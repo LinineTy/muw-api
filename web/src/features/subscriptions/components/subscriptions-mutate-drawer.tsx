@@ -545,6 +545,24 @@ export function SubscriptionsMutateDrawer({
 
                 <FormField
                   control={form.control}
+                  name='is_recommended'
+                  render={({ field }) => (
+                    <FormItem className={sideDrawerSwitchItemClassName()}>
+                      <FormLabel className='!mt-0'>
+                        {t('Recommended')}
+                      </FormLabel>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
                   name='allow_balance_pay'
                   render={({ field }) => (
                     <FormItem className={sideDrawerSwitchItemClassName()}>
