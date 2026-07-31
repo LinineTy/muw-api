@@ -29,6 +29,7 @@ import { BillingHistoryDialog } from './components/dialogs/billing-history-dialo
 import { CreemConfirmDialog } from './components/dialogs/creem-confirm-dialog'
 import { PaymentConfirmDialog } from './components/dialogs/payment-confirm-dialog'
 import { TransferDialog } from './components/dialogs/transfer-dialog'
+import { QuotaPoolClaimCard } from './components/quota-pool-claim-card'
 import { RechargeFormCard } from './components/recharge-form-card'
 import { SubscriptionSummaryCard } from './components/subscription-summary-card'
 import { WalletStatsCard } from './components/wallet-stats-card'
@@ -86,6 +87,8 @@ export function Wallet(props: WalletProps) {
   // 推广返利(推荐计划)开关，关闭后不展示钱包推荐卡片
   // getStatus() 返回扁平化的 status 数据，字段在顶层而非 data 下
   const affiliateEnabled = status?.affiliate_program_enabled !== false
+  // 额度池功能开关
+  const quotaPoolEnabled = status?.quota_pool_enabled === true
 
   // Calculate effective exchange rate - when display type is USD, use rate of 1
   const effectiveUsdExchangeRate = useMemo(() => {
@@ -331,6 +334,10 @@ export function Wallet(props: WalletProps) {
                 onTransfer={() => setTransferDialogOpen(true)}
                 loading={affiliateLoading}
               />
+            )}
+
+            {quotaPoolEnabled && (
+              <QuotaPoolClaimCard enabled onBalanceChange={fetchUser} />
             )}
           </div>
         </SectionPageLayout.Content>

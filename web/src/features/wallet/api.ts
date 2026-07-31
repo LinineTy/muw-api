@@ -246,3 +246,21 @@ export async function completeOrder(
   const res = await api.post('/api/user/topup/complete', request)
   return res.data
 }
+
+/**
+ * Get enabled quota pools for the current user with claim status
+ */
+export async function getQuotaPools(): Promise<ApiResponse> {
+  const res = await api.get('/api/user/quota-pool')
+  return res.data
+}
+
+/**
+ * Claim quota from a quota pool
+ */
+export async function claimQuotaPool(
+  poolId: number
+): Promise<ApiResponse<{ quota: number }>> {
+  const res = await api.post(`/api/user/quota-pool/${poolId}/claim`)
+  return res.data
+}

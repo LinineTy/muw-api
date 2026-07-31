@@ -124,6 +124,10 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.GET("/checkin", controller.GetCheckinStatus)
 				selfRoute.POST("/checkin", middleware.TurnstileCheck(), controller.DoCheckin)
 
+				// Quota pool routes (user)
+				selfRoute.GET("/quota-pool", controller.GetQuotaPools)
+				selfRoute.POST("/quota-pool/:id/claim", middleware.CriticalRateLimit(), controller.ClaimQuotaPool)
+
 				// Custom OAuth bindings
 				selfRoute.GET("/oauth/bindings", controller.GetUserOAuthBindings)
 				selfRoute.DELETE("/oauth/bindings/:provider_id", controller.UnbindCustomOAuth)
@@ -267,6 +271,16 @@ func SetApiRouter(router *gin.Engine) {
 			redemptionRoute.PUT("/", controller.UpdateRedemption)
 			redemptionRoute.DELETE("/invalid", controller.DeleteInvalidRedemption)
 			redemptionRoute.DELETE("/:id", controller.DeleteRedemption)
+		}
+		quotaPoolRoute := apiRouter.Group("/quota-pool")
+		quotaPoolRoute.Use(middleware.AdminAuth())
+		{
+			quotaPoolRoute.GET("/", controller.AdminGetQuotaPools)
+			quotaPoolRoute.POST("/", controller.AdminCreateQuotaPool)
+			quotaPoolRoute.PUT("/:id", controller.AdminUpdateQuotaPool)
+			quotaPoolRoute.PATCH("/:id", controller.AdminToggleQuotaPool)
+			quotaPoolRoute.DELETE("/:id", controller.AdminDeleteQuotaPool)
+			quotaPoolRoute.GET("/:id/records", controller.AdminGetQuotaPoolRecords)
 		}
 		logRoute := apiRouter.Group("/log")
 		logRoute.GET("/", middleware.AdminAuth(), controller.GetAllLogs)

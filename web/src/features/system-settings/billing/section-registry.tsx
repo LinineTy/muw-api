@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { parseCurrencyDisplayType } from '@/lib/currency'
 
 import { CheckinSettingsSection } from '../general/checkin-settings-section'
+import { QuotaPoolSettingsSection } from '../general/quota-pool-settings-section'
 import { PricingSection } from '../general/pricing-section'
 import { QuotaSettingsSection } from '../general/quota-settings-section'
 import { PaymentSettingsSection } from '../integrations/payment-settings-section'
@@ -185,6 +186,17 @@ const BILLING_SECTIONS = [
           enabled: settings['checkin_setting.enabled'],
           minQuota: settings['checkin_setting.min_quota'],
           maxQuota: settings['checkin_setting.max_quota'],
+        }}
+      />
+    ),
+  },
+  {
+    id: 'quota_pool',
+    titleKey: 'Quota Pools',
+    build: (settings: BillingSettings) => (
+      <QuotaPoolSettingsSection
+        defaultValues={{
+          enabled: settings['quota_pool_setting.enabled'],
         }}
       />
     ),
