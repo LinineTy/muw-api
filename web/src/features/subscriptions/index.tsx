@@ -17,22 +17,22 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Info } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
+import { AdminSubscriptionsTable } from './components/admin-subscriptions-table'
 import { SubscriptionsDialogs } from './components/subscriptions-dialogs'
 import { SubscriptionsPrimaryButtons } from './components/subscriptions-primary-buttons'
-import {
-  SubscriptionsProvider,
-  useSubscriptions,
-} from './components/subscriptions-provider'
+import { SubscriptionsProvider } from './components/subscriptions-provider'
 import { SubscriptionsTable } from './components/subscriptions-table'
 
 function SubscriptionsContent() {
   const { t } = useTranslation()
-  const { complianceConfirmed } = useSubscriptions()
+  const [tab, setTab] = useState<'plans' | 'all'>('plans')
 
   return (
     <>
@@ -55,18 +55,25 @@ function SubscriptionsContent() {
         </SectionPageLayout.Actions>
         <SectionPageLayout.Content>
           <div className='flex h-full min-h-0 flex-col gap-4'>
-            {!complianceConfirmed ? (
-              <Alert variant='destructive' className='shrink-0'>
-                <AlertDescription>
-                  {t(
-                    'Subscription plan creation and changes are locked until the administrator confirms compliance terms in Payment Gateway settings.'
-                  )}
-                </AlertDescription>
-              </Alert>
-            ) : null}
-            <div className='min-h-0 flex-1'>
-              <SubscriptionsTable />
-            </div>
+            <Tabs
+              value={tab}
+              onValueChange={(value) => setTab(value as 'plans' | 'all')}
+              className='flex min-h-0 flex-1 flex-col'
+            >
+              <TabsList className='w-fit'>
+                <TabsTrigger value='plans'>{t('Plans')}</TabsTrigger>
+                <TabsTrigger value='all'>
+                  {t('All Subscriptions')}
+                </TabsTrigger>
+              </TabsList>
+              <div className='min-h-0 flex-1 pt-2'>
+                {tab === 'plans' ? (
+                  <SubscriptionsTable />
+                ) : (
+                  <AdminSubscriptionsTable />
+                )}
+              </div>
+            </Tabs>
           </div>
         </SectionPageLayout.Content>
       </SectionPageLayout>

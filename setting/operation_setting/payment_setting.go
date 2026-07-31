@@ -30,7 +30,8 @@ func GetPaymentSetting() *PaymentSetting {
 	return &paymentSetting
 }
 
+// IsPaymentComplianceConfirmed 合规确认功能已移除,恒为 true。
+// 保留此函数仅为兼容各调用点(邀请奖励/兑换码/充值/webhook),不再做任何拦截。
 func IsPaymentComplianceConfirmed() bool {
-	return paymentSetting.ComplianceConfirmed &&
-		paymentSetting.ComplianceTermsVersion == CurrentComplianceTermsVersion
+	return true
 }

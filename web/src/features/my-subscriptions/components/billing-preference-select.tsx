@@ -1,0 +1,129 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+import { RefreshCw } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
+
+import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { updateBillingPreference } from '@/features/subscriptions/api'
+
+import { useMySubscriptions } from './my-subscriptions-provider'
+import { getBillingPreferenceLabel } from '../lib/helpers'
+
+export function BillingPreferenceSelect() {
+  const { t } = useTranslation()
+  const { selfData, refreshing, refresh } = useMySubscriptions()
+  const [preference, setPreference] = useState(
+    selfData?.billing_preference || 'subscription_first'
+  )
+
+  // Keep local state in sync once the server value loads / refreshes.
+  useEffect(() => {
+    if (selfData?.billing_preference) {
+      setPreference(selfData.billing_preference)
+    }
+  }, [selfData?.billing_preference])
+
+  const activeCount = selfData?.subscriptions?.length || 0
+  const disablePref = activeCount <= 0
+  const isSubPref =
+    preference === 'subscription_first' || preference === 'subscription_only'
+  const displayPref = disablePref && isSubPref ? 'wallet_first' : preference
+
+  const handlePreferenceChange = async (pref: string) => {
+    if (pref === null) return
+    const previous = preference
+    setPreference(pref)
+    try {
+      const res = await updateBillingPreference(pref)
+      if (res.success) {
+        toast.success(t('Updated successfully'))
+        const normalized = res.data?.billing_preference || pref
+        setPreference(normalized)
+      } else {
+        toast.error(res.message || t('Update failed'))
+        setPreference(previous)
+      }
+    } catch {
+      toast.error(t('Request failed'))
+      setPreference(previous)
+    }
+  }
+
+  const prefOptions = [
+    { value: 'subscription_first', disabled: disablePref },
+    { value: 'wallet_first', disabled: false },
+    { value: 'subscription_only', disabled: disablePref },
+    { value: 'wallet_only', disabled: false },
+  ]
+
+  return (
+    <div className='flex items-center gap-2'>
+      <Select
+        items={prefOptions.map((opt) => ({
+          value: opt.value,
+          label: (
+            <>
+              {getBillingPreferenceLabel(opt.value, t)}
+              {opt.disabled ? ` (${t('No Active')})` : ''}
+            </>
+          ),
+        }))}
+        value={displayPref}
+        onValueChange={(v) => v !== null && handlePreferenceChange(v)}
+      >
+        <SelectTrigger className='h-8 flex-1 text-xs sm:w-[140px] sm:flex-none'>
+          <SelectValue>
+            {getBillingPreferenceLabel(displayPref, t)}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent alignItemWithTrigger={false}>
+          <SelectGroup>
+            {prefOptions.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value} disabled={opt.disabled}>
+                {getBillingPreferenceLabel(opt.value, t)}
+                {opt.disabled ? ` (${t('No Active')})` : ''}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+      <Button
+        variant='ghost'
+        size='icon'
+        className='h-8 w-8'
+        onClick={() => refresh()}
+        disabled={refreshing}
+      >
+        <RefreshCw
+          className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`}
+        />
+      </Button>
+    </div>
+  )
+}

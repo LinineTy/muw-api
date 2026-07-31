@@ -7,7 +7,6 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -30,11 +29,6 @@ type SubscriptionBalancePayRequest struct {
 // ---- User APIs ----
 
 func GetSubscriptionPlans(c *gin.Context) {
-	if !operation_setting.IsPaymentComplianceConfirmed() {
-		common.ApiSuccess(c, []SubscriptionPlanDTO{})
-		return
-	}
-
 	var plans []model.SubscriptionPlan
 	if err := model.DB.Where("enabled = ?", true).Order("sort_order desc, id desc").Find(&plans).Error; err != nil {
 		common.ApiError(c, err)
@@ -98,9 +92,6 @@ func UpdateSubscriptionPreference(c *gin.Context) {
 }
 
 func SubscriptionRequestBalancePay(c *gin.Context) {
-	if !requirePaymentCompliance(c) {
-		return
-	}
 
 	userId := c.GetInt("id")
 	var req SubscriptionBalancePayRequest
@@ -139,9 +130,6 @@ type AdminUpsertSubscriptionPlanRequest struct {
 }
 
 func AdminCreateSubscriptionPlan(c *gin.Context) {
-	if !requirePaymentCompliance(c) {
-		return
-	}
 
 	var req AdminUpsertSubscriptionPlanRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -214,9 +202,6 @@ func AdminCreateSubscriptionPlan(c *gin.Context) {
 }
 
 func AdminUpdateSubscriptionPlan(c *gin.Context) {
-	if !requirePaymentCompliance(c) {
-		return
-	}
 
 	id, _ := strconv.Atoi(c.Param("id"))
 	if id <= 0 {
@@ -326,9 +311,6 @@ type AdminUpdateSubscriptionPlanStatusRequest struct {
 }
 
 func AdminUpdateSubscriptionPlanStatus(c *gin.Context) {
-	if !requirePaymentCompliance(c) {
-		return
-	}
 
 	id, _ := strconv.Atoi(c.Param("id"))
 	if id <= 0 {
@@ -354,9 +336,6 @@ type AdminBindSubscriptionRequest struct {
 }
 
 func AdminBindSubscription(c *gin.Context) {
-	if !requirePaymentCompliance(c) {
-		return
-	}
 
 	var req AdminBindSubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil || req.UserId <= 0 || req.PlanId <= 0 {
@@ -391,6 +370,24 @@ func AdminListUserSubscriptions(c *gin.Context) {
 	common.ApiSuccess(c, subs)
 }
 
+// AdminListAllSubscriptions returns a paginated, filterable list of every user
+// subscription across all users. Query params: p, page_size, status, user, plan_id.
+func AdminListAllSubscriptions(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	status := c.Query("status")
+	userKeyword := c.Query("user")
+	planId, _ := strconv.Atoi(c.Query("plan_id"))
+	items, total, err := model.GetAllSubscriptionsByAdmin(status, userKeyword, planId,
+		pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(items)
+	common.ApiSuccess(c, pageInfo)
+}
+
 type AdminCreateUserSubscriptionRequest struct {
 	PlanId int `json:"plan_id"`
 }
@@ -419,9 +416,6 @@ func recordSubscriptionResetUserLogs(result *model.SubscriptionResetResult, admi
 
 // AdminCreateUserSubscription creates a new user subscription from a plan (no payment).
 func AdminCreateUserSubscription(c *gin.Context) {
-	if !requirePaymentCompliance(c) {
-		return
-	}
 
 	userId, _ := strconv.Atoi(c.Param("id"))
 	if userId <= 0 {

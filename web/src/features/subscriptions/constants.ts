@@ -45,3 +45,20 @@ export function getDurationUnitOptions(t: TFunction) {
 export function getResetPeriodOptions(t: TFunction) {
   return RESET_PERIODS.map((p) => ({ value: p.value, label: t(p.labelKey) }))
 }
+
+// ============================================================================
+// Subscription Status Options
+// ============================================================================
+
+export const SUBSCRIPTION_STATUS_OPTIONS = [
+  { value: 'active', labelKey: 'Active' },
+  { value: 'expired', labelKey: 'Expired' },
+  { value: 'cancelled', labelKey: 'Cancelled' },
+] as const
+
+export function getSubscriptionStatusOptions(t: TFunction) {
+  return SUBSCRIPTION_STATUS_OPTIONS.map((s) => ({
+    value: s.value,
+    label: t(s.labelKey),
+  }))
+}
