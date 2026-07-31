@@ -323,6 +323,7 @@
     "Allow speed passthrough": "speed パススルーを許可",
     "Allow upstream callbacks": "アップストリームコールバックを許可",
     "Allow users to check in daily for random quota rewards": "ユーザーが毎日チェックインしてランダムなクォータ報酬を受け取れるようにする",
+    "Allow users to earn rewards through referral links": "ユーザーが紹介リンクを通じて報酬を得られるようにする",
     "Allow users to enter promo codes": "ユーザーがプロモーションコードを入力できるようにする",
     "Allow users to log in with password": "ユーザーがパスワードでログインできるようにする",
     "Allow users to register and sign in with Passkey (WebAuthn)": "ユーザーがPasskey (WebAuthn) で登録およびサインインできるようにする",

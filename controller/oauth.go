@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/oauth"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -368,7 +369,7 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 
 	// Handle affiliate code
 	inviterId := 0
-	if affiliateCode != "" {
+	if affiliateCode != "" && operation_setting.AffiliateProgramEnabled {
 		inviterId, _ = model.GetUserIdByAffCode(affiliateCode)
 	}
 

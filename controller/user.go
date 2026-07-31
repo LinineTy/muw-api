@@ -19,6 +19,7 @@ import (
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/service/authz"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/QuantumNous/new-api/constant"
 
@@ -260,7 +261,10 @@ func Register(c *gin.Context) {
 		return
 	}
 	affCode := user.AffCode // this code is the inviter's code, not the user's own code
-	inviterId, _ := model.GetUserIdByAffCode(affCode)
+	inviterId := 0
+	if affCode != "" && operation_setting.AffiliateProgramEnabled {
+		inviterId, _ = model.GetUserIdByAffCode(affCode)
+	}
 	cleanUser := model.User{
 		Username:    user.Username,
 		Password:    user.Password,
