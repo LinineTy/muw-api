@@ -21,19 +21,13 @@ import { MissingModelsDialog } from './dialogs/missing-models-dialog'
 import { PrefillGroupManagement } from './dialogs/prefill-group-management'
 import { SyncWizardDialog } from './dialogs/sync-wizard-dialog'
 import { UpstreamConflictDialog } from './dialogs/upstream-conflict-dialog'
-import { VendorMutateDialog } from './dialogs/vendor-mutate-dialog'
 import { ModelMutateDrawer } from './drawers/model-mutate-drawer'
 import { useModels } from './models-provider'
+import { VendorManagement } from './vendor-management'
 
 export function ModelsDialogs() {
-  const {
-    open,
-    setOpen,
-    currentRow,
-    currentVendor,
-    descriptionData,
-    setDescriptionData,
-  } = useModels()
+  const { open, setOpen, currentRow, descriptionData, setDescriptionData } =
+    useModels()
 
   return (
     <>
@@ -44,11 +38,10 @@ export function ModelsDialogs() {
         currentRow={currentRow}
       />
 
-      {/* Vendor Create/Update Dialog */}
-      <VendorMutateDialog
-        open={open === 'create-vendor' || open === 'update-vendor'}
+      {/* Vendor Management */}
+      <VendorManagement
+        open={open === 'vendor-management'}
         onOpenChange={(v) => !v && setOpen(null)}
-        currentVendor={open === 'update-vendor' ? currentVendor : null}
       />
 
       {/* Missing Models Dialog */}
