@@ -8,7 +8,7 @@ DEV_POSTGRES_DB = new-api
 DEV_POSTGRES_USER = root
 DEV_SQLITE_PATH ?= one-api.db
 
-.PHONY: all build-web build-all-web start-api dev dev-api dev-api-rebuild dev-web reset-setup test
+.PHONY: all build-web build-all-web start-api run-local dev dev-api dev-api-rebuild dev-web reset-setup test
 
 all: build-all-web start-api
 
@@ -20,6 +20,14 @@ build-web:
 build-all-web: build-web
 
 start-api:
+	@echo "Starting api dev server..."
+	@cd $(API_DIR) && go run main.go &
+
+# Kill any leftover server holding the API port, then start fresh.
+# Prevents stale processes from locking the port/db (common after repeated dev runs).
+run-local:
+	@echo "Killing existing server on port 3000 (if any)..."
+	@netstat -ano | grep ":3000" | grep LISTENING | awk '{print $$NF}' | sort -u | xargs -r taskkill //F //PID >/dev/null 2>&1 || true
 	@echo "Starting api dev server..."
 	@cd $(API_DIR) && go run main.go &
 
