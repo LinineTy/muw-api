@@ -154,6 +154,10 @@ export function SidebarModulesSection({
         title: t('Subscription Management'),
         description: t('Manage subscription plans and pricing.'),
       },
+      system_info: {
+        title: t('System Info'),
+        description: t('Monitor system instances and background tasks.'),
+      },
     },
   }
   const formDefaults = useMemo(() => config, [config])

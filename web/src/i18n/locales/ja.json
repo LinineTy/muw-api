@@ -2731,6 +2731,7 @@
     "MokaAI": "MokaAI",
     "Monitor": "モニタリング",
     "Monitor balance, usage, and request volume": "残高、使用量、リクエスト数を監視",
+    "Monitor system instances and background tasks.": "システムインスタンスとバックグラウンドタスクを監視",
     "Monitored relay requests": "監視対象のリレーリクエスト",
     "Monitoring & Alerts": "監視とアラート",
     "Month": "月",
