@@ -323,6 +323,7 @@
     "Allow speed passthrough": "允許 speed 透傳",
     "Allow upstream callbacks": "允許上游Callback",
     "Allow users to check in daily for random quota rewards": "允許用戶每日簽到獲取隨機額度獎勵",
+    "Allow users to earn rewards through referral links": "允許用戶通過推薦連結獲得獎勵",
     "Allow users to enter promo codes": "允許用戶輸入促銷代碼",
     "Allow users to log in with password": "允許用戶使用密碼登入",
     "Allow users to register and sign in with Passkey (WebAuthn)": "允許用戶使用通行金鑰 (WebAuthn) 註冊和登入",

@@ -323,6 +323,7 @@
     "Allow speed passthrough": "Allow speed passthrough",
     "Allow upstream callbacks": "Allow upstream callbacks",
     "Allow users to check in daily for random quota rewards": "Allow users to check in daily for random quota rewards",
+    "Allow users to earn rewards through referral links": "Allow users to earn rewards through referral links",
     "Allow users to enter promo codes": "Allow users to enter promo codes",
     "Allow users to log in with password": "Allow users to log in with password",
     "Allow users to register and sign in with Passkey (WebAuthn)": "Allow users to register and sign in with Passkey (WebAuthn)",

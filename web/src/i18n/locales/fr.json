@@ -323,6 +323,7 @@
     "Allow speed passthrough": "Autoriser la transmission de speed",
     "Allow upstream callbacks": "Autoriser les callbacks en amont",
     "Allow users to check in daily for random quota rewards": "Permettre aux utilisateurs de se connecter quotidiennement pour des récompenses de quota aléatoires",
+    "Allow users to earn rewards through referral links": "Permettre aux utilisateurs de gagner des récompenses via des liens de parrainage",
     "Allow users to enter promo codes": "Autoriser les utilisateurs à saisir des codes promotionnels",
     "Allow users to log in with password": "Autoriser les utilisateurs à se connecter avec un mot de passe",
     "Allow users to register and sign in with Passkey (WebAuthn)": "Autoriser les utilisateurs à s'inscrire et se connecter avec une clé d'accès (Passkey) (WebAuthn)",

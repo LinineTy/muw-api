@@ -323,6 +323,7 @@
     "Allow speed passthrough": "Разрешить передачу speed",
     "Allow upstream callbacks": "Разрешить обратные вызовы upstream",
     "Allow users to check in daily for random quota rewards": "Разрешить пользователям регистрироваться ежедневно для получения случайных квотных наград",
+    "Allow users to earn rewards through referral links": "Разрешить пользователям получать награды через реферальные ссылки",
     "Allow users to enter promo codes": "Разрешить пользователям вводить промокоды",
     "Allow users to log in with password": "Разрешить пользователям входить по паролю",
     "Allow users to register and sign in with Passkey (WebAuthn)": "Разрешить пользователям регистрироваться и входить с помощью Passkey (WebAuthn)",

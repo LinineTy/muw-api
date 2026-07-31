@@ -318,6 +318,7 @@ export type OperationsSettings = {
   DefaultCollapseSidebar: boolean
   DemoSiteEnabled: boolean
   SelfUseModeEnabled: boolean
+  AffiliateProgramEnabled: boolean
   QuotaRemindThreshold: string
   SMTPServer: string
   SMTPPort: string

@@ -323,6 +323,7 @@
     "Allow speed passthrough": "Cho phép truyền speed",
     "Allow upstream callbacks": "Cho phép callback upstream",
     "Allow users to check in daily for random quota rewards": "Cho phép người dùng điểm danh hàng ngày để nhận phần thưởng hạn ngạch ngẫu nhiên",
+    "Allow users to earn rewards through referral links": "Cho phép người dùng nhận phần thưởng qua liên kết giới thiệu",
     "Allow users to enter promo codes": "Cho phép người dùng nhập mã khuyến mãi",
     "Allow users to log in with password": "Cho phép người dùng đăng nhập bằng mật khẩu",
     "Allow users to register and sign in with Passkey (WebAuthn)": "Cho phép người dùng đăng ký và đăng nhập bằng Passkey (WebAuthn)",
