@@ -84,7 +84,8 @@ export function Wallet(props: WalletProps) {
   const { topupInfo, presetAmounts, loading: topupLoading } = useTopupInfo()
 
   // 推广返利(推荐计划)开关，关闭后不展示钱包推荐卡片
-  const affiliateEnabled = status?.data?.affiliate_program_enabled !== false
+  // getStatus() 返回扁平化的 status 数据，字段在顶层而非 data 下
+  const affiliateEnabled = status?.affiliate_program_enabled !== false
 
   // Calculate effective exchange rate - when display type is USD, use rate of 1
   const effectiveUsdExchangeRate = useMemo(() => {
