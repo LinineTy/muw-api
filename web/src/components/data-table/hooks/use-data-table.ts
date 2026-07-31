@@ -296,6 +296,11 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     withSortedRowModel = !manualSorting && !manualPagination,
     withFacetedRowModel = !manualFiltering,
     withExpandedRowModel = false,
+    // 默认关闭 autoResetPageIndex：TanStack 的 getRowModel memo 每次渲染都会
+    // 因为 getState() 返回新引用而重算，进而反复触发 _autoResetPageIndex 的
+    // resetPageIndex → onStateChange → 无限渲染循环（客户端分页时必现）。
+    // 现有页面全部走 manualPagination，autoReset 本来就不生效，改默认值无影响。
+    autoResetPageIndex = false,
   } = options
 
   const columnVisibilityStorageKey =
@@ -388,7 +393,11 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
       columnSizing,
       rowSelection,
       expanded,
-      columnFilters: options.columnFilters,
+      // Default to an empty array instead of `undefined`: TanStack Table
+      // spreads the `state` object over its own `columnFilters: []` default,
+      // so an explicit `undefined` here leaves `getState().columnFilters`
+      // undefined and crashes toolbar consumers that read `.length`.
+      columnFilters: options.columnFilters ?? [],
       globalFilter: options.globalFilter,
       pagination,
     },
@@ -397,7 +406,7 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     getRowId: options.getRowId,
     getSubRows: options.getSubRows,
     globalFilterFn: options.globalFilterFn,
-    autoResetPageIndex: options.autoResetPageIndex,
+    autoResetPageIndex,
     manualFiltering,
     manualPagination,
     manualSorting,
