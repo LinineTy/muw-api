@@ -83,12 +83,12 @@ export function PlanCatalogSection() {
   return (
     <>
       <div className='grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3 2xl:gap-4'>
-        {plans.map((p, index) => {
+        {plans.map((p) => {
           const plan = p?.plan
           if (!plan) return null
           const totalAmount = Number(plan.total_amount || 0)
           const price = Number(plan.price_amount || 0).toFixed(2)
-          const isPopular = index === 0 && plans.length > 1
+          const isPopular = plan.is_recommended === true
           const limit = Number(plan.max_purchase_per_user || 0)
           const count = planPurchaseCountMap.get(plan.id) || 0
           const reached = limit > 0 && count >= limit

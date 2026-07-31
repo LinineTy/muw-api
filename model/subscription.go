@@ -160,6 +160,9 @@ type SubscriptionPlan struct {
 	Enabled   bool `json:"enabled" gorm:"default:true"`
 	SortOrder int  `json:"sort_order" gorm:"type:int;default:0"`
 
+	// Recommended plan shown with a highlighted badge on the user-facing catalog
+	IsRecommended bool `json:"is_recommended" gorm:"default:false"`
+
 	AllowBalancePay *bool `json:"allow_balance_pay"`
 
 	// Allow falling back to wallet balance after subscription quota is exhausted (empty = true)
