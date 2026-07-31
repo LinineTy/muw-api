@@ -23,8 +23,11 @@ import { useTranslation } from 'react-i18next'
 import { DataTablePage, useDataTable } from '@/components/data-table'
 
 import { getAdminPlans } from '../api'
+import { PlanCard } from './plan-card'
 import { useSubscriptionsColumns } from './subscriptions-columns'
 import { useSubscriptions } from './subscriptions-provider'
+
+const SUBSCRIPTIONS_VIEW_MODE_STORAGE_KEY = 'subscriptions:view-mode'
 
 export function SubscriptionsTable() {
   const { t } = useTranslation()
@@ -45,7 +48,7 @@ export function SubscriptionsTable() {
   const { table } = useDataTable({
     data: plans,
     columns,
-    withFilteredRowModel: false,
+    // 开启客户端搜索（globalFilter），否则工具栏的搜索框是空摆设
     withFacetedRowModel: false,
   })
 
@@ -59,6 +62,15 @@ export function SubscriptionsTable() {
         'Click "Create Plan" to create your first subscription plan'
       )}
       skeletonKeyPrefix='subscriptions-skeleton'
+      enableCardView
+      viewModeStorageKey={SUBSCRIPTIONS_VIEW_MODE_STORAGE_KEY}
+      renderCard={(row, { isSelected }) => (
+        <PlanCard row={row} isSelected={isSelected} />
+      )}
+      cardGridClassName='grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2 2xl:grid-cols-3'
+      toolbarProps={{
+        searchPlaceholder: t('Filter plans...'),
+      }}
       applyHeaderSize
     />
   )
