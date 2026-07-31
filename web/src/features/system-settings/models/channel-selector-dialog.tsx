@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { ColumnDef, RowSelectionState } from '@tanstack/react-table'
-import { Search } from 'lucide-react'
+import { Plus, Search, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -57,6 +57,12 @@ type ChannelSelectorDialogProps = {
   onSelectedChannelIdsChange: (ids: number[]) => void
   channelEndpoints: Record<number, string>
   onChannelEndpointsChange: (endpoints: Record<number, string>) => void
+  /** 自定义上游的合成负 id 列表（这些行不是 new-api 渠道） */
+  customUpstreamIds: number[]
+  onAddCustom: () => void
+  onRemoveCustom: (id: number) => void
+  onCustomNameChange: (id: number, name: string) => void
+  onCustomBaseUrlChange: (id: number, baseUrl: string) => void
   onConfirm: (selectedIds: number[]) => void
 }
 
@@ -76,6 +82,11 @@ export function ChannelSelectorDialog({
   onSelectedChannelIdsChange,
   channelEndpoints,
   onChannelEndpointsChange,
+  customUpstreamIds,
+  onAddCustom,
+  onRemoveCustom,
+  onCustomNameChange,
+  onCustomBaseUrlChange,
   onConfirm,
 }: ChannelSelectorDialogProps) {
   const { t } = useTranslation()
@@ -150,6 +161,28 @@ export function ChannelSelectorDialog({
           const name = row.getValue('name') as string
           const channel = row.original
           const isOfficial = isOfficialChannel(channel)
+          const isCustomRow = customUpstreamIds.includes(channel.id)
+
+          if (isCustomRow) {
+            return (
+              <div className='flex items-center gap-2'>
+                <Input
+                  value={name}
+                  onChange={(e) =>
+                    onCustomNameChange(channel.id, e.target.value)
+                  }
+                  placeholder={t('Custom upstream name')}
+                  className='h-8 w-44 min-w-0 font-mono text-xs'
+                />
+                <StatusBadge
+                  label={t('Custom')}
+                  variant='neutral'
+                  size='sm'
+                  copyable={false}
+                />
+              </div>
+            )
+          }
 
           return (
             <div className='flex items-center gap-2'>
@@ -172,7 +205,33 @@ export function ChannelSelectorDialog({
         size: 340,
         minSize: 260,
         cell: ({ row }) => {
+          const channel = row.original
           const url = row.getValue('base_url') as string
+
+          if (customUpstreamIds.includes(channel.id)) {
+            return (
+              <div className='flex items-center gap-1.5'>
+                <Input
+                  value={url}
+                  onChange={(e) =>
+                    onCustomBaseUrlChange(channel.id, e.target.value)
+                  }
+                  placeholder={t('https://upstream.example.com')}
+                  className='h-8 min-w-0 flex-1 font-mono text-xs'
+                />
+                <Button
+                  size='icon'
+                  variant='ghost'
+                  className='text-destructive hover:text-destructive'
+                  onClick={() => onRemoveCustom(channel.id)}
+                  aria-label={t('Remove')}
+                >
+                  <Trash2 className='h-4 w-4' />
+                </Button>
+              </div>
+            )
+          }
+
           return (
             <span
               className='text-muted-foreground block max-w-xs truncate font-mono text-xs'
@@ -189,6 +248,19 @@ export function ChannelSelectorDialog({
         size: 140,
         minSize: 120,
         cell: ({ row }) => {
+          const channel = row.original
+
+          if (customUpstreamIds.includes(channel.id)) {
+            return (
+              <StatusBadge
+                label={t('Custom')}
+                variant='neutral'
+                size='sm'
+                copyable={false}
+              />
+            )
+          }
+
           const status = row.getValue('status') as number
           const config =
             CHANNEL_STATUS_CONFIG[status as keyof typeof CHANNEL_STATUS_CONFIG]
@@ -221,8 +293,11 @@ export function ChannelSelectorDialog({
         minSize: 360,
         cell: ({ row }) => {
           const channel = row.original
+          const storedEndpoint = channelEndpoints[channel.id]
+          // 区分「未设置(用默认值)」与「显式选择 custom(路径为空)」，
+          // 否则选完 custom 后空字符串会被 `|| DEFAULT_ENDPOINT` 顶回默认值
           const currentEndpoint =
-            channelEndpoints[channel.id] || DEFAULT_ENDPOINT
+            storedEndpoint === undefined ? DEFAULT_ENDPOINT : storedEndpoint
           const endpointType = getEndpointType(currentEndpoint)
 
           const handleTypeChange = (value: string) => {
@@ -269,7 +344,15 @@ export function ChannelSelectorDialog({
         },
       },
     ],
-    [channelEndpoints, t, updateEndpoint]
+    [
+      channelEndpoints,
+      t,
+      updateEndpoint,
+      customUpstreamIds,
+      onCustomNameChange,
+      onCustomBaseUrlChange,
+      onRemoveCustom,
+    ]
   )
 
   const filteredChannels = useMemo(() => {
@@ -344,6 +427,10 @@ export function ChannelSelectorDialog({
               className='ps-9'
             />
           </div>
+          <Button size='sm' variant='outline' onClick={onAddCustom}>
+            <Plus className='mr-1 h-3.5 w-3.5' />
+            {t('Add Upstream')}
+          </Button>
         </div>
 
         <DataTableView

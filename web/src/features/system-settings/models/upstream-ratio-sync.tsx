@@ -17,8 +17,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckSquare, RefreshCcw } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { CheckSquare, RefreshCcw, Settings2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -48,6 +48,7 @@ import {
   OFFICIAL_CHANNEL_ID,
   OPENROUTER_CHANNEL_TYPE,
   OPENROUTER_ENDPOINT,
+  SUB2API_ENDPOINT,
 } from './constants'
 import {
   NUMERIC_SYNC_FIELDS,
@@ -129,6 +130,39 @@ export function UpstreamRatioSync({ modelRatios }: UpstreamRatioSyncProps) {
   const [channelEndpoints, setChannelEndpoints] = useState<
     Record<number, string>
   >({})
+  const [customUpstreams, setCustomUpstreams] = useState<
+    Array<{ id: number; name: string; base_url: string }>
+  >([])
+  const nextCustomId = useRef(-2000)
+
+  const addCustomUpstream = () => {
+    const id = nextCustomId.current--
+    setCustomUpstreams((prev) => [...prev, { id, name: '', base_url: '' }])
+    setChannelEndpoints((prev) => ({ ...prev, [id]: SUB2API_ENDPOINT }))
+  }
+
+  const removeCustomUpstream = (id: number) => {
+    setCustomUpstreams((prev) => prev.filter((u) => u.id !== id))
+    setSelectedChannelIds((prev) => prev.filter((cid) => cid !== id))
+    setChannelEndpoints((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+  }
+
+  const updateCustomName = (id: number, name: string) => {
+    setCustomUpstreams((prev) =>
+      prev.map((u) => (u.id === id ? { ...u, name } : u))
+    )
+  }
+
+  const updateCustomBaseUrl = (id: number, baseUrl: string) => {
+    setCustomUpstreams((prev) =>
+      prev.map((u) => (u.id === id ? { ...u, base_url: baseUrl } : u))
+    )
+  }
+
   const [differences, setDifferences] = useState<DifferencesMap>({})
   const [resolutions, setResolutions] = useState<ResolutionsMap>({})
   const [conflictItems, setConflictItems] = useState<ConflictItem[]>([])
@@ -144,6 +178,20 @@ export function UpstreamRatioSync({ modelRatios }: UpstreamRatioSyncProps) {
   // data actually changes, instead of on every render (the `|| []` fallback
   // would otherwise produce a new array reference each render).
   const channels = useMemo(() => channelsData?.data ?? [], [channelsData?.data])
+
+  // 自定义上游合成负 id，与真实渠道合并成同一张表
+  const dialogChannels = useMemo<UpstreamChannel[]>(
+    () => [
+      ...channels,
+      ...customUpstreams.map((u) => ({
+        id: u.id,
+        name: u.name,
+        base_url: u.base_url,
+        status: 1,
+      })),
+    ],
+    [channels, customUpstreams]
+  )
 
   useEffect(() => {
     if (channels.length === 0) return
@@ -228,23 +276,33 @@ export function UpstreamRatioSync({ modelRatios }: UpstreamRatioSyncProps) {
     setChannelDialogOpen(true)
   }
 
+  // 确认选择只保存选中项，不发起请求；真正同步由「同步上游价格」按钮触发
   const handleConfirmChannelSelection = (selectedIds: number[]) => {
-    const selectedChannels = channels.filter((ch) =>
-      selectedIds.includes(ch.id)
-    )
+    if (selectedIds.length === 0) {
+      toast.warning(t('Please select at least one channel'))
+    }
+  }
 
-    if (selectedChannels.length === 0) {
+  const buildUpstreams = (): UpstreamConfig[] => {
+    const selected = dialogChannels.filter((ch) =>
+      selectedChannelIds.includes(ch.id)
+    )
+    return selected
+      .map((ch) => ({
+        id: ch.id,
+        name: ch.name || ch.base_url,
+        base_url: ch.base_url,
+        endpoint: channelEndpoints[ch.id] || DEFAULT_ENDPOINT,
+      }))
+      .filter((u) => u.base_url.trim() !== '')
+  }
+
+  const handleFetchUpstreams = () => {
+    const upstreams = buildUpstreams()
+    if (upstreams.length === 0) {
       toast.warning(t('Please select at least one channel'))
       return
     }
-
-    const upstreams: UpstreamConfig[] = selectedChannels.map((ch) => ({
-      id: ch.id,
-      name: ch.name,
-      base_url: ch.base_url,
-      endpoint: channelEndpoints[ch.id] || DEFAULT_ENDPOINT,
-    }))
-
     fetchMutation.mutate({ upstreams, timeout: 10 })
   }
 
@@ -472,6 +530,9 @@ export function UpstreamRatioSync({ modelRatios }: UpstreamRatioSyncProps) {
   }
 
   const hasSelections = Object.keys(resolutions).length > 0
+  const hasUpstreams =
+    selectedChannelIds.length > 0 ||
+    customUpstreams.some((u) => u.base_url.trim() !== '')
   const isLoading = fetchMutation.isPending || isSyncPending || confirmLoading
 
   return (
@@ -479,8 +540,16 @@ export function UpstreamRatioSync({ modelRatios }: UpstreamRatioSyncProps) {
       <div className='flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
         <div className='flex flex-col gap-2 sm:flex-row'>
           <Button onClick={handleOpenChannelDialog} disabled={isLoading}>
-            <RefreshCcw className='mr-2 h-4 w-4' />
+            <Settings2 className='mr-2 h-4 w-4' />
             {t('Select Sync Channels')}
+          </Button>
+          <Button
+            variant='outline'
+            onClick={handleFetchUpstreams}
+            disabled={!hasUpstreams || isLoading}
+          >
+            <RefreshCcw className='mr-2 h-4 w-4' />
+            {t('Fetch Upstream Prices')}
           </Button>
           <Button
             variant='secondary'
@@ -512,11 +581,16 @@ export function UpstreamRatioSync({ modelRatios }: UpstreamRatioSyncProps) {
       <ChannelSelectorDialog
         open={channelDialogOpen}
         onOpenChange={setChannelDialogOpen}
-        channels={channels}
+        channels={dialogChannels}
         selectedChannelIds={selectedChannelIds}
         onSelectedChannelIdsChange={setSelectedChannelIds}
         channelEndpoints={channelEndpoints}
         onChannelEndpointsChange={setChannelEndpoints}
+        customUpstreamIds={customUpstreams.map((u) => u.id)}
+        onAddCustom={addCustomUpstream}
+        onRemoveCustom={removeCustomUpstream}
+        onCustomNameChange={updateCustomName}
+        onCustomBaseUrlChange={updateCustomBaseUrl}
         onConfirm={handleConfirmChannelSelection}
       />
 

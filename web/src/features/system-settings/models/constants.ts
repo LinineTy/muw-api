@@ -47,10 +47,14 @@ export const OPENROUTER_ENDPOINT = 'openrouter'
 // Backend channel type for OpenRouter (see constant/channel.go: ChannelTypeOpenRouter = 20)
 export const OPENROUTER_CHANNEL_TYPE = 20
 
+// Endpoint sentinel for the sub2api model-plaza converter (see controller/ratio_sync.go)
+export const SUB2API_ENDPOINT = 'sub2api'
+
 export const ENDPOINT_OPTIONS = [
   { label: 'pricing', value: '/api/pricing' },
   { label: 'ratio_config', value: '/api/ratio_config' },
   { label: 'OpenRouter', value: OPENROUTER_ENDPOINT },
+  { label: 'Sub2API', value: SUB2API_ENDPOINT },
   { label: 'custom', value: 'custom' },
 ] as const
 
