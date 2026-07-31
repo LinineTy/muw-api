@@ -1988,6 +1988,7 @@
     "Filter models by provider, group, type, endpoint, and tags.": "按供应商、分组、类型、端点和标签筛选模型。",
     "Filter models by type, endpoint, vendor, group and tags": "按类型、端点、供应商、分组和标签筛选模型",
     "Filter models...": "筛选模型...",
+    "Filter plans...": "筛选套餐...",
     "Filter the model analytics view by time range and user.": "按时间范围和用户筛选模型分析视图。",
     "Filter the traffic flow view by time range and user.": "按时间范围和用户筛选分流图视图。",
     "Filter...": "筛选...",

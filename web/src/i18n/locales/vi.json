@@ -1988,6 +1988,7 @@
     "Filter models by provider, group, type, endpoint, and tags.": "Lọc mô hình theo nhà cung cấp, nhóm, loại, endpoint và thẻ.",
     "Filter models by type, endpoint, vendor, group and tags": "Lọc mô hình theo loại, endpoint, nhà cung cấp, nhóm và thẻ",
     "Filter models...": "Lọc mô hình...",
+    "Filter plans...": "Filter plans...",
     "Filter the model analytics view by time range and user.": "Lọc chế độ xem phân tích mô hình theo khoảng thời gian và người dùng.",
     "Filter the traffic flow view by time range and user.": "Lọc chế độ xem luồng lưu lượng theo khoảng thời gian và người dùng.",
     "Filter...": "Lọc...",
