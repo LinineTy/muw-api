@@ -43,6 +43,9 @@ const (
 	modelsDevHost               = "models.dev"
 	modelsDevPath               = "/api.json"
 	modelsDevInputCostRatioBase = 1000.0
+	// sub2api 上游：endpoint 填 "sub2api" 时，拉取其公开的模型广场接口
+	sub2APIEndpointValue  = "sub2api"
+	sub2APIModelPlazaPath = "/api/v1/model-plaza"
 )
 
 func nearlyEqual(a, b float64) bool {
@@ -226,11 +229,14 @@ func FetchUpstreamRatios(c *gin.Context) {
 			defer func() { <-sem }()
 
 			isOpenRouter := chItem.Endpoint == "openrouter"
+			isSub2API := chItem.Endpoint == sub2APIEndpointValue
 
 			endpoint := chItem.Endpoint
 			var fullURL string
 			if isOpenRouter {
 				fullURL = chItem.BaseURL + "/v1/models"
+			} else if isSub2API {
+				fullURL = chItem.BaseURL + sub2APIModelPlazaPath
 			} else if strings.HasPrefix(endpoint, "http://") || strings.HasPrefix(endpoint, "https://") {
 				fullURL = endpoint
 			} else {
@@ -331,6 +337,18 @@ func FetchUpstreamRatios(c *gin.Context) {
 				converted, err := convertModelsDevToRatioData(bytes.NewReader(bodyBytes))
 				if err != nil {
 					logger.LogWarn(c.Request.Context(), "models.dev parse failed from "+chItem.Name+": "+err.Error())
+					ch <- upstreamResult{Name: uniqueName, Err: err.Error()}
+					return
+				}
+				ch <- upstreamResult{Name: uniqueName, Data: converted}
+				return
+			}
+
+			// type5: sub2api /api/v1/model-plaza -> convert plaza pricing to ratios
+			if isSub2API {
+				converted, err := convertSub2APIToRatioData(bytes.NewReader(bodyBytes))
+				if err != nil {
+					logger.LogWarn(c.Request.Context(), "sub2api parse failed from "+chItem.Name+": "+err.Error())
 					ch <- upstreamResult{Name: uniqueName, Err: err.Error()}
 					return
 				}
@@ -975,6 +993,120 @@ func convertModelsDevToRatioData(reader io.Reader) (map[string]any, error) {
 	if len(modelRatioMap) > 0 {
 		converted["model_ratio"] = modelRatioMap
 	}
+	if len(completionRatioMap) > 0 {
+		converted["completion_ratio"] = completionRatioMap
+	}
+	if len(cacheRatioMap) > 0 {
+		converted["cache_ratio"] = cacheRatioMap
+	}
+	return converted, nil
+}
+
+// sub2APIPlazaEnvelope 是 sub2api「模型广场」接口的响应结构：
+// GET /api/v1/model-plaza（可选 JWT，匿名可访问），每个分组带 rate_multiplier，
+// 每个模型带 LiteLLM 官方参考价（USD per token）。
+type sub2APIPlazaEnvelope struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    struct {
+		Description string `json:"description"`
+		Groups      []struct {
+			ID               int64   `json:"id"`
+			Name             string  `json:"name"`
+			RateMultiplier   float64 `json:"rate_multiplier"`
+			IsExclusive      bool    `json:"is_exclusive"`
+			PeakRateEnabled  bool    `json:"peak_rate_enabled"`
+			PeakRateMultiplier float64 `json:"peak_rate_multiplier"`
+			Models           []struct {
+				Name            string `json:"name"`
+				Platform        string `json:"platform"`
+				OfficialPricing *struct {
+					InputPrice        *float64 `json:"input_price"`
+					OutputPrice       *float64 `json:"output_price"`
+					CacheWritePrice   *float64 `json:"cache_write_price"`
+					CacheWrite1hPrice *float64 `json:"cache_write_1h_price"`
+					CacheReadPrice    *float64 `json:"cache_read_price"`
+				} `json:"official_pricing"`
+			} `json:"models"`
+		} `json:"groups"`
+	} `json:"data"`
+}
+
+// convertSub2APIToRatioData 解析 sub2api 模型广场响应并转换为本地倍率格式。
+// sub2api 实际收费 = LiteLLM 官方价 × 分组倍率，因此：
+//
+//	model_ratio = input_price(USD/token) * 1000 * USD * rate_multiplier
+//	completion_ratio = output_price / input_price
+//	cache_ratio = cache_read_price / input_price
+//
+// 同一模型可能出现在多个分组，取非专属分组中最小的 rate_multiplier（匿名可见的
+// 最低收费档）。peak 时段倍率与渠道自定义价（pricing 字段）不在转换范围内。
+func convertSub2APIToRatioData(reader io.Reader) (map[string]any, error) {
+	var resp sub2APIPlazaEnvelope
+	if err := common.DecodeJson(reader, &resp); err != nil {
+		return nil, fmt.Errorf("failed to decode sub2api model plaza response: %w", err)
+	}
+	if resp.Code != 0 {
+		return nil, fmt.Errorf("sub2api model plaza error: %s", resp.Message)
+	}
+
+	// 第一遍：统计每个模型在非专属分组下的最小倍率
+	minMultiplier := make(map[string]float64)
+	for _, g := range resp.Data.Groups {
+		if g.IsExclusive {
+			continue
+		}
+		mult := g.RateMultiplier
+		if mult <= 0 {
+			mult = 1
+		}
+		for _, model := range g.Models {
+			if model.Name == "" || model.OfficialPricing == nil {
+				continue
+			}
+			if cur, ok := minMultiplier[model.Name]; !ok || mult < cur {
+				minMultiplier[model.Name] = mult
+			}
+		}
+	}
+
+	modelRatioMap := make(map[string]any)
+	completionRatioMap := make(map[string]any)
+	cacheRatioMap := make(map[string]any)
+
+	// 第二遍：按模型转换，仅取存在官方输入价且倍率最低的记录
+	for _, g := range resp.Data.Groups {
+		if g.IsExclusive {
+			continue
+		}
+		for _, model := range g.Models {
+			p := model.OfficialPricing
+			if model.Name == "" || p == nil || p.InputPrice == nil || *p.InputPrice <= 0 {
+				continue
+			}
+			if _, exists := modelRatioMap[model.Name]; exists {
+				continue
+			}
+			input := *p.InputPrice
+			mult := minMultiplier[model.Name]
+
+			modelRatioMap[model.Name] = roundRatioValue(input * 1000 * float64(ratio_setting.USD) * mult)
+
+			if p.OutputPrice != nil && *p.OutputPrice >= 0 {
+				completionRatioMap[model.Name] = roundRatioValue(*p.OutputPrice / input)
+			}
+			if p.CacheReadPrice != nil && *p.CacheReadPrice >= 0 {
+				cacheRatioMap[model.Name] = roundRatioValue(*p.CacheReadPrice / input)
+			}
+		}
+	}
+
+	if len(modelRatioMap) == 0 {
+		return nil, fmt.Errorf("no valid sub2api model plaza pricing entries found")
+	}
+
+	converted := make(map[string]any)
+	converted["model_ratio"] = modelRatioMap
 	if len(completionRatioMap) > 0 {
 		converted["completion_ratio"] = completionRatioMap
 	}
