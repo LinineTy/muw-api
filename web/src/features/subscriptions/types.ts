@@ -75,6 +75,15 @@ export interface UserSubscriptionRecord {
   subscription: UserSubscription
 }
 
+// Admin global subscriptions list item (enriched with owner + plan info).
+export interface AdminUserSubscriptionSummary {
+  subscription: UserSubscription
+  username: string
+  email?: string
+  display_name?: string
+  plan_title?: string
+}
+
 // ============================================================================
 // API Request/Response Types
 // ============================================================================

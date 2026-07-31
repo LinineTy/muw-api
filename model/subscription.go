@@ -913,6 +913,97 @@ func buildSubscriptionSummaries(subs []UserSubscription) []SubscriptionSummary {
 	return result
 }
 
+// AdminUserSubscriptionSummary enriches a UserSubscription with owner and plan
+// info for the admin global subscriptions view.
+type AdminUserSubscriptionSummary struct {
+	Subscription *UserSubscription `json:"subscription"`
+	Username     string            `json:"username"`
+	Email        string            `json:"email"`
+	DisplayName  string            `json:"display_name"`
+	PlanTitle    string            `json:"plan_title"`
+}
+
+// GetAllSubscriptionsByAdmin returns a paginated, filterable list of all user
+// subscriptions across all users. Filters: status (active/expired/cancelled),
+// userKeyword (username/email/display_name substring or user id), planId.
+// Keeps the {subscription:{...}} wrapper convention so existing frontend types
+// (UserSubscriptionRecord) can be reused alongside the enriched fields.
+func GetAllSubscriptionsByAdmin(status string, userKeyword string, planId int, startIdx int, num int) ([]AdminUserSubscriptionSummary, int64, error) {
+	if num <= 0 || num > searchHardLimit {
+		num = searchHardLimit
+	}
+	if startIdx < 0 {
+		startIdx = 0
+	}
+
+	base := DB.Model(&UserSubscription{})
+	if status != "" {
+		base = base.Where("status = ?", status)
+	}
+	if planId > 0 {
+		base = base.Where("plan_id = ?", planId)
+	}
+	if userKeyword != "" {
+		// Mirror SearchUsers: substring match on identity fields, plus exact user_id for numeric input.
+		cond := "user_id IN (SELECT id FROM users WHERE username LIKE ? ESCAPE '!' OR email LIKE ? ESCAPE '!' OR display_name LIKE ? ESCAPE '!')"
+		args := []interface{}{"%" + userKeyword + "%", "%" + userKeyword + "%", "%" + userKeyword + "%"}
+		if keywordInt, err := strconv.Atoi(userKeyword); err == nil {
+			cond = "user_id = ? OR " + cond
+			args = append([]interface{}{keywordInt}, args...)
+		}
+		base = base.Where("("+cond+")", args...)
+	}
+
+	var total int64
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var subs []UserSubscription
+	if err := base.Order("end_time desc, id desc").Limit(num).Offset(startIdx).Find(&subs).Error; err != nil {
+		return nil, 0, err
+	}
+	if len(subs) == 0 {
+		return []AdminUserSubscriptionSummary{}, total, nil
+	}
+
+	// Bulk-fetch owner info (two-step + map, same pattern as GetAllLogs channel hydration).
+	userIds := make(map[int]struct{}, len(subs))
+	for _, sub := range subs {
+		userIds[sub.UserId] = struct{}{}
+	}
+	idList := make([]int, 0, len(userIds))
+	for id := range userIds {
+		idList = append(idList, id)
+	}
+	var users []User
+	if err := DB.Select("id, username, email, display_name").Where("id IN ?", idList).Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+	userMap := make(map[int]User, len(users))
+	for _, u := range users {
+		userMap[u.Id] = u
+	}
+
+	result := make([]AdminUserSubscriptionSummary, 0, len(subs))
+	for _, sub := range subs {
+		subCopy := sub
+		item := AdminUserSubscriptionSummary{
+			Subscription: &subCopy,
+		}
+		if u, ok := userMap[sub.UserId]; ok {
+			item.Username = u.Username
+			item.Email = u.Email
+			item.DisplayName = u.DisplayName
+		}
+		if plan, err := GetSubscriptionPlanById(sub.PlanId); err == nil && plan != nil {
+			item.PlanTitle = plan.Title
+		}
+		result = append(result, item)
+	}
+	return result, total, nil
+}
+
 // AdminInvalidateUserSubscription marks a user subscription as cancelled and ends it immediately.
 func AdminInvalidateUserSubscription(userSubscriptionId int) (string, error) {
 	if userSubscriptionId <= 0 {

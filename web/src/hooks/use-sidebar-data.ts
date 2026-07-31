@@ -20,6 +20,7 @@ import {
   Activity,
   Box,
   CreditCard,
+  Crown,
   FileText,
   FlaskConical,
   Key,
@@ -107,6 +108,11 @@ export function useSidebarData(): SidebarData {
             title: t('Wallet'),
             url: '/wallet',
             icon: Wallet,
+          },
+          {
+            title: t('My Subscriptions'),
+            url: '/my-subscriptions',
+            icon: Crown,
           },
           {
             title: t('Profile'),

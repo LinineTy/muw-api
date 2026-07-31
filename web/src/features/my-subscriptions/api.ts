@@ -16,22 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Plus } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
-
-import { Button } from '@/components/ui/button'
-
-import { useSubscriptions } from './subscriptions-provider'
-
-export function SubscriptionsPrimaryButtons() {
-  const { t } = useTranslation()
-  const { setOpen } = useSubscriptions()
-  return (
-    <div className='flex gap-2'>
-      <Button size='sm' onClick={() => setOpen('create')}>
-        <Plus className='h-4 w-4' />
-        {t('Create Plan')}
-      </Button>
-    </div>
-  )
-}
+// Thin re-exports so the feature stays self-contained while reusing the
+// subscription + wallet API implementations (no duplicated network calls).
+export {
+  getPublicPlans,
+  getSelfSubscriptionFull,
+  updateBillingPreference,
+} from '@/features/subscriptions/api'
+export { getSelf } from '@/lib/api'
