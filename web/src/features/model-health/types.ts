@@ -34,6 +34,7 @@ export type ModelHealthRow = {
   last_test_time: number
   last_error: string
   trend: TestTrendPoint[]
+  user_traffic_count?: number
 }
 
 export type ChannelTestRecord = {
@@ -44,6 +45,7 @@ export type ChannelTestRecord = {
   success: boolean
   response_time: number
   error_reason: string
+  source?: string
   created_at: number
 }
 

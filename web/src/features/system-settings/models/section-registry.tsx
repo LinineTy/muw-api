@@ -86,6 +86,8 @@ const MODELS_SECTIONS = [
             settings['monitor_setting.channel_test_mode'],
           'monitor_setting.auto_test_all_models':
             settings['monitor_setting.auto_test_all_models'] ?? false,
+          'monitor_setting.record_user_traffic':
+            settings['monitor_setting.record_user_traffic'] ?? false,
         }}
       />
     ),

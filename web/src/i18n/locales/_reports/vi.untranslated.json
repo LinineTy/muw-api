@@ -10,6 +10,7 @@
   "Filter by username or email": "Filter by username or email",
   "Manage the vendors that models are associated with. Create, edit, or remove vendors here.": "Manage the vendors that models are associated with. Create, edit, or remove vendors here.",
   "Track per-model success rate and latency trends.": "Track per-model success rate and latency trends.",
+  "Record real user call outcomes (success, latency) into model health. Lets the health page reflect real usage, so you can reduce scheduled test frequency to save tokens.": "Record real user call outcomes (success, latency) into model health. Lets the health page reflect real usage, so you can reduce scheduled test frequency to save tokens.",
   "Search model or channel": "Search model or channel",
   "Enable scheduled channel tests or run a manual test to start collecting health data.": "Enable scheduled channel tests or run a manual test to start collecting health data.",
   "Only available for admins. Receive a summary notification when the scheduled model check detects upstream changes.": "Only available for admins. Receive a summary notification when the scheduled model check detects upstream changes.",

@@ -24,9 +24,16 @@ import (
 	"sort"
 )
 
+// ChannelTestSourceTest marks records produced by scheduled auto-tests and
+// manual channel tests (synthetic probes).
+const ChannelTestSourceTest = "test"
+
+// ChannelTestSourceUser marks records produced by real user traffic.
+const ChannelTestSourceUser = "user"
+
 // ChannelTestRecord persists one channel connectivity probe (scheduled
-// auto-test or manual test) so channel/model health can be aggregated over
-// time: success rate, latency trend and recent errors.
+// auto-test, manual test or real user traffic) so channel/model health can be
+// aggregated over time: success rate, latency trend and recent errors.
 type ChannelTestRecord struct {
 	Id           int    `json:"id"`
 	ChannelId    int    `json:"channel_id" gorm:"index"`
@@ -35,6 +42,7 @@ type ChannelTestRecord struct {
 	Success      bool   `json:"success"`
 	ResponseTime int    `json:"response_time"` // milliseconds
 	ErrorReason  string `json:"error_reason" gorm:"type:text"`
+	Source       string `json:"source"`        // ChannelTestSourceTest | ChannelTestSourceUser
 	CreatedAt    int64  `json:"created_at" gorm:"autoCreateTime;index"`
 }
 
@@ -58,6 +66,9 @@ type ModelHealthRow struct {
 	LastTestTime     int64            `json:"last_test_time"`
 	LastError        string           `json:"last_error"`
 	Trend            []TestTrendPoint `json:"trend"`
+	// UserTrafficCount is how many of the TestCount records came from real user
+	// traffic (ChannelTestSourceUser) rather than synthetic tests.
+	UserTrafficCount int `json:"user_traffic_count"`
 }
 
 // channelTestTrendLimit bounds how many recent probes are kept per pair for the
@@ -96,6 +107,9 @@ func AggregateChannelTestRecords(records []ChannelTestRecord) []ModelHealthRow {
 		a.row.TestCount++
 		if r.Success {
 			a.row.SuccessCount++
+		}
+		if r.Source == ChannelTestSourceUser {
+			a.row.UserTrafficCount++
 		}
 		a.latencySum += int64(r.ResponseTime)
 		if r.CreatedAt >= a.row.LastTestTime {

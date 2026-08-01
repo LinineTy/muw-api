@@ -80,6 +80,28 @@ func TestAggregateChannelTestRecordsEmpty(t *testing.T) {
 	assert.Empty(t, rows)
 }
 
+func TestAggregateChannelTestRecordsUserTrafficSource(t *testing.T) {
+	records := []ChannelTestRecord{
+		{Id: 1, ChannelId: 1, ChannelName: "A", ModelName: "deepseek-chat", Success: true, ResponseTime: 100, Source: ChannelTestSourceUser, CreatedAt: 1000},
+		{Id: 2, ChannelId: 1, ChannelName: "A", ModelName: "deepseek-chat", Success: false, ResponseTime: 400, ErrorReason: "upstream 500", Source: ChannelTestSourceUser, CreatedAt: 2000},
+		{Id: 3, ChannelId: 1, ChannelName: "A", ModelName: "deepseek-chat", Success: true, ResponseTime: 150, Source: ChannelTestSourceTest, CreatedAt: 3000},
+		{Id: 4, ChannelId: 1, ChannelName: "A", ModelName: "deepseek-chat", Success: true, ResponseTime: 120, Source: "", CreatedAt: 4000}, // legacy rows have no source
+	}
+
+	rows := AggregateChannelTestRecords(records)
+	require.Len(t, rows, 1)
+	row := rows[0]
+	// UserTrafficCount counts only source == "user"; TestCount stays the total.
+	assert.Equal(t, 4, row.TestCount)
+	assert.Equal(t, 2, row.UserTrafficCount)
+	// Success rate and latency still mix all records.
+	assert.Equal(t, 3, row.SuccessCount)
+	assert.InDelta(t, 75, row.SuccessRate, 0.1)
+	assert.Equal(t, 193, row.AvgResponseTime) // round((100+400+150+120)/4) = 193
+	// The most recent failure comes from the user-traffic record.
+	assert.Equal(t, "upstream 500", row.LastError)
+}
+
 func TestAggregateChannelTestRecordsOrderIndependent(t *testing.T) {
 	records := []ChannelTestRecord{
 		{Id: 1, ChannelId: 1, ChannelName: "A", ModelName: "m", Success: true, ResponseTime: 100, CreatedAt: 2000},

@@ -83,6 +83,7 @@ const routingReliabilitySchema = z
         .min(1, 'Interval must be at least 1 minute'),
       channel_test_mode: z.enum(channelTestModes),
       auto_test_all_models: z.boolean(),
+      record_user_traffic: z.boolean(),
     }),
   })
   .superRefine((values, ctx) => {
@@ -129,6 +130,7 @@ type RoutingReliabilitySectionProps = {
     'monitor_setting.auto_test_channel_minutes': number
     'monitor_setting.channel_test_mode': ChannelTestMode
     'monitor_setting.auto_test_all_models': boolean
+    'monitor_setting.record_user_traffic': boolean
   }
 }
 
@@ -148,6 +150,7 @@ type NormalizedRoutingReliabilityValues = {
   'monitor_setting.auto_test_channel_minutes': number
   'monitor_setting.channel_test_mode': ChannelTestMode
   'monitor_setting.auto_test_all_models': boolean
+  'monitor_setting.record_user_traffic': boolean
 }
 
 function normalizeChannelTestMode(value?: string): ChannelTestMode {
@@ -175,6 +178,7 @@ const buildFormDefaults = (
       defaults['monitor_setting.channel_test_mode']
     ),
     auto_test_all_models: defaults['monitor_setting.auto_test_all_models'],
+    record_user_traffic: defaults['monitor_setting.record_user_traffic'],
   },
 })
 
@@ -203,6 +207,8 @@ const normalizeDefaults = (
   ),
   'monitor_setting.auto_test_all_models':
     defaults['monitor_setting.auto_test_all_models'],
+  'monitor_setting.record_user_traffic':
+    defaults['monitor_setting.record_user_traffic'],
 })
 
 const normalizeFormValues = (
@@ -228,6 +234,8 @@ const normalizeFormValues = (
   'monitor_setting.channel_test_mode': values.monitor_setting.channel_test_mode,
   'monitor_setting.auto_test_all_models':
     values.monitor_setting.auto_test_all_models,
+  'monitor_setting.record_user_traffic':
+    values.monitor_setting.record_user_traffic,
 })
 
 export function RoutingReliabilitySection({
@@ -399,6 +407,29 @@ export function RoutingReliabilitySection({
                       <FormDescription>
                         {t(
                           'Probe every model instead of a single representative one. Provides per-model health at higher upstream load.'
+                        )}
+                      </FormDescription>
+                    </SettingsSwitchContent>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </SettingsSwitchItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='monitor_setting.record_user_traffic'
+                render={({ field }) => (
+                  <SettingsSwitchItem>
+                    <SettingsSwitchContent>
+                      <FormLabel>{t('Record real user traffic')}</FormLabel>
+                      <FormDescription>
+                        {t(
+                          'Record real user call outcomes (success, latency) into model health. Lets the health page reflect real usage, so you can reduce scheduled test frequency to save tokens.'
                         )}
                       </FormDescription>
                     </SettingsSwitchContent>

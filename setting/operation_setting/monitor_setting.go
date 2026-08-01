@@ -15,6 +15,10 @@ type MonitorSetting struct {
 	// representative model. Defaults to off because it multiplies upstream load
 	// by the number of models per channel.
 	AutoTestAllModels bool `json:"auto_test_all_models"`
+	// RecordUserTraffic writes real user call outcomes (success, latency, error)
+	// into the channel test history so the model health page reflects real
+	// usage. Defaults to off.
+	RecordUserTraffic bool `json:"record_user_traffic"`
 }
 
 const (
