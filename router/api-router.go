@@ -109,8 +109,8 @@ func SetApiRouter(router *gin.Engine) {
 				// Quota pool routes (user)
 				selfRoute.GET("/quota-pool", controller.GetQuotaPoolStatus)
 				selfRoute.GET("/quota-pool/records", controller.GetQuotaPoolRecords)
-				selfRoute.POST("/quota-pool/claim", middleware.CriticalRateLimit(), controller.ClaimQuotaPool)
-				selfRoute.POST("/quota-pool/checkin", middleware.CriticalRateLimit(), controller.QuotaCheckIn)
+				selfRoute.POST("/quota-pool/claim", middleware.QuotaPoolActionRateLimit(), controller.ClaimQuotaPool)
+				selfRoute.POST("/quota-pool/checkin", middleware.QuotaPoolActionRateLimit(), controller.QuotaCheckIn)
 
 				// Custom OAuth bindings
 				selfRoute.GET("/oauth/bindings", controller.GetUserOAuthBindings)

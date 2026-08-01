@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -113,6 +114,44 @@ func TestRedisEmailVerificationRateLimiterPreservesResponseAndTTL(t *testing.T) 
 	key := redisIPRateLimitKey(EmailVerificationRateLimitMark, "192.0.2.30")
 	assert.True(t, redisServer.Exists(key))
 	assert.Equal(t, time.Duration(EmailVerificationDuration)*time.Second, redisServer.TTL(key))
+}
+
+func TestQuotaPoolActionRateLimit_IsPerUserNotSharedIP(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	_, _ = useRateLimitMiniRedis(t)
+
+	router := gin.New()
+	require.NoError(t, router.SetTrustedProxies(nil))
+	router.POST(
+		"/quota-pool/checkin",
+		func(c *gin.Context) {
+			userID, _ := strconv.Atoi(c.GetHeader("X-Test-User"))
+			c.Set("id", userID)
+		},
+		QuotaPoolActionRateLimit(),
+		func(c *gin.Context) { c.Status(http.StatusNoContent) },
+	)
+
+	request := func(userID string) int {
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodPost, "/quota-pool/checkin", nil)
+		request.RemoteAddr = "192.0.2.70:12345"
+		request.Header.Set("X-Test-User", userID)
+		router.ServeHTTP(recorder, request)
+		return recorder.Code
+	}
+
+	// 用户 100 连续 10 次后第 11 次被限
+	for i := 0; i < 10; i++ {
+		assert.Equal(t, http.StatusNoContent, request("100"))
+	}
+	assert.Equal(t, http.StatusTooManyRequests, request("100"))
+
+	// 同一 IP 下的用户 200 不受影响——限流按用户而非共享 IP 桶，
+	// 否则一个用户连点会误伤 refresh 等接口导致其他人被登出。
+	for i := 0; i < 10; i++ {
+		assert.Equal(t, http.StatusNoContent, request("200"))
+	}
 }
 
 func TestRedisFixedWindowIsAtomicUnderConcurrency(t *testing.T) {
