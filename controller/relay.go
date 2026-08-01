@@ -126,6 +126,16 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		return
 	}
 
+	// Replace image parts with text descriptions for non-vision models before
+	// pricing/billing so both the vision sub-call and the main text request are
+	// billed correctly.
+	if relayFormat == types.RelayFormatOpenAI {
+		if apiErr := applyVisionFallback(c, relayInfo); apiErr != nil {
+			newAPIError = apiErr
+			return
+		}
+	}
+
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
 	needCountToken := constant.CountToken
 	// Avoid building huge CombineText (strings.Join) when token counting and sensitive check are both disabled.

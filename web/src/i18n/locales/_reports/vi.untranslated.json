@@ -1,6 +1,11 @@
 {
   "Are you sure you want to delete vendor \"{{name}}\"? This action cannot be undone.": "Are you sure you want to delete vendor \"{{name}}\"? This action cannot be undone.",
   "Create your first vendor to get started.": "Create your first vendor to get started.",
+  "LinuxDO user ids or usernames that are blocked from logging in or registering, one per line. Matching ignores case for usernames and applies even when the trust level meets the minimum.": "LinuxDO user ids or usernames that are blocked from logging in or registering, one per line. Matching ignores case for usernames and applies even when the trust level meets the minimum.",
+  "When a request contains images but the target model does not support vision, each image is described by the vision fallback model and the description is sent to the target model instead.": "When a request contains images but the target model does not support vision, each image is described by the vision fallback model and the description is sent to the target model instead.",
+  "A vision-capable model used to describe images. It must have an enabled channel in the user group and a configured price/ratio, because each vision call is billed to the user.": "A vision-capable model used to describe images. It must have an enabled channel in the user group and a configured price/ratio, because each vision call is billed to the user.",
+  "System prompt sent to the vision fallback model when describing an image.": "System prompt sent to the vision fallback model when describing an image.",
+  "Models that already support vision, one per line. Requests to these models skip the fallback. Matching is case-insensitive and matches model names containing the entry.": "Models that already support vision, one per line. Requests to these models skip the fallback. Matching is case-insensitive and matches model names containing the entry.",
   "Failed to fetch subscription records": "Failed to fetch subscription records",
   "Filter by username or email": "Filter by username or email",
   "Manage the vendors that models are associated with. Create, edit, or remove vendors here.": "Manage the vendors that models are associated with. Create, edit, or remove vendors here.",
