@@ -108,8 +108,14 @@ export function PlanCatalogSection() {
             <Card
               key={plan.id}
               data-card-hover='false'
-              className={cn(isPopular && 'border-primary/70 shadow-sm')}
+              className={cn(
+                'relative overflow-hidden',
+                isPopular && 'border-primary/70 shadow-sm'
+              )}
             >
+              {isPopular && (
+                <div className='from-primary/60 to-primary/20 absolute inset-x-0 top-0 h-1 bg-linear-to-r' />
+              )}
               <CardContent className='flex h-full flex-col p-3.5 sm:p-4'>
                 <div className='mb-2 flex items-start justify-between gap-3'>
                   <div className='min-w-0'>
