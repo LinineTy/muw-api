@@ -2704,8 +2704,6 @@
     "Record real user traffic": "記錄真實使用者流量",
     "Record real user call outcomes (success, latency) into model health. Lets the health page reflect real usage, so you can reduce scheduled test frequency to save tokens.": "把真實使用者呼叫結果(成功/延遲)寫入模型健康。健康頁可反映真實使用情況,這樣你可以降低定時測試頻率來節省 token。",
     "Last tested": "最近測試",
-    "Avg response": "平均延遲",
-    "Last error": "最近錯誤",
     "Search model or channel": "搜尋模型或通道",
     "Only unhealthy": "僅看異常",
     "No health data yet": "暫無健康資料",
