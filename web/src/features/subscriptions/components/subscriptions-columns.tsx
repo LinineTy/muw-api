@@ -30,6 +30,18 @@ import { formatDuration, formatResetPeriod } from '../lib'
 import type { PlanRecord } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
 
+function parseAllowedGroups(raw?: string): string[] {
+  if (!raw) return []
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return Array.isArray(parsed)
+      ? parsed.filter((g): g is string => typeof g === 'string')
+      : []
+  } catch {
+    return []
+  }
+}
+
 export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
   const { t } = useTranslation()
 
@@ -174,6 +186,87 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
           )
         },
         size: 120,
+      },
+      {
+        id: 'exclusive_group',
+        header: t('Exclusive Group'),
+        meta: { mobileHidden: true },
+        cell: ({ row }) => {
+          const group = row.original.plan.exclusive_group
+          return group ? (
+            <GroupBadge group={group} />
+          ) : (
+            <span className='text-muted-foreground'>—</span>
+          )
+        },
+        size: 120,
+      },
+      {
+        id: 'limits',
+        header: t('Quota Limits'),
+        meta: { mobileHidden: true },
+        cell: ({ row }) => {
+          const p = row.original.plan
+          const parts: string[] = []
+          if (Number(p.weekly_amount_limit || 0) > 0) {
+            parts.push(
+              `${t('Weekly')} ${formatQuota(Number(p.weekly_amount_limit))}`
+            )
+          }
+          if (Number(p.monthly_amount_limit || 0) > 0) {
+            parts.push(
+              `${t('Monthly')} ${formatQuota(Number(p.monthly_amount_limit))}`
+            )
+          }
+          if (Number(p.reset_amount_limit || 0) > 0) {
+            parts.push(
+              `${t('Per-Cycle')} ${formatQuota(Number(p.reset_amount_limit))}`
+            )
+          }
+          return (
+            <span className='text-muted-foreground'>
+              {parts.length > 0 ? parts.join(' / ') : '—'}
+            </span>
+          )
+        },
+        size: 190,
+      },
+      {
+        id: 'max_duration',
+        header: t('Max Duration'),
+        meta: { mobileHidden: true },
+        cell: ({ row }) => {
+          const seconds = Number(row.original.plan.max_cumulative_seconds || 0)
+          return seconds > 0 ? (
+            <span className='text-muted-foreground'>
+              {Math.floor(seconds / 86400)} {t('days')}
+            </span>
+          ) : (
+            <span className='text-muted-foreground'>—</span>
+          )
+        },
+        size: 100,
+      },
+      {
+        id: 'allowed_groups',
+        header: t('Allowed Groups'),
+        meta: { mobileHidden: true },
+        cell: ({ row }) => {
+          const groups = parseAllowedGroups(row.original.plan.allowed_groups)
+          if (groups.length === 0) {
+            return (
+              <span className='text-muted-foreground'>{t('All')}</span>
+            )
+          }
+          return (
+            <BadgeCell>
+              {groups.map((g) => (
+                <GroupBadge key={g} group={g} />
+              ))}
+            </BadgeCell>
+          )
+        },
+        size: 150,
       },
       {
         id: 'actions',

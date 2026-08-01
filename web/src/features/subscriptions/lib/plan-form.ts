@@ -39,6 +39,12 @@ export function getPlanFormSchema(t: TFunction) {
       'custom',
     ]),
     quota_reset_custom_seconds: z.coerce.number().min(0).optional(),
+    reset_amount_limit: z.coerce.number().min(0),
+    weekly_amount_limit: z.coerce.number().min(0),
+    monthly_amount_limit: z.coerce.number().min(0),
+    max_cumulative_days: z.coerce.number().min(0),
+    exclusive_group: z.string().optional(),
+    allowed_groups: z.array(z.string()).optional(),
     enabled: z.boolean(),
     sort_order: z.coerce.number(),
     is_recommended: z.boolean(),
@@ -53,6 +59,18 @@ export function getPlanFormSchema(t: TFunction) {
 
 export type PlanFormValues = z.infer<ReturnType<typeof getPlanFormSchema>>
 
+function parseAllowedGroups(raw?: string): string[] {
+  if (!raw) return []
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return Array.isArray(parsed)
+      ? parsed.filter((g): g is string => typeof g === 'string')
+      : []
+  } catch {
+    return []
+  }
+}
+
 export const PLAN_FORM_DEFAULTS: PlanFormValues = {
   title: '',
   subtitle: '',
@@ -62,6 +80,12 @@ export const PLAN_FORM_DEFAULTS: PlanFormValues = {
   custom_seconds: 0,
   quota_reset_period: 'never',
   quota_reset_custom_seconds: 0,
+  reset_amount_limit: 0,
+  weekly_amount_limit: 0,
+  monthly_amount_limit: 0,
+  max_cumulative_days: 0,
+  exclusive_group: '',
+  allowed_groups: [],
   enabled: true,
   sort_order: 0,
   is_recommended: false,
@@ -83,6 +107,12 @@ export function planToFormValues(plan: SubscriptionPlan): PlanFormValues {
     custom_seconds: Number(plan.custom_seconds || 0),
     quota_reset_period: plan.quota_reset_period || 'never',
     quota_reset_custom_seconds: Number(plan.quota_reset_custom_seconds || 0),
+    reset_amount_limit: quotaUnitsToDollars(Number(plan.reset_amount_limit || 0)),
+    weekly_amount_limit: quotaUnitsToDollars(Number(plan.weekly_amount_limit || 0)),
+    monthly_amount_limit: quotaUnitsToDollars(Number(plan.monthly_amount_limit || 0)),
+    max_cumulative_days: Math.round(Number(plan.max_cumulative_seconds || 0) / 86400),
+    exclusive_group: plan.exclusive_group || '',
+    allowed_groups: parseAllowedGroups(plan.allowed_groups),
     enabled: plan.enabled !== false,
     sort_order: Number(plan.sort_order || 0),
     is_recommended: plan.is_recommended === true,
@@ -108,6 +138,12 @@ export function formValuesToPlanPayload(values: PlanFormValues): PlanPayload {
         values.quota_reset_period === 'custom'
           ? Number(values.quota_reset_custom_seconds || 0)
           : 0,
+      reset_amount_limit: parseQuotaFromDollars(Number(values.reset_amount_limit || 0)),
+      weekly_amount_limit: parseQuotaFromDollars(Number(values.weekly_amount_limit || 0)),
+      monthly_amount_limit: parseQuotaFromDollars(Number(values.monthly_amount_limit || 0)),
+      max_cumulative_seconds: Math.round(Number(values.max_cumulative_days || 0)) * 86400,
+      exclusive_group: values.exclusive_group?.trim() || '',
+      allowed_groups: JSON.stringify(values.allowed_groups || []),
       sort_order: Number(values.sort_order || 0),
       max_purchase_per_user: Number(values.max_purchase_per_user || 0),
       total_amount: parseQuotaFromDollars(Number(values.total_amount || 0)),
