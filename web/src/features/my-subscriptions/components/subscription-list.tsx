@@ -16,11 +16,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Clock, RefreshCw } from 'lucide-react'
+import { CalendarX, ChevronsUp, Clock, RefreshCw } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { StatusBadge } from '@/components/status-badge'
 import { Progress } from '@/components/ui/progress'
+import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import {
   Tooltip,
   TooltipContent,
@@ -29,21 +33,60 @@ import {
 import { formatTimestamp } from '@/features/subscriptions/lib'
 import { formatQuota } from '@/lib/format'
 
-import type { UserSubscriptionRecord } from '@/features/subscriptions/types'
+import type {
+  SubscriptionPlan,
+  UserSubscriptionRecord,
+} from '@/features/subscriptions/types'
+import { setSubscriptionAutoRenew, setSubscriptionPriority } from '../api'
 import {
   classifySubscriptionStatus,
   getRemainingDays,
   getUsagePercent,
 } from '../lib/helpers'
+import { useMySubscriptions } from './my-subscriptions-provider'
+import { CancelSubscriptionDialog } from './dialogs/cancel-subscription-dialog'
+import { RenewSubscriptionDialog } from './dialogs/renew-subscription-dialog'
+
+function CycleUsageRow({
+  label,
+  used,
+  total,
+}: {
+  label: string
+  used: number
+  total: number
+}) {
+  const pct = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0
+  return (
+    <div>
+      <div className='text-muted-foreground flex items-center justify-between text-xs'>
+        <span>{label}</span>
+        <span>
+          {formatQuota(used)} / {formatQuota(total)}
+        </span>
+      </div>
+      <Progress value={pct} className='mt-0.5 h-1' />
+    </div>
+  )
+}
 
 function SubscriptionItem({
   sub,
-  planTitle,
+  plan,
+  isPreferred,
+  onRenew,
+  onCancel,
 }: {
   sub: UserSubscriptionRecord
-  planTitle: string
+  plan?: SubscriptionPlan
+  isPreferred?: boolean
+  onRenew: (sub: UserSubscriptionRecord) => void
+  onCancel: (sub: UserSubscriptionRecord) => void
 }) {
   const { t } = useTranslation()
+  const { refresh } = useMySubscriptions()
+  const [updating, setUpdating] = useState(false)
+
   const subscription = sub.subscription
   const totalAmount = Number(subscription?.amount_total || 0)
   const usedAmount = Number(subscription?.amount_used || 0)
@@ -54,12 +97,20 @@ function SubscriptionItem({
   const nextResetTime = subscription?.next_reset_time ?? 0
   const { isActive, isCancelled } = classifySubscriptionStatus(sub)
 
+  const hasCycleLimit = Number(plan?.reset_amount_limit || 0) > 0
+  const cycleStartUsed = Number(subscription?.cycle_start_used || 0)
+  const cycleUsed = Math.max(0, usedAmount - cycleStartUsed)
+  const cycleLimit = Number(plan?.reset_amount_limit || 0)
+  const weekLimit = Number(plan?.weekly_amount_limit || 0)
+  const monthLimit = Number(plan?.monthly_amount_limit || 0)
+  const weekUsed = Math.max(0, usedAmount - Number(subscription?.week_start_used || 0))
+  const monthUsed = Math.max(
+    0,
+    usedAmount - Number(subscription?.month_start_used || 0)
+  )
+
   let statusBadge = (
-    <StatusBadge
-      label={t('Expired')}
-      variant='neutral'
-      copyable={false}
-    />
+    <StatusBadge label={t('Expired')} variant='neutral' copyable={false} />
   )
   if (isActive) {
     statusBadge = (
@@ -78,17 +129,67 @@ function SubscriptionItem({
     endTimeLabel = t('Cancelled at')
   }
 
+  const handleAutoRenew = async (enabled: boolean) => {
+    if (!subscription) return
+    setUpdating(true)
+    try {
+      const res = await setSubscriptionAutoRenew(subscription.id, enabled)
+      if (res.success) {
+        toast.success(enabled ? t('Auto-renew enabled') : t('Auto-renew disabled'))
+      } else {
+        toast.error(res.message || t('Request failed'))
+      }
+    } catch {
+      toast.error(t('Request failed'))
+    } finally {
+      setUpdating(false)
+      void refresh()
+    }
+  }
+
+  const handleSetPriority = async () => {
+    if (!subscription) return
+    setUpdating(true)
+    try {
+      const res = await setSubscriptionPriority(subscription.id)
+      if (res.success) {
+        toast.success(t('Set as preferred subscription'))
+      } else {
+        toast.error(res.message || t('Request failed'))
+      }
+    } catch {
+      toast.error(t('Request failed'))
+    } finally {
+      setUpdating(false)
+      void refresh()
+    }
+  }
+
   return (
-    <div className='bg-card overflow-hidden rounded-2xl border shadow-xs'>
+    <div className='bg-card flex flex-col overflow-hidden rounded-2xl border shadow-xs'>
       {/* 顶栏：计划名 + 状态 + 剩余天数 */}
       <div className='flex items-center justify-between gap-2 border-b px-4 py-3'>
         <div className='flex min-w-0 items-center gap-2'>
           <span className='truncate text-sm font-semibold'>
-            {planTitle
-              ? `${planTitle} · ${t('Subscription')} #${subscription?.id}`
+            {plan?.title
+              ? `${plan.title} · ${t('Subscription')} #${subscription?.id}`
               : `${t('Subscription')} #${subscription?.id}`}
           </span>
           {statusBadge}
+          {isPreferred && (
+            <StatusBadge
+              label={t('Preferred')}
+              variant='info'
+              copyable={false}
+            />
+          )}
+          {isActive && subscription?.cancel_at_end && (
+            <StatusBadge
+              label={t('Cancels at end')}
+              variant='neutral'
+              copyable={false}
+            />
+          )}
         </div>
         {isActive && (
           <span className='text-muted-foreground shrink-0 text-xs'>
@@ -100,7 +201,7 @@ function SubscriptionItem({
       </div>
 
       {/* 额度主体 */}
-      <div className='px-4 py-3'>
+      <div className='flex-1 px-4 py-3'>
         {totalAmount > 0 ? (
           <>
             <div className='flex items-end justify-between gap-2'>
@@ -140,6 +241,31 @@ function SubscriptionItem({
             <div className='text-muted-foreground mt-1 text-xs'>
               {t('Remaining')} {formatQuota(remainAmount)}
             </div>
+            {(hasCycleLimit || weekLimit > 0 || monthLimit > 0) && isActive && (
+              <div className='mt-2 space-y-1.5'>
+                {hasCycleLimit && (
+                  <CycleUsageRow
+                    label={t('This cycle')}
+                    used={cycleUsed}
+                    total={cycleLimit}
+                  />
+                )}
+                {weekLimit > 0 && (
+                  <CycleUsageRow
+                    label={t('This week')}
+                    used={weekUsed}
+                    total={weekLimit}
+                  />
+                )}
+                {monthLimit > 0 && (
+                  <CycleUsageRow
+                    label={t('This month')}
+                    used={monthUsed}
+                    total={monthLimit}
+                  />
+                )}
+              </div>
+            )}
           </>
         ) : (
           <div className='flex items-center gap-2'>
@@ -152,6 +278,15 @@ function SubscriptionItem({
           </div>
         )}
       </div>
+
+      {/* 自动续费失败提示 */}
+      {isActive && subscription?.auto_renew_failed && (
+        <div className='bg-destructive/10 text-destructive border-y px-4 py-2 text-xs'>
+          {t(
+            'Auto-renew failed: insufficient balance or plan unavailable. Please top up or renew manually.'
+          )}
+        </div>
+      )}
 
       {/* 时间信息条 */}
       <div className='bg-muted/40 text-muted-foreground flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t px-4 py-2.5 text-xs'>
@@ -166,18 +301,87 @@ function SubscriptionItem({
           </span>
         )}
       </div>
+
+      {/* 操作区 */}
+      {isActive && (
+        <div className='space-y-2 border-t px-4 py-2.5'>
+          <div className='flex items-center gap-2'>
+            <Button
+              size='sm'
+              variant='outline'
+              className='flex-1'
+              onClick={() => onRenew(sub)}
+            >
+              <RefreshCw className='size-3.5' />
+              {t('Renew')}
+            </Button>
+            <Button
+              size='sm'
+              variant='outline'
+              className='flex-1'
+              onClick={() => onCancel(sub)}
+            >
+              <CalendarX className='size-3.5' />
+              {t('Cancel')}
+            </Button>
+          </div>
+          <div className='flex items-center justify-between gap-2 text-xs'>
+            <label className='flex items-center gap-1.5'>
+              <Switch
+                checked={subscription?.auto_renew === true}
+                onCheckedChange={handleAutoRenew}
+                disabled={updating}
+                size='sm'
+              />
+              {t('Auto-renew')}
+            </label>
+            <Button
+              size='sm'
+              variant='ghost'
+              onClick={handleSetPriority}
+              disabled={updating}
+            >
+              <ChevronsUp className='size-3.5' />
+              {t('Use First')}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 export function SubscriptionList({
   subscriptions,
-  planTitleMap,
+  planMap,
 }: {
   subscriptions: UserSubscriptionRecord[]
-  planTitleMap: Map<number, string>
+  planMap: Map<number, SubscriptionPlan>
 }) {
   const { t } = useTranslation()
+  const { refresh } = useMySubscriptions()
+  const [renewTarget, setRenewTarget] =
+    useState<UserSubscriptionRecord | null>(null)
+  const [cancelTarget, setCancelTarget] =
+    useState<UserSubscriptionRecord | null>(null)
+
+  // A subscription is "preferred" when it has the lowest priority among active
+  // ones and priorities actually differ (i.e. the user has chosen a preference).
+  const preferredSet = useMemo(() => {
+    const actives = subscriptions.filter((s) =>
+      classifySubscriptionStatus(s).isActive
+    )
+    if (actives.length < 2) return new Set<number>()
+    const ps = actives.map((s) => Number(s.subscription?.priority || 0))
+    const minP = Math.min(...ps)
+    const maxP = Math.max(...ps)
+    if (maxP <= minP) return new Set<number>()
+    return new Set(
+      actives
+        .filter((s) => Number(s.subscription?.priority || 0) === minP)
+        .map((s) => s.subscription?.id)
+    )
+  }, [subscriptions])
 
   if (subscriptions.length === 0) {
     return (
@@ -191,15 +395,35 @@ export function SubscriptionList({
     <div className='grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3'>
       {subscriptions.map((sub) => {
         const subscription = sub.subscription
-        const planTitle = planTitleMap.get(subscription?.plan_id) || ''
         return (
           <SubscriptionItem
             key={subscription?.id}
             sub={sub}
-            planTitle={planTitle}
+            plan={planMap.get(subscription?.plan_id)}
+            isPreferred={!!subscription && preferredSet.has(subscription.id)}
+            onRenew={(s) => setRenewTarget(s)}
+            onCancel={(s) => setCancelTarget(s)}
           />
         )
       })}
+
+      <RenewSubscriptionDialog
+        open={!!renewTarget}
+        onOpenChange={(open) => {
+          if (!open) setRenewTarget(null)
+        }}
+        subscription={renewTarget}
+        plan={renewTarget ? planMap.get(renewTarget.subscription?.plan_id) : null}
+        onSuccess={refresh}
+      />
+      <CancelSubscriptionDialog
+        open={!!cancelTarget}
+        onOpenChange={(open) => {
+          if (!open) setCancelTarget(null)
+        }}
+        subscription={cancelTarget}
+        onSuccess={refresh}
+      />
     </div>
   )
 }

@@ -22,5 +22,13 @@ export {
   getPublicPlans,
   getSelfSubscriptionFull,
   updateBillingPreference,
+  cancelSubscription,
+  renewSubscriptionBalance,
+  setSubscriptionAutoRenew,
+  setSubscriptionPriority,
+  getExpiringSubscriptions,
+  paySubscriptionEpay,
+  paySubscriptionBalance,
 } from '@/features/subscriptions/api'
+export type { ExpiringSubscription } from '@/features/subscriptions/api'
 export { getSelf } from '@/lib/api'

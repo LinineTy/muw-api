@@ -29,6 +29,7 @@ type MySubscriptionsContextValue = {
   plans: PlanRecord[]
   topupInfo: TopupInfo | null
   userQuota: number
+  userGroup: string
   loading: boolean
   refreshing: boolean
   refresh: () => Promise<void>
@@ -48,6 +49,7 @@ export function MySubscriptionsProvider({
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [userQuota, setUserQuota] = useState(0)
+  const [userGroup, setUserGroup] = useState('')
 
   const { topupInfo } = useTopupInfo()
 
@@ -73,6 +75,18 @@ export function MySubscriptionsProvider({
     }
   }, [])
 
+  const fetchSelf = useCallback(async () => {
+    try {
+      const self = await getSelf()
+      if (self.success) {
+        setUserQuota(self.data?.quota ?? 0)
+        setUserGroup(self.data?.group || '')
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     const init = async () => {
@@ -81,8 +95,8 @@ export function MySubscriptionsProvider({
       try {
         const self = await getSelf()
         if (!cancelled && self.success) {
-          const quota = self.data?.quota ?? 0
-          setUserQuota(quota)
+          setUserQuota(self.data?.quota ?? 0)
+          setUserGroup(self.data?.group || '')
         }
       } catch {
         // ignore
@@ -99,14 +113,11 @@ export function MySubscriptionsProvider({
     setRefreshing(true)
     try {
       await fetchSelfSubscription()
-      const self = await getSelf()
-      if (self.success) {
-        setUserQuota(self.data?.quota ?? 0)
-      }
+      await fetchSelf()
     } finally {
       setRefreshing(false)
     }
-  }, [fetchSelfSubscription])
+  }, [fetchSelfSubscription, fetchSelf])
 
   return (
     <MySubscriptionsContext.Provider
@@ -115,6 +126,7 @@ export function MySubscriptionsProvider({
         plans,
         topupInfo,
         userQuota,
+        userGroup,
         loading,
         refreshing,
         refresh,
