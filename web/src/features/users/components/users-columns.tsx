@@ -192,6 +192,27 @@ export function useUsersColumns(): ColumnDef<User>[] {
       meta: { mobileOrder: 30 },
     },
     {
+      id: 'linuxdo_trust_level',
+      accessorKey: 'linux_do_trust_level',
+      header: t('LinuxDO Level'),
+      cell: ({ row }) => {
+        const user = row.original
+        if (!user.linux_do_id) return null
+        return (
+          <BadgeCell>
+            <StatusBadge
+              label={`L${user.linux_do_trust_level ?? 0}`}
+              variant='info'
+              copyable={false}
+            />
+          </BadgeCell>
+        )
+      },
+      enableSorting: false,
+      size: 110,
+      meta: { mobileHidden: true },
+    },
+    {
       accessorKey: 'role',
       header: t('Role'),
       cell: ({ row }) => {

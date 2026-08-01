@@ -26,8 +26,10 @@ import {
   FormControl,
   FormDescription,
   FormField,
+  FormItem,
   FormLabel,
 } from '@/components/ui/form'
+import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 
 import {
@@ -45,6 +47,7 @@ const behaviorSchema = z.object({
   DemoSiteEnabled: z.boolean(),
   SelfUseModeEnabled: z.boolean(),
   AffiliateProgramEnabled: z.boolean(),
+  DefaultUserGroup: z.string(),
 })
 
 type BehaviorFormValues = z.infer<typeof behaviorSchema>
@@ -165,6 +168,32 @@ export function SystemBehaviorSection({
                   />
                 </FormControl>
               </SettingsSwitchItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='DefaultUserGroup'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Default User Group')}</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder='default'
+                    autoComplete='off'
+                    value={field.value ?? ''}
+                    onChange={(event) => field.onChange(event.target.value)}
+                    name={field.name}
+                    onBlur={field.onBlur}
+                    ref={field.ref}
+                  />
+                </FormControl>
+                <FormDescription>
+                  {t(
+                    'Group assigned to new registered users (including OAuth). LinuxDO trust levels without a mapping also fall back to this group.'
+                  )}
+                </FormDescription>
+              </FormItem>
             )}
           />
         </SettingsForm>

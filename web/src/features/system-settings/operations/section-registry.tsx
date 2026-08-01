@@ -37,6 +37,7 @@ const OPERATIONS_SECTIONS = [
           DemoSiteEnabled: settings.DemoSiteEnabled,
           SelfUseModeEnabled: settings.SelfUseModeEnabled,
           AffiliateProgramEnabled: settings.AffiliateProgramEnabled,
+          DefaultUserGroup: settings.DefaultUserGroup ?? 'default',
         }}
       />
     ),

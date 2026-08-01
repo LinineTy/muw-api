@@ -308,6 +308,9 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 		if user.Id == 0 {
 			return nil, &OAuthUserDeletedError{}
 		}
+		if _, ok := provider.(*oauth.LinuxDOProvider); ok {
+			applyLinuxDOProfile(user, oauthUser, false)
+		}
 		return user, nil
 	}
 
@@ -366,6 +369,10 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 	}
 	user.Role = common.RoleCommonUser
 	user.Status = common.UserStatusEnabled
+	user.Group = common.DefaultUserGroup
+	if _, ok := provider.(*oauth.LinuxDOProvider); ok {
+		applyLinuxDOProfile(user, oauthUser, true)
+	}
 
 	// Handle affiliate code
 	inviterId := 0
@@ -432,6 +439,43 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 	}
 
 	return user, nil
+}
+
+// applyLinuxDOProfile persists the LinuxDO trust level and keeps the user's
+// group in sync with the configured trust-level → group mapping. For existing
+// users the group is only re-synced while it is still auto-managed (GroupAuto),
+// so an administrator's manual override is never silently overwritten.
+func applyLinuxDOProfile(user *model.User, oauthUser *oauth.OAuthUser, isNew bool) {
+	if user == nil {
+		return
+	}
+	trustLevel, _ := oauthUser.Extra["trust_level"].(int)
+
+	if isNew {
+		// New LinuxDO user: record the trust level and, when a mapping is
+		// configured, assign the mapped group and mark the group auto-managed.
+		user.LinuxDOTrustLevel = trustLevel
+		if len(common.LinuxDOGroupMapping) > 0 {
+			user.GroupAuto = true
+			user.Group = common.LinuxDOGroupForTrustLevel(trustLevel)
+		}
+		return
+	}
+
+	// Existing user: always refresh the trust level for display.
+	group := ""
+	if len(common.LinuxDOGroupMapping) > 0 && user.GroupAuto {
+		group = common.LinuxDOGroupForTrustLevel(trustLevel)
+	}
+	if trustLevel == user.LinuxDOTrustLevel && (group == "" || group == user.Group) {
+		return
+	}
+	if group == "" {
+		group = user.Group // only the trust level changed; keep the current group
+	}
+	if err := model.SyncLinuxDOProfile(user, trustLevel, group, user.GroupAuto); err != nil {
+		common.SysError(fmt.Sprintf("[OAuth-LinuxDO] failed to sync profile for user %d: %s", user.Id, err.Error()))
+	}
 }
 
 // Error types for OAuth

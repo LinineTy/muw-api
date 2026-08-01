@@ -111,6 +111,10 @@ var LinuxDOClientId = ""
 var LinuxDOClientSecret = ""
 var LinuxDOMinimumTrustLevel = 0
 
+// LinuxDOGroupMapping maps a LinuxDO trust level (L0-L4) to a user group, e.g.
+// {"2":"vip","3":"svip"}. An empty map disables LinuxDO auto group assignment.
+var LinuxDOGroupMapping = map[string]string{}
+
 var WeChatServerAddress = ""
 var WeChatServerToken = ""
 var WeChatAccountQRCodeImageURL = ""
@@ -124,6 +128,10 @@ var TelegramBotName = ""
 var QuotaForNewUser = 0
 var QuotaForInviter = 0
 var QuotaForInvitee = 0
+
+// DefaultUserGroup is the group new users land in when no group is specified.
+var DefaultUserGroup = "default"
+
 var ChannelDisableThreshold = 5.0
 var AutomaticDisableChannelEnabled = false
 var AutomaticEnableChannelEnabled = false
