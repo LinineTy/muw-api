@@ -41,7 +41,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 
 import { getModelHealth } from './api'
-import { ChannelTestDetailDrawer } from './components/channel-test-detail-drawer'
 import { ModelHealthCard } from './components/model-health-card'
 import type { ModelHealthRow } from './types'
 
@@ -57,7 +56,6 @@ export function ModelHealth() {
   const [query, setQuery] = useState('')
   const [appliedQuery, setAppliedQuery] = useState('')
   const [unhealthyOnly, setUnhealthyOnly] = useState(false)
-  const [detail, setDetail] = useState<ModelHealthRow | null>(null)
 
   const healthQuery = useQuery({
     queryKey: ['model-health', days, appliedQuery, unhealthyOnly],
@@ -116,7 +114,6 @@ export function ModelHealth() {
             key={name}
             modelName={name}
             rows={groups.get(name) ?? []}
-            onViewDetail={(row) => setDetail(row)}
           />
         ))}
       </div>
@@ -178,14 +175,6 @@ export function ModelHealth() {
       <SectionPageLayout.Content>
         {content}
       </SectionPageLayout.Content>
-
-      <ChannelTestDetailDrawer
-        row={detail}
-        open={detail != null}
-        onOpenChange={(open) => {
-          if (!open) setDetail(null)
-        }}
-      />
     </SectionPageLayout>
   )
 }

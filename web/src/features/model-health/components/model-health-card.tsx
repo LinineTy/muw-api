@@ -16,7 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { History } from 'lucide-react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -28,19 +29,19 @@ import {
 } from '@/components/ui/tooltip'
 
 import type { ModelHealthRow } from '../types'
+import { ChannelTestDetailPanel } from './channel-test-detail-panel'
 import { HealthBlocks } from './health-blocks'
 import { SuccessRateBadge } from './success-rate-badge'
 
 export function ModelHealthCard({
   modelName,
   rows,
-  onViewDetail,
 }: {
   modelName: string
   rows: ModelHealthRow[]
-  onViewDetail: (row: ModelHealthRow) => void
 }) {
   const { t } = useTranslation()
+  const [expandedId, setExpandedId] = useState<number | null>(null)
 
   const totalTests = rows.reduce((sum, row) => sum + row.test_count, 0)
   const totalSuccess = rows.reduce((sum, row) => sum + row.success_count, 0)
@@ -70,49 +71,62 @@ export function ModelHealthCard({
         </div>
       </CardHeader>
       <CardContent className='p-0'>
-        <div className='divide-border/60 divide-y'>
-          {rows.map((row) => (
-            <div
-              key={row.channel_id}
-              className='flex items-center gap-3 px-3 py-2.5 sm:px-4'
-            >
-              <span className='w-28 shrink-0 truncate text-sm sm:w-40'>
-                {row.channel_name}
-              </span>
-              <div className='min-w-0'>
-                <HealthBlocks trend={row.trend} />
-              </div>
-              <div className='ml-auto flex shrink-0 items-center gap-2'>
-                <span className='text-muted-foreground font-mono text-xs tabular-nums'>
-                  {row.avg_response_time}ms
-                </span>
-                <SuccessRateBadge rate={row.success_rate} />
-                {row.last_error ? (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <span className='bg-destructive size-2 shrink-0 rounded-full' />
+        <div className='divide-y divide-border/60'>
+          {rows.map((row) => {
+            const expanded = expandedId === row.channel_id
+            return (
+              <div key={row.channel_id}>
+                <div className='flex items-center gap-2 px-3 py-1.5 sm:px-4'>
+                  <span className='w-24 shrink-0 truncate text-sm sm:w-32'>
+                    {row.channel_name}
+                  </span>
+                  <HealthBlocks trend={row.trend} />
+                  <span className='text-muted-foreground shrink-0 font-mono text-xs tabular-nums'>
+                    {row.avg_response_time}ms
+                  </span>
+                  <SuccessRateBadge rate={row.success_rate} />
+                  <div className='ml-auto flex shrink-0 items-center gap-1.5'>
+                    {row.last_error ? (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <span className='bg-destructive size-2 shrink-0 rounded-full' />
+                          }
+                        />
+                        <TooltipContent side='top' className='max-w-xs'>
+                          <p className='break-words font-mono text-xs'>
+                            {row.last_error}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : null}
+                    <Button
+                      variant='ghost'
+                      size='sm'
+                      className='h-6 px-1.5'
+                      onClick={() =>
+                        setExpandedId(expanded ? null : row.channel_id)
                       }
-                    />
-                    <TooltipContent side='top' className='max-w-xs'>
-                      <p className='break-words font-mono text-xs'>
-                        {row.last_error}
-                      </p>
-                    </TooltipContent>
-                  </Tooltip>
+                    >
+                      {expanded ? (
+                        <ChevronUp className='size-3.5' />
+                      ) : (
+                        <ChevronDown className='size-3.5' />
+                      )}
+                      <span className='hidden text-xs md:inline'>
+                        {expanded ? t('Collapse') : t('Detail')}
+                      </span>
+                    </Button>
+                  </div>
+                </div>
+                {expanded ? (
+                  <div className='bg-muted/30 border-t px-3 py-3 sm:px-4'>
+                    <ChannelTestDetailPanel row={row} />
+                  </div>
                 ) : null}
-                <Button
-                  variant='ghost'
-                  size='sm'
-                  className='h-7 px-2'
-                  onClick={() => onViewDetail(row)}
-                >
-                  <History className='size-3.5' />
-                  <span className='hidden sm:inline'>{t('Detail')}</span>
-                </Button>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </CardContent>
     </Card>
