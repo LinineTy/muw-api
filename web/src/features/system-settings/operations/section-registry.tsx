@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { SystemBehaviorSection } from '../general/system-behavior-section'
+import { UserPreferencePolicySection } from '../general/user-preference-policy-section'
 import { EmailSettingsSection } from '../integrations/email-settings-section'
 import { MonitoringSettingsSection } from '../integrations/monitoring-settings-section'
 import { WorkerSettingsSection } from '../integrations/worker-settings-section'
@@ -38,6 +39,17 @@ const OPERATIONS_SECTIONS = [
           SelfUseModeEnabled: settings.SelfUseModeEnabled,
           AffiliateProgramEnabled: settings.AffiliateProgramEnabled,
           DefaultUserGroup: settings.DefaultUserGroup ?? 'default',
+        }}
+      />
+    ),
+  },
+  {
+    id: 'user-policy',
+    titleKey: 'User Preference Policy',
+    build: (settings: OperationsSettings) => (
+      <UserPreferencePolicySection
+        defaultValues={{
+          UserPreferencePolicy: settings.UserPreferencePolicy ?? '{}',
         }}
       />
     ),

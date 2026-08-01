@@ -32,6 +32,7 @@ const defaultOperationsSettings: OperationsSettings = {
   SelfUseModeEnabled: false,
   AffiliateProgramEnabled: true,
   DefaultUserGroup: 'default',
+  UserPreferencePolicy: '{}',
   QuotaRemindThreshold: '',
   SMTPServer: '',
   SMTPPort: '',
