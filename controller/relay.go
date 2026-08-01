@@ -203,6 +203,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	for ; retryParam.GetRetry() <= common.RetryTimes; retryParam.IncreaseRetry() {
 		relayInfo.RetryIndex = retryParam.GetRetry()
+		attemptStart := time.Now()
 		channel, channelErr := getChannel(c, relayInfo, retryParam)
 		if channelErr != nil {
 			logger.LogError(c, channelErr.Error())
@@ -236,6 +237,21 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			newAPIError = geminiRelayHandler(c, relayInfo)
 		default:
 			newAPIError = relayHandler(c, relayInfo)
+		}
+
+		// Record real user call outcomes into the channel test history so the
+		// model health page reflects actual usage (source "user"). Synthetic
+		// channel tests are recorded separately with source "test".
+		if !relayInfo.IsChannelTest &&
+			relayInfo.RelayMode == relayconstant.RelayModeChatCompletions &&
+			operation_setting.GetMonitorSetting().RecordUserTraffic {
+			errMsg := ""
+			if newAPIError != nil {
+				errMsg = newAPIError.Error()
+			}
+			recordChannelTest(model.ChannelTestSourceUser, channel,
+				relayInfo.OriginModelName, newAPIError == nil,
+				int(time.Since(attemptStart).Milliseconds()), errMsg)
 		}
 
 		if newAPIError == nil {

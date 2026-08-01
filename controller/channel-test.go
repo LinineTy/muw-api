@@ -62,8 +62,10 @@ func resolveChannelTestModel(channel *model.Channel, testModel string) string {
 }
 
 // recordChannelTest persists one probe result into the channel test history so
-// model/channel health can be aggregated over time.
-func recordChannelTest(channel *model.Channel, modelName string, success bool, responseTime int, errMsg string) {
+// model/channel health can be aggregated over time. source distinguishes
+// synthetic tests (ChannelTestSourceTest) from real user traffic
+// (ChannelTestSourceUser).
+func recordChannelTest(source string, channel *model.Channel, modelName string, success bool, responseTime int, errMsg string) {
 	record := &model.ChannelTestRecord{
 		ChannelId:    channel.Id,
 		ChannelName:  channel.Name,
@@ -71,6 +73,7 @@ func recordChannelTest(channel *model.Channel, modelName string, success bool, r
 		Success:      success,
 		ResponseTime: responseTime,
 		ErrorReason:  errMsg,
+		Source:       source,
 	}
 	if err := model.DB.Create(record).Error; err != nil {
 		common.SysError(fmt.Sprintf("failed to record channel test for channel %d: %s", channel.Id, err.Error()))
@@ -93,7 +96,7 @@ func runAndRecordChannelTest(ctx context.Context, channel *model.Channel, testUs
 		errMsg = result.localErr.Error()
 	}
 	success := result.newAPIError == nil && result.localErr == nil
-	recordChannelTest(channel, resolveChannelTestModel(channel, testModel), success, int(milliseconds), errMsg)
+	recordChannelTest(model.ChannelTestSourceTest, channel, resolveChannelTestModel(channel, testModel), success, int(milliseconds), errMsg)
 	return result, milliseconds
 }
 
@@ -911,7 +914,7 @@ func TestChannel(c *gin.Context) {
 		} else if result.localErr != nil {
 			errMsg = result.localErr.Error()
 		}
-		recordChannelTest(channel, resolveChannelTestModel(channel, testModel), result.newAPIError == nil && result.localErr == nil, int(milliseconds), errMsg)
+		recordChannelTest(model.ChannelTestSourceTest, channel, resolveChannelTestModel(channel, testModel), result.newAPIError == nil && result.localErr == nil, int(milliseconds), errMsg)
 	}
 	if result.localErr != nil {
 		resp := gin.H{

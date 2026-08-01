@@ -227,6 +227,7 @@ export type ModelSettings = {
   'monitor_setting.auto_test_channel_minutes': number
   'monitor_setting.channel_test_mode': 'scheduled_all' | 'passive_recovery'
   'monitor_setting.auto_test_all_models': boolean
+  'monitor_setting.record_user_traffic': boolean
   'channel_affinity_setting.enabled': boolean
   'channel_affinity_setting.switch_on_success': boolean
   'channel_affinity_setting.keep_on_channel_disabled': boolean

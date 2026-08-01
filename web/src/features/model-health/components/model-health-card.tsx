@@ -50,6 +50,10 @@ export function ModelHealthCard({
 
   const totalTests = rows.reduce((sum, row) => sum + row.test_count, 0)
   const totalSuccess = rows.reduce((sum, row) => sum + row.success_count, 0)
+  const totalUserTraffic = rows.reduce(
+    (sum, row) => sum + (row.user_traffic_count ?? 0),
+    0
+  )
   const overallRate =
     totalTests > 0 ? (totalSuccess / totalTests) * 100 : 0
 
@@ -64,6 +68,11 @@ export function ModelHealthCard({
           <span className='text-muted-foreground text-xs'>
             {t('Test count')}: {totalTests}
           </span>
+          {totalUserTraffic > 0 && (
+            <span className='text-muted-foreground text-xs'>
+              {t('Real user traffic')}: {totalUserTraffic}
+            </span>
+          )}
         </div>
       </CardHeader>
       <CardContent className='p-0'>
