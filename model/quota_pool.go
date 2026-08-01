@@ -294,29 +294,33 @@ func GetQuotaClaimStatus(userId int) (*QuotaClaimStatus, error) {
 		}
 	}
 
-	if setting.PoolPeriodCap > 0 {
-		g, err := globalPeriodGranted(DB, poolKey)
-		if err != nil {
-			return nil, err
-		}
+	// 周期统计总是返回（即便未配置对应上限），"到顶"标志仅在配置了上限时判定。
+	// 这样用户始终能看到已领次数/额度，而不是因未配置上限而恒显示 0。
+	if g, err := globalPeriodGranted(DB, poolKey); err != nil {
+		return nil, err
+	} else {
 		status.GlobalGranted = g
-		status.GlobalCapReached = g >= setting.PoolPeriodCap
+		status.GlobalCapReached = setting.PoolPeriodCap > 0 && g >= setting.PoolPeriodCap
 	}
-	if setting.UserPeriodCap > 0 {
-		g, err := userPeriodGranted(DB, userId, userKey)
-		if err != nil {
-			return nil, err
-		}
+	if g, err := userPeriodGranted(DB, userId, userKey); err != nil {
+		return nil, err
+	} else {
 		status.UserGranted = g
-		status.UserCapReached = g >= setting.UserPeriodCap
-	}
-	if setting.UserPeriodCountLimit > 0 {
-		c, err := userPeriodClaimCount(DB, userId, userKey)
-		if err != nil {
-			return nil, err
+		// 单次发放最小量：fixed=Amount，random=MinAmount
+		minClaim := setting.Amount
+		if setting.AmountType == QuotaPoolAmountRandom {
+			minClaim = setting.MinAmount
 		}
+		// 剩余空间已小于单次最小发放时同样视为到顶：此时任何一次领取都会被后端
+		// 拒绝（granted+quotaAwarded > cap），前端应禁用按钮而不是点了再报错。
+		status.UserCapReached = setting.UserPeriodCap > 0 &&
+			(g >= setting.UserPeriodCap || g+minClaim > setting.UserPeriodCap)
+	}
+	if c, err := userPeriodClaimCount(DB, userId, userKey); err != nil {
+		return nil, err
+	} else {
 		status.UserCount = c
-		status.CountLimitReached = c >= setting.UserPeriodCountLimit
+		status.CountLimitReached = setting.UserPeriodCountLimit > 0 && c >= setting.UserPeriodCountLimit
 	}
 
 	// 生命周期累计（只统计领取）
