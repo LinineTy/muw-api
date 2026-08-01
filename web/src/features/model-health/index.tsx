@@ -57,11 +57,7 @@ export function ModelHealth() {
   const [query, setQuery] = useState('')
   const [appliedQuery, setAppliedQuery] = useState('')
   const [unhealthyOnly, setUnhealthyOnly] = useState(false)
-  const [detail, setDetail] = useState<{
-    channelId: number
-    channelName: string
-    modelName: string
-  } | null>(null)
+  const [detail, setDetail] = useState<ModelHealthRow | null>(null)
 
   const healthQuery = useQuery({
     queryKey: ['model-health', days, appliedQuery, unhealthyOnly],
@@ -120,9 +116,7 @@ export function ModelHealth() {
             key={name}
             modelName={name}
             rows={groups.get(name) ?? []}
-            onViewDetail={(channelId, channelName, modelName) =>
-              setDetail({ channelId, channelName, modelName })
-            }
+            onViewDetail={(row) => setDetail(row)}
           />
         ))}
       </div>
@@ -186,9 +180,7 @@ export function ModelHealth() {
       </SectionPageLayout.Content>
 
       <ChannelTestDetailDrawer
-        channelId={detail?.channelId ?? null}
-        channelName={detail?.channelName ?? ''}
-        modelName={detail?.modelName ?? ''}
+        row={detail}
         open={detail != null}
         onOpenChange={(open) => {
           if (!open) setDetail(null)

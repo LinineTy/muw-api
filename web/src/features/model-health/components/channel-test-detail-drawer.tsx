@@ -23,13 +23,13 @@ import { useTranslation } from 'react-i18next'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-} from '@/components/ui/drawer'
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Tooltip,
@@ -40,21 +40,19 @@ import { formatRelativeTime } from '@/features/channels/lib/channel-utils'
 import { formatTimestampToDate } from '@/lib/format'
 
 import { getChannelTestRecords } from '../api'
+import type { ModelHealthRow } from '../types'
 
 const PAGE_SIZE = 20
 
 // ChannelTestDetailDrawer shows the raw probe history of one (channel, model)
-// pair, newest first, with pagination.
+// pair, newest first, with pagination, plus a compact aggregate summary of the
+// pair taken from the health row.
 export function ChannelTestDetailDrawer({
-  channelId,
-  modelName,
-  channelName,
+  row,
   open,
   onOpenChange,
 }: {
-  channelId: number | null
-  modelName: string
-  channelName: string
+  row: ModelHealthRow | null
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
@@ -66,15 +64,15 @@ export function ChannelTestDetailDrawer({
   }, [open])
 
   const recordsQuery = useQuery({
-    queryKey: ['channel-test-records', channelId, modelName, page],
+    queryKey: ['channel-test-records', row?.channel_id, row?.model_name, page],
     queryFn: () =>
       getChannelTestRecords({
-        channel_id: channelId ?? 0,
-        model: modelName,
+        channel_id: row?.channel_id ?? 0,
+        model: row?.model_name ?? '',
         page,
         page_size: PAGE_SIZE,
       }),
-    enabled: open && channelId != null,
+    enabled: open && row != null,
     retry: false,
   })
 
@@ -128,22 +126,60 @@ export function ChannelTestDetailDrawer({
   }
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange} direction='right'>
-      <DrawerContent className='w-full sm:max-w-lg'>
-        <DrawerHeader>
-          <DrawerTitle className='truncate'>
-            {channelName} · {modelName}
-          </DrawerTitle>
-          <DrawerDescription>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side='right' className='w-full sm:max-w-lg'>
+        <SheetHeader>
+          <SheetTitle className='truncate'>
+            {row?.channel_name ?? ''} · {row?.model_name ?? ''}
+          </SheetTitle>
+          <SheetDescription>
             {t('Recent channel test records')}
-          </DrawerDescription>
-        </DrawerHeader>
+          </SheetDescription>
+        </SheetHeader>
+
+        {row ? (
+          <div className='px-4'>
+            <div className='grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4'>
+              <div>
+                <p className='text-muted-foreground text-xs'>
+                  {t('Success rate')}
+                </p>
+                <p className='font-mono text-sm'>
+                  {row.success_rate.toFixed(1)}%
+                </p>
+              </div>
+              <div>
+                <p className='text-muted-foreground text-xs'>{t('Total')}</p>
+                <p className='font-mono text-sm'>{row.test_count}</p>
+              </div>
+              <div>
+                <p className='text-muted-foreground text-xs'>
+                  {t('Avg response')}
+                </p>
+                <p className='font-mono text-sm'>{row.avg_response_time}ms</p>
+              </div>
+              <div>
+                <p className='text-muted-foreground text-xs'>
+                  {t('Real user traffic')}
+                </p>
+                <p className='font-mono text-sm'>
+                  {row.user_traffic_count ?? 0}
+                </p>
+              </div>
+            </div>
+            {row.last_error ? (
+              <p className='text-destructive mt-2 line-clamp-2 text-xs'>
+                {t('Last error')}: {row.last_error}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className='flex-1 space-y-1 overflow-y-auto px-4 pb-4'>
           {recordsContent}
         </div>
 
-        <DrawerFooter className='flex-row items-center justify-between'>
+        <SheetFooter className='flex-row items-center justify-between'>
           <span className='text-muted-foreground text-xs'>
             {t('Total')}: {data?.total ?? 0}
           </span>
@@ -168,8 +204,8 @@ export function ChannelTestDetailDrawer({
               {t('Next')}
             </Button>
           </div>
-        </DrawerFooter>
-      </DrawerContent>
-    </Drawer>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   )
 }
