@@ -4,6 +4,8 @@
   "Failed to fetch subscription records": "Failed to fetch subscription records",
   "Filter by username or email": "Filter by username or email",
   "Manage the vendors that models are associated with. Create, edit, or remove vendors here.": "Manage the vendors that models are associated with. Create, edit, or remove vendors here.",
+  "Search model or channel": "Search model or channel",
+  "Enable scheduled channel tests or run a manual test to start collecting health data.": "Enable scheduled channel tests or run a manual test to start collecting health data.",
   "Please retry or refresh the page.": "Please retry or refresh the page.",
   "Unable to load vendors": "Unable to load vendors",
   "Click \"Create Pool\" to create your first quota pool": "Click \"Create Pool\" to create your first quota pool",

@@ -138,6 +138,10 @@ export function SidebarModulesSection({
         title: t('Models'),
         description: t('Manage catalog visibility and pricing.'),
       },
+      model_health: {
+        title: t('Model Health'),
+        description: t('Track per-model success rate and latency trends.'),
+      },
       redemption: {
         title: t('Redeem codes'),
         description: t('Create and review invite or credit codes.'),
