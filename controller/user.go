@@ -541,6 +541,7 @@ func buildSelfUserData(user *model.User) map[string]interface{} {
 		"linux_do_trust_level": user.LinuxDOTrustLevel,
 		"group_auto":           user.GroupAuto,
 		"setting":              user.Setting,
+		"preference_policy":    common.GetUserPreferencePolicy(),
 		"sidebar_modules":      userSetting.SidebarModules, // 正确提取sidebar_modules字段
 		"permissions":          permissions,
 	}
@@ -1534,6 +1535,24 @@ func UpdateUserSetting(c *gin.Context) {
 		} else {
 			settings.GotifyPriority = req.GotifyPriority
 		}
+	}
+
+	// 管理员偏好策略：强开的偏好强制为 true；禁止修改的保持当前值，
+	// 用户提交的值不会改变这两类偏好。
+	if common.PreferenceForceOn(common.PreferenceKeyAcceptUnsetModelRatioModel) {
+		settings.AcceptUnsetRatioModel = true
+	} else if common.PreferenceLocked(common.PreferenceKeyAcceptUnsetModelRatioModel) {
+		settings.AcceptUnsetRatioModel = existingSettings.AcceptUnsetRatioModel
+	}
+	if common.PreferenceForceOn(common.PreferenceKeyRecordIpLog) {
+		settings.RecordIpLog = true
+	} else if common.PreferenceLocked(common.PreferenceKeyRecordIpLog) {
+		settings.RecordIpLog = existingSettings.RecordIpLog
+	}
+	if common.PreferenceForceOn(common.PreferenceKeyUpstreamModelUpdateNotify) {
+		settings.UpstreamModelUpdateNotifyEnabled = true
+	} else if common.PreferenceLocked(common.PreferenceKeyUpstreamModelUpdateNotify) {
+		settings.UpstreamModelUpdateNotifyEnabled = existingSettings.UpstreamModelUpdateNotifyEnabled
 	}
 
 	// 更新用户设置

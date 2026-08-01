@@ -297,6 +297,7 @@ export type OperationsSettings = {
   SelfUseModeEnabled: boolean
   AffiliateProgramEnabled: boolean
   DefaultUserGroup: string
+  UserPreferencePolicy: string
   QuotaRemindThreshold: string
   SMTPServer: string
   SMTPPort: string

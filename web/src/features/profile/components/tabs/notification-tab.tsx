@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { PasswordInput } from '@/components/password-input'
+import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -48,6 +49,11 @@ const NOTIFICATION_VALUES = new Set<NotifyType>(
   NOTIFICATION_METHODS.map((method) => method.value)
 )
 
+// Preference policy keys (must match backend common.PreferenceKey*).
+const PREF_ACCEPT_UNPRICED = 'accept_unset_model_ratio_model'
+const PREF_RECORD_IP = 'record_ip_log'
+const PREF_UPSTREAM_NOTIFY = 'upstream_model_update_notify_enabled'
+
 function normalizeNotifyType(value: unknown): NotifyType {
   return typeof value === 'string' &&
     NOTIFICATION_VALUES.has(value as NotifyType)
@@ -64,9 +70,42 @@ interface NotificationTabProps {
   onUpdate: () => void
 }
 
+function PolicyBadge({
+  forced,
+  locked,
+}: {
+  forced: boolean
+  locked: boolean
+}) {
+  const { t } = useTranslation()
+  if (forced) {
+    return (
+      <StatusBadge
+        label={t('Admin Enforced')}
+        variant='warning'
+        copyable={false}
+        className='shrink-0'
+      />
+    )
+  }
+  if (locked) {
+    return (
+      <StatusBadge
+        label={t('Locked by Admin')}
+        variant='neutral'
+        copyable={false}
+        className='shrink-0'
+      />
+    )
+  }
+  return null
+}
+
 export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
   const { t } = useTranslation()
   const isAdmin = (profile?.role ?? 0) >= ROLE.ADMIN
+  const forceOnSet = new Set(profile?.preference_policy?.force_on ?? [])
+  const lockedSet = new Set(profile?.preference_policy?.locked ?? [])
   const [loading, setLoading] = useState(false)
   const [settings, setSettings] = useState<UserSettings>({
     notify_type: 'email',
@@ -336,9 +375,15 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
         {isAdmin && (
           <div className='flex items-start justify-between gap-3 rounded-lg border p-3 sm:items-center sm:p-4'>
             <div className='space-y-0.5'>
-              <Label htmlFor='upstreamModelUpdateNotify'>
-                {t('Receive Upstream Model Update Notifications')}
-              </Label>
+              <div className='flex flex-wrap items-center gap-2'>
+                <Label htmlFor='upstreamModelUpdateNotify'>
+                  {t('Receive Upstream Model Update Notifications')}
+                </Label>
+                <PolicyBadge
+                  forced={forceOnSet.has(PREF_UPSTREAM_NOTIFY)}
+                  locked={lockedSet.has(PREF_UPSTREAM_NOTIFY)}
+                />
+              </div>
               <p className='text-muted-foreground line-clamp-3 text-xs sm:line-clamp-none sm:text-sm'>
                 {t(
                   'Only available for admins. When enabled, you will receive a summary notification via your selected method when the scheduled model check detects upstream model changes or check failures.'
@@ -348,7 +393,14 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
             <Switch
               id='upstreamModelUpdateNotify'
               className='shrink-0'
-              checked={settings.upstream_model_update_notify_enabled}
+              checked={
+                forceOnSet.has(PREF_UPSTREAM_NOTIFY) ||
+                settings.upstream_model_update_notify_enabled
+              }
+              disabled={
+                forceOnSet.has(PREF_UPSTREAM_NOTIFY) ||
+                lockedSet.has(PREF_UPSTREAM_NOTIFY)
+              }
               onCheckedChange={(checked) =>
                 updateField('upstream_model_update_notify_enabled', checked)
               }
@@ -359,9 +411,15 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
         {/* Accept Unset Model Price */}
         <div className='flex items-start justify-between gap-3 rounded-lg border p-3 sm:items-center sm:p-4'>
           <div className='space-y-0.5'>
-            <Label htmlFor='acceptUnsetPrice'>
-              {t('Accept Unpriced Models')}
-            </Label>
+            <div className='flex flex-wrap items-center gap-2'>
+              <Label htmlFor='acceptUnsetPrice'>
+                {t('Accept Unpriced Models')}
+              </Label>
+              <PolicyBadge
+                forced={forceOnSet.has(PREF_ACCEPT_UNPRICED)}
+                locked={lockedSet.has(PREF_ACCEPT_UNPRICED)}
+              />
+            </div>
             <p className='text-muted-foreground text-xs sm:text-sm'>
               {t('Allow using models without price configuration')}
             </p>
@@ -369,7 +427,14 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
           <Switch
             id='acceptUnsetPrice'
             className='shrink-0'
-            checked={settings.accept_unset_model_ratio_model}
+            checked={
+              forceOnSet.has(PREF_ACCEPT_UNPRICED) ||
+              settings.accept_unset_model_ratio_model
+            }
+            disabled={
+              forceOnSet.has(PREF_ACCEPT_UNPRICED) ||
+              lockedSet.has(PREF_ACCEPT_UNPRICED)
+            }
             onCheckedChange={(checked) =>
               updateField('accept_unset_model_ratio_model', checked)
             }
@@ -379,7 +444,13 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
         {/* Record IP Log */}
         <div className='flex items-start justify-between gap-3 rounded-lg border p-3 sm:items-center sm:p-4'>
           <div className='space-y-0.5'>
-            <Label htmlFor='recordIp'>{t('Record IP Address')}</Label>
+            <div className='flex flex-wrap items-center gap-2'>
+              <Label htmlFor='recordIp'>{t('Record IP Address')}</Label>
+              <PolicyBadge
+                forced={forceOnSet.has(PREF_RECORD_IP)}
+                locked={lockedSet.has(PREF_RECORD_IP)}
+              />
+            </div>
             <p className='text-muted-foreground text-xs sm:text-sm'>
               {t('Log IP address for usage and error logs')}
             </p>
@@ -387,7 +458,12 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
           <Switch
             id='recordIp'
             className='shrink-0'
-            checked={settings.record_ip_log}
+            checked={
+              forceOnSet.has(PREF_RECORD_IP) || settings.record_ip_log
+            }
+            disabled={
+              forceOnSet.has(PREF_RECORD_IP) || lockedSet.has(PREF_RECORD_IP)
+            }
             onCheckedChange={(checked) => updateField('record_ip_log', checked)}
           />
         </div>

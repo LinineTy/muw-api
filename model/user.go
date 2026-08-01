@@ -148,7 +148,26 @@ func (user *User) GetSetting() dto.UserSetting {
 			common.SysLog("failed to unmarshal setting: " + err.Error())
 		}
 	}
+	applyForcedPreferencePolicy(&setting)
 	return setting
+}
+
+// applyForcedPreferencePolicy clamps force-enabled preferences to on for every
+// consumer (relay billing, IP logging, profile display), so an admin force-on
+// cannot be bypassed by a stored off value.
+func applyForcedPreferencePolicy(setting *dto.UserSetting) {
+	if setting == nil {
+		return
+	}
+	if common.PreferenceForceOn(common.PreferenceKeyAcceptUnsetModelRatioModel) {
+		setting.AcceptUnsetRatioModel = true
+	}
+	if common.PreferenceForceOn(common.PreferenceKeyRecordIpLog) {
+		setting.RecordIpLog = true
+	}
+	if common.PreferenceForceOn(common.PreferenceKeyUpstreamModelUpdateNotify) {
+		setting.UpstreamModelUpdateNotifyEnabled = true
+	}
 }
 
 func (user *User) SetSetting(setting dto.UserSetting) {

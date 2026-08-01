@@ -81,6 +81,13 @@ export interface UserProfile {
   telegram_id?: string
   /** LinuxDO ID (OAuth) */
   linux_do_id?: string
+  /** LinuxDO trust level (L0-L4) */
+  linux_do_trust_level?: number
+  /** Global admin policy for profile preference switches */
+  preference_policy?: {
+    force_on: string[]
+    locked: string[]
+  }
 }
 
 /**
