@@ -72,8 +72,9 @@ type ModelHealthRow struct {
 }
 
 // channelTestTrendLimit bounds how many recent probes are kept per pair for the
-// trend sparkline.
-const channelTestTrendLimit = 20
+// trend strip. Kept generous so the frontend can render as many fixed-size
+// blocks as fit the container width on wide screens.
+const channelTestTrendLimit = 200
 
 // AggregateChannelTestRecords groups probe records by (channel_id, model_name)
 // and computes per-pair success rate, latency stats, the most recent failure

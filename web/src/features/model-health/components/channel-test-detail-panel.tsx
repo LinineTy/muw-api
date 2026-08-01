@@ -105,34 +105,7 @@ export function ChannelTestDetailPanel({ row }: { row: ModelHealthRow }) {
   }
 
   return (
-    <div className='space-y-2'>
-      <div className='flex flex-wrap items-center gap-x-4 gap-y-1 text-xs'>
-        <span>
-          <span className='text-muted-foreground'>{t('Success rate')}:</span>{' '}
-          <span className='font-mono'>{row.success_rate.toFixed(1)}%</span>
-        </span>
-        <span>
-          <span className='text-muted-foreground'>{t('Total')}:</span>{' '}
-          <span className='font-mono'>{row.test_count}</span>
-        </span>
-        <span>
-          <span className='text-muted-foreground'>{t('Avg response')}:</span>{' '}
-          <span className='font-mono'>{row.avg_response_time}ms</span>
-        </span>
-        <span>
-          <span className='text-muted-foreground'>{t('Real user traffic')}:</span>{' '}
-          <span className='font-mono'>{row.user_traffic_count ?? 0}</span>
-        </span>
-        {row.last_error ? (
-          <span
-            className='text-destructive max-w-[32ch] truncate'
-            title={row.last_error}
-          >
-            {t('Last error')}: {row.last_error}
-          </span>
-        ) : null}
-      </div>
-
+    <div className='space-y-1.5'>
       <div className='max-h-72 space-y-1 overflow-y-auto'>{recordsContent}</div>
 
       <div className='flex items-center justify-between text-xs'>

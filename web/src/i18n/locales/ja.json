@@ -2704,8 +2704,6 @@
     "Record real user traffic": "Record real user traffic",
     "Record real user call outcomes (success, latency) into model health. Lets the health page reflect real usage, so you can reduce scheduled test frequency to save tokens.": "Record real user call outcomes (success, latency) into model health. Lets the health page reflect real usage, so you can reduce scheduled test frequency to save tokens.",
     "Last tested": "Last tested",
-    "Avg response": "Avg response",
-    "Last error": "Last error",
     "Search model or channel": "Search model or channel",
     "Only unhealthy": "Only unhealthy",
     "No health data yet": "No health data yet",

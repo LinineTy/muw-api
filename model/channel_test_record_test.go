@@ -51,8 +51,9 @@ func TestAggregateChannelTestRecords(t *testing.T) {
 }
 
 func TestAggregateChannelTestRecordsTrendWindow(t *testing.T) {
+	const total = 250
 	var records []ChannelTestRecord
-	for i := 1; i <= 30; i++ {
+	for i := 1; i <= total; i++ {
 		records = append(records, ChannelTestRecord{
 			Id:           i,
 			ChannelId:    1,
@@ -66,13 +67,13 @@ func TestAggregateChannelTestRecordsTrendWindow(t *testing.T) {
 
 	rows := AggregateChannelTestRecords(records)
 	require.Len(t, rows, 1)
-	require.Len(t, rows[0].Trend, 20)
-	// Trend keeps the newest probes (ids 11..30, ResponseTime == id).
-	assert.Equal(t, 11, rows[0].Trend[0].ResponseTime)
-	assert.Equal(t, 30, rows[0].Trend[19].ResponseTime)
+	require.Len(t, rows[0].Trend, channelTestTrendLimit)
+	// Trend keeps the newest probes (ids total-limit+1 .. total).
+	assert.Equal(t, total-channelTestTrendLimit+1, rows[0].Trend[0].ResponseTime)
+	assert.Equal(t, total, rows[0].Trend[channelTestTrendLimit-1].ResponseTime)
 	// Counts still reflect the whole window.
-	assert.Equal(t, 30, rows[0].TestCount)
-	assert.Equal(t, 15, rows[0].SuccessCount)
+	assert.Equal(t, total, rows[0].TestCount)
+	assert.Equal(t, total/2, rows[0].SuccessCount)
 }
 
 func TestAggregateChannelTestRecordsEmpty(t *testing.T) {

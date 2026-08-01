@@ -21,18 +21,36 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 
-import type { ModelHealthRow } from '../types'
+import type { ModelHealthRow, TestTrendPoint } from '../types'
 import { ChannelTestDetailPanel } from './channel-test-detail-panel'
 import { HealthBlocks } from './health-blocks'
 import { SuccessRateBadge } from './success-rate-badge'
 
+// mergeTrend combines every channel's probe history of a model into one
+// chronological strip (oldest → newest). The compact model-level heartbeat
+// renders as many newest blocks as fit the container width, so no hard cap here.
+function mergeTrend(rows: ModelHealthRow[]): TestTrendPoint[] {
+  const points: TestTrendPoint[] = []
+  for (const row of rows) {
+    for (const point of row.trend) points.push(point)
+  }
+  points.sort(
+    (a, b) => a.created_at - b.created_at || a.response_time - b.response_time
+  )
+  return points
+}
+
+// ModelHealthCard renders one model as a compact two-line block: line 1 shows
+// the model name and overall success rate, line 2 shows the health blocks strip
+// and the detail toggle. Expanding reveals per-channel rows with their own
+// expandable raw records.
 export function ModelHealthCard({
   modelName,
   rows,
@@ -41,7 +59,7 @@ export function ModelHealthCard({
   rows: ModelHealthRow[]
 }) {
   const { t } = useTranslation()
-  const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [expanded, setExpanded] = useState(false)
 
   const totalTests = rows.reduce((sum, row) => sum + row.test_count, 0)
   const totalSuccess = rows.reduce((sum, row) => sum + row.success_count, 0)
@@ -54,81 +72,73 @@ export function ModelHealthCard({
 
   return (
     <Card data-card-hover='false' className='gap-0 overflow-hidden py-0'>
-      <CardHeader className='flex-row items-center gap-3 border-b p-3 sm:p-4'>
-        <span className='min-w-0 truncate font-mono text-sm font-semibold'>
+      <div className='flex items-center gap-2 px-3 pt-2 sm:px-4'>
+        <span className='min-w-0 flex-1 truncate font-mono text-sm font-medium'>
           {modelName}
         </span>
-        <div className='ml-auto flex shrink-0 items-center gap-2'>
-          <SuccessRateBadge rate={overallRate} />
-          <span className='text-muted-foreground text-xs'>
-            {t('Test count')}: {totalTests}
+        <span className='text-muted-foreground shrink-0 text-xs'>
+          {t('Test count')}: {totalTests}
+        </span>
+        {totalUserTraffic > 0 && (
+          <span className='text-muted-foreground shrink-0 text-xs'>
+            {t('Real user traffic')}: {totalUserTraffic}
           </span>
-          {totalUserTraffic > 0 && (
-            <span className='text-muted-foreground text-xs'>
-              {t('Real user traffic')}: {totalUserTraffic}
-            </span>
+        )}
+        <SuccessRateBadge rate={overallRate} />
+      </div>
+
+      <div className='flex items-center gap-2 px-3 pb-1.5 sm:px-4'>
+        <HealthBlocks trend={mergeTrend(rows)} />
+        <Button
+          variant='ghost'
+          size='sm'
+          className='ml-auto h-6 px-1.5'
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? (
+            <ChevronUp className='size-3.5' />
+          ) : (
+            <ChevronDown className='size-3.5' />
           )}
-        </div>
-      </CardHeader>
-      <CardContent className='p-0'>
-        <div className='divide-y divide-border/60'>
-          {rows.map((row) => {
-            const expanded = expandedId === row.channel_id
-            return (
+          <span className='hidden text-xs md:inline'>
+            {expanded ? t('Collapse') : t('Detail')}
+          </span>
+        </Button>
+      </div>
+
+      {expanded ? (
+        <div className='bg-muted/30 border-t px-3 py-2 sm:px-4'>
+          <div className='space-y-3'>
+            {rows.map((row) => (
               <div key={row.channel_id}>
-                <div className='flex items-center gap-2 px-3 py-1.5 sm:px-4'>
-                  <span className='w-24 shrink-0 truncate text-sm sm:w-32'>
+                <div className='mb-1 flex items-center gap-2'>
+                  <span className='truncate text-xs font-medium'>
                     {row.channel_name}
                   </span>
-                  <HealthBlocks trend={row.trend} />
                   <span className='text-muted-foreground shrink-0 font-mono text-xs tabular-nums'>
                     {row.avg_response_time}ms
                   </span>
-                  <SuccessRateBadge rate={row.success_rate} />
-                  <div className='ml-auto flex shrink-0 items-center gap-1.5'>
-                    {row.last_error ? (
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <span className='bg-destructive size-2 shrink-0 rounded-full' />
-                          }
-                        />
-                        <TooltipContent side='top' className='max-w-xs'>
-                          <p className='break-words font-mono text-xs'>
-                            {row.last_error}
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    ) : null}
-                    <Button
-                      variant='ghost'
-                      size='sm'
-                      className='h-6 px-1.5'
-                      onClick={() =>
-                        setExpandedId(expanded ? null : row.channel_id)
-                      }
-                    >
-                      {expanded ? (
-                        <ChevronUp className='size-3.5' />
-                      ) : (
-                        <ChevronDown className='size-3.5' />
-                      )}
-                      <span className='hidden text-xs md:inline'>
-                        {expanded ? t('Collapse') : t('Detail')}
-                      </span>
-                    </Button>
-                  </div>
+                  {row.last_error ? (
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <span className='bg-destructive size-2 shrink-0 rounded-full' />
+                        }
+                      />
+                      <TooltipContent side='top' className='max-w-xs'>
+                        <p className='break-words font-mono text-xs'>
+                          {row.last_error}
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : null}
                 </div>
-                {expanded ? (
-                  <div className='bg-muted/30 border-t px-3 py-3 sm:px-4'>
-                    <ChannelTestDetailPanel row={row} />
-                  </div>
-                ) : null}
+                <ChannelTestDetailPanel row={row} />
               </div>
-            )
-          })}
+            ))}
+          </div>
         </div>
-      </CardContent>
+      ) : null}
     </Card>
   )
 }
