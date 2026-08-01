@@ -19,7 +19,6 @@ For commercial licensing, please contact support@quantumnous.com
 import {
   Activity,
   Box,
-  Coins,
   CreditCard,
   Crown,
   FileText,
@@ -145,11 +144,6 @@ export function useSidebarData(): SidebarData {
             title: t('Redemption Codes'),
             url: '/redemption-codes',
             icon: Ticket,
-          },
-          {
-            title: t('Quota Pools'),
-            url: '/quota-pools',
-            icon: Coins,
           },
           {
             title: t('Subscriptions'),

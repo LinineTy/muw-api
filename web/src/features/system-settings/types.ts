@@ -309,10 +309,19 @@ export type BillingSettings = {
   // section (saved via /api/option/waffo-pancake/save).
   WaffoPancakeStoreID: string
   WaffoPancakeProductID: string
-  'checkin_setting.enabled': boolean
-  'checkin_setting.min_quota': number
-  'checkin_setting.max_quota': number
   'quota_pool_setting.enabled': boolean
+  'quota_pool_setting.pool_period': string
+  'quota_pool_setting.user_period': string
+  'quota_pool_setting.amount_type': string
+  'quota_pool_setting.amount': number
+  'quota_pool_setting.min_amount': number
+  'quota_pool_setting.max_amount': number
+  'quota_pool_setting.pool_period_cap': number
+  'quota_pool_setting.user_period_cap': number
+  'quota_pool_setting.user_period_count_limit': number
+  'quota_pool_setting.time_rule': string
+  'quota_pool_setting.balance_mode': string
+  'quota_pool_setting.balance_limit': number
 }
 
 export type OperationsSettings = {

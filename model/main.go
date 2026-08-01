@@ -280,9 +280,8 @@ func migrateDB() error {
 		&Setup{},
 		&TwoFA{},
 		&TwoFABackupCode{},
-		&Checkin{},
-		&QuotaPool{},
 		&QuotaClaimRecord{},
+		&QuotaClaimLock{},
 		&SubscriptionOrder{},
 		&UserSubscription{},
 		&SubscriptionPreConsumeRecord{},
@@ -312,6 +311,21 @@ func migrateDB() error {
 		if err := DB.AutoMigrate(&SubscriptionPlan{}); err != nil {
 			return err
 		}
+	}
+	if err := ensureQuotaClaimLockSeeded(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ensureQuotaClaimLockSeeded 确保额度池全局锁行存在（id=1），供 MySQL/PG 并发领取串行化
+func ensureQuotaClaimLockSeeded() error {
+	var count int64
+	if err := DB.Model(&QuotaClaimLock{}).Count(&count).Error; err != nil {
+		return err
+	}
+	if count == 0 {
+		return DB.Create(&QuotaClaimLock{Id: 1}).Error
 	}
 	return nil
 }
@@ -345,7 +359,6 @@ func migrateDBFast() error {
 		{&Setup{}, "Setup"},
 		{&TwoFA{}, "TwoFA"},
 		{&TwoFABackupCode{}, "TwoFABackupCode"},
-		{&Checkin{}, "Checkin"},
 		{&SubscriptionOrder{}, "SubscriptionOrder"},
 		{&UserSubscription{}, "UserSubscription"},
 		{&SubscriptionPreConsumeRecord{}, "SubscriptionPreConsumeRecord"},

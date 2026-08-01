@@ -248,19 +248,41 @@ export async function completeOrder(
 }
 
 /**
- * Get enabled quota pools for the current user with claim status
+ * Get single quota pool config + current period claim status for the user
  */
-export async function getQuotaPools(): Promise<ApiResponse> {
+export async function getQuotaPoolStatus(): Promise<ApiResponse> {
   const res = await api.get('/api/user/quota-pool')
   return res.data
 }
 
 /**
- * Claim quota from a quota pool
+ * Get the user's per-day claim records for a month (calendar view)
  */
-export async function claimQuotaPool(
-  poolId: number
-): Promise<ApiResponse<{ quota: number }>> {
-  const res = await api.post(`/api/user/quota-pool/${poolId}/claim`)
+export async function getQuotaPoolRecords(
+  month: string
+): Promise<ApiResponse> {
+  const res = await api.get(
+    `/api/user/quota-pool/records?month=${encodeURIComponent(month)}`
+  )
+  return res.data
+}
+
+/**
+ * Claim quota from the quota pool
+ */
+export async function claimQuotaPool(): Promise<
+  ApiResponse<{ quota: number }>
+> {
+  const res = await api.post('/api/user/quota-pool/claim')
+  return res.data
+}
+
+/**
+ * Check in (record a daily stamp without quota reward)
+ */
+export async function quotaCheckIn(): Promise<
+  ApiResponse<{ checked_in_at: number }>
+> {
+  const res = await api.post('/api/user/quota-pool/checkin')
   return res.data
 }

@@ -241,6 +241,63 @@ export interface UserWalletData {
 }
 
 /**
+ * Current-period claim status for the single quota pool
+ */
+export interface QuotaPoolClaimStatus {
+  pool_period_key: string
+  user_period_key: string
+  global_granted: number
+  user_granted: number
+  user_count: number
+  global_cap_reached: boolean
+  user_cap_reached: boolean
+  count_limit_reached: boolean
+  time_open: boolean
+  balance_allowed: boolean
+  checked_in_today: boolean
+  total_claims: number
+  total_quota: number
+}
+
+/**
+ * Quota pool config + status response
+ */
+export interface QuotaPoolStatusResponse {
+  enabled: boolean
+  pool_period: string
+  user_period: string
+  amount_type: 'fixed' | 'random'
+  amount: number
+  min_amount: number
+  max_amount: number
+  pool_period_cap: number
+  user_period_cap: number
+  user_period_count_limit: number
+  time_rule: string
+  balance_mode: 'off' | 'below' | 'above'
+  balance_limit: number
+  status: QuotaPoolClaimStatus
+}
+
+/**
+ * Per-day aggregated claim/check-in record
+ */
+export interface QuotaClaimDayRecord {
+  date: string
+  count: number
+  quota: number
+  checkin_count: number
+}
+
+/**
+ * Monthly per-day records response
+ */
+export interface QuotaPoolRecordsResponse {
+  month: string
+  records: QuotaClaimDayRecord[]
+}
+
+/**
  * Topup record status
  */
 export type TopupStatus = 'success' | 'pending' | 'expired'
