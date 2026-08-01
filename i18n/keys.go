@@ -151,10 +151,7 @@ const (
 	MsgPaymentCreateFailed       = "payment.create_failed"
 	MsgPaymentStartFailed        = "payment.start_failed"
 	MsgPaymentAmountTooLow       = "payment.amount_too_low"
-	MsgPaymentStripeNotConfig    = "payment.stripe_not_configured"
 	MsgPaymentWebhookNotConfig   = "payment.webhook_not_configured"
-	MsgPaymentPriceIdNotConfig   = "payment.price_id_not_configured"
-	MsgPaymentCreemNotConfig     = "payment.creem_not_configured"
 )
 
 // Topup related messages
@@ -250,20 +247,6 @@ const (
 	MsgSettingGotifyUrlInvalid = "setting.gotify_url_invalid"
 	MsgSettingUrlMustHttp      = "setting.url_must_http"
 	MsgSettingSaved            = "setting.saved"
-)
-
-// Deployment related messages (io.net)
-const (
-	MsgDeploymentNotEnabled     = "deployment.not_enabled"
-	MsgDeploymentIdRequired     = "deployment.id_required"
-	MsgDeploymentContainerIdReq = "deployment.container_id_required"
-	MsgDeploymentNameEmpty      = "deployment.name_empty"
-	MsgDeploymentNameTaken      = "deployment.name_taken"
-	MsgDeploymentHardwareIdReq  = "deployment.hardware_id_required"
-	MsgDeploymentHardwareInvId  = "deployment.hardware_invalid_id"
-	MsgDeploymentApiKeyRequired = "deployment.api_key_required"
-	MsgDeploymentInvalidPayload = "deployment.invalid_payload"
-	MsgDeploymentNotFound       = "deployment.not_found"
 )
 
 // Performance related messages
