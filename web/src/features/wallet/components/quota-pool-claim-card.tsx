@@ -406,10 +406,8 @@ export function QuotaPoolClaimCard({
           </div>
         </div>
 
-        {!collapsed ? (
-          <>
-            {/* Stats */}
-            <div className='grid grid-cols-3 gap-px border-b'>
+        {/* Stats */}
+        <div className='grid grid-cols-3 gap-px border-b'>
               <div className='bg-card p-3 text-center sm:p-5'>
                 <div className='text-xl font-semibold tracking-tight tabular-nums sm:text-2xl'>
                   {status?.user_count || 0}
@@ -436,6 +434,8 @@ export function QuotaPoolClaimCard({
               </div>
             </div>
 
+            {!collapsed && (
+              <>
             {/* Calendar */}
             <div className='p-4 sm:p-6'>
               <div className='space-y-3 sm:space-y-4'>
@@ -620,8 +620,8 @@ export function QuotaPoolClaimCard({
                 </div>
               </div>
             </div>
-          </>
-        ) : null}
+              </>
+            )}
       </Card>
     </TooltipProvider>
   )

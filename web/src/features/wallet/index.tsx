@@ -228,48 +228,49 @@ export function Wallet(props: WalletProps) {
         <SectionPageLayout.Title>{t('Wallet')}</SectionPageLayout.Title>
         <SectionPageLayout.Content>
           <div className='mx-auto flex w-full max-w-7xl flex-col gap-4 sm:gap-5'>
-            <WalletStatsCard user={user} loading={userLoading} />
-
             <div className='grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] xl:items-start'>
-              <div id='wallet-add-funds' className='scroll-mt-4'>
-                <RechargeFormCard
-                  topupInfo={topupInfo}
-                  presetAmounts={presetAmounts}
-                  selectedPreset={selectedPreset}
-                  onSelectPreset={handleSelectPreset}
-                  topupAmount={topupAmount}
-                  onTopupAmountChange={handleTopupAmountChange}
-                  paymentAmount={paymentAmount}
-                  calculating={calculating}
-                  onPaymentMethodSelect={handlePaymentMethodSelect}
-                  paymentLoading={paymentLoading}
-                  redemptionCode={redemptionCode}
-                  onRedemptionCodeChange={setRedemptionCode}
-                  onRedeem={handleRedeem}
-                  redeeming={redeeming}
-                  topupLink={topupInfo?.topup_link}
-                  loading={topupLoading}
-                  priceRatio={(status?.price as number) || 1}
-                  usdExchangeRate={effectiveUsdExchangeRate}
-                  onOpenBilling={() => setBillingDialogOpen(true)}
-                />
+              <div className='flex min-w-0 flex-col gap-4 sm:gap-5'>
+                <WalletStatsCard user={user} loading={userLoading} />
+                <div id='wallet-add-funds' className='scroll-mt-4'>
+                  <RechargeFormCard
+                    topupInfo={topupInfo}
+                    presetAmounts={presetAmounts}
+                    selectedPreset={selectedPreset}
+                    onSelectPreset={handleSelectPreset}
+                    topupAmount={topupAmount}
+                    onTopupAmountChange={handleTopupAmountChange}
+                    paymentAmount={paymentAmount}
+                    calculating={calculating}
+                    onPaymentMethodSelect={handlePaymentMethodSelect}
+                    paymentLoading={paymentLoading}
+                    redemptionCode={redemptionCode}
+                    onRedemptionCodeChange={setRedemptionCode}
+                    onRedeem={handleRedeem}
+                    redeeming={redeeming}
+                    topupLink={topupInfo?.topup_link}
+                    loading={topupLoading}
+                    priceRatio={(status?.price as number) || 1}
+                    usdExchangeRate={effectiveUsdExchangeRate}
+                    onOpenBilling={() => setBillingDialogOpen(true)}
+                  />
+                </div>
+                <SubscriptionSummaryCard />
               </div>
 
-              <SubscriptionSummaryCard />
+              <div className='flex min-w-0 flex-col gap-4 sm:gap-5'>
+                {quotaPoolEnabled && (
+                  <QuotaPoolClaimCard enabled onBalanceChange={fetchUser} />
+                )}
+                {affiliateEnabled && (
+                  <AffiliateRewardsCard
+                    user={user}
+                    affiliateLink={affiliateLink}
+                    onTransfer={() => setTransferDialogOpen(true)}
+                    loading={affiliateLoading}
+                  />
+                )}
+              </div>
             </div>
-
-            {affiliateEnabled && (
-              <AffiliateRewardsCard
-                user={user}
-                affiliateLink={affiliateLink}
-                onTransfer={() => setTransferDialogOpen(true)}
-                loading={affiliateLoading}
-              />
-            )}
-
-            {quotaPoolEnabled && (
-              <QuotaPoolClaimCard enabled onBalanceChange={fetchUser} />
-            )}
           </div>
         </SectionPageLayout.Content>
       </SectionPageLayout>

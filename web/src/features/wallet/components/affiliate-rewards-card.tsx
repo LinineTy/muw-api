@@ -45,8 +45,8 @@ export function AffiliateRewardsCard({
   const { t } = useTranslation()
   if (loading) {
     return (
-      <Card data-card-hover='false' className='bg-muted/20 py-0'>
-        <CardContent className='grid gap-4 p-3 sm:p-4 lg:grid-cols-[minmax(220px,1fr)_minmax(220px,0.72fr)_minmax(320px,1.15fr)] lg:items-center'>
+      <Card data-card-hover='false' className='py-0'>
+        <CardContent className='flex flex-col gap-4 p-3 sm:p-4'>
           <div>
             <Skeleton className='h-5 w-32' />
             <Skeleton className='mt-2 h-4 w-48' />
@@ -61,8 +61,8 @@ export function AffiliateRewardsCard({
   const hasRewards = (user?.aff_quota ?? 0) > 0
 
   return (
-    <Card data-card-hover='false' className='bg-muted/20 py-0'>
-      <CardContent className='grid gap-3 p-3 sm:gap-4 sm:p-4 lg:grid-cols-[minmax(200px,1fr)_minmax(180px,0.65fr)_minmax(280px,1fr)] lg:items-center'>
+    <Card data-card-hover='false' className='py-0'>
+      <CardContent className='flex flex-col gap-3 p-3 sm:gap-4 sm:p-4'>
         <div className='flex min-w-0 items-center gap-2.5'>
           <IconBadge tone='chart-3'>
             <Share2 />
