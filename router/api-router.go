@@ -149,6 +149,11 @@ func SetApiRouter(router *gin.Engine) {
 			subscriptionRoute.PUT("/self/preference", controller.UpdateSubscriptionPreference)
 			subscriptionRoute.POST("/balance/pay", middleware.CriticalRateLimit(), controller.SubscriptionRequestBalancePay)
 			subscriptionRoute.POST("/epay/pay", middleware.CriticalRateLimit(), controller.SubscriptionRequestEpay)
+			subscriptionRoute.POST("/cancel", middleware.CriticalRateLimit(), controller.SubscriptionCancel)
+			subscriptionRoute.POST("/renew/balance", middleware.CriticalRateLimit(), controller.SubscriptionRequestRenewBalance)
+			subscriptionRoute.POST("/auto-renew", middleware.CriticalRateLimit(), controller.SubscriptionUpdateAutoRenew)
+			subscriptionRoute.POST("/priority", middleware.CriticalRateLimit(), controller.SubscriptionUpdatePriority)
+			subscriptionRoute.GET("/expiring", controller.GetSubscriptionExpiring)
 		}
 		subscriptionAdminRoute := apiRouter.Group("/subscription/admin")
 		subscriptionAdminRoute.Use(middleware.AdminAuth())

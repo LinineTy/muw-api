@@ -81,6 +81,12 @@ func runSubscriptionQuotaResetOnce() {
 			break
 		}
 	}
+	totalAutoRenew, err := model.AutoRenewDueSubscriptions(subscriptionResetBatchSize)
+	if err != nil {
+		logger.LogWarn(ctx, fmt.Sprintf("subscription auto-renew task failed: %v", err))
+	} else if totalAutoRenew > 0 {
+		logger.LogInfo(ctx, fmt.Sprintf("subscription auto-renewed: %d", totalAutoRenew))
+	}
 	lastCleanup := time.Unix(subscriptionCleanupLast.Load(), 0)
 	if time.Since(lastCleanup) >= subscriptionCleanupInterval {
 		if _, err := model.CleanupSubscriptionPreConsumeRecords(7 * 24 * 3600); err == nil {

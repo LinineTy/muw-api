@@ -17,8 +17,9 @@ import (
 )
 
 type SubscriptionEpayPayRequest struct {
-	PlanId        int    `json:"plan_id"`
-	PaymentMethod string `json:"payment_method"`
+	PlanId         int    `json:"plan_id"`
+	PaymentMethod  string `json:"payment_method"`
+	SubscriptionId int    `json:"subscription_id"` // >0 renews the target subscription
 }
 
 func SubscriptionRequestEpay(c *gin.Context) {
@@ -47,7 +48,11 @@ func SubscriptionRequestEpay(c *gin.Context) {
 	}
 
 	userId := c.GetInt("id")
-	if plan.MaxPurchasePerUser > 0 {
+	if err := model.ValidateSubscriptionPurchaseGate(userId, plan, req.SubscriptionId); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if req.SubscriptionId == 0 && plan.MaxPurchasePerUser > 0 {
 		count, err := model.CountUserSubscriptionsByPlan(userId, plan.Id)
 		if err != nil {
 			common.ApiError(c, err)
@@ -55,6 +60,14 @@ func SubscriptionRequestEpay(c *gin.Context) {
 		}
 		if count >= int64(plan.MaxPurchasePerUser) {
 			common.ApiErrorMsg(c, "已达到该套餐购买上限")
+			return
+		}
+	}
+	if req.SubscriptionId > 0 {
+		// Renewal target must belong to the user and be active.
+		var target model.UserSubscription
+		if err := model.DB.Where("id = ? AND user_id = ? AND status = ?", req.SubscriptionId, userId, "active").First(&target).Error; err != nil {
+			common.ApiErrorMsg(c, "订阅不存在或已失效")
 			return
 		}
 	}
@@ -81,14 +94,15 @@ func SubscriptionRequestEpay(c *gin.Context) {
 	}
 
 	order := &model.SubscriptionOrder{
-		UserId:          userId,
-		PlanId:          plan.Id,
-		Money:           plan.PriceAmount,
-		TradeNo:         tradeNo,
-		PaymentMethod:   req.PaymentMethod,
-		PaymentProvider: model.PaymentProviderEpay,
-		CreateTime:      time.Now().Unix(),
-		Status:          common.TopUpStatusPending,
+		UserId:               userId,
+		PlanId:               plan.Id,
+		Money:                plan.PriceAmount,
+		TradeNo:              tradeNo,
+		PaymentMethod:        req.PaymentMethod,
+		PaymentProvider:      model.PaymentProviderEpay,
+		CreateTime:           time.Now().Unix(),
+		Status:               common.TopUpStatusPending,
+		ExtendSubscriptionId: req.SubscriptionId,
 	}
 	if err := order.Insert(); err != nil {
 		common.ApiErrorMsg(c, "创建订单失败")
