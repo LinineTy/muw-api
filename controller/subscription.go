@@ -100,11 +100,132 @@ func SubscriptionRequestBalancePay(c *gin.Context) {
 		return
 	}
 
-	if err := model.PurchaseSubscriptionWithBalance(userId, req.PlanId); err != nil {
+	msg, err := model.PurchaseWithStrategy(userId, req.PlanId, 0)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"message": msg})
+}
+
+// ---- User self-service: cancel / renew / auto-renew / priority / expiring ----
+
+type SubscriptionCancelRequest struct {
+	SubscriptionId int    `json:"subscription_id"`
+	Mode           string `json:"mode"`
+}
+
+func SubscriptionCancel(c *gin.Context) {
+	userId := c.GetInt("id")
+	var req SubscriptionCancelRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.SubscriptionId <= 0 {
+		common.ApiErrorMsg(c, "参数错误")
+		return
+	}
+	msg, err := model.UserCancelSubscription(userId, req.SubscriptionId, req.Mode)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"message": msg})
+}
+
+type SubscriptionRenewRequest struct {
+	SubscriptionId int `json:"subscription_id"`
+}
+
+func SubscriptionRequestRenewBalance(c *gin.Context) {
+	userId := c.GetInt("id")
+	var req SubscriptionRenewRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.SubscriptionId <= 0 {
+		common.ApiErrorMsg(c, "参数错误")
+		return
+	}
+	var sub model.UserSubscription
+	if err := model.DB.Where("id = ? AND user_id = ?", req.SubscriptionId, userId).First(&sub).Error; err != nil {
+		common.ApiErrorMsg(c, "订阅不存在")
+		return
+	}
+	msg, err := model.PurchaseWithStrategy(userId, sub.PlanId, req.SubscriptionId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"message": msg})
+}
+
+type SubscriptionAutoRenewRequest struct {
+	SubscriptionId int  `json:"subscription_id"`
+	Enabled        bool `json:"enabled"`
+}
+
+func SubscriptionUpdateAutoRenew(c *gin.Context) {
+	userId := c.GetInt("id")
+	var req SubscriptionAutoRenewRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.SubscriptionId <= 0 {
+		common.ApiErrorMsg(c, "参数错误")
+		return
+	}
+	var sub model.UserSubscription
+	if err := model.DB.Where("id = ? AND user_id = ? AND status = ?", req.SubscriptionId, userId, "active").First(&sub).Error; err != nil {
+		common.ApiErrorMsg(c, "订阅不存在或已失效")
+		return
+	}
+	if req.Enabled {
+		plan, err := model.GetSubscriptionPlanById(sub.PlanId)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		if plan.AllowBalancePay != nil && !*plan.AllowBalancePay {
+			common.ApiErrorMsg(c, "该套餐不允许余额支付，无法开启自动续费")
+			return
+		}
+	}
+	if err := model.DB.Model(&model.UserSubscription{}).
+		Where("id = ? AND user_id = ?", req.SubscriptionId, userId).
+		Updates(map[string]interface{}{
+			"auto_renew":        req.Enabled,
+			"auto_renew_failed": false,
+			"cancel_at_end":     false,
+			"updated_at":        common.GetTimestamp(),
+		}).Error; err != nil {
 		common.ApiError(c, err)
 		return
 	}
 	common.ApiSuccess(c, nil)
+}
+
+type SubscriptionPriorityRequest struct {
+	SubscriptionId int `json:"subscription_id"`
+}
+
+func SubscriptionUpdatePriority(c *gin.Context) {
+	userId := c.GetInt("id")
+	var req SubscriptionPriorityRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.SubscriptionId <= 0 {
+		common.ApiErrorMsg(c, "参数错误")
+		return
+	}
+	if err := model.SetSubscriptionPriority(userId, req.SubscriptionId); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
+}
+
+func GetSubscriptionExpiring(c *gin.Context) {
+	userId := c.GetInt("id")
+	days, _ := strconv.Atoi(c.DefaultQuery("days", "7"))
+	if days <= 0 {
+		days = 7
+	}
+	items, err := model.GetExpiringSubscriptions(userId, days)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, items)
 }
 
 // ---- Admin APIs ----
@@ -192,6 +313,22 @@ func AdminCreateSubscriptionPlan(c *gin.Context) {
 		common.ApiErrorMsg(c, "自定义重置周期需大于0秒")
 		return
 	}
+	if req.Plan.ResetAmountLimit < 0 {
+		common.ApiErrorMsg(c, "每周期配额上限不能为负数")
+		return
+	}
+	if req.Plan.WeeklyAmountLimit < 0 || req.Plan.MonthlyAmountLimit < 0 || req.Plan.MaxCumulativeSeconds < 0 {
+		common.ApiErrorMsg(c, "配额上限或累计时长上限不能为负数")
+		return
+	}
+	req.Plan.ExclusiveGroup = strings.TrimSpace(req.Plan.ExclusiveGroup)
+	if req.Plan.AllowedGroups != "" {
+		var groups []string
+		if err := common.UnmarshalJsonStr(req.Plan.AllowedGroups, &groups); err != nil {
+			common.ApiErrorMsg(c, "允许订阅组格式错误，应为 JSON 数组")
+			return
+		}
+	}
 	err := model.DB.Create(&req.Plan).Error
 	if err != nil {
 		common.ApiError(c, err)
@@ -263,6 +400,22 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 		common.ApiErrorMsg(c, "自定义重置周期需大于0秒")
 		return
 	}
+	if req.Plan.ResetAmountLimit < 0 {
+		common.ApiErrorMsg(c, "每周期配额上限不能为负数")
+		return
+	}
+	if req.Plan.WeeklyAmountLimit < 0 || req.Plan.MonthlyAmountLimit < 0 || req.Plan.MaxCumulativeSeconds < 0 {
+		common.ApiErrorMsg(c, "配额上限或累计时长上限不能为负数")
+		return
+	}
+	req.Plan.ExclusiveGroup = strings.TrimSpace(req.Plan.ExclusiveGroup)
+	if req.Plan.AllowedGroups != "" {
+		var groups []string
+		if err := common.UnmarshalJsonStr(req.Plan.AllowedGroups, &groups); err != nil {
+			common.ApiErrorMsg(c, "允许订阅组格式错误，应为 JSON 数组")
+			return
+		}
+	}
 
 	err := model.DB.Transaction(func(tx *gorm.DB) error {
 		// update plan (allow zero values updates with map)
@@ -283,6 +436,12 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 			"downgrade_group":            req.Plan.DowngradeGroup,
 			"quota_reset_period":         req.Plan.QuotaResetPeriod,
 			"quota_reset_custom_seconds": req.Plan.QuotaResetCustomSeconds,
+			"reset_amount_limit":         req.Plan.ResetAmountLimit,
+			"weekly_amount_limit":        req.Plan.WeeklyAmountLimit,
+			"monthly_amount_limit":       req.Plan.MonthlyAmountLimit,
+			"max_cumulative_seconds":     req.Plan.MaxCumulativeSeconds,
+			"exclusive_group":            req.Plan.ExclusiveGroup,
+			"allowed_groups":             req.Plan.AllowedGroups,
 			"updated_at":                 common.GetTimestamp(),
 		}
 		if req.Plan.AllowBalancePay != nil {
