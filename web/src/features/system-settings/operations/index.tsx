@@ -59,6 +59,10 @@ const defaultOperationsSettings: OperationsSettings = {
   'perf_metrics_setting.flush_interval': 5,
   'perf_metrics_setting.bucket_time': 'hour',
   'perf_metrics_setting.retention_days': 0,
+  'visual_fallback_setting.enabled': false,
+  'visual_fallback_setting.model': '',
+  'visual_fallback_setting.prompt': '',
+  'visual_fallback_setting.supported_models': '',
 }
 
 export function OperationsSettings() {
