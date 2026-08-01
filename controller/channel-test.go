@@ -40,6 +40,61 @@ type testResult struct {
 	context     *gin.Context
 	localErr    error
 	newAPIError *types.NewAPIError
+	skipRecord  bool // set when the probe is not a real connectivity test (e.g. unsupported channel type)
+}
+
+// resolveChannelTestModel picks the model a probe will actually exercise: an
+// explicit model wins, otherwise the channel's TestModel, then the first model
+// of the channel, then a hard-coded default. Callers reuse it to know which
+// model a single-model test exercised for health recording.
+func resolveChannelTestModel(channel *model.Channel, testModel string) string {
+	testModel = strings.TrimSpace(testModel)
+	if testModel != "" {
+		return testModel
+	}
+	if channel.TestModel != nil && *channel.TestModel != "" {
+		return strings.TrimSpace(*channel.TestModel)
+	}
+	if models := channel.GetModels(); len(models) > 0 {
+		return strings.TrimSpace(models[0])
+	}
+	return "gpt-4o-mini"
+}
+
+// recordChannelTest persists one probe result into the channel test history so
+// model/channel health can be aggregated over time.
+func recordChannelTest(channel *model.Channel, modelName string, success bool, responseTime int, errMsg string) {
+	record := &model.ChannelTestRecord{
+		ChannelId:    channel.Id,
+		ChannelName:  channel.Name,
+		ModelName:    modelName,
+		Success:      success,
+		ResponseTime: responseTime,
+		ErrorReason:  errMsg,
+	}
+	if err := model.DB.Create(record).Error; err != nil {
+		common.SysError(fmt.Sprintf("failed to record channel test for channel %d: %s", channel.Id, err.Error()))
+	}
+}
+
+// runAndRecordChannelTest runs one probe and writes its outcome to history.
+func runAndRecordChannelTest(ctx context.Context, channel *model.Channel, testUserID int, testModel string, endpointType string, isStream bool) (testResult, int64) {
+	tik := time.Now()
+	result := testChannel(ctx, channel, testUserID, testModel, endpointType, isStream)
+	tok := time.Now()
+	milliseconds := tok.Sub(tik).Milliseconds()
+	if result.skipRecord {
+		return result, milliseconds
+	}
+	errMsg := ""
+	if result.newAPIError != nil {
+		errMsg = result.newAPIError.Error()
+	} else if result.localErr != nil {
+		errMsg = result.localErr.Error()
+	}
+	success := result.newAPIError == nil && result.localErr == nil
+	recordChannelTest(channel, resolveChannelTestModel(channel, testModel), success, int(milliseconds), errMsg)
+	return result, milliseconds
 }
 
 func normalizeChannelTestEndpoint(channel *model.Channel, modelName, endpointType string) string {
@@ -90,26 +145,14 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 	if lo.Contains(unsupportedTestChannelTypes, channel.Type) {
 		channelTypeName := constant.GetChannelTypeName(channel.Type)
 		return testResult{
-			localErr: fmt.Errorf("%s channel test is not supported", channelTypeName),
+			localErr:   fmt.Errorf("%s channel test is not supported", channelTypeName),
+			skipRecord: true,
 		}
 	}
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	testModel = strings.TrimSpace(testModel)
-	if testModel == "" {
-		if channel.TestModel != nil && *channel.TestModel != "" {
-			testModel = strings.TrimSpace(*channel.TestModel)
-		} else {
-			models := channel.GetModels()
-			if len(models) > 0 {
-				testModel = strings.TrimSpace(models[0])
-			}
-			if testModel == "" {
-				testModel = "gpt-4o-mini"
-			}
-		}
-	}
+	testModel = resolveChannelTestModel(channel, testModel)
 
 	endpointType = normalizeChannelTestEndpoint(channel, testModel, endpointType)
 
@@ -858,6 +901,18 @@ func TestChannel(c *gin.Context) {
 		requestCtx = c.Request.Context()
 	}
 	result := testChannel(requestCtx, channel, testUserID, testModel, endpointType, isStream)
+	tok := time.Now()
+	milliseconds := tok.Sub(tik).Milliseconds()
+	// Persist the manual probe into history so per-model health accumulates.
+	if !result.skipRecord {
+		errMsg := ""
+		if result.newAPIError != nil {
+			errMsg = result.newAPIError.Error()
+		} else if result.localErr != nil {
+			errMsg = result.localErr.Error()
+		}
+		recordChannelTest(channel, resolveChannelTestModel(channel, testModel), result.newAPIError == nil && result.localErr == nil, int(milliseconds), errMsg)
+	}
 	if result.localErr != nil {
 		resp := gin.H{
 			"success": false,
@@ -870,8 +925,6 @@ func TestChannel(c *gin.Context) {
 		c.JSON(http.StatusOK, resp)
 		return
 	}
-	tok := time.Now()
-	milliseconds := tok.Sub(tik).Milliseconds()
 	go channel.UpdateResponseTime(milliseconds)
 	consumedTime := float64(milliseconds) / 1000.0
 	if result.newAPIError != nil {
@@ -900,6 +953,34 @@ type channelTestSummary struct {
 	Enabled   int `json:"enabled"`
 }
 
+// channelTestOutcome pairs one probe result with the latency it took and the
+// model it exercised, used by the channel-level decisions in the test loop.
+type channelTestOutcome struct {
+	result       testResult
+	milliseconds int64
+	modelName    string
+}
+
+// channelTestHistoryRetentionSeconds bounds how long channel test records are
+// kept; older rows are pruned opportunistically by the test task.
+const channelTestHistoryRetentionSeconds = 30 * 24 * 60 * 60
+
+var lastChannelTestCleanup int64
+
+// cleanupOldChannelTestRecords prunes test history older than the retention
+// window. It is guarded to run at most once per hour per process so the
+// scheduled probe (every few minutes) does not issue a delete every cycle.
+func cleanupOldChannelTestRecords(now int64) {
+	if now-lastChannelTestCleanup < 3600 {
+		return
+	}
+	lastChannelTestCleanup = now
+	cutoff := now - channelTestHistoryRetentionSeconds
+	if err := model.DB.Where("created_at < ?", cutoff).Delete(&model.ChannelTestRecord{}).Error; err != nil {
+		common.SysError(fmt.Sprintf("failed to cleanup old channel test records: %s", err.Error()))
+	}
+}
+
 // performChannelTests runs the channel test loop synchronously, honoring ctx
 // cancellation so a system-task runner that loses its lease stops promptly. When
 // report is non-nil it is called after each channel with (processed, total) so
@@ -923,15 +1004,55 @@ func performChannelTests(ctx context.Context, channels []*model.Channel, testUse
 			continue
 		}
 		isChannelEnabled := channel.Status == common.ChannelStatusEnabled
-		tik := time.Now()
-		result := testChannel(ctx, channel, testUserID, "", "", shouldUseStreamForAutomaticChannelTest(channel))
-		tok := time.Now()
-		milliseconds := tok.Sub(tik).Milliseconds()
+
+		// Run one probe per channel by default; when auto-test-all-models is on,
+		// probe every model of the channel and persist per-model outcomes.
+		var outcomes []channelTestOutcome
+		isAllModels := operation_setting.GetMonitorSetting().AutoTestAllModels
+		stream := shouldUseStreamForAutomaticChannelTest(channel)
+		if isAllModels {
+			models := channel.GetModels()
+			if len(models) == 0 {
+				models = []string{""}
+			}
+			for _, modelName := range models {
+				result, milliseconds := runAndRecordChannelTest(ctx, channel, testUserID, modelName, "", stream)
+				outcomes = append(outcomes, channelTestOutcome{result: result, milliseconds: milliseconds, modelName: resolveChannelTestModel(channel, modelName)})
+				if ctx != nil && ctx.Err() != nil {
+					break
+				}
+			}
+		} else {
+			result, milliseconds := runAndRecordChannelTest(ctx, channel, testUserID, "", "", stream)
+			outcomes = append(outcomes, channelTestOutcome{result: result, milliseconds: milliseconds, modelName: resolveChannelTestModel(channel, "")})
+		}
 		if ctx != nil && ctx.Err() != nil {
 			break
 		}
+		if len(outcomes) == 0 {
+			continue
+		}
 
 		summary.Tested++
+
+		// Pick a representative outcome for the channel-level decisions. Prefer
+		// the channel's explicit TestModel when multiple models were probed so a
+		// single degraded model does not take the whole channel down.
+		rep := outcomes[0]
+		if isAllModels && channel.TestModel != nil && strings.TrimSpace(*channel.TestModel) != "" {
+			for _, o := range outcomes {
+				if o.modelName == strings.TrimSpace(*channel.TestModel) {
+					rep = o
+					break
+				}
+			}
+		}
+		var totalMilliseconds int64
+		for _, o := range outcomes {
+			totalMilliseconds += o.milliseconds
+		}
+		milliseconds := totalMilliseconds / int64(len(outcomes))
+		result := rep.result
 
 		shouldBanChannel := false
 		newAPIError := result.newAPIError
@@ -1009,6 +1130,7 @@ func runChannelTestTask(ctx context.Context, mode string, notify bool, report fu
 	selected := selectChannelsForAutomaticTest(channels, mode)
 	allowDisable := mode != operation_setting.ChannelTestModePassiveRecovery
 	summary := performChannelTests(ctx, selected, testUserID, allowDisable, report)
+	cleanupOldChannelTestRecords(time.Now().Unix())
 	if notify && (ctx == nil || ctx.Err() == nil) {
 		service.NotifyRootUser(dto.NotifyTypeChannelTest, "通道测试完成", "所有通道测试已完成")
 	}
