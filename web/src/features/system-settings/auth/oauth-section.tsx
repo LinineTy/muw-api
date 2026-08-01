@@ -50,6 +50,7 @@ import {
 import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
+import { LinuxDOGroupMappingEditor } from './linuxdo-group-mapping-editor'
 import {
   buildOAuthCallbackUrl,
   resolveOAuthSiteUrl,
@@ -87,6 +88,7 @@ const oauthSchema = z.object({
   LinuxDOClientId: z.string(),
   LinuxDOClientSecret: z.string(),
   LinuxDOMinimumTrustLevel: z.string(),
+  LinuxDOGroupMapping: z.string(),
   WeChatAuthEnabled: z.boolean(),
   WeChatServerAddress: z.string(),
   WeChatServerToken: z.string(),
@@ -117,6 +119,7 @@ type FlatOAuthDefaults = {
   LinuxDOClientId: string
   LinuxDOClientSecret: string
   LinuxDOMinimumTrustLevel: string
+  LinuxDOGroupMapping: string
   WeChatAuthEnabled: boolean
   WeChatServerAddress: string
   WeChatServerToken: string
@@ -201,6 +204,7 @@ const buildFormDefaults = (defaults: FlatOAuthDefaults): OAuthFormValues => ({
   LinuxDOClientId: defaults.LinuxDOClientId ?? '',
   LinuxDOClientSecret: defaults.LinuxDOClientSecret ?? '',
   LinuxDOMinimumTrustLevel: defaults.LinuxDOMinimumTrustLevel ?? '',
+  LinuxDOGroupMapping: defaults.LinuxDOGroupMapping ?? '',
   WeChatAuthEnabled: defaults.WeChatAuthEnabled,
   WeChatServerAddress: defaults.WeChatServerAddress ?? '',
   WeChatServerToken: defaults.WeChatServerToken ?? '',
@@ -229,6 +233,7 @@ const normalizeFormValues = (values: OAuthFormValues): FlatOAuthDefaults => ({
   LinuxDOClientId: values.LinuxDOClientId,
   LinuxDOClientSecret: values.LinuxDOClientSecret,
   LinuxDOMinimumTrustLevel: values.LinuxDOMinimumTrustLevel,
+  LinuxDOGroupMapping: values.LinuxDOGroupMapping,
   WeChatAuthEnabled: values.WeChatAuthEnabled,
   WeChatServerAddress: values.WeChatServerAddress,
   WeChatServerToken: values.WeChatServerToken,
@@ -994,6 +999,28 @@ export function OAuthSection(props: OAuthSectionProps) {
                       </FormControl>
                       <FormDescription>
                         {t('Minimum LinuxDO trust level required')}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='LinuxDOGroupMapping'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Trust Level Group Mapping')}</FormLabel>
+                      <FormControl>
+                        <LinuxDOGroupMappingEditor
+                          value={field.value ?? ''}
+                          onChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t(
+                          'Map LinuxDO trust levels to user groups. Users without a mapped level fall back to the default group. Leave empty to disable auto group.'
+                        )}
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

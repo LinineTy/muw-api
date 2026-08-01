@@ -77,38 +77,40 @@ func resolveUserSortOptions(sortOptions []UserSortOptions) UserSortOptions {
 // User if you add sensitive fields, don't forget to clean them in setupLogin function.
 // Otherwise, the sensitive information will be saved on local storage in plain text!
 type User struct {
-	Id               int                        `json:"id"`
-	Username         string                     `json:"username" gorm:"unique;index" validate:"max=20"`
-	Password         string                     `json:"password" gorm:"not null;" validate:"min=8,max=20"`
-	OriginalPassword string                     `json:"original_password" gorm:"-:all"` // this field is only for Password change verification, don't save it to database!
-	DisplayName      string                     `json:"display_name" gorm:"index" validate:"max=20"`
-	Role             int                        `json:"role" gorm:"type:int;default:1"`   // admin, common
-	Status           int                        `json:"status" gorm:"type:int;default:1"` // enabled, disabled
-	Email            string                     `json:"email" gorm:"index" validate:"max=50"`
-	GitHubId         string                     `json:"github_id" gorm:"column:github_id;index"`
-	DiscordId        string                     `json:"discord_id" gorm:"column:discord_id;index"`
-	OidcId           string                     `json:"oidc_id" gorm:"column:oidc_id;index"`
-	WeChatId         string                     `json:"wechat_id" gorm:"column:wechat_id;index"`
-	TelegramId       string                     `json:"telegram_id" gorm:"column:telegram_id;index"`
-	VerificationCode string                     `json:"verification_code" gorm:"-:all"`                         // this field is only for Email verification, don't save it to database!
-	AccessToken      *string                    `json:"-" gorm:"type:char(32);column:access_token;uniqueIndex"` // this token is for system management
-	Quota            int                        `json:"quota" gorm:"type:int;default:0"`
-	UsedQuota        int                        `json:"used_quota" gorm:"type:int;default:0;column:used_quota"` // used quota
-	RequestCount     int                        `json:"request_count" gorm:"type:int;default:0;"`               // request number
-	Group            string                     `json:"group" gorm:"type:varchar(64);default:'default'"`
-	AffCode          string                     `json:"aff_code" gorm:"type:varchar(32);column:aff_code;uniqueIndex"`
-	AffCount         int                        `json:"aff_count" gorm:"type:int;default:0;column:aff_count"`
-	AffQuota         int                        `json:"aff_quota" gorm:"type:int;default:0;column:aff_quota"`           // 邀请剩余额度
-	AffHistoryQuota  int                        `json:"aff_history_quota" gorm:"type:int;default:0;column:aff_history"` // 邀请历史额度
-	InviterId        int                        `json:"inviter_id" gorm:"type:int;column:inviter_id;index"`
-	DeletedAt        gorm.DeletedAt             `gorm:"index"`
-	LinuxDOId        string                     `json:"linux_do_id" gorm:"column:linux_do_id;index"`
-	Setting          string                     `json:"setting" gorm:"type:text;column:setting"`
-	Remark           string                     `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
-	CreatedAt        int64                      `json:"created_at" gorm:"autoCreateTime;column:created_at"`
-	LastLoginAt      int64                      `json:"last_login_at" gorm:"default:0;column:last_login_at"`
-	AuthVersion      int64                      `json:"-" gorm:"type:bigint;not null;default:1;column:auth_version"`
-	AdminPermissions map[string]map[string]bool `json:"admin_permissions,omitempty" gorm:"-:all"`
+	Id                int                        `json:"id"`
+	Username          string                     `json:"username" gorm:"unique;index" validate:"max=20"`
+	Password          string                     `json:"password" gorm:"not null;" validate:"min=8,max=20"`
+	OriginalPassword  string                     `json:"original_password" gorm:"-:all"` // this field is only for Password change verification, don't save it to database!
+	DisplayName       string                     `json:"display_name" gorm:"index" validate:"max=20"`
+	Role              int                        `json:"role" gorm:"type:int;default:1"`   // admin, common
+	Status            int                        `json:"status" gorm:"type:int;default:1"` // enabled, disabled
+	Email             string                     `json:"email" gorm:"index" validate:"max=50"`
+	GitHubId          string                     `json:"github_id" gorm:"column:github_id;index"`
+	DiscordId         string                     `json:"discord_id" gorm:"column:discord_id;index"`
+	OidcId            string                     `json:"oidc_id" gorm:"column:oidc_id;index"`
+	WeChatId          string                     `json:"wechat_id" gorm:"column:wechat_id;index"`
+	TelegramId        string                     `json:"telegram_id" gorm:"column:telegram_id;index"`
+	VerificationCode  string                     `json:"verification_code" gorm:"-:all"`                         // this field is only for Email verification, don't save it to database!
+	AccessToken       *string                    `json:"-" gorm:"type:char(32);column:access_token;uniqueIndex"` // this token is for system management
+	Quota             int                        `json:"quota" gorm:"type:int;default:0"`
+	UsedQuota         int                        `json:"used_quota" gorm:"type:int;default:0;column:used_quota"` // used quota
+	RequestCount      int                        `json:"request_count" gorm:"type:int;default:0;"`               // request number
+	Group             string                     `json:"group" gorm:"type:varchar(64);default:'default'"`
+	AffCode           string                     `json:"aff_code" gorm:"type:varchar(32);column:aff_code;uniqueIndex"`
+	AffCount          int                        `json:"aff_count" gorm:"type:int;default:0;column:aff_count"`
+	AffQuota          int                        `json:"aff_quota" gorm:"type:int;default:0;column:aff_quota"`           // 邀请剩余额度
+	AffHistoryQuota   int                        `json:"aff_history_quota" gorm:"type:int;default:0;column:aff_history"` // 邀请历史额度
+	InviterId         int                        `json:"inviter_id" gorm:"type:int;column:inviter_id;index"`
+	DeletedAt         gorm.DeletedAt             `gorm:"index"`
+	LinuxDOId         string                     `json:"linux_do_id" gorm:"column:linux_do_id;index"`
+	LinuxDOTrustLevel int                        `json:"linux_do_trust_level" gorm:"column:linux_do_trust_level"` // LinuxDO 信任等级（L0-L4，展示与分组依据）
+	GroupAuto         bool                       `json:"group_auto" gorm:"column:group_auto"`                     // 分组是否由 LinuxDO 信任等级自动管理
+	Setting           string                     `json:"setting" gorm:"type:text;column:setting"`
+	Remark            string                     `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
+	CreatedAt         int64                      `json:"created_at" gorm:"autoCreateTime;column:created_at"`
+	LastLoginAt       int64                      `json:"last_login_at" gorm:"default:0;column:last_login_at"`
+	AuthVersion       int64                      `json:"-" gorm:"type:bigint;not null;default:1;column:auth_version"`
+	AdminPermissions  map[string]map[string]bool `json:"admin_permissions,omitempty" gorm:"-:all"`
 }
 
 func (user *User) ToBaseUser() *UserBase {
@@ -804,6 +806,13 @@ func (user *User) EditWithTx(tx *gorm.DB, updatePassword bool) error {
 			return err
 		}
 	}
+	if current.Group != newUser.Group {
+		// A manual group change takes the user out of LinuxDO auto-management,
+		// regardless of what the form sent for group_auto.
+		updates["group_auto"] = false
+	} else {
+		updates["group_auto"] = newUser.GroupAuto
+	}
 	if err = tx.Model(&current).Updates(updates).Error; err != nil {
 		return err
 	}
@@ -1407,6 +1416,31 @@ func (user *User) FillUserByLinuxDOId() error {
 	}
 	err := DB.Where("linux_do_id = ?", user.LinuxDOId).First(user).Error
 	return err
+}
+
+// SyncLinuxDOProfile persists the LinuxDO trust level and, when a group change
+// is requested (group != ""), the auto-assigned group. The Redis group cache is
+// refreshed so subsequent requests observe the new group without invalidating
+// the user's sessions. Group transitions intentionally keep the auth version.
+func SyncLinuxDOProfile(user *User, trustLevel int, group string, groupAuto bool) error {
+	updates := map[string]interface{}{
+		"linux_do_trust_level": trustLevel,
+		"group_auto":           groupAuto,
+	}
+	if group != "" {
+		updates["group"] = group
+	}
+	if err := DB.Model(&User{}).Where("id = ?", user.Id).Updates(updates).Error; err != nil {
+		return err
+	}
+	// Keep the in-memory user object in sync for the rest of the login flow.
+	user.LinuxDOTrustLevel = trustLevel
+	user.GroupAuto = groupAuto
+	if group != "" {
+		user.Group = group
+		return RefreshUserGroupCache(user.Id)
+	}
+	return nil
 }
 
 func RootUserExists() bool {

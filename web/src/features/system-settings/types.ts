@@ -139,6 +139,7 @@ export type AuthSettings = {
   LinuxDOClientId: string
   LinuxDOClientSecret: string
   LinuxDOMinimumTrustLevel: string
+  LinuxDOGroupMapping: string
   WeChatAuthEnabled: boolean
   WeChatServerAddress: string
   WeChatServerToken: string
@@ -295,6 +296,7 @@ export type OperationsSettings = {
   DemoSiteEnabled: boolean
   SelfUseModeEnabled: boolean
   AffiliateProgramEnabled: boolean
+  DefaultUserGroup: string
   QuotaRemindThreshold: string
   SMTPServer: string
   SMTPPort: string

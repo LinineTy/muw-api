@@ -31,6 +31,7 @@ const defaultOperationsSettings: OperationsSettings = {
   DemoSiteEnabled: false,
   SelfUseModeEnabled: false,
   AffiliateProgramEnabled: true,
+  DefaultUserGroup: 'default',
   QuotaRemindThreshold: '',
   SMTPServer: '',
   SMTPPort: '',

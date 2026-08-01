@@ -54,6 +54,7 @@ const defaultAuthSettings: AuthSettings = {
   LinuxDOClientId: '',
   LinuxDOClientSecret: '',
   LinuxDOMinimumTrustLevel: '0',
+  LinuxDOGroupMapping: '',
   WeChatAuthEnabled: false,
   WeChatServerAddress: '',
   WeChatServerToken: '',

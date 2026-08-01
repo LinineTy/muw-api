@@ -393,9 +393,13 @@ export function AccountBindingsTab({
         id: 'linuxdo',
         label: t('LinuxDO'),
         icon: SiLinux as React.ComponentType<{ className?: string }>,
-        value: (profile as unknown as Record<string, unknown>).linux_do_id as
-          | string
-          | undefined,
+        value: (() => {
+          const linuxdoId = (profile as unknown as Record<string, unknown>)
+            .linux_do_id as string | undefined
+          if (!linuxdoId) return undefined
+          const level = profile.linux_do_trust_level
+          return level ? `${linuxdoId} · L${level}` : linuxdoId
+        })(),
         isBound: Boolean(
           (profile as unknown as Record<string, unknown>).linux_do_id
         ),

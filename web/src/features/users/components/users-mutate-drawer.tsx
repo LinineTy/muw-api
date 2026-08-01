@@ -366,7 +366,14 @@ export function UsersMutateDrawer({
                               label: group,
                             })),
                           ]}
-                          onValueChange={field.onChange}
+                          onValueChange={(value) => {
+                            // Manually picking a group opts the user out of
+                            // LinuxDO auto-management until re-enabled below.
+                            if (value !== null && value !== field.value) {
+                              form.setValue('group_auto', false)
+                            }
+                            field.onChange(value)
+                          }}
                           value={field.value}
                         >
                           <FormControl>
@@ -388,6 +395,37 @@ export function UsersMutateDrawer({
                       </FormItem>
                     )}
                   />
+
+                  {currentRow?.linux_do_id && (
+                    <FormField
+                      control={form.control}
+                      name='group_auto'
+                      render={({ field }) => (
+                        <FormItem className='flex flex-col gap-1.5'>
+                          <div className='flex items-center justify-between gap-2'>
+                            <div>
+                              <FormLabel>{t('Auto group (LinuxDO)')}</FormLabel>
+                              <FormDescription>
+                                {t(
+                                  'When enabled, the group is re-synced from the LinuxDO trust level on every login.'
+                                )}
+                              </FormDescription>
+                            </div>
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value === true}
+                                onCheckedChange={(checked) =>
+                                  field.onChange(checked === true)
+                                }
+                                aria-label={t('Auto group (LinuxDO)')}
+                              />
+                            </FormControl>
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
 
                   <FormField
                     control={form.control}
@@ -568,6 +606,22 @@ export function UsersMutateDrawer({
                         />
                       </div>
                     ))}
+                    {currentRow?.linux_do_id && (
+                      <div>
+                        <Label className='text-muted-foreground text-xs'>
+                          {t('LinuxDO Trust Level')}
+                        </Label>
+                        <Input
+                          value={
+                            currentRow.linux_do_trust_level
+                              ? `L${currentRow.linux_do_trust_level}`
+                              : '-'
+                          }
+                          disabled
+                          className='mt-1'
+                        />
+                      </div>
+                    )}
                   </div>
                 </SideDrawerSection>
               )}
