@@ -56,12 +56,12 @@ export function useSidebarData(): SidebarData {
         title: t('Chat'),
         items: [
           {
-            title: t('Playground'),
+            title: t('Chat'),
             url: '/playground',
             icon: FlaskConical,
           },
           {
-            title: t('Chat'),
+            title: t('Third-party Integration'),
             icon: MessageSquare,
             type: 'chat-presets',
           },

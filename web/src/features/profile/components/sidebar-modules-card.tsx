@@ -63,12 +63,12 @@ export function SidebarModulesCard() {
       modules: [
         {
           key: 'playground',
-          title: t('Playground'),
+          title: t('Chat'),
           description: t('AI model testing environment'),
         },
         {
           key: 'chat',
-          title: t('Chat'),
+          title: t('Third-party Integration'),
           description: t('Chat session management'),
         },
       ],

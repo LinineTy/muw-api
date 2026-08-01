@@ -89,11 +89,11 @@ export function SidebarModulesSection({
   > = {
     chat: {
       playground: {
-        title: t('Playground'),
+        title: t('Chat'),
         description: t('Experiment with prompts and models in real time.'),
       },
       chat: {
-        title: t('Chat'),
+        title: t('Third-party Integration'),
         description: t('Access previous conversations and start new ones.'),
       },
     },
