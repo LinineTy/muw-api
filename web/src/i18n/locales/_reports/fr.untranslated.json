@@ -40,5 +40,21 @@
   "The global cap resets at the start of this period": "The global cap resets at the start of this period",
   "Per-user caps and claim counts reset at the start of this period": "Per-user caps and claim counts reset at the start of this period",
   "Configured as PayMethods JSON. The type value is sent to Epay as the type parameter to select the payment flow.": "Configured as PayMethods JSON. The type value is sent to Epay as the type parameter to select the payment flow.",
-  "Used to decide the payment flow. The value is sent to Epay as the type parameter.": "Used to decide the payment flow. The value is sent to Epay as the type parameter."
+  "Used to decide the payment flow. The value is sent to Epay as the type parameter.": "Used to decide the payment flow. The value is sent to Epay as the type parameter.",
+  "Keeps the subscription active until it expires, then ends it automatically. Auto-renew is turned off.": "Keeps the subscription active until it expires, then ends it automatically. Auto-renew is turned off.",
+  "Ends the subscription right away. The user group reverts immediately if applicable.": "Ends the subscription right away. The user group reverts immediately if applicable.",
+  "Renew with Balance": "Renew with Balance",
+  "Amount to Pay": "Amount to Pay",
+  "The current subscription will be replaced. Remaining quota is not refunded.": "The current subscription will be replaced. Remaining quota is not refunded.",
+  "Restricted to specific groups": "Restricted to specific groups",
+  "Auto-renew failed: insufficient balance or plan unavailable. Please top up or renew manually.": "Auto-renew failed: insufficient balance or plan unavailable. Please top up or renew manually.",
+  "Max quota usable within each reset cycle, separate from the total quota. 0 means no per-cycle cap. Requires a reset cycle to take effect.": "Max quota usable within each reset cycle, separate from the total quota. 0 means no per-cycle cap. Requires a reset cycle to take effect.",
+  "Plans sharing the same exclusive group cannot coexist. Buying another plan in the group triggers a prorated switch.": "Plans sharing the same exclusive group cannot coexist. Buying another plan in the group triggers a prorated switch.",
+  "Only users in these groups can subscribe to this plan. Separate multiple groups with commas; empty means all groups.": "Only users in these groups can subscribe to this plan. Separate multiple groups with commas; empty means all groups.",
+  "Are you sure you want to delete \"{{name}}\"? Users who authenticated with this provider will no longer be able to log in.": "Are you sure you want to delete \"{{name}}\"? Users who authenticated with this provider will no longer be able to log in.",
+  "Calendar week cap (resets every Monday). Works alongside the monthly cap. 0 means no weekly cap.": "Calendar week cap (resets every Monday). Works alongside the monthly cap. 0 means no weekly cap.",
+  "Calendar month cap (resets on the 1st). Works alongside the weekly cap. 0 means no monthly cap.": "Calendar month cap (resets on the 1st). Works alongside the weekly cap. 0 means no monthly cap.",
+  "The total remaining time cannot exceed this after renewal. Prevents stacking time indefinitely. 0 means unlimited.": "The total remaining time cannot exceed this after renewal. Prevents stacking time indefinitely. 0 means unlimited.",
+  "Mutual exclusion: plans in the same group cannot be held at the same time. Buying another plan in the group triggers a prorated upgrade/downgrade switch. Different from the purchase-gate group below.": "Mutual exclusion: plans in the same group cannot be held at the same time. Buying another plan in the group triggers a prorated upgrade/downgrade switch. Different from the purchase-gate group below.",
+  "Purchase gate: only users in the selected groups can subscribe to this plan. Leave empty to allow all groups.": "Purchase gate: only users in the selected groups can subscribe to this plan. Leave empty to allow all groups."
 }
