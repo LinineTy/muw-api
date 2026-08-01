@@ -82,6 +82,7 @@ const routingReliabilitySchema = z
         .int()
         .min(1, 'Interval must be at least 1 minute'),
       channel_test_mode: z.enum(channelTestModes),
+      auto_test_all_models: z.boolean(),
     }),
   })
   .superRefine((values, ctx) => {
@@ -127,6 +128,7 @@ type RoutingReliabilitySectionProps = {
     'monitor_setting.auto_test_channel_enabled': boolean
     'monitor_setting.auto_test_channel_minutes': number
     'monitor_setting.channel_test_mode': ChannelTestMode
+    'monitor_setting.auto_test_all_models': boolean
   }
 }
 
@@ -145,6 +147,7 @@ type NormalizedRoutingReliabilityValues = {
   'monitor_setting.auto_test_channel_enabled': boolean
   'monitor_setting.auto_test_channel_minutes': number
   'monitor_setting.channel_test_mode': ChannelTestMode
+  'monitor_setting.auto_test_all_models': boolean
 }
 
 function normalizeChannelTestMode(value?: string): ChannelTestMode {
@@ -171,6 +174,7 @@ const buildFormDefaults = (
     channel_test_mode: normalizeChannelTestMode(
       defaults['monitor_setting.channel_test_mode']
     ),
+    auto_test_all_models: defaults['monitor_setting.auto_test_all_models'],
   },
 })
 
@@ -197,6 +201,8 @@ const normalizeDefaults = (
   'monitor_setting.channel_test_mode': normalizeChannelTestMode(
     defaults['monitor_setting.channel_test_mode']
   ),
+  'monitor_setting.auto_test_all_models':
+    defaults['monitor_setting.auto_test_all_models'],
 })
 
 const normalizeFormValues = (
@@ -220,6 +226,8 @@ const normalizeFormValues = (
   'monitor_setting.auto_test_channel_minutes':
     values.monitor_setting.auto_test_channel_minutes,
   'monitor_setting.channel_test_mode': values.monitor_setting.channel_test_mode,
+  'monitor_setting.auto_test_all_models':
+    values.monitor_setting.auto_test_all_models,
 })
 
 export function RoutingReliabilitySection({
@@ -368,6 +376,29 @@ export function RoutingReliabilitySection({
                       <FormDescription>
                         {t(
                           'Automatically probe all channels in the background'
+                        )}
+                      </FormDescription>
+                    </SettingsSwitchContent>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </SettingsSwitchItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='monitor_setting.auto_test_all_models'
+                render={({ field }) => (
+                  <SettingsSwitchItem>
+                    <SettingsSwitchContent>
+                      <FormLabel>{t('Test all models of each channel')}</FormLabel>
+                      <FormDescription>
+                        {t(
+                          'Probe every model instead of a single representative one. Provides per-model health at higher upstream load.'
                         )}
                       </FormDescription>
                     </SettingsSwitchContent>
