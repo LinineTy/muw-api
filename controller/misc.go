@@ -123,7 +123,6 @@ func GetStatus(c *gin.Context) {
 		"setup":                       constant.Setup,
 		"user_agreement_enabled":      legalSetting.UserAgreement != "",
 		"privacy_policy_enabled":      legalSetting.PrivacyPolicy != "",
-		"checkin_enabled":             operation_setting.GetCheckinSetting().Enabled,
 		"quota_pool_enabled":          operation_setting.GetQuotaPoolSetting().Enabled,
 	}
 

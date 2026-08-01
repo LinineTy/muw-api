@@ -97,10 +97,19 @@ const defaultBillingSettings: BillingSettings = {
   WaffoPancakeReturnURL: '',
   WaffoPancakeStoreID: '',
   WaffoPancakeProductID: '',
-  'checkin_setting.enabled': false,
-  'checkin_setting.min_quota': 1000,
-  'checkin_setting.max_quota': 10000,
   'quota_pool_setting.enabled': false,
+  'quota_pool_setting.pool_period': 'daily',
+  'quota_pool_setting.user_period': 'weekly',
+  'quota_pool_setting.amount_type': 'random',
+  'quota_pool_setting.amount': 0,
+  'quota_pool_setting.min_amount': 1000,
+  'quota_pool_setting.max_amount': 10000,
+  'quota_pool_setting.pool_period_cap': 0,
+  'quota_pool_setting.user_period_cap': 0,
+  'quota_pool_setting.user_period_count_limit': 0,
+  'quota_pool_setting.time_rule': '',
+  'quota_pool_setting.balance_mode': 'off',
+  'quota_pool_setting.balance_limit': 0,
 }
 
 export function BillingSettings() {

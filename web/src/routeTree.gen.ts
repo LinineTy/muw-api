@@ -45,7 +45,6 @@ import { Route as AuthenticatedModelsSectionRouteImport } from './routes/_authen
 import { Route as AuthenticatedMySubscriptionsIndexRouteImport } from './routes/_authenticated/my-subscriptions/index'
 import { Route as AuthenticatedPlaygroundIndexRouteImport } from './routes/_authenticated/playground/index'
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile/index'
-import { Route as AuthenticatedQuotaPoolsIndexRouteImport } from './routes/_authenticated/quota-pools/index'
 import { Route as AuthenticatedRedemptionCodesIndexRouteImport } from './routes/_authenticated/redemption-codes/index'
 import { Route as AuthenticatedSubscriptionsIndexRouteImport } from './routes/_authenticated/subscriptions/index'
 import { Route as AuthenticatedSystemInfoIndexRouteImport } from './routes/_authenticated/system-info/index'
@@ -258,12 +257,6 @@ const AuthenticatedProfileIndexRoute =
     path: '/profile/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedQuotaPoolsIndexRoute =
-  AuthenticatedQuotaPoolsIndexRouteImport.update({
-    id: '/quota-pools/',
-    path: '/quota-pools/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 const AuthenticatedRedemptionCodesIndexRoute =
   AuthenticatedRedemptionCodesIndexRouteImport.update({
     id: '/redemption-codes/',
@@ -437,7 +430,6 @@ export interface FileRoutesByFullPath {
   '/my-subscriptions/': typeof AuthenticatedMySubscriptionsIndexRoute
   '/playground/': typeof AuthenticatedPlaygroundIndexRoute
   '/profile/': typeof AuthenticatedProfileIndexRoute
-  '/quota-pools/': typeof AuthenticatedQuotaPoolsIndexRoute
   '/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
   '/subscriptions/': typeof AuthenticatedSubscriptionsIndexRoute
   '/system-info/': typeof AuthenticatedSystemInfoIndexRoute
@@ -496,7 +488,6 @@ export interface FileRoutesByTo {
   '/my-subscriptions': typeof AuthenticatedMySubscriptionsIndexRoute
   '/playground': typeof AuthenticatedPlaygroundIndexRoute
   '/profile': typeof AuthenticatedProfileIndexRoute
-  '/quota-pools': typeof AuthenticatedQuotaPoolsIndexRoute
   '/redemption-codes': typeof AuthenticatedRedemptionCodesIndexRoute
   '/subscriptions': typeof AuthenticatedSubscriptionsIndexRoute
   '/system-info': typeof AuthenticatedSystemInfoIndexRoute
@@ -559,7 +550,6 @@ export interface FileRoutesById {
   '/_authenticated/my-subscriptions/': typeof AuthenticatedMySubscriptionsIndexRoute
   '/_authenticated/playground/': typeof AuthenticatedPlaygroundIndexRoute
   '/_authenticated/profile/': typeof AuthenticatedProfileIndexRoute
-  '/_authenticated/quota-pools/': typeof AuthenticatedQuotaPoolsIndexRoute
   '/_authenticated/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
   '/_authenticated/subscriptions/': typeof AuthenticatedSubscriptionsIndexRoute
   '/_authenticated/system-info/': typeof AuthenticatedSystemInfoIndexRoute
@@ -621,7 +611,6 @@ export interface FileRouteTypes {
     | '/my-subscriptions/'
     | '/playground/'
     | '/profile/'
-    | '/quota-pools/'
     | '/redemption-codes/'
     | '/subscriptions/'
     | '/system-info/'
@@ -680,7 +669,6 @@ export interface FileRouteTypes {
     | '/my-subscriptions'
     | '/playground'
     | '/profile'
-    | '/quota-pools'
     | '/redemption-codes'
     | '/subscriptions'
     | '/system-info'
@@ -742,7 +730,6 @@ export interface FileRouteTypes {
     | '/_authenticated/my-subscriptions/'
     | '/_authenticated/playground/'
     | '/_authenticated/profile/'
-    | '/_authenticated/quota-pools/'
     | '/_authenticated/redemption-codes/'
     | '/_authenticated/subscriptions/'
     | '/_authenticated/system-info/'
@@ -1040,13 +1027,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProfileIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/quota-pools/': {
-      id: '/_authenticated/quota-pools/'
-      path: '/quota-pools'
-      fullPath: '/quota-pools/'
-      preLoaderRoute: typeof AuthenticatedQuotaPoolsIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/redemption-codes/': {
       id: '/_authenticated/redemption-codes/'
       path: '/redemption-codes'
@@ -1309,7 +1289,6 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedMySubscriptionsIndexRoute: typeof AuthenticatedMySubscriptionsIndexRoute
   AuthenticatedPlaygroundIndexRoute: typeof AuthenticatedPlaygroundIndexRoute
   AuthenticatedProfileIndexRoute: typeof AuthenticatedProfileIndexRoute
-  AuthenticatedQuotaPoolsIndexRoute: typeof AuthenticatedQuotaPoolsIndexRoute
   AuthenticatedRedemptionCodesIndexRoute: typeof AuthenticatedRedemptionCodesIndexRoute
   AuthenticatedSubscriptionsIndexRoute: typeof AuthenticatedSubscriptionsIndexRoute
   AuthenticatedSystemInfoIndexRoute: typeof AuthenticatedSystemInfoIndexRoute
@@ -1335,7 +1314,6 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
     AuthenticatedMySubscriptionsIndexRoute,
   AuthenticatedPlaygroundIndexRoute: AuthenticatedPlaygroundIndexRoute,
   AuthenticatedProfileIndexRoute: AuthenticatedProfileIndexRoute,
-  AuthenticatedQuotaPoolsIndexRoute: AuthenticatedQuotaPoolsIndexRoute,
   AuthenticatedRedemptionCodesIndexRoute:
     AuthenticatedRedemptionCodesIndexRoute,
   AuthenticatedSubscriptionsIndexRoute: AuthenticatedSubscriptionsIndexRoute,

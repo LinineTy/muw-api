@@ -18,7 +18,6 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { parseCurrencyDisplayType } from '@/lib/currency'
 
-import { CheckinSettingsSection } from '../general/checkin-settings-section'
 import { QuotaPoolSettingsSection } from '../general/quota-pool-settings-section'
 import { PricingSection } from '../general/pricing-section'
 import { QuotaSettingsSection } from '../general/quota-settings-section'
@@ -178,25 +177,25 @@ const BILLING_SECTIONS = [
     ),
   },
   {
-    id: 'checkin',
-    titleKey: 'Check-in Rewards',
-    build: (settings: BillingSettings) => (
-      <CheckinSettingsSection
-        defaultValues={{
-          enabled: settings['checkin_setting.enabled'],
-          minQuota: settings['checkin_setting.min_quota'],
-          maxQuota: settings['checkin_setting.max_quota'],
-        }}
-      />
-    ),
-  },
-  {
     id: 'quota_pool',
     titleKey: 'Quota Pools',
     build: (settings: BillingSettings) => (
       <QuotaPoolSettingsSection
         defaultValues={{
           enabled: settings['quota_pool_setting.enabled'],
+          poolPeriod: settings['quota_pool_setting.pool_period'],
+          userPeriod: settings['quota_pool_setting.user_period'],
+          amountType: settings['quota_pool_setting.amount_type'],
+          amount: settings['quota_pool_setting.amount'],
+          minAmount: settings['quota_pool_setting.min_amount'],
+          maxAmount: settings['quota_pool_setting.max_amount'],
+          poolPeriodCap: settings['quota_pool_setting.pool_period_cap'],
+          userPeriodCap: settings['quota_pool_setting.user_period_cap'],
+          userPeriodCountLimit:
+            settings['quota_pool_setting.user_period_count_limit'],
+          timeRule: settings['quota_pool_setting.time_rule'],
+          balanceMode: settings['quota_pool_setting.balance_mode'],
+          balanceLimit: settings['quota_pool_setting.balance_limit'],
         }}
       />
     ),

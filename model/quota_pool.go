@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"gorm.io/gorm"
 )
 
@@ -49,73 +50,46 @@ const (
 	QuotaPoolBalanceAbove = "above" // 余额高于阈值才可领
 )
 
+// Record kinds
+const (
+	QuotaRecordKindClaim   = "claim"   // 领取：发放额度
+	QuotaRecordKindCheckin = "checkin" // 打卡：只记录，不发额度
+)
+
 var (
-	ErrQuotaPoolNotFound          = errors.New("quota pool not found")
 	ErrQuotaPoolDisabled          = errors.New("quota pool disabled")
 	ErrQuotaPoolTimeRestricted    = errors.New("quota pool time restricted")
 	ErrQuotaPoolPoolCapReached    = errors.New("quota pool cap reached")
 	ErrQuotaPoolUserCapReached    = errors.New("quota pool user cap reached")
 	ErrQuotaPoolBalanceNotAllowed = errors.New("quota pool balance not allowed")
 	ErrQuotaPoolCountLimitReached = errors.New("quota pool count limit reached")
+	ErrQuotaCheckinAlreadyToday   = errors.New("quota checkin already today")
 )
 
-// QuotaPool 额度池：管理员配置发放规则，用户按规则领取（周期制）
-type QuotaPool struct {
-	Id          int    `json:"id"`
-	Name        string `json:"name" gorm:"type:varchar(64);not null"`
-	Description string `json:"description" gorm:"type:varchar(255);default:''"`
-	Enabled     bool   `json:"enabled"`
-
-	// 周期：daily | weekly | monthly（上限/次数按此滚动重置）
-	Period string `json:"period" gorm:"type:varchar(16);default:'weekly'"`
-
-	// 发放额度：fixed 固定 / random 随机区间
-	AmountType string `json:"amount_type" gorm:"type:varchar(16);default:'fixed'"`
-	Amount     int    `json:"amount"`     // fixed 档发放额度（quota 单位）
-	MinAmount  int    `json:"min_amount"` // random 档下限
-	MaxAmount  int    `json:"max_amount"` // random 档上限
-
-	// 规则1 时间窗口：JSON 文本 [{dates:[], weekdays:[], periods:[{start,end}]}]
-	TimeRule string `json:"time_rule" gorm:"type:text"`
-
-	// 规则2 全池周期总额上限（quota 单位；0 = 不限）：当前周期内所有用户合计最多发这么多
-	PoolPeriodCap int `json:"pool_period_cap"`
-	// 规则3 单用户周期额度上限（quota 单位；0 = 不限）：当前用户本周期累计最多拿这么多
-	UserPeriodCap int `json:"user_period_cap"`
-	// 规则4 余额门槛：mode = off | below | above；limit 为 quota 阈值
-	BalanceMode  string `json:"balance_mode" gorm:"type:varchar(16);default:'off'"`
-	BalanceLimit int    `json:"balance_limit"`
-	// 规则5 单用户周期领取次数上限（0 = 不限）
-	UserPeriodCountLimit int `json:"user_period_count_limit"`
-
-	CreatedTime int64 `json:"created_time" gorm:"bigint"`
-	UpdatedTime int64 `json:"updated_time" gorm:"bigint"`
-}
-
-func (p *QuotaPool) BeforeCreate(tx *gorm.DB) error {
-	now := time.Now().Unix()
-	p.CreatedTime = now
-	p.UpdatedTime = now
-	return nil
-}
-
-func (p *QuotaPool) BeforeUpdate(tx *gorm.DB) error {
-	p.UpdatedTime = time.Now().Unix()
-	return nil
-}
-
-// QuotaClaimRecord 领取记录：周期内累计计算 + 历史
+// QuotaClaimRecord 领取/打卡记录：周期内累计计算 + 历史
+// 全站周期与单用户周期粒度可不同，因此同时记录两个周期键。
 type QuotaClaimRecord struct {
-	Id        int    `json:"id"`
-	UserId    int    `json:"user_id" gorm:"not null;index"`
-	PoolId    int    `json:"pool_id" gorm:"not null;index"`
-	Quota     int    `json:"quota"`
-	PeriodKey string `json:"period_key" gorm:"type:varchar(16);index"` // 周期键
-	ClaimedAt int64  `json:"claimed_at" gorm:"bigint"`
+	Id            int    `json:"id"`
+	UserId        int    `json:"user_id" gorm:"not null;index"`
+	PoolPeriodKey string `json:"pool_period_key" gorm:"type:varchar(16);index"` // 全站周期键，如 "2026-08-01" / "2026-W31" / "2026-08"
+	UserPeriodKey string `json:"user_period_key" gorm:"type:varchar(16);index"` // 单用户周期键
+	Quota         int    `json:"quota"`                                         // 发放额度（打卡为 0）
+	Kind          string `json:"kind" gorm:"type:varchar(8);index"`             // claim | checkin
+	ClaimedAt     int64  `json:"claimed_at" gorm:"bigint"`
 }
 
 func (QuotaClaimRecord) TableName() string {
 	return "quota_claim_records"
+}
+
+// QuotaClaimLock 全局串行锁：并发领取时串行化，防止全站周期上限超发
+// （仅 MySQL/PostgreSQL 需要；SQLite 单写者天然串行）
+type QuotaClaimLock struct {
+	Id int `gorm:"primaryKey"`
+}
+
+func (QuotaClaimLock) TableName() string {
+	return "quota_claim_locks"
 }
 
 // ---- 周期键 ----
@@ -221,245 +195,265 @@ func parseHHMM(s string) int {
 	return h*60 + m
 }
 
-// ---- 池 CRUD ----
+// ---- 周期累计统计（只统计领取记录，打卡不计入上限） ----
 
-func GetQuotaPool(id int) (*QuotaPool, error) {
-	var pool QuotaPool
-	if err := DB.Where("id = ?", id).First(&pool).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrQuotaPoolNotFound
-		}
-		return nil, err
-	}
-	return &pool, nil
-}
-
-func GetEnabledQuotaPools() ([]QuotaPool, error) {
-	var pools []QuotaPool
-	err := DB.Where("enabled = ?", true).Order("id asc").Find(&pools).Error
-	return pools, err
-}
-
-func GetAllQuotaPools() ([]QuotaPool, error) {
-	var pools []QuotaPool
-	err := DB.Order("id asc").Find(&pools).Error
-	return pools, err
-}
-
-func CreateQuotaPool(pool *QuotaPool) error {
-	return DB.Create(pool).Error
-}
-
-func UpdateQuotaPool(pool *QuotaPool) error {
-	return DB.Save(pool).Error
-}
-
-func DeleteQuotaPool(id int) error {
-	return DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Delete(&QuotaPool{}, "id = ?", id).Error; err != nil {
-			return err
-		}
-		return tx.Delete(&QuotaClaimRecord{}, "pool_id = ?", id).Error
-	})
-}
-
-// ---- 周期累计统计 ----
-
-func poolPeriodGranted(tx *gorm.DB, poolId int, periodKey string) (int, error) {
+func globalPeriodGranted(tx *gorm.DB, poolPeriodKey string) (int, error) {
 	var total int64
 	err := tx.Model(&QuotaClaimRecord{}).
-		Where("pool_id = ? AND period_key = ?", poolId, periodKey).
+		Where("kind = ? AND pool_period_key = ?", QuotaRecordKindClaim, poolPeriodKey).
 		Select("COALESCE(SUM(quota), 0)").Scan(&total).Error
 	return int(total), err
 }
 
-func userPeriodGranted(tx *gorm.DB, userId, poolId int, periodKey string) (int, error) {
+func userPeriodGranted(tx *gorm.DB, userId int, userPeriodKey string) (int, error) {
 	var total int64
 	err := tx.Model(&QuotaClaimRecord{}).
-		Where("user_id = ? AND pool_id = ? AND period_key = ?", userId, poolId, periodKey).
+		Where("kind = ? AND user_id = ? AND user_period_key = ?", QuotaRecordKindClaim, userId, userPeriodKey).
 		Select("COALESCE(SUM(quota), 0)").Scan(&total).Error
 	return int(total), err
 }
 
-func userPeriodClaimCount(tx *gorm.DB, userId, poolId int, periodKey string) (int, error) {
+func userPeriodClaimCount(tx *gorm.DB, userId int, userPeriodKey string) (int, error) {
 	var count int64
 	err := tx.Model(&QuotaClaimRecord{}).
-		Where("user_id = ? AND pool_id = ? AND period_key = ?", userId, poolId, periodKey).
+		Where("kind = ? AND user_id = ? AND user_period_key = ?", QuotaRecordKindClaim, userId, userPeriodKey).
 		Count(&count).Error
 	return int(count), err
 }
 
-func GetQuotaPoolRecords(poolId int, startIdx, num int) (records []QuotaClaimRecord, total int64, err error) {
-	err = DB.Model(&QuotaClaimRecord{}).Where("pool_id = ?", poolId).Count(&total).Error
-	if err != nil {
-		return nil, 0, err
-	}
-	if num <= 0 {
-		num = 20
-	}
-	err = DB.Where("pool_id = ?", poolId).
-		Order("claimed_at desc").Limit(num).Offset(startIdx).Find(&records).Error
-	return records, total, err
+// hasCheckedInToday 判断用户当天是否已打卡（kind=checkin）
+func hasCheckedInToday(userId int, now time.Time) (bool, error) {
+	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local).Unix()
+	end := start + 86400
+	var count int64
+	err := DB.Model(&QuotaClaimRecord{}).
+		Where("user_id = ? AND kind = ? AND claimed_at >= ? AND claimed_at < ?",
+			userId, QuotaRecordKindCheckin, start, end).
+		Count(&count).Error
+	return count > 0, err
 }
 
-// ---- 领取 ----
+// ---- 领取/打卡 ----
 
-// computeQuotaPoolAmount 计算本次发放额度
-func computeQuotaPoolAmount(pool *QuotaPool) int {
-	if pool.AmountType == QuotaPoolAmountRandom {
-		if pool.MaxAmount > pool.MinAmount {
-			return pool.MinAmount + rand.Intn(pool.MaxAmount-pool.MinAmount+1)
+// computeQuotaAmount 计算本次发放额度
+func computeQuotaAmount(s *operation_setting.QuotaPoolSetting) int {
+	if s.AmountType == QuotaPoolAmountRandom {
+		if s.MaxAmount > s.MinAmount {
+			return s.MinAmount + rand.Intn(s.MaxAmount-s.MinAmount+1)
 		}
-		return pool.MinAmount
+		return s.MinAmount
 	}
-	return pool.Amount
+	return s.Amount
 }
 
-// QuotaPoolClaimStatus 用户对某池的当前周期领取状态（用户端列表展示用）
-type QuotaPoolClaimStatus struct {
-	PeriodKey         string `json:"period_key"`
-	PoolPeriodGranted int    `json:"pool_period_granted"`
-	UserPeriodGranted int    `json:"user_period_granted"`
-	UserPeriodCount   int    `json:"user_period_count"`
-	PoolCapReached    bool   `json:"pool_cap_reached"`
+// QuotaClaimStatus 当前周期领取状态（用户端展示用）
+type QuotaClaimStatus struct {
+	PoolPeriodKey     string `json:"pool_period_key"`
+	UserPeriodKey     string `json:"user_period_key"`
+	GlobalGranted     int    `json:"global_granted"` // 全站当前周期已发
+	UserGranted       int    `json:"user_granted"`   // 用户当前周期已领额度
+	UserCount         int    `json:"user_count"`     // 用户当前周期领取次数
+	GlobalCapReached  bool   `json:"global_cap_reached"`
 	UserCapReached    bool   `json:"user_cap_reached"`
 	CountLimitReached bool   `json:"count_limit_reached"`
 	TimeOpen          bool   `json:"time_open"`
 	BalanceAllowed    bool   `json:"balance_allowed"`
+	CheckedInToday    bool   `json:"checked_in_today"`
+	TotalClaims       int64  `json:"total_claims"` // 生命周期累计领取次数
+	TotalQuota        int64  `json:"total_quota"`  // 生命周期累计领取额度
 }
 
-// GetQuotaPoolClaimStatus 计算用户对某池的当前周期领取状态（只读，不发放）
-func GetQuotaPoolClaimStatus(userId int, pool *QuotaPool) (*QuotaPoolClaimStatus, error) {
+// GetQuotaClaimStatus 计算当前周期领取状态（只读，不发放）
+func GetQuotaClaimStatus(userId int) (*QuotaClaimStatus, error) {
+	setting := operation_setting.GetQuotaPoolSetting()
 	now := time.Now()
-	key := quotaPoolPeriodKey(pool.Period, now)
-	status := &QuotaPoolClaimStatus{
-		PeriodKey:      key,
-		TimeOpen:       matchesTimeRule(pool.TimeRule, now),
+	poolKey := quotaPoolPeriodKey(setting.PoolPeriod, now)
+	userKey := quotaPoolPeriodKey(setting.UserPeriod, now)
+	status := &QuotaClaimStatus{
+		PoolPeriodKey:  poolKey,
+		UserPeriodKey:  userKey,
+		TimeOpen:       matchesTimeRule(setting.TimeRule, now),
 		BalanceAllowed: true,
 	}
 
-	if pool.BalanceMode != QuotaPoolBalanceOff {
+	checkedIn, err := hasCheckedInToday(userId, now)
+	if err != nil {
+		return nil, err
+	}
+	status.CheckedInToday = checkedIn
+
+	if setting.BalanceMode != QuotaPoolBalanceOff {
 		quota, err := GetUserQuota(userId, false)
 		if err != nil {
 			return nil, err
 		}
-		if pool.BalanceMode == QuotaPoolBalanceBelow {
-			status.BalanceAllowed = quota < pool.BalanceLimit
+		if setting.BalanceMode == QuotaPoolBalanceBelow {
+			status.BalanceAllowed = quota < setting.BalanceLimit
 		} else {
-			status.BalanceAllowed = quota > pool.BalanceLimit
+			status.BalanceAllowed = quota > setting.BalanceLimit
 		}
 	}
 
-	if pool.PoolPeriodCap > 0 {
-		g, err := poolPeriodGranted(DB, pool.Id, key)
+	if setting.PoolPeriodCap > 0 {
+		g, err := globalPeriodGranted(DB, poolKey)
 		if err != nil {
 			return nil, err
 		}
-		status.PoolPeriodGranted = g
-		status.PoolCapReached = g >= pool.PoolPeriodCap
+		status.GlobalGranted = g
+		status.GlobalCapReached = g >= setting.PoolPeriodCap
 	}
-	if pool.UserPeriodCap > 0 {
-		g, err := userPeriodGranted(DB, userId, pool.Id, key)
+	if setting.UserPeriodCap > 0 {
+		g, err := userPeriodGranted(DB, userId, userKey)
 		if err != nil {
 			return nil, err
 		}
-		status.UserPeriodGranted = g
-		status.UserCapReached = g >= pool.UserPeriodCap
+		status.UserGranted = g
+		status.UserCapReached = g >= setting.UserPeriodCap
 	}
-	if pool.UserPeriodCountLimit > 0 {
-		c, err := userPeriodClaimCount(DB, userId, pool.Id, key)
+	if setting.UserPeriodCountLimit > 0 {
+		c, err := userPeriodClaimCount(DB, userId, userKey)
 		if err != nil {
 			return nil, err
 		}
-		status.UserPeriodCount = c
-		status.CountLimitReached = c >= pool.UserPeriodCountLimit
+		status.UserCount = c
+		status.CountLimitReached = c >= setting.UserPeriodCountLimit
 	}
+
+	// 生命周期累计（只统计领取）
+	DB.Model(&QuotaClaimRecord{}).
+		Where("user_id = ? AND kind = ?", userId, QuotaRecordKindClaim).Count(&status.TotalClaims)
+	DB.Model(&QuotaClaimRecord{}).
+		Where("user_id = ? AND kind = ?", userId, QuotaRecordKindClaim).
+		Select("COALESCE(SUM(quota), 0)").Scan(&status.TotalQuota)
+
 	return status, nil
 }
 
-// UserClaimPoolQuota 用户从额度池领取（规则校验 + 发放），照 UserCheckin 的跨库事务写法
-func UserClaimPoolQuota(userId, poolId int) (*QuotaClaimRecord, error) {
-	pool, err := GetQuotaPool(poolId)
-	if err != nil {
-		return nil, err
-	}
-	if !pool.Enabled {
+// GetUserQuotaClaimRecords 获取用户在时间戳区间内的领取/打卡记录（日历按天聚合用）
+func GetUserQuotaClaimRecords(userId int, startTs, endTs int64) ([]QuotaClaimRecord, error) {
+	var records []QuotaClaimRecord
+	err := DB.Where("user_id = ? AND claimed_at >= ? AND claimed_at < ?", userId, startTs, endTs).
+		Order("claimed_at asc").Find(&records).Error
+	return records, err
+}
+
+// ClaimQuota 用户从额度池领取（规则校验 + 发放），照 UserCheckin 的跨库事务写法
+func ClaimQuota(userId int) (*QuotaClaimRecord, error) {
+	setting := operation_setting.GetQuotaPoolSetting()
+	if !setting.Enabled {
 		return nil, ErrQuotaPoolDisabled
 	}
 
 	now := time.Now()
-	periodKey := quotaPoolPeriodKey(pool.Period, now)
+	poolKey := quotaPoolPeriodKey(setting.PoolPeriod, now)
+	userKey := quotaPoolPeriodKey(setting.UserPeriod, now)
 
 	// 规则1 时间窗口
-	if !matchesTimeRule(pool.TimeRule, now) {
+	if !matchesTimeRule(setting.TimeRule, now) {
 		return nil, ErrQuotaPoolTimeRestricted
 	}
 
 	// 规则4 余额门槛（在事务外读一次即可，无需外部 API）
-	if pool.BalanceMode != QuotaPoolBalanceOff {
+	if setting.BalanceMode != QuotaPoolBalanceOff {
 		quota, qErr := GetUserQuota(userId, false)
 		if qErr != nil {
 			return nil, qErr
 		}
-		if pool.BalanceMode == QuotaPoolBalanceBelow && quota >= pool.BalanceLimit {
+		if setting.BalanceMode == QuotaPoolBalanceBelow && quota >= setting.BalanceLimit {
 			return nil, ErrQuotaPoolBalanceNotAllowed
 		}
-		if pool.BalanceMode == QuotaPoolBalanceAbove && quota <= pool.BalanceLimit {
+		if setting.BalanceMode == QuotaPoolBalanceAbove && quota <= setting.BalanceLimit {
 			return nil, ErrQuotaPoolBalanceNotAllowed
 		}
 	}
 
-	quotaAwarded := computeQuotaPoolAmount(pool)
+	quotaAwarded := computeQuotaAmount(setting)
 
 	record := &QuotaClaimRecord{
-		UserId:    userId,
-		PoolId:    poolId,
-		Quota:     quotaAwarded,
-		PeriodKey: periodKey,
-		ClaimedAt: now.Unix(),
+		UserId:        userId,
+		PoolPeriodKey: poolKey,
+		UserPeriodKey: userKey,
+		Quota:         quotaAwarded,
+		Kind:          QuotaRecordKindClaim,
+		ClaimedAt:     now.Unix(),
 	}
 
 	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
-		return claimQuotaPoolWithoutTransaction(record, pool, userId, quotaAwarded, periodKey)
+		return claimQuotaWithoutTransaction(record, setting, quotaAwarded, poolKey, userKey)
 	}
-	return claimQuotaPoolWithTransaction(record, pool, userId, quotaAwarded, periodKey)
+	return claimQuotaWithTransaction(record, setting, quotaAwarded, poolKey, userKey)
 }
 
-// claimQuotaPoolWithTransaction MySQL / PostgreSQL 事务
-func claimQuotaPoolWithTransaction(record *QuotaClaimRecord, pool *QuotaPool, userId, quotaAwarded int, periodKey string) (*QuotaClaimRecord, error) {
+// CheckInQuota 用户打卡（不发额度，只记录），每天一次
+func CheckInQuota(userId int) (*QuotaClaimRecord, error) {
+	setting := operation_setting.GetQuotaPoolSetting()
+	if !setting.Enabled {
+		return nil, ErrQuotaPoolDisabled
+	}
+
+	now := time.Now()
+	if !matchesTimeRule(setting.TimeRule, now) {
+		return nil, ErrQuotaPoolTimeRestricted
+	}
+
+	checkedIn, err := hasCheckedInToday(userId, now)
+	if err != nil {
+		return nil, err
+	}
+	if checkedIn {
+		return nil, ErrQuotaCheckinAlreadyToday
+	}
+
+	record := &QuotaClaimRecord{
+		UserId:        userId,
+		PoolPeriodKey: quotaPoolPeriodKey(setting.PoolPeriod, now),
+		UserPeriodKey: quotaPoolPeriodKey(setting.UserPeriod, now),
+		Quota:         0,
+		Kind:          QuotaRecordKindCheckin,
+		ClaimedAt:     now.Unix(),
+	}
+	if err := DB.Create(record).Error; err != nil {
+		return nil, err
+	}
+	return record, nil
+}
+
+// claimQuotaWithTransaction MySQL / PostgreSQL 事务
+func claimQuotaWithTransaction(record *QuotaClaimRecord, setting *operation_setting.QuotaPoolSetting, quotaAwarded int, poolKey, userKey string) (*QuotaClaimRecord, error) {
 	err := DB.Transaction(func(tx *gorm.DB) error {
-		// 锁池行，避免并发超发
-		if err := lockForUpdate(tx).Where("id = ?", pool.Id).First(&QuotaPool{}).Error; err != nil {
-			return ErrQuotaPoolNotFound
+		// 锁全局锁行，串行化所有并发领取，避免并发超发全站周期上限
+		var lock QuotaClaimLock
+		if err := lockForUpdate(tx).Where("id = ?", 1).First(&lock).Error; err != nil {
+			return err
 		}
 
-		// 规则2 全池周期总额上限
-		if pool.PoolPeriodCap > 0 {
-			granted, err := poolPeriodGranted(tx, pool.Id, periodKey)
+		// 规则2 全站周期总额上限
+		if setting.PoolPeriodCap > 0 {
+			granted, err := globalPeriodGranted(tx, poolKey)
 			if err != nil {
 				return err
 			}
-			if granted+quotaAwarded > pool.PoolPeriodCap {
+			if granted+quotaAwarded > setting.PoolPeriodCap {
 				return ErrQuotaPoolPoolCapReached
 			}
 		}
 		// 规则3 单用户周期额度上限
-		if pool.UserPeriodCap > 0 {
-			granted, err := userPeriodGranted(tx, userId, pool.Id, periodKey)
+		if setting.UserPeriodCap > 0 {
+			granted, err := userPeriodGranted(tx, record.UserId, userKey)
 			if err != nil {
 				return err
 			}
-			if granted+quotaAwarded > pool.UserPeriodCap {
+			if granted+quotaAwarded > setting.UserPeriodCap {
 				return ErrQuotaPoolUserCapReached
 			}
 		}
 		// 规则5 单用户周期领取次数
-		if pool.UserPeriodCountLimit > 0 {
-			count, err := userPeriodClaimCount(tx, userId, pool.Id, periodKey)
+		if setting.UserPeriodCountLimit > 0 {
+			count, err := userPeriodClaimCount(tx, record.UserId, userKey)
 			if err != nil {
 				return err
 			}
-			if count >= pool.UserPeriodCountLimit {
+			if count >= setting.UserPeriodCountLimit {
 				return ErrQuotaPoolCountLimitReached
 			}
 		}
@@ -467,47 +461,47 @@ func claimQuotaPoolWithTransaction(record *QuotaClaimRecord, pool *QuotaPool, us
 		if err := tx.Create(record).Error; err != nil {
 			return err
 		}
-		return tx.Model(&User{}).Where("id = ?", userId).
+		return tx.Model(&User{}).Where("id = ?", record.UserId).
 			Update("quota", gorm.Expr("quota + ?", quotaAwarded)).Error
 	})
 	if err != nil {
 		return nil, err
 	}
 	go func() {
-		_ = cacheIncrUserQuota(userId, int64(quotaAwarded))
+		_ = cacheIncrUserQuota(record.UserId, int64(quotaAwarded))
 	}()
 	return record, nil
 }
 
-// claimQuotaPoolWithoutTransaction SQLite 顺序操作 + 手动回滚
-func claimQuotaPoolWithoutTransaction(record *QuotaClaimRecord, pool *QuotaPool, userId, quotaAwarded int, periodKey string) (*QuotaClaimRecord, error) {
-	// 规则2 全池周期总额上限
-	if pool.PoolPeriodCap > 0 {
-		granted, err := poolPeriodGranted(DB, pool.Id, periodKey)
+// claimQuotaWithoutTransaction SQLite 顺序操作 + 手动回滚
+func claimQuotaWithoutTransaction(record *QuotaClaimRecord, setting *operation_setting.QuotaPoolSetting, quotaAwarded int, poolKey, userKey string) (*QuotaClaimRecord, error) {
+	// 规则2 全站周期总额上限
+	if setting.PoolPeriodCap > 0 {
+		granted, err := globalPeriodGranted(DB, poolKey)
 		if err != nil {
 			return nil, err
 		}
-		if granted+quotaAwarded > pool.PoolPeriodCap {
+		if granted+quotaAwarded > setting.PoolPeriodCap {
 			return nil, ErrQuotaPoolPoolCapReached
 		}
 	}
 	// 规则3 单用户周期额度上限
-	if pool.UserPeriodCap > 0 {
-		granted, err := userPeriodGranted(DB, userId, pool.Id, periodKey)
+	if setting.UserPeriodCap > 0 {
+		granted, err := userPeriodGranted(DB, record.UserId, userKey)
 		if err != nil {
 			return nil, err
 		}
-		if granted+quotaAwarded > pool.UserPeriodCap {
+		if granted+quotaAwarded > setting.UserPeriodCap {
 			return nil, ErrQuotaPoolUserCapReached
 		}
 	}
 	// 规则5 单用户周期领取次数
-	if pool.UserPeriodCountLimit > 0 {
-		count, err := userPeriodClaimCount(DB, userId, pool.Id, periodKey)
+	if setting.UserPeriodCountLimit > 0 {
+		count, err := userPeriodClaimCount(DB, record.UserId, userKey)
 		if err != nil {
 			return nil, err
 		}
-		if count >= pool.UserPeriodCountLimit {
+		if count >= setting.UserPeriodCountLimit {
 			return nil, ErrQuotaPoolCountLimitReached
 		}
 	}
@@ -515,7 +509,7 @@ func claimQuotaPoolWithoutTransaction(record *QuotaClaimRecord, pool *QuotaPool,
 	if err := DB.Create(record).Error; err != nil {
 		return nil, err
 	}
-	if err := IncreaseUserQuota(userId, quotaAwarded, true); err != nil {
+	if err := IncreaseUserQuota(record.UserId, quotaAwarded, true); err != nil {
 		DB.Delete(record)
 		return nil, err
 	}

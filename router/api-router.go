@@ -120,13 +120,11 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.POST("/2fa/disable", middleware.DisableCache(), controller.Disable2FA)
 				selfRoute.POST("/2fa/backup_codes", middleware.DisableCache(), controller.RegenerateBackupCodes)
 
-				// Check-in routes
-				selfRoute.GET("/checkin", controller.GetCheckinStatus)
-				selfRoute.POST("/checkin", middleware.TurnstileCheck(), controller.DoCheckin)
-
 				// Quota pool routes (user)
-				selfRoute.GET("/quota-pool", controller.GetQuotaPools)
-				selfRoute.POST("/quota-pool/:id/claim", middleware.CriticalRateLimit(), controller.ClaimQuotaPool)
+				selfRoute.GET("/quota-pool", controller.GetQuotaPoolStatus)
+				selfRoute.GET("/quota-pool/records", controller.GetQuotaPoolRecords)
+				selfRoute.POST("/quota-pool/claim", middleware.CriticalRateLimit(), controller.ClaimQuotaPool)
+				selfRoute.POST("/quota-pool/checkin", middleware.CriticalRateLimit(), controller.QuotaCheckIn)
 
 				// Custom OAuth bindings
 				selfRoute.GET("/oauth/bindings", controller.GetUserOAuthBindings)
@@ -271,16 +269,6 @@ func SetApiRouter(router *gin.Engine) {
 			redemptionRoute.PUT("/", controller.UpdateRedemption)
 			redemptionRoute.DELETE("/invalid", controller.DeleteInvalidRedemption)
 			redemptionRoute.DELETE("/:id", controller.DeleteRedemption)
-		}
-		quotaPoolRoute := apiRouter.Group("/quota-pool")
-		quotaPoolRoute.Use(middleware.AdminAuth())
-		{
-			quotaPoolRoute.GET("/", controller.AdminGetQuotaPools)
-			quotaPoolRoute.POST("/", controller.AdminCreateQuotaPool)
-			quotaPoolRoute.PUT("/:id", controller.AdminUpdateQuotaPool)
-			quotaPoolRoute.PATCH("/:id", controller.AdminToggleQuotaPool)
-			quotaPoolRoute.DELETE("/:id", controller.AdminDeleteQuotaPool)
-			quotaPoolRoute.GET("/:id/records", controller.AdminGetQuotaPoolRecords)
 		}
 		logRoute := apiRouter.Group("/log")
 		logRoute.GET("/", middleware.AdminAuth(), controller.GetAllLogs)
