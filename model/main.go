@@ -312,6 +312,9 @@ func migrateDB() error {
 			return err
 		}
 	}
+	if err := ensureQuotaClaimRecordsClean(); err != nil {
+		return err
+	}
 	if err := ensureQuotaClaimLockSeeded(); err != nil {
 		return err
 	}
@@ -328,6 +331,61 @@ func ensureQuotaClaimLockSeeded() error {
 		return DB.Create(&QuotaClaimLock{Id: 1}).Error
 	}
 	return nil
+}
+
+// ensureQuotaClaimRecordsClean 处理从旧版升级的 quota_claim_records 表。
+// 旧版含 pool_id (NOT NULL) / period_key 列；收敛后 struct 已删除这两列，但
+// AutoMigrate 只加列不删列，残留的 pool_id 会让新的 insert 触发
+// NOT NULL constraint failed（SQLite 扩展错误码 1299）。检测到旧列时删除，
+// 保证存量库升级后领取/打卡不报错。
+func ensureQuotaClaimRecordsClean() error {
+	hasLegacy, err := quotaClaimRecordsHasLegacyPoolId()
+	if err != nil {
+		return err
+	}
+	if !hasLegacy {
+		return nil
+	}
+	return dropLegacyQuotaClaimColumns()
+}
+
+// quotaClaimRecordsHasLegacyPoolId 检测 quota_claim_records 表是否仍含旧版 pool_id 列。
+func quotaClaimRecordsHasLegacyPoolId() (bool, error) {
+	var count int64
+	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
+		err := DB.Raw(
+			"SELECT COUNT(*) FROM pragma_table_info('quota_claim_records') WHERE name = 'pool_id'",
+		).Scan(&count).Error
+		return count > 0, err
+	}
+	if common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
+		err := DB.Raw(
+			"SELECT COUNT(*) FROM information_schema.COLUMNS WHERE table_schema = current_schema() AND table_name = 'quota_claim_records' AND column_name = 'pool_id'",
+		).Scan(&count).Error
+		return count > 0, err
+	}
+	err := DB.Raw(
+		"SELECT COUNT(*) FROM information_schema.COLUMNS WHERE table_schema = DATABASE() AND table_name = 'quota_claim_records' AND column_name = 'pool_id'",
+	).Scan(&count).Error
+	return count > 0, err
+}
+
+// dropLegacyQuotaClaimColumns 删除旧版残留的 pool_id / period_key 列。
+// SQLite 的 DROP COLUMN 不允许列仍被索引引用，需先删对应索引。
+func dropLegacyQuotaClaimColumns() error {
+	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
+		if err := DB.Exec("DROP INDEX IF EXISTS idx_quota_claim_records_pool_id").Error; err != nil {
+			return err
+		}
+		if err := DB.Exec("DROP INDEX IF EXISTS idx_quota_claim_records_period_key").Error; err != nil {
+			return err
+		}
+		if err := DB.Exec("ALTER TABLE quota_claim_records DROP COLUMN pool_id").Error; err != nil {
+			return err
+		}
+		return DB.Exec("ALTER TABLE quota_claim_records DROP COLUMN period_key").Error
+	}
+	return DB.Exec("ALTER TABLE quota_claim_records DROP COLUMN pool_id, DROP COLUMN period_key").Error
 }
 
 func migrateDBFast() error {
