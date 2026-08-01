@@ -1,0 +1,141 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+import { CalendarX } from 'lucide-react'
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
+
+import { Dialog } from '@/components/dialog'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+
+import { cancelSubscription } from '../../api'
+import type { UserSubscriptionRecord } from '@/features/subscriptions/types'
+
+type CancelMode = 'immediate' | 'end_period'
+
+interface Props {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  subscription: UserSubscriptionRecord | null
+  onSuccess?: () => void | Promise<void>
+}
+
+export function CancelSubscriptionDialog(props: Props) {
+  const { t } = useTranslation()
+  const [mode, setMode] = useState<CancelMode>('end_period')
+  const [submitting, setSubmitting] = useState(false)
+
+  const sub = props.subscription?.subscription
+
+  const handleConfirm = async () => {
+    if (!sub) return
+    setSubmitting(true)
+    try {
+      const res = await cancelSubscription(sub.id, mode)
+      if (res.success) {
+        toast.success(res.data?.message || t('Subscription cancelled'))
+        props.onOpenChange(false)
+        void props.onSuccess?.()
+      } else {
+        toast.error(res.message || t('Request failed'))
+      }
+    } catch {
+      toast.error(t('Request failed'))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const options: { value: CancelMode; title: string; desc: string }[] = [
+    {
+      value: 'end_period',
+      title: t('Cancel at period end'),
+      desc: t(
+        'Keeps the subscription active until it expires, then ends it automatically. Auto-renew is turned off.'
+      ),
+    },
+    {
+      value: 'immediate',
+      title: t('Cancel immediately'),
+      desc: t(
+        'Ends the subscription right away. The user group reverts immediately if applicable.'
+      ),
+    },
+  ]
+
+  return (
+    <Dialog
+      open={props.open}
+      onOpenChange={props.onOpenChange}
+      title={
+        <>
+          <CalendarX className='h-5 w-5' />
+          {t('Cancel Subscription')}
+        </>
+      }
+      contentClassName='max-sm:w-[calc(100vw-1.5rem)] sm:max-w-md'
+      titleClassName='flex items-center gap-2'
+      contentHeight='auto'
+      bodyClassName='space-y-4'
+    >
+      <div className='space-y-3'>
+        <div className='bg-muted/50 rounded-lg border px-3 py-2 text-sm'>
+          <span className='text-muted-foreground'>{t('Plan Name')}: </span>
+          <span className='font-medium'>{sub?.plan_id ? `#${sub.plan_id}` : ''}</span>
+        </div>
+        <div className='space-y-2'>
+          {options.map((opt) => (
+            <button
+              key={opt.value}
+              type='button'
+              onClick={() => setMode(opt.value)}
+              className={cn(
+                'w-full rounded-lg border p-3 text-left transition-colors',
+                mode === opt.value
+                  ? 'border-primary bg-primary/5'
+                  : 'bg-card hover:bg-muted/50'
+              )}
+            >
+              <div className='text-sm font-medium'>{opt.title}</div>
+              <div className='text-muted-foreground mt-0.5 text-xs'>
+                {opt.desc}
+              </div>
+            </button>
+          ))}
+        </div>
+        <div className='flex justify-end gap-2 pt-1'>
+          <Button
+            variant='outline'
+            onClick={() => props.onOpenChange(false)}
+          >
+            {t('Close')}
+          </Button>
+          <Button
+            variant='destructive'
+            onClick={handleConfirm}
+            disabled={submitting || !sub}
+          >
+            {submitting ? t('Saving...') : t('Confirm Cancel')}
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  )
+}

@@ -203,6 +203,64 @@ export async function updateBillingPreference(
   return res.data
 }
 
+// ============================================================================
+// User Self-service: cancel / renew / auto-renew / priority / expiring
+// ============================================================================
+
+export async function cancelSubscription(
+  subscriptionId: number,
+  mode: 'immediate' | 'end_period'
+): Promise<ApiResponse<{ message?: string }>> {
+  const res = await api.post('/api/subscription/cancel', {
+    subscription_id: subscriptionId,
+    mode,
+  })
+  return res.data
+}
+
+export async function renewSubscriptionBalance(
+  subscriptionId: number
+): Promise<ApiResponse<{ message?: string }>> {
+  const res = await api.post('/api/subscription/renew/balance', {
+    subscription_id: subscriptionId,
+  })
+  return res.data
+}
+
+export async function setSubscriptionAutoRenew(
+  subscriptionId: number,
+  enabled: boolean
+): Promise<ApiResponse> {
+  const res = await api.post('/api/subscription/auto-renew', {
+    subscription_id: subscriptionId,
+    enabled,
+  })
+  return res.data
+}
+
+export async function setSubscriptionPriority(
+  subscriptionId: number
+): Promise<ApiResponse> {
+  const res = await api.post('/api/subscription/priority', {
+    subscription_id: subscriptionId,
+  })
+  return res.data
+}
+
+export interface ExpiringSubscription {
+  subscription: UserSubscriptionRecord['subscription']
+  plan_title?: string
+}
+
+export async function getExpiringSubscriptions(
+  days?: number
+): Promise<ApiResponse<ExpiringSubscription[]>> {
+  const res = await api.get('/api/subscription/expiring', {
+    params: days ? { days } : undefined,
+  })
+  return res.data
+}
+
 export async function getGroups(): Promise<ApiResponse<string[]>> {
   const res = await api.get('/api/group')
   return res.data

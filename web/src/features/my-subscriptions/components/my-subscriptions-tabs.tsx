@@ -16,17 +16,23 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useMemo } from 'react'
+import { CalendarClock, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import type { UserSubscriptionRecord } from '@/features/subscriptions/types'
+import type {
+  SubscriptionPlan,
+  UserSubscriptionRecord,
+} from '@/features/subscriptions/types'
+import { cn } from '@/lib/utils'
 
 import { useMySubscriptions } from './my-subscriptions-provider'
 import { SubscriptionList } from './subscription-list'
 import { PlanCatalogSection } from './plan-catalog-section'
 import { classifySubscriptionStatus } from '../lib/helpers'
+import { getExpiringSubscriptions, type ExpiringSubscription } from '../api'
 
 function splitByStatus(subscriptions: UserSubscriptionRecord[]) {
   const active: UserSubscriptionRecord[] = []
@@ -45,6 +51,49 @@ function splitByStatus(subscriptions: UserSubscriptionRecord[]) {
   return { active, expired, cancelled }
 }
 
+function ExpiringBanner() {
+  const { t } = useTranslation()
+  const [expiring, setExpiring] = useState<ExpiringSubscription[]>([])
+  const [dismissed, setDismissed] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    getExpiringSubscriptions(7)
+      .then((res) => {
+        if (!cancelled && res.success) setExpiring(res.data || [])
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (dismissed || expiring.length === 0) return null
+
+  return (
+    <div className='relative flex flex-wrap items-center gap-2 rounded-lg border border-amber-300/70 bg-amber-50 px-3 py-2 pr-8 text-xs text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-300'>
+      <CalendarClock className='size-4 shrink-0' aria-hidden='true' />
+      <span>
+        {t('{{count}} subscription(s) expire within 7 days', {
+          count: expiring.length,
+        })}
+        :{' '}
+        {expiring
+          .map((e) => `${e.plan_title || `#${e.subscription.id}`}`)
+          .join(', ')}
+      </span>
+      <button
+        type='button'
+        onClick={() => setDismissed(true)}
+        className='absolute top-1/2 right-2 -translate-y-1/2 rounded p-0.5 hover:bg-black/5'
+        aria-label={t('Close')}
+      >
+        <X className='size-3.5' />
+      </button>
+    </div>
+  )
+}
+
 export function MySubscriptionsTabs() {
   const { t } = useTranslation()
   const { selfData, plans, loading } = useMySubscriptions()
@@ -53,16 +102,28 @@ export function MySubscriptionsTabs() {
     () => selfData?.all_subscriptions ?? [],
     [selfData]
   )
-  const { active, expired, cancelled } = useMemo(
-    () => splitByStatus(allSubscriptions),
-    [allSubscriptions]
-  )
+  const { active, expired, cancelled } = useMemo(() => {
+    const split = splitByStatus(allSubscriptions)
+    // Active subscriptions honor the user-set consumption priority: when a
+    // preference has been chosen (priorities differ), sort the preferred first.
+    const ps = split.active.map((s) => Number(s.subscription?.priority || 0))
+    const maxP = Math.max(...ps)
+    const minP = Math.min(...ps)
+    if (ps.length > 1 && maxP > minP) {
+      split.active.sort(
+        (a, b) =>
+          Number(a.subscription?.priority || 0) -
+          Number(b.subscription?.priority || 0)
+      )
+    }
+    return split
+  }, [allSubscriptions])
 
-  const planTitleMap = useMemo(() => {
-    const map = new Map<number, string>()
+  const planMap = useMemo(() => {
+    const map = new Map<number, SubscriptionPlan>()
     for (const p of plans) {
       if (p?.plan?.id) {
-        map.set(p.plan.id, p.plan.title || '')
+        map.set(p.plan.id, p.plan)
       }
     }
     return map
@@ -79,37 +140,34 @@ export function MySubscriptionsTabs() {
   }
 
   return (
-    <Tabs defaultValue='active' className='flex min-h-0 flex-1 flex-col'>
-      <TabsList className='w-fit'>
-        <TabsTrigger value='active'>
-          {t('Active')} ({active.length})
-        </TabsTrigger>
-        <TabsTrigger value='expired'>
-          {t('Expired')} ({expired.length})
-        </TabsTrigger>
-        <TabsTrigger value='cancelled'>
-          {t('Cancelled')} ({cancelled.length})
-        </TabsTrigger>
-        <TabsTrigger value='plans'>{t('Subscription Plans')}</TabsTrigger>
-      </TabsList>
-      <TabsContent value='active' className='pt-3'>
-        <SubscriptionList subscriptions={active} planTitleMap={planTitleMap} />
-      </TabsContent>
-      <TabsContent value='expired' className='pt-3'>
-        <SubscriptionList
-          subscriptions={expired}
-          planTitleMap={planTitleMap}
-        />
-      </TabsContent>
-      <TabsContent value='cancelled' className='pt-3'>
-        <SubscriptionList
-          subscriptions={cancelled}
-          planTitleMap={planTitleMap}
-        />
-      </TabsContent>
-      <TabsContent value='plans' className='pt-3'>
-        <PlanCatalogSection />
-      </TabsContent>
-    </Tabs>
+    <div className={cn('flex min-h-0 flex-1 flex-col gap-3')}>
+      <ExpiringBanner />
+      <Tabs defaultValue='active' className='flex min-h-0 flex-1 flex-col'>
+        <TabsList className='w-fit'>
+          <TabsTrigger value='active'>
+            {t('Active')} ({active.length})
+          </TabsTrigger>
+          <TabsTrigger value='expired'>
+            {t('Expired')} ({expired.length})
+          </TabsTrigger>
+          <TabsTrigger value='cancelled'>
+            {t('Cancelled')} ({cancelled.length})
+          </TabsTrigger>
+          <TabsTrigger value='plans'>{t('Subscription Plans')}</TabsTrigger>
+        </TabsList>
+        <TabsContent value='active' className='pt-3'>
+          <SubscriptionList subscriptions={active} planMap={planMap} />
+        </TabsContent>
+        <TabsContent value='expired' className='pt-3'>
+          <SubscriptionList subscriptions={expired} planMap={planMap} />
+        </TabsContent>
+        <TabsContent value='cancelled' className='pt-3'>
+          <SubscriptionList subscriptions={cancelled} planMap={planMap} />
+        </TabsContent>
+        <TabsContent value='plans' className='pt-3'>
+          <PlanCatalogSection />
+        </TabsContent>
+      </Tabs>
+    </div>
   )
 }

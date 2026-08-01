@@ -16,14 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Check, Sparkles } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { ArrowLeftRight, Sparkles } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
 import {
   Tooltip,
   TooltipContent,
@@ -34,20 +32,51 @@ import {
   formatDuration,
   formatResetPeriod,
 } from '@/features/subscriptions/lib'
-import type { PlanRecord } from '@/features/subscriptions/types'
+import type {
+  PlanRecord,
+  SubscriptionPlan,
+} from '@/features/subscriptions/types'
 import { formatQuota } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 import { useMySubscriptions } from './my-subscriptions-provider'
 import { getEpayMethods } from '../lib/helpers'
+import { classifySubscriptionStatus } from '../lib/helpers'
+import { SwitchPlanDialog } from './dialogs/switch-plan-dialog'
+
+function parseAllowedGroups(raw?: string): string[] {
+  if (!raw) return []
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return Array.isArray(parsed)
+      ? parsed.filter((g): g is string => typeof g === 'string')
+      : []
+  } catch {
+    return []
+  }
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className='min-w-0'>
+      <div className='text-muted-foreground text-[11px] font-medium select-none'>
+        {label}
+      </div>
+      <div className='text-muted-foreground min-w-0 truncate text-sm'>
+        {value}
+      </div>
+    </div>
+  )
+}
 
 export function PlanCatalogSection() {
   const { t } = useTranslation()
-  const { plans, selfData, topupInfo, userQuota, refresh } =
+  const { plans, selfData, topupInfo, userQuota, userGroup, refresh } =
     useMySubscriptions()
 
   const [purchaseOpen, setPurchaseOpen] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<PlanRecord | null>(null)
+  const [switchTarget, setSwitchTarget] = useState<PlanRecord | null>(null)
 
   const enableOnlineTopUp = !!topupInfo?.enable_online_topup
   const epayMethods = useMemo(
@@ -68,6 +97,34 @@ export function PlanCatalogSection() {
     }
     return map
   }, [allSubscriptions])
+
+  const planMap = useMemo(() => {
+    const map = new Map<number, SubscriptionPlan>()
+    for (const p of plans) {
+      if (p?.plan?.id) {
+        map.set(p.plan.id, p.plan)
+      }
+    }
+    return map
+  }, [plans])
+
+  const findSameGroupSub = useCallback(
+    (targetPlan?: SubscriptionPlan | null) => {
+      if (!targetPlan?.exclusive_group) return null
+      for (const s of allSubscriptions) {
+        const sub = s.subscription
+        if (!sub || sub.exclusive_group !== targetPlan.exclusive_group) continue
+        if (!classifySubscriptionStatus(s).isActive) continue
+        return { sub, oldPlan: planMap.get(sub.plan_id) || null }
+      }
+      return null
+    },
+    [allSubscriptions, planMap]
+  )
+
+  const switchInfo = switchTarget
+    ? findSameGroupSub(switchTarget.plan)
+    : null
 
   if (plans.length === 0) {
     return (
@@ -90,44 +147,64 @@ export function PlanCatalogSection() {
           const count = planPurchaseCountMap.get(plan.id) || 0
           const reached = limit > 0 && count >= limit
 
-          const benefits = [
-            `${t('Validity Period')}: ${formatDuration(plan, t)}`,
+          const allowedGroups = parseAllowedGroups(plan.allowed_groups)
+          const groupRestricted =
+            allowedGroups.length > 0 && !allowedGroups.includes(userGroup)
+          const sameGroupActive = findSameGroupSub(plan)
+
+          const weekLimit = Number(plan.weekly_amount_limit || 0)
+          const monthLimit = Number(plan.monthly_amount_limit || 0)
+          const maxDays = Math.floor(Number(plan.max_cumulative_seconds || 0) / 86400)
+
+          const infoRows = [
+            { label: t('Validity'), value: formatDuration(plan, t) },
             formatResetPeriod(plan, t) !== t('No Reset')
-              ? `${t('Quota Reset')}: ${formatResetPeriod(plan, t)}`
+              ? { label: t('Quota Reset'), value: formatResetPeriod(plan, t) }
               : null,
-            totalAmount > 0
-              ? `${t('Total Quota')}: ${formatQuota(totalAmount)}`
-              : `${t('Total Quota')}: ${t('Unlimited')}`,
-            limit > 0 ? `${t('Purchase Limit')}: ${limit}` : null,
+            {
+              label: t('Plan Quota'),
+              value:
+                totalAmount > 0 ? formatQuota(totalAmount) : t('Unlimited'),
+            },
+            weekLimit > 0
+              ? { label: t('Weekly Quota'), value: formatQuota(weekLimit) }
+              : null,
+            monthLimit > 0
+              ? { label: t('Monthly Quota'), value: formatQuota(monthLimit) }
+              : null,
+            maxDays > 0
+              ? {
+                  label: t('Max Duration'),
+                  value: `${maxDays} ${t('days')}`,
+                }
+              : null,
+            limit > 0
+              ? { label: t('Purchase Limit'), value: `${limit}` }
+              : null,
             plan.upgrade_group
-              ? `${t('Upgrade Group')}: ${plan.upgrade_group}`
+              ? { label: t('Upgrade Group'), value: plan.upgrade_group }
               : null,
-          ].filter(Boolean) as string[]
+          ].filter(Boolean) as { label: string; value: string }[]
 
           return (
-            <Card
+            <div
               key={plan.id}
               data-card-hover='false'
               className={cn(
-                'relative overflow-hidden',
+                'bg-card relative flex flex-col overflow-hidden rounded-2xl border shadow-xs',
                 isPopular && 'border-primary/70 shadow-sm'
               )}
             >
               {isPopular && (
                 <div className='from-primary/60 to-primary/20 absolute inset-x-0 top-0 h-1 bg-linear-to-r' />
               )}
-              <CardContent className='flex h-full flex-col p-3.5 sm:p-4'>
-                <div className='mb-2 flex items-start justify-between gap-3'>
-                  <div className='min-w-0'>
-                    <h4 className='truncate font-semibold'>
-                      {plan.title || t('Subscription Plans')}
-                    </h4>
-                    {plan.subtitle && (
-                      <p className='text-muted-foreground truncate text-xs'>
-                        {plan.subtitle}
-                      </p>
-                    )}
-                  </div>
+
+              {/* 顶栏：标题 + 推荐徽标 */}
+              <div className='flex items-center justify-between gap-2 border-b px-4 py-3'>
+                <div className='flex min-w-0 items-center gap-2'>
+                  <span className='truncate text-sm font-semibold'>
+                    {plan.title || t('Subscription Plans')}
+                  </span>
                   {isPopular && (
                     <StatusBadge
                       variant='info'
@@ -139,27 +216,34 @@ export function PlanCatalogSection() {
                     </StatusBadge>
                   )}
                 </div>
-
-                <div className='py-2'>
-                  <span className='text-primary text-2xl font-bold'>
-                    ${price}
+                {plan.subtitle && (
+                  <span className='text-muted-foreground truncate text-xs'>
+                    {plan.subtitle}
                   </span>
-                </div>
+                )}
+              </div>
 
-                <div className='flex-1 space-y-1.5 pb-3'>
-                  {benefits.map((label) => (
-                    <div
-                      key={label}
-                      className='text-muted-foreground flex items-center gap-2 text-xs'
-                    >
-                      <Check className='text-primary h-3 w-3 shrink-0' />
-                      <span>{label}</span>
-                    </div>
+              {/* 价格 + 有效期 */}
+              <div className='flex items-baseline gap-2 px-4 pt-3'>
+                <span className='text-primary text-2xl font-bold'>
+                  ${price}
+                </span>
+                <span className='text-muted-foreground text-sm'>
+                  {formatDuration(plan, t)}
+                </span>
+              </div>
+
+              {/* 元信息 */}
+              <div className='flex-1 px-4 py-3'>
+                <div className='grid grid-cols-2 gap-x-4 gap-y-2'>
+                  {infoRows.map((row) => (
+                    <InfoRow key={row.label} label={row.label} value={row.value} />
                   ))}
                 </div>
+              </div>
 
-                <Separator className='mb-3' />
-
+              {/* 操作区 */}
+              <div className='border-t px-4 py-2.5'>
                 {reached ? (
                   <Tooltip>
                     <TooltipTrigger render={<div />}>
@@ -171,6 +255,29 @@ export function PlanCatalogSection() {
                       {t('Purchase limit reached')} ({count}/{limit})
                     </TooltipContent>
                   </Tooltip>
+                ) : groupRestricted ? (
+                  <Tooltip>
+                    <TooltipTrigger render={<div />}>
+                      <Button variant='outline' className='w-full' disabled>
+                        {t('Only for: {{groups}}', {
+                          groups: allowedGroups.join(', '),
+                        })}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {t('Only users in these groups can subscribe')}:{' '}
+                      {allowedGroups.join(', ')}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : sameGroupActive ? (
+                  <Button
+                    variant='outline'
+                    className='w-full'
+                    onClick={() => setSwitchTarget(p)}
+                  >
+                    <ArrowLeftRight className='size-4' />
+                    {t('Upgrade / Downgrade')}
+                  </Button>
                 ) : (
                   <Button
                     variant='outline'
@@ -183,8 +290,8 @@ export function PlanCatalogSection() {
                     {t('Subscribe Now')}
                   </Button>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )
         })}
       </div>
@@ -212,6 +319,17 @@ export function PlanCatalogSection() {
             ? planPurchaseCountMap.get(selectedPlan.plan.id)
             : undefined
         }
+      />
+
+      <SwitchPlanDialog
+        open={!!switchTarget}
+        onOpenChange={(open) => {
+          if (!open) setSwitchTarget(null)
+        }}
+        plan={switchTarget?.plan || null}
+        oldSub={switchInfo?.sub || null}
+        oldPlan={switchInfo?.oldPlan || null}
+        onSuccess={refresh}
       />
     </>
   )
