@@ -38,5 +38,7 @@
   "Leave all unchecked to allow every day": "Leave all unchecked to allow every day",
   "Failed to check in": "Failed to check in",
   "The global cap resets at the start of this period": "The global cap resets at the start of this period",
-  "Per-user caps and claim counts reset at the start of this period": "Per-user caps and claim counts reset at the start of this period"
+  "Per-user caps and claim counts reset at the start of this period": "Per-user caps and claim counts reset at the start of this period",
+  "Configured as PayMethods JSON. The type value is sent to Epay as the type parameter to select the payment flow.": "Configured as PayMethods JSON. The type value is sent to Epay as the type parameter to select the payment flow.",
+  "Used to decide the payment flow. The value is sent to Epay as the type parameter.": "Used to decide the payment flow. The value is sent to Epay as the type parameter."
 }

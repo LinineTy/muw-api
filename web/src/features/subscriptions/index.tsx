@@ -16,12 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Info } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 import { AdminSubscriptionsTable } from './components/admin-subscriptions-table'
@@ -41,17 +39,7 @@ function SubscriptionsContent() {
           {t('Subscription Management')}
         </SectionPageLayout.Title>
         <SectionPageLayout.Actions>
-          <div className='flex items-center gap-2'>
-            <Alert variant='default' className='hidden px-3 py-2 sm:flex'>
-              <Info className='h-4 w-4' />
-              <AlertDescription className='text-xs'>
-                {t(
-                  'Stripe/Creem requires creating products on the third-party platform and entering the ID'
-                )}
-              </AlertDescription>
-            </Alert>
-            <SubscriptionsPrimaryButtons />
-          </div>
+          <SubscriptionsPrimaryButtons />
         </SectionPageLayout.Actions>
         <SectionPageLayout.Content>
           <div className='flex h-full min-h-0 flex-col gap-4'>

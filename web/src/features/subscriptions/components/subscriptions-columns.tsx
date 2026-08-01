@@ -134,30 +134,12 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
         id: 'payment',
         header: t('Payment Channel'),
         meta: { mobileHidden: true },
-        cell: ({ row }) => {
-          const plan = row.original.plan
-          return (
-            <BadgeCell>
-              {plan.stripe_price_id && (
-                <StatusBadge
-                  label='Stripe'
-                  variant='neutral'
-                  copyable={false}
-                />
-              )}
-              {plan.creem_product_id && (
-                <StatusBadge label='Creem' variant='neutral' copyable={false} />
-              )}
-              {plan.waffo_pancake_product_id && (
-                <StatusBadge
-                  label='Waffo Pancake'
-                  variant='neutral'
-                  copyable={false}
-                />
-              )}
-            </BadgeCell>
-          )
-        },
+        cell: () => (
+          <BadgeCell>
+            <StatusBadge label='Epay' variant='neutral' copyable={false} />
+            <StatusBadge label='Balance' variant='neutral' copyable={false} />
+          </BadgeCell>
+        ),
         size: 140,
       },
       {

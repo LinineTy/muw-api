@@ -20,9 +20,7 @@ import type { PaymentMethod } from '@/features/wallet/types'
 import type { UserSubscriptionRecord } from '@/features/subscriptions/types'
 
 export function getEpayMethods(payMethods: PaymentMethod[] = []): PaymentMethod[] {
-  return payMethods.filter(
-    (m) => m?.type && m.type !== 'stripe' && m.type !== 'creem'
-  )
+  return payMethods.filter((m) => m?.type)
 }
 
 export function getBillingPreferenceLabel(
