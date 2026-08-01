@@ -33,6 +33,13 @@ export const subscriptionPlanSchema = z.object({
   custom_seconds: z.number().optional(),
   quota_reset_period: z.enum(['never', 'daily', 'weekly', 'monthly', 'custom']),
   quota_reset_custom_seconds: z.number().optional(),
+  reset_amount_limit: z.number().optional().default(0),
+  weekly_amount_limit: z.number().optional().default(0),
+  monthly_amount_limit: z.number().optional().default(0),
+  max_cumulative_seconds: z.number().optional().default(0),
+  exclusive_group: z.string().optional().default(''),
+  // JSON array string of allowed user groups (backend wire format), empty = any group.
+  allowed_groups: z.string().optional().default(''),
   enabled: z.boolean(),
   sort_order: z.number(),
   is_recommended: z.boolean().optional().default(false),
@@ -65,6 +72,16 @@ export const userSubscriptionSchema = z.object({
   amount_total: z.number(),
   amount_used: z.number(),
   next_reset_time: z.number().optional(),
+  auto_renew: z.boolean().optional().default(false),
+  auto_renew_failed: z.boolean().optional().default(false),
+  priority: z.number().optional().default(0),
+  cancel_at_end: z.boolean().optional().default(false),
+  cycle_start_used: z.number().optional().default(0),
+  week_start_at: z.number().optional().default(0),
+  week_start_used: z.number().optional().default(0),
+  month_start_at: z.number().optional().default(0),
+  month_start_used: z.number().optional().default(0),
+  exclusive_group: z.string().optional().default(''),
 })
 
 export type UserSubscription = z.infer<typeof userSubscriptionSchema>
@@ -99,6 +116,7 @@ export interface PlanPayload {
 export interface SubscriptionPayRequest {
   plan_id: number
   payment_method?: string
+  subscription_id?: number
 }
 
 export interface SubscriptionPayResponse {

@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { CalendarClock, RefreshCw, Settings2 } from 'lucide-react'
+import { CalendarClock, Plus, RefreshCw, Settings2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useForm, type Resolver } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -32,6 +32,7 @@ import {
   sideDrawerSwitchItemClassName,
 } from '@/components/drawer-layout'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Form,
   FormControl,
@@ -67,6 +68,7 @@ import {
   createPlan,
   updatePlan,
   getGroups,
+  getAdminPlans,
 } from '../api'
 import { getDurationUnitOptions, getResetPeriodOptions } from '../constants'
 import {
@@ -98,6 +100,9 @@ export function SubscriptionsMutateDrawer({
   const currencyLabel = getCurrencyLabel()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [groupOptions, setGroupOptions] = useState<string[]>([])
+  const [exclusiveGroupOptions, setExclusiveGroupOptions] = useState<string[]>([])
+  const [newExclusiveGroup, setNewExclusiveGroup] = useState(false)
+  const [newExclusiveGroupValue, setNewExclusiveGroupValue] = useState('')
 
   const schema = getPlanFormSchema(t)
   const form = useForm<PlanFormValues>({
@@ -112,9 +117,23 @@ export function SubscriptionsMutateDrawer({
       } else {
         form.reset(PLAN_FORM_DEFAULTS)
       }
+      setNewExclusiveGroup(false)
+      setNewExclusiveGroupValue('')
       getGroups()
         .then((res) => {
           if (res.success) setGroupOptions(res.data || [])
+        })
+        .catch(() => {})
+      // Load existing exclusive groups so they can be picked instead of typed.
+      getAdminPlans()
+        .then((res) => {
+          if (!res.success) return
+          const groups = new Set<string>()
+          for (const p of res.data || []) {
+            const g = p?.plan?.exclusive_group
+            if (g) groups.add(g)
+          }
+          setExclusiveGroupOptions([...groups])
         })
         .catch(() => {})
     }
@@ -665,6 +684,317 @@ export function SubscriptionsMutateDrawer({
                   )}
                 />
               </div>
+
+              <FormField
+                control={form.control}
+                name='reset_amount_limit'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      {t('Per-Cycle Quota Limit ({{currency}})', {
+                        currency: currencyLabel,
+                      })}
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type='number'
+                        min={0}
+                        step={tokensOnly ? 1 : 0.01}
+                        placeholder={
+                          tokensOnly
+                            ? t('Enter quota in tokens')
+                            : t('Enter quota in {{currency}}', {
+                                currency: currencyLabel,
+                              })
+                        }
+                        onChange={(e) =>
+                          field.onChange(
+                            Number.parseFloat(e.target.value) || 0
+                          )
+                        }
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Max quota usable within each reset cycle, separate from the total quota. 0 means no per-cycle cap. Requires a reset cycle to take effect.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
+                <FormField
+                  control={form.control}
+                  name='weekly_amount_limit'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {t('Weekly Quota Limit ({{currency}})', {
+                          currency: currencyLabel,
+                        })}
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type='number'
+                          min={0}
+                          step={tokensOnly ? 1 : 0.01}
+                          placeholder={
+                            tokensOnly
+                              ? t('Enter quota in tokens')
+                              : t('Enter quota in {{currency}}', {
+                                  currency: currencyLabel,
+                                })
+                          }
+                          onChange={(e) =>
+                            field.onChange(
+                              Number.parseFloat(e.target.value) || 0
+                            )
+                          }
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t(
+                          'Calendar week cap (resets every Monday). Works alongside the monthly cap. 0 means no weekly cap.'
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='monthly_amount_limit'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {t('Monthly Quota Limit ({{currency}})', {
+                          currency: currencyLabel,
+                        })}
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type='number'
+                          min={0}
+                          step={tokensOnly ? 1 : 0.01}
+                          placeholder={
+                            tokensOnly
+                              ? t('Enter quota in tokens')
+                              : t('Enter quota in {{currency}}', {
+                                  currency: currencyLabel,
+                                })
+                          }
+                          onChange={(e) =>
+                            field.onChange(
+                              Number.parseFloat(e.target.value) || 0
+                            )
+                          }
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t(
+                          'Calendar month cap (resets on the 1st). Works alongside the weekly cap. 0 means no monthly cap.'
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='max_cumulative_days'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Max Cumulative Duration (days)')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type='number'
+                          min={0}
+                          onChange={(e) =>
+                            field.onChange(
+                              Number.parseInt(e.target.value, 10) || 0
+                            )
+                          }
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t(
+                          'The total remaining time cannot exceed this after renewal. Prevents stacking time indefinitely. 0 means unlimited.'
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </SideDrawerSection>
+
+            {/* Plan Strategy */}
+            <SideDrawerSection>
+              <h3 className='flex items-center gap-2 text-sm font-medium'>
+                <IconBadge tone='chart-4' size='xs'>
+                  <Settings2 />
+                </IconBadge>
+                {t('Plan Strategy')}
+              </h3>
+
+              <FormField
+                control={form.control}
+                name='exclusive_group'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Plan Exclusive Group')}</FormLabel>
+                    {newExclusiveGroup ? (
+                      <div className='flex items-center gap-2'>
+                        <FormControl>
+                          <Input
+                            autoFocus
+                            value={newExclusiveGroupValue}
+                            onChange={(e) =>
+                              setNewExclusiveGroupValue(e.target.value)
+                            }
+                            placeholder={t('Enter a new exclusive group name')}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                field.onChange(newExclusiveGroupValue.trim())
+                                setNewExclusiveGroup(false)
+                                setNewExclusiveGroupValue('')
+                              }
+                            }}
+                          />
+                        </FormControl>
+                        <Button
+                          type='button'
+                          size='sm'
+                          onClick={() => {
+                            field.onChange(newExclusiveGroupValue.trim())
+                            setNewExclusiveGroup(false)
+                            setNewExclusiveGroupValue('')
+                          }}
+                        >
+                          {t('Confirm')}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className='flex items-center gap-2'>
+                        <div className='flex-1'>
+                          <Select
+                            items={[
+                              {
+                                value: '__none__',
+                                label: t('No exclusive group'),
+                              },
+                              ...exclusiveGroupOptions.map((g) => ({
+                                value: g,
+                                label: g,
+                              })),
+                            ]}
+                            value={field.value || '__none__'}
+                            onValueChange={(v) => {
+                              if (v === '__none__' || v == null) {
+                                field.onChange('')
+                              } else {
+                                field.onChange(v)
+                              }
+                            }}
+                          >
+                            <FormControl>
+                              <SelectTrigger className='w-full'>
+                                <SelectValue
+                                  placeholder={t('No exclusive group')}
+                                />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent alignItemWithTrigger={false}>
+                              <SelectGroup>
+                                <SelectItem value='__none__'>
+                                  {t('No exclusive group')}
+                                </SelectItem>
+                                {exclusiveGroupOptions.map((g) => (
+                                  <SelectItem key={g} value={g}>
+                                    {g}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button
+                          type='button'
+                          variant='outline'
+                          size='icon'
+                          className='shrink-0'
+                          onClick={() => setNewExclusiveGroup(true)}
+                          title={t('Create new group...')}
+                        >
+                          <Plus className='size-4' />
+                        </Button>
+                      </div>
+                    )}
+                    <FormDescription>
+                      {t(
+                        'Mutual exclusion: plans in the same group cannot be held at the same time. Buying another plan in the group triggers a prorated upgrade/downgrade switch. Different from the purchase-gate group below.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='allowed_groups'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Allowed Subscription Groups')}</FormLabel>
+                    <FormControl>
+                      <div className='flex max-h-40 flex-wrap gap-x-4 gap-y-2 overflow-y-auto rounded-md border p-2.5'>
+                        {groupOptions.length === 0 ? (
+                          <span className='text-muted-foreground text-xs'>
+                            {t('No groups available')}
+                          </span>
+                        ) : (
+                          groupOptions.map((g) => {
+                            const checked = (field.value || []).includes(g)
+                            return (
+                              <label
+                                key={g}
+                                className='flex cursor-pointer items-center gap-1.5 text-sm'
+                              >
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(v) => {
+                                    const cur = field.value || []
+                                    field.onChange(
+                                      v
+                                        ? [...cur, g]
+                                        : cur.filter((x) => x !== g)
+                                    )
+                                  }}
+                                />
+                                <span>{g}</span>
+                              </label>
+                            )
+                          })
+                        )}
+                      </div>
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Purchase gate: only users in the selected groups can subscribe to this plan. Leave empty to allow all groups.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </SideDrawerSection>
           </form>
         </Form>

@@ -57,6 +57,10 @@ function PlanCardComponent({
   const statusCell = renderCell('enabled')
   const paymentCell = renderCell('payment')
   const upgradeCell = renderCell('upgrade_group')
+  const exclusiveCell = renderCell('exclusive_group')
+  const limitsCell = renderCell('limits')
+  const maxDurationCell = renderCell('max_duration')
+  const allowedGroupsCell = renderCell('allowed_groups')
   const actionsCell = renderCell('actions')
 
   const labelClass = 'text-muted-foreground text-[11px] font-medium select-none'
@@ -118,6 +122,30 @@ function PlanCardComponent({
           <div className={labelClass}>{t('Upgrade Group')}</div>
           <div className='text-muted-foreground min-w-0 overflow-hidden text-sm'>
             {upgradeCell}
+          </div>
+        </div>
+        <div className='min-w-0'>
+          <div className={labelClass}>{t('Exclusive Group')}</div>
+          <div className='text-muted-foreground min-w-0 overflow-hidden text-sm'>
+            {exclusiveCell}
+          </div>
+        </div>
+        <div className='min-w-0'>
+          <div className={labelClass}>{t('Quota Limits')}</div>
+          <div className='text-muted-foreground min-w-0 overflow-hidden text-sm'>
+            {limitsCell}
+          </div>
+        </div>
+        <div className='min-w-0'>
+          <div className={labelClass}>{t('Max Duration')}</div>
+          <div className='text-muted-foreground min-w-0 overflow-hidden text-sm'>
+            {maxDurationCell}
+          </div>
+        </div>
+        <div className='min-w-0'>
+          <div className={labelClass}>{t('Allowed Groups')}</div>
+          <div className='text-muted-foreground min-w-0 overflow-hidden text-sm'>
+            {allowedGroupsCell}
           </div>
         </div>
       </div>
