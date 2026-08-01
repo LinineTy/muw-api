@@ -41,4 +41,7 @@ func UsingLogDatabase(databaseType DatabaseType) bool {
 	return logDatabaseType == databaseType
 }
 
-var SQLitePath = "one-api.db?_busy_timeout=30000"
+// SQLitePath defaults to WAL journal mode so readers are not blocked by the
+// single writer, plus a 30s busy timeout. The pure-Go driver (modernc.org/sqlite)
+// only honors `_pragma` DSN parameters (a plain `_busy_timeout` is ignored).
+var SQLitePath = "one-api.db?_pragma=busy_timeout(30000)&_pragma=journal_mode(WAL)"

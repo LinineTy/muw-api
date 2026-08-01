@@ -241,7 +241,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		// Record real user call outcomes into the channel test history so the
 		// model health page reflects actual usage (source "user"). Synthetic
-		// channel tests are recorded separately with source "test".
+		// channel tests are recorded separately with source "test". The insert
+		// runs off the request hot path to avoid adding a blocking DB write (and
+		// write-lock contention) to every chat request.
 		if !relayInfo.IsChannelTest &&
 			relayInfo.RelayMode == relayconstant.RelayModeChatCompletions &&
 			operation_setting.GetMonitorSetting().RecordUserTraffic {
@@ -249,9 +251,13 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			if newAPIError != nil {
 				errMsg = newAPIError.Error()
 			}
-			recordChannelTest(model.ChannelTestSourceUser, channel,
-				relayInfo.OriginModelName, newAPIError == nil,
-				int(time.Since(attemptStart).Milliseconds()), errMsg)
+			modelName := relayInfo.OriginModelName
+			success := newAPIError == nil
+			responseTime := int(time.Since(attemptStart).Milliseconds())
+			gopool.Go(func() {
+				recordChannelTest(model.ChannelTestSourceUser, channel,
+					modelName, success, responseTime, errMsg)
+			})
 		}
 
 		if newAPIError == nil {
