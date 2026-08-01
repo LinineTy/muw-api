@@ -154,6 +154,13 @@ func (p *LinuxDOProvider) GetUserInfo(ctx context.Context, token *OAuthToken) (*
 		}
 	}
 
+	// Check blacklist (id or username)
+	if common.IsLinuxDOBlacklisted(linuxdoUser.Id, linuxdoUser.Username) {
+		logger.LogWarn(ctx, fmt.Sprintf("[OAuth-LinuxDO] GetUserInfo: user is blacklisted (id=%d, username=%s)",
+			linuxdoUser.Id, linuxdoUser.Username))
+		return nil, &LinuxDOBlacklistedError{}
+	}
+
 	logger.LogDebug(ctx, "[OAuth-LinuxDO] GetUserInfo success: id=%d, username=%s", linuxdoUser.Id, linuxdoUser.Username)
 
 	return &OAuthUser{
@@ -194,4 +201,12 @@ type TrustLevelError struct {
 
 func (e *TrustLevelError) Error() string {
 	return "trust level too low"
+}
+
+// LinuxDOBlacklistedError indicates the LinuxDO account is on the blacklist,
+// so the user is denied even if the trust level is sufficient.
+type LinuxDOBlacklistedError struct{}
+
+func (e *LinuxDOBlacklistedError) Error() string {
+	return "linuxdo account is blacklisted"
 }

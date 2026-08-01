@@ -111,6 +111,10 @@ var LinuxDOClientId = ""
 var LinuxDOClientSecret = ""
 var LinuxDOMinimumTrustLevel = 0
 
+// LinuxDOBlacklist lists LinuxDO user ids or usernames that are forbidden from
+// logging in or registering, regardless of trust level.
+var LinuxDOBlacklist = []string{}
+
 // LinuxDOGroupMapping maps a LinuxDO trust level (L0-L4) to a user group, e.g.
 // {"2":"vip","3":"svip"}. An empty map disables LinuxDO auto group assignment.
 var LinuxDOGroupMapping = map[string]string{}

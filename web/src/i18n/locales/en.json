@@ -1539,6 +1539,8 @@
     "Enable Groups": "Enable Groups",
     "Enable if this is an OpenRouter enterprise account with special response format": "Enable if this is an OpenRouter enterprise account with special response format",
     "Enable LinuxDO OAuth": "Enable LinuxDO OAuth",
+    "LinuxDO Blacklist": "LinuxDO Blacklist",
+    "LinuxDO user ids or usernames that are blocked from logging in or registering, one per line. Matching ignores case for usernames and applies even when the trust level meets the minimum.": "LinuxDO user ids or usernames that are blocked from logging in or registering, one per line. Matching ignores case for usernames and applies even when the trust level meets the minimum.",
     "Enable model performance metrics": "Enable model performance metrics",
     "Enable OIDC": "Enable OIDC",
     "OIDC Display Name": "OIDC Display Name",

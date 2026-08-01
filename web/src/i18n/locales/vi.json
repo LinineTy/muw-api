@@ -1539,6 +1539,8 @@
     "Enable Groups": "Bật Nhóm",
     "Enable if this is an OpenRouter enterprise account with special response format": "Bật nếu đây là tài khoản doanh nghiệp OpenRouter với định dạng phản hồi đặc biệt",
     "Enable LinuxDO OAuth": "Bật LinuxDO OAuth",
+    "LinuxDO Blacklist": "LinuxDO Blacklist",
+    "LinuxDO user ids or usernames that are blocked from logging in or registering, one per line. Matching ignores case for usernames and applies even when the trust level meets the minimum.": "LinuxDO user ids or usernames that are blocked from logging in or registering, one per line. Matching ignores case for usernames and applies even when the trust level meets the minimum.",
     "Enable model performance metrics": "Bật chỉ số hiệu năng mô hình",
     "Enable OIDC": "Bật OIDC",
     "OIDC Display Name": "Tên hiển thị OIDC",

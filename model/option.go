@@ -41,6 +41,7 @@ func InitOptionMap() {
 	common.OptionMap["EmailVerificationEnabled"] = strconv.FormatBool(common.EmailVerificationEnabled)
 	common.OptionMap["GitHubOAuthEnabled"] = strconv.FormatBool(common.GitHubOAuthEnabled)
 	common.OptionMap["LinuxDOOAuthEnabled"] = strconv.FormatBool(common.LinuxDOOAuthEnabled)
+	common.OptionMap["LinuxDOBlacklist"] = strings.Join(common.LinuxDOBlacklist, "\n")
 	common.OptionMap["TelegramOAuthEnabled"] = strconv.FormatBool(common.TelegramOAuthEnabled)
 	common.OptionMap["WeChatAuthEnabled"] = strconv.FormatBool(common.WeChatAuthEnabled)
 	common.OptionMap["TurnstileCheckEnabled"] = strconv.FormatBool(common.TurnstileCheckEnabled)
@@ -411,6 +412,8 @@ func updateOptionMap(key string, value string) (err error) {
 		common.LinuxDOMinimumTrustLevel, _ = strconv.Atoi(value)
 	case "LinuxDOGroupMapping":
 		err = common.UpdateLinuxDOGroupMappingByJSONString(value)
+	case "LinuxDOBlacklist":
+		common.SetLinuxDOBlacklist(value)
 	case "Footer":
 		common.Footer = value
 	case "SystemName":

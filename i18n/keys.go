@@ -145,13 +145,13 @@ const (
 
 // Payment related messages
 const (
-	MsgPaymentNotConfigured      = "payment.not_configured"
-	MsgPaymentMethodNotExists    = "payment.method_not_exists"
-	MsgPaymentCallbackError      = "payment.callback_error"
-	MsgPaymentCreateFailed       = "payment.create_failed"
-	MsgPaymentStartFailed        = "payment.start_failed"
-	MsgPaymentAmountTooLow       = "payment.amount_too_low"
-	MsgPaymentWebhookNotConfig   = "payment.webhook_not_configured"
+	MsgPaymentNotConfigured    = "payment.not_configured"
+	MsgPaymentMethodNotExists  = "payment.method_not_exists"
+	MsgPaymentCallbackError    = "payment.callback_error"
+	MsgPaymentCreateFailed     = "payment.create_failed"
+	MsgPaymentStartFailed      = "payment.start_failed"
+	MsgPaymentAmountTooLow     = "payment.amount_too_low"
+	MsgPaymentWebhookNotConfig = "payment.webhook_not_configured"
 )
 
 // Topup related messages
@@ -264,20 +264,21 @@ const (
 
 // OAuth related messages
 const (
-	MsgOAuthInvalidCode     = "oauth.invalid_code"
-	MsgOAuthGetUserErr      = "oauth.get_user_error"
-	MsgOAuthAccountUsed     = "oauth.account_used"
-	MsgOAuthUnknownProvider = "oauth.unknown_provider"
-	MsgOAuthStateInvalid    = "oauth.state_invalid"
-	MsgOAuthNotEnabled      = "oauth.not_enabled"
-	MsgOAuthUserDeleted     = "oauth.user_deleted"
-	MsgOAuthUserBanned      = "oauth.user_banned"
-	MsgOAuthBindSuccess     = "oauth.bind_success"
-	MsgOAuthAlreadyBound    = "oauth.already_bound"
-	MsgOAuthConnectFailed   = "oauth.connect_failed"
-	MsgOAuthTokenFailed     = "oauth.token_failed"
-	MsgOAuthUserInfoEmpty   = "oauth.user_info_empty"
-	MsgOAuthTrustLevelLow   = "oauth.trust_level_low"
+	MsgOAuthInvalidCode        = "oauth.invalid_code"
+	MsgOAuthGetUserErr         = "oauth.get_user_error"
+	MsgOAuthAccountUsed        = "oauth.account_used"
+	MsgOAuthUnknownProvider    = "oauth.unknown_provider"
+	MsgOAuthStateInvalid       = "oauth.state_invalid"
+	MsgOAuthNotEnabled         = "oauth.not_enabled"
+	MsgOAuthUserDeleted        = "oauth.user_deleted"
+	MsgOAuthUserBanned         = "oauth.user_banned"
+	MsgOAuthBindSuccess        = "oauth.bind_success"
+	MsgOAuthAlreadyBound       = "oauth.already_bound"
+	MsgOAuthConnectFailed      = "oauth.connect_failed"
+	MsgOAuthTokenFailed        = "oauth.token_failed"
+	MsgOAuthUserInfoEmpty      = "oauth.user_info_empty"
+	MsgOAuthTrustLevelLow      = "oauth.trust_level_low"
+	MsgOAuthLinuxDOBlacklisted = "oauth.linuxdo_blacklisted"
 )
 
 // Model layer error messages (for translation in controller)
