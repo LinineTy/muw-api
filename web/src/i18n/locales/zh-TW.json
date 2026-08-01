@@ -1539,6 +1539,8 @@
     "Enable Groups": "啟用分組",
     "Enable if this is an OpenRouter enterprise account with special response format": "如果這是具有特殊回應格式的 OpenRouter 企業用戶，則啟用",
     "Enable LinuxDO OAuth": "啟用 LinuxDO OAuth",
+    "LinuxDO Blacklist": "LinuxDO 黑名單",
+    "LinuxDO user ids or usernames that are blocked from logging in or registering, one per line. Matching ignores case for usernames and applies even when the trust level meets the minimum.": "被禁止登入或註冊的 LinuxDO 使用者 ID 或使用者名稱，每行一個。使用者名稱比對不分大小寫，且即使信任等級達標也會被攔截。",
     "Enable model performance metrics": "啟用模型效能指標",
     "Enable OIDC": "啟用 OIDC",
     "OIDC Display Name": "OIDC 顯示名稱",

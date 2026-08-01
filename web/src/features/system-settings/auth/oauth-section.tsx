@@ -39,6 +39,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Textarea } from '@/components/ui/textarea'
 
 import { FormDirtyIndicator } from '../components/form-dirty-indicator'
 import { FormNavigationGuard } from '../components/form-navigation-guard'
@@ -89,6 +90,7 @@ const oauthSchema = z.object({
   LinuxDOClientSecret: z.string(),
   LinuxDOMinimumTrustLevel: z.string(),
   LinuxDOGroupMapping: z.string(),
+  LinuxDOBlacklist: z.string(),
   WeChatAuthEnabled: z.boolean(),
   WeChatServerAddress: z.string(),
   WeChatServerToken: z.string(),
@@ -120,6 +122,7 @@ type FlatOAuthDefaults = {
   LinuxDOClientSecret: string
   LinuxDOMinimumTrustLevel: string
   LinuxDOGroupMapping: string
+  LinuxDOBlacklist: string
   WeChatAuthEnabled: boolean
   WeChatServerAddress: string
   WeChatServerToken: string
@@ -205,6 +208,7 @@ const buildFormDefaults = (defaults: FlatOAuthDefaults): OAuthFormValues => ({
   LinuxDOClientSecret: defaults.LinuxDOClientSecret ?? '',
   LinuxDOMinimumTrustLevel: defaults.LinuxDOMinimumTrustLevel ?? '',
   LinuxDOGroupMapping: defaults.LinuxDOGroupMapping ?? '',
+  LinuxDOBlacklist: defaults.LinuxDOBlacklist ?? '',
   WeChatAuthEnabled: defaults.WeChatAuthEnabled,
   WeChatServerAddress: defaults.WeChatServerAddress ?? '',
   WeChatServerToken: defaults.WeChatServerToken ?? '',
@@ -234,6 +238,7 @@ const normalizeFormValues = (values: OAuthFormValues): FlatOAuthDefaults => ({
   LinuxDOClientSecret: values.LinuxDOClientSecret,
   LinuxDOMinimumTrustLevel: values.LinuxDOMinimumTrustLevel,
   LinuxDOGroupMapping: values.LinuxDOGroupMapping,
+  LinuxDOBlacklist: values.LinuxDOBlacklist,
   WeChatAuthEnabled: values.WeChatAuthEnabled,
   WeChatServerAddress: values.WeChatServerAddress,
   WeChatServerToken: values.WeChatServerToken,
@@ -1020,6 +1025,30 @@ export function OAuthSection(props: OAuthSectionProps) {
                       <FormDescription>
                         {t(
                           'Map LinuxDO trust levels to user groups. Users without a mapped level fall back to the default group. Leave empty to disable auto group.'
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='LinuxDOBlacklist'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('LinuxDO Blacklist')}</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          value={field.value ?? ''}
+                          onChange={field.onChange}
+                          rows={5}
+                          placeholder={'12345\nblocked-username'}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t(
+                          'LinuxDO user ids or usernames that are blocked from logging in or registering, one per line. Matching ignores case for usernames and applies even when the trust level meets the minimum.'
                         )}
                       </FormDescription>
                       <FormMessage />

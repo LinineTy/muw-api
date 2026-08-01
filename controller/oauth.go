@@ -516,6 +516,8 @@ func handleOAuthError(c *gin.Context, err error) {
 		common.ApiErrorMsg(c, e.Message)
 	case *oauth.TrustLevelError:
 		common.ApiErrorI18n(c, i18n.MsgOAuthTrustLevelLow)
+	case *oauth.LinuxDOBlacklistedError:
+		common.ApiErrorI18n(c, i18n.MsgOAuthLinuxDOBlacklisted)
 	default:
 		common.ApiError(c, err)
 	}
