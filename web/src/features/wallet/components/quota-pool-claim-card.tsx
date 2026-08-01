@@ -26,7 +26,7 @@ import {
   ChevronUp,
   Sparkles,
 } from 'lucide-react'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -73,6 +73,9 @@ export function QuotaPoolClaimCard({
   })
   const [actionLoading, setActionLoading] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
+  // Re-render lags behind a rapid double-click, so the disabled state alone
+  // cannot stop a second request from firing before the first completes.
+  const actionInFlightRef = useRef(false)
 
   const currentMonthStr = useMemo(() => {
     const y = currentMonth.getFullYear()
@@ -185,6 +188,8 @@ export function QuotaPoolClaimCard({
   }, [status, remainingClaims, t])
 
   const handleClaim = useCallback(async () => {
+    if (actionInFlightRef.current) return
+    actionInFlightRef.current = true
     setActionLoading(true)
     try {
       const res = await claimQuotaPool()
@@ -203,11 +208,14 @@ export function QuotaPoolClaimCard({
     } catch {
       toast.error(t('Failed to claim quota'))
     } finally {
+      actionInFlightRef.current = false
       setActionLoading(false)
     }
   }, [onBalanceChange, refetchRecords, refetchStatus, t])
 
   const handleCheckIn = useCallback(async () => {
+    if (actionInFlightRef.current) return
+    actionInFlightRef.current = true
     setActionLoading(true)
     try {
       const res = await quotaCheckIn()
@@ -221,6 +229,7 @@ export function QuotaPoolClaimCard({
     } catch {
       toast.error(t('Failed to check in'))
     } finally {
+      actionInFlightRef.current = false
       setActionLoading(false)
     }
   }, [refetchRecords, refetchStatus, t])

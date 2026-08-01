@@ -241,3 +241,13 @@ func SearchRateLimit() func(c *gin.Context) {
 	}
 	return userRateLimitFactory(common.SearchRateLimitNum, common.SearchRateLimitDuration, "SR")
 }
+
+// QuotaPoolActionRateLimit returns a per-user, generous rate limiter for
+// quota-pool claim/checkin. These are daily-bounded operations, so an IP-level
+// critical limiter would let one user drain the shared IP bucket and then
+// block the auth refresh endpoint (also under CriticalRateLimit) for everyone
+// behind the same IP, force-logging out already-authenticated users.
+func QuotaPoolActionRateLimit() func(c *gin.Context) {
+	return userRateLimitFactory(10, 60, "QP")
+}
+
