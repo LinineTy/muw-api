@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { Clock, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { StatusBadge } from '@/components/status-badge'
@@ -25,6 +26,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { formatTimestamp } from '@/features/subscriptions/lib'
 import { formatQuota } from '@/lib/format'
 
 import type { UserSubscriptionRecord } from '@/features/subscriptions/types'
@@ -77,10 +79,11 @@ function SubscriptionItem({
   }
 
   return (
-    <div className='bg-background rounded-md border p-3 text-xs'>
-      <div className='flex items-center justify-between gap-2'>
+    <div className='bg-card overflow-hidden rounded-2xl border shadow-xs'>
+      {/* 顶栏：计划名 + 状态 + 剩余天数 */}
+      <div className='flex items-center justify-between gap-2 border-b px-4 py-3'>
         <div className='flex min-w-0 items-center gap-2'>
-          <span className='truncate font-medium'>
+          <span className='truncate text-sm font-semibold'>
             {planTitle
               ? `${planTitle} · ${t('Subscription')} #${subscription?.id}`
               : `${t('Subscription')} #${subscription?.id}`}
@@ -88,47 +91,81 @@ function SubscriptionItem({
           {statusBadge}
         </div>
         {isActive && (
-          <span className='text-muted-foreground shrink-0'>
+          <span className='text-muted-foreground shrink-0 text-xs'>
             {t('{{count}} days remaining', {
               count: remainDays,
             })}
           </span>
         )}
       </div>
-      <div className='text-muted-foreground mt-1.5'>
-        {endTimeLabel}{' '}
-        {new Date((subscription?.end_time || 0) * 1000).toLocaleString()}
-      </div>
-      {isActive && nextResetTime > 0 && (
-        <div className='text-muted-foreground mt-1'>
-          {t('Next reset')}: {new Date(nextResetTime * 1000).toLocaleString()}
-        </div>
-      )}
-      <div className='text-muted-foreground mt-1'>
-        {t('Total Quota')}:{' '}
+
+      {/* 额度主体 */}
+      <div className='px-4 py-3'>
         {totalAmount > 0 ? (
-          <Tooltip>
-            <TooltipTrigger render={<span className='cursor-help' />}>
-              {formatQuota(usedAmount)}/{formatQuota(totalAmount)} ·{' '}
+          <>
+            <div className='flex items-end justify-between gap-2'>
+              <div className='min-w-0'>
+                <div className='text-muted-foreground text-[11px] font-medium tracking-wider uppercase'>
+                  {t('Total Quota')}
+                </div>
+                <div className='text-foreground mt-0.5 truncate font-mono text-xl font-bold tracking-tight tabular-nums sm:text-2xl'>
+                  <Tooltip>
+                    <TooltipTrigger render={<span className='cursor-help' />}>
+                      {formatQuota(usedAmount)}
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {t('Raw Quota')}: {usedAmount}
+                    </TooltipContent>
+                  </Tooltip>
+                  <span className='text-muted-foreground text-sm font-normal'>
+                    {' '}
+                    / {formatQuota(totalAmount)}
+                  </span>
+                </div>
+              </div>
+              <span className='text-muted-foreground shrink-0 text-xs'>
+                {t('Used')} {usagePercent}%
+              </span>
+            </div>
+            {isActive ? (
+              <Progress value={usagePercent} className='mt-2 h-1.5' />
+            ) : (
+              <div className='bg-muted/50 mt-2 h-1.5 overflow-hidden rounded-full'>
+                <div
+                  className='bg-muted h-full rounded-full'
+                  style={{ width: `${usagePercent}%` }}
+                />
+              </div>
+            )}
+            <div className='text-muted-foreground mt-1 text-xs'>
               {t('Remaining')} {formatQuota(remainAmount)}
-            </TooltipTrigger>
-            <TooltipContent>
-              {t('Raw Quota')}: {usedAmount}/{totalAmount} · {t('Remaining')}{' '}
-              {remainAmount}
-            </TooltipContent>
-          </Tooltip>
+            </div>
+          </>
         ) : (
-          t('Unlimited')
+          <div className='flex items-center gap-2'>
+            <span className='font-mono text-xl font-bold tracking-tight sm:text-2xl'>
+              ∞
+            </span>
+            <span className='text-muted-foreground text-xs'>
+              {t('Unlimited')}
+            </span>
+          </div>
         )}
-        {totalAmount > 0 && (
-          <span className='ml-2'>
-            {t('Used')} {usagePercent}%
+      </div>
+
+      {/* 时间信息条 */}
+      <div className='bg-muted/40 text-muted-foreground flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t px-4 py-2.5 text-xs'>
+        <span className='flex items-center gap-1.5'>
+          <Clock className='size-3.5 shrink-0' aria-hidden='true' />
+          {endTimeLabel} {formatTimestamp(subscription?.end_time ?? 0)}
+        </span>
+        {isActive && nextResetTime > 0 && (
+          <span className='flex items-center gap-1.5'>
+            <RefreshCw className='size-3.5 shrink-0' aria-hidden='true' />
+            {t('Reset')} {formatTimestamp(nextResetTime)}
           </span>
         )}
       </div>
-      {totalAmount > 0 && isActive && (
-        <Progress value={usagePercent} className='mt-2 h-1.5' />
-      )}
     </div>
   )
 }
