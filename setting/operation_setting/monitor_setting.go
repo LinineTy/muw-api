@@ -11,6 +11,10 @@ type MonitorSetting struct {
 	AutoTestChannelEnabled bool    `json:"auto_test_channel_enabled"`
 	AutoTestChannelMinutes float64 `json:"auto_test_channel_minutes"`
 	ChannelTestMode        string  `json:"channel_test_mode"`
+	// AutoTestAllModels probes every model of each channel instead of a single
+	// representative model. Defaults to off because it multiplies upstream load
+	// by the number of models per channel.
+	AutoTestAllModels bool `json:"auto_test_all_models"`
 }
 
 const (
