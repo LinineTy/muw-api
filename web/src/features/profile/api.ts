@@ -62,6 +62,20 @@ export async function updateUserSettings(
 }
 
 /**
+ * Upload a new avatar image. Returns the new avatar URL.
+ */
+export async function uploadAvatar(
+  file: File
+): Promise<ApiResponse<{ url: string }>> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await api.post('/api/user/avatar', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return res.data
+}
+
+/**
  * Update interface language preference
  */
 export async function updateUserLanguage(

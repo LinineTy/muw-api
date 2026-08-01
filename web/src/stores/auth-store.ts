@@ -48,6 +48,7 @@ export interface AuthUser {
   wechat_id?: string
   telegram_id?: string
   linux_do_id?: string
+  avatar?: string
   language?: string
   setting?: Record<string, unknown> | string
   sidebar_modules?: string

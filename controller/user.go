@@ -540,6 +540,7 @@ func buildSelfUserData(user *model.User) map[string]interface{} {
 		"linux_do_id":          user.LinuxDOId,
 		"linux_do_trust_level": user.LinuxDOTrustLevel,
 		"group_auto":           user.GroupAuto,
+		"avatar":               user.Avatar,
 		"setting":              user.Setting,
 		"preference_policy":    common.GetUserPreferencePolicy(),
 		"sidebar_modules":      userSetting.SidebarModules, // 正确提取sidebar_modules字段

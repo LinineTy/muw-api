@@ -16,18 +16,26 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Activity, BarChart3, WalletCards } from 'lucide-react'
+import { Activity, BarChart3, Camera, WalletCards } from 'lucide-react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { StatusBadge } from '@/components/status-badge'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from '@/components/ui/avatar'
 import { Card, CardContent } from '@/components/ui/card'
 import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
 import { formatCompactNumber, formatQuota } from '@/lib/format'
 import { getRoleLabel } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 
+import { uploadAvatar } from '../api'
 import { getDisplayName } from '../lib'
 import type { UserProfile } from '../types'
 
@@ -38,10 +46,47 @@ import type { UserProfile } from '../types'
 interface ProfileHeaderProps {
   profile: UserProfile | null
   loading: boolean
+  onProfileUpdate?: () => void
 }
 
-export function ProfileHeader({ profile, loading }: ProfileHeaderProps) {
+export function ProfileHeader({
+  profile,
+  loading,
+  onProfileUpdate,
+}: ProfileHeaderProps) {
   const { t } = useTranslation()
+  const currentUser = useAuthStore((s) => s.auth.user)
+  const setUser = useAuthStore((s) => s.auth.setUser)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+
+  const handleAvatarChange = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    setUploading(true)
+    try {
+      const res = await uploadAvatar(file)
+      if (res.success && res.data?.url) {
+        toast.success(t('Avatar updated'))
+        // Sync the avatar into the auth store so every header renders it right
+        // away; the profile refetch keeps the server value authoritative.
+        if (currentUser) {
+          setUser({ ...currentUser, avatar: res.data.url })
+        }
+        await onProfileUpdate?.()
+      } else {
+        toast.error(res.message || t('Avatar upload failed'))
+      }
+    } catch {
+      toast.error(t('Avatar upload failed'))
+    } finally {
+      setUploading(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -118,14 +163,36 @@ export function ProfileHeader({ profile, loading }: ProfileHeaderProps) {
     <Card data-card-hover='false' className='gap-0 overflow-hidden py-0'>
       <CardContent className='p-3 sm:p-5'>
         <div className='flex items-center gap-3 text-left sm:gap-4'>
-          <Avatar className='ring-background h-12 w-12 rounded-xl text-sm ring-2 sm:h-16 sm:w-16 sm:rounded-2xl sm:text-lg sm:ring-4'>
-            <AvatarFallback
-              className='rounded-xl font-semibold text-white sm:rounded-2xl'
-              style={avatarFallbackStyle}
+          <div className='group/avatar-edit relative shrink-0'>
+            <Avatar className='ring-background h-12 w-12 rounded-xl text-sm ring-2 sm:h-16 sm:w-16 sm:rounded-2xl sm:text-lg sm:ring-4'>
+              {profile.avatar ? (
+                <AvatarImage src={profile.avatar} alt={displayName} />
+              ) : null}
+              <AvatarFallback
+                className='rounded-xl font-semibold text-white sm:rounded-2xl'
+                style={avatarFallbackStyle}
+              >
+                {avatarFallback}
+              </AvatarFallback>
+            </Avatar>
+            <button
+              type='button'
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              title={t('Change avatar')}
+              aria-label={t('Change avatar')}
+              className='bg-background/60 ring-background absolute inset-0 flex items-center justify-center rounded-xl text-white opacity-0 ring-2 transition-opacity group-hover/avatar-edit:opacity-100 sm:rounded-2xl'
             >
-              {avatarFallback}
-            </AvatarFallback>
-          </Avatar>
+              <Camera className='size-5' />
+            </button>
+            <input
+              ref={fileInputRef}
+              type='file'
+              accept='image/png,image/jpeg,image/gif'
+              className='hidden'
+              onChange={handleAvatarChange}
+            />
+          </div>
 
           <div className='min-w-0 flex-1 space-y-1.5 sm:space-y-3'>
             <div className='flex min-w-0 items-center gap-2'>

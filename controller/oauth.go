@@ -311,6 +311,11 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 		if _, ok := provider.(*oauth.LinuxDOProvider); ok {
 			applyLinuxDOProfile(user, oauthUser, false)
 		}
+		if oauthUser.Avatar != "" {
+			if err := user.SyncOAuthAvatar(oauthUser.Avatar); err != nil {
+				common.SysError(fmt.Sprintf("[OAuth] failed to sync avatar for user %d: %s", user.Id, err.Error()))
+			}
+		}
 		return user, nil
 	}
 
@@ -370,6 +375,7 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 	user.Role = common.RoleCommonUser
 	user.Status = common.UserStatusEnabled
 	user.Group = common.DefaultUserGroup
+	user.Avatar = oauthUser.Avatar
 	if _, ok := provider.(*oauth.LinuxDOProvider); ok {
 		applyLinuxDOProfile(user, oauthUser, true)
 	}

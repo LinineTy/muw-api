@@ -105,6 +105,8 @@ type User struct {
 	LinuxDOId         string                     `json:"linux_do_id" gorm:"column:linux_do_id;index"`
 	LinuxDOTrustLevel int                        `json:"linux_do_trust_level" gorm:"column:linux_do_trust_level"` // LinuxDO 信任等级（L0-L4，展示与分组依据）
 	GroupAuto         bool                       `json:"group_auto" gorm:"column:group_auto"`                     // 分组是否由 LinuxDO 信任等级自动管理
+	Avatar            string                     `json:"avatar" gorm:"column:avatar"`                             // 头像 URL（本地上传路径或 OAuth 外链）
+	AvatarCustom      bool                       `json:"avatar_custom" gorm:"column:avatar_custom"`               // 头像是否为用户上传（true 时 OAuth 登录不再覆盖）
 	Setting           string                     `json:"setting" gorm:"type:text;column:setting"`
 	Remark            string                     `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
 	CreatedAt         int64                      `json:"created_at" gorm:"autoCreateTime;column:created_at"`
@@ -1469,4 +1471,28 @@ func RootUserExists() bool {
 		return false
 	}
 	return true
+}
+
+// shouldSyncOAuthAvatar decides whether an OAuth login may refresh the stored
+// avatar from the provider. A user-uploaded avatar is never overwritten; an
+// empty provider avatar is a no-op; and an identical value needs no write.
+func shouldSyncOAuthAvatar(currentAvatar string, isCustom bool, providerAvatar string) bool {
+	if providerAvatar == "" || isCustom {
+		return false
+	}
+	return currentAvatar != providerAvatar
+}
+
+// SyncOAuthAvatar persists the OAuth provider avatar for an existing user,
+// honoring the user-upload override. It is a no-op when the value is unchanged.
+func (user *User) SyncOAuthAvatar(providerAvatar string) error {
+	if !shouldSyncOAuthAvatar(user.Avatar, user.AvatarCustom, providerAvatar) {
+		return nil
+	}
+	if err := DB.Model(&User{}).Where("id = ?", user.Id).Update("avatar", providerAvatar).Error; err != nil {
+		return err
+	}
+	// Keep the in-memory user object in sync for the rest of the login flow.
+	user.Avatar = providerAvatar
+	return nil
 }

@@ -20,6 +20,8 @@ type OAuthUser struct {
 	DisplayName string
 	// Email is the email from the OAuth provider
 	Email string
+	// Avatar is the profile picture URL from the OAuth provider (may be empty)
+	Avatar string
 	// Extra contains any additional provider-specific data
 	Extra map[string]any
 }

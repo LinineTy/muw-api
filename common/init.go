@@ -20,6 +20,9 @@ var (
 	PrintVersion = flag.Bool("version", false, "print version and exit")
 	PrintHelp    = flag.Bool("help", false, "print help and exit")
 	LogDir       = flag.String("log-dir", "./logs", "specify the log directory")
+	// UploadDir is the root directory for user-uploaded files (avatars etc.).
+	// It is overridable via the UPLOAD_DIR environment variable.
+	UploadDir = "uploads"
 )
 
 func printHelp() {
@@ -68,6 +71,15 @@ func InitEnv() {
 	initUserSessionSettings()
 	if os.Getenv("SQLITE_PATH") != "" {
 		SQLitePath = os.Getenv("SQLITE_PATH")
+	}
+	if envUploadDir := os.Getenv("UPLOAD_DIR"); envUploadDir != "" {
+		UploadDir = envUploadDir
+	}
+	avatarDir := filepath.Join(UploadDir, "avatar")
+	if _, err := os.Stat(avatarDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(avatarDir, 0o755); err != nil {
+			log.Fatalf("failed to create upload dir %s: %v", avatarDir, err)
+		}
 	}
 	if *LogDir != "" {
 		var err error
