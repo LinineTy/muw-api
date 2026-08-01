@@ -83,6 +83,10 @@ export interface UserProfile {
   linux_do_id?: string
   /** LinuxDO trust level (L0-L4) */
   linux_do_trust_level?: number
+  /** Avatar URL (local upload or OAuth) */
+  avatar?: string
+  /** Whether the avatar was uploaded by the user */
+  avatar_custom?: boolean
   /** Global admin policy for profile preference switches */
   preference_policy?: {
     force_on: string[]

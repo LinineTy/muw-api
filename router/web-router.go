@@ -25,6 +25,9 @@ func SetWebRouter(router *gin.Engine, assets WebAssets) {
 	router.Use(gzip.Gzip(gzip.DefaultCompression))
 	router.Use(middleware.GlobalWebRateLimit())
 	router.Use(middleware.Cache())
+	// Serve user-uploaded files (avatars) from the filesystem before the
+	// embedded frontend, which has no knowledge of runtime-uploaded assets.
+	router.Use(static.Serve("/uploads", static.LocalFile(common.UploadDir, false)))
 	router.Use(static.Serve("/", frontendFS))
 	router.NoRoute(func(c *gin.Context) {
 		c.Set(middleware.RouteTagKey, "web")
