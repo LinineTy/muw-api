@@ -33,10 +33,13 @@ import {
 } from '../constants'
 import { modelsQueryKeys, vendorsQueryKeys } from '../lib'
 import { DataTableBulkActions } from './data-table-bulk-actions'
+import { ModelCard } from './model-card'
 import { useModelsColumns } from './models-columns'
 import { useModels } from './models-provider'
 
 const route = getRouteApi('/_authenticated/models/$section')
+
+const MODELS_VIEW_MODE_STORAGE_KEY = 'models:view-mode'
 
 export function ModelsTable() {
   const { t } = useTranslation()
@@ -199,6 +202,12 @@ export function ModelsTable() {
         'No models available. Create your first model to get started.'
       )}
       skeletonKeyPrefix='model-skeleton'
+      enableCardView
+      viewModeStorageKey={MODELS_VIEW_MODE_STORAGE_KEY}
+      renderCard={(row, { isSelected }) => (
+        <ModelCard row={row} isSelected={isSelected} />
+      )}
+      cardGridClassName='grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3'
       applyHeaderSize
       toolbarProps={{
         searchPlaceholder: t('Filter by model name...'),
