@@ -36,6 +36,7 @@ import { watchOAuthPopupClosed } from '@/features/auth/lib/oauth-bind-window'
 import {
   getOAuthSessionStorage,
   markOAuthBindPopup,
+  markOAuthRefreshPopup,
 } from '@/features/auth/lib/oauth-callback-mode'
 import type { CustomOAuthProviderInfo } from '@/features/auth/types'
 import { useDialogs } from '@/hooks/use-dialog'
@@ -79,6 +80,7 @@ interface PendingOAuthBinding {
 interface OAuthBindingCallback {
   type: typeof OAUTH_BIND_CALLBACK_MESSAGE
   provider: string
+  intent?: 'bind' | 'refresh'
   state: string
   code?: string
   error?: string
@@ -154,7 +156,11 @@ export function AccountBindingsTab({
   }
 
   const startOAuthBinding = useCallback(
-    async (provider: string, buildUrl: (state: string) => string) => {
+    async (
+      provider: string,
+      intent: 'bind' | 'refresh',
+      buildUrl: (state: string) => string
+    ) => {
       const previous = pendingOAuthBinding.current
       if (previous) {
         clearPendingOAuthBinding(previous)
@@ -177,15 +183,17 @@ export function AccountBindingsTab({
       )
       pendingOAuthBinding.current = pending
       try {
-        const state = await createOAuthFlow(provider, 'bind')
+        const state = await createOAuthFlow(provider, intent)
         if (pendingOAuthBinding.current !== pending || popup.closed) return
         // Stamp the popup while it is still same-origin (about:blank). Tying
         // the mark to this state prevents a stale popup from claiming a later
         // login callback. If storage is blocked, do not navigate into a
-        // callback that cannot safely identify the bind flow.
-        if (
-          !markOAuthBindPopup(getOAuthSessionStorage(popup), provider, state)
-        ) {
+        // callback that cannot safely identify the popup flow.
+        const marked =
+          intent === 'refresh'
+            ? markOAuthRefreshPopup(getOAuthSessionStorage(popup), provider, state)
+            : markOAuthBindPopup(getOAuthSessionStorage(popup), provider, state)
+        if (!marked) {
           throw new Error('OAuth bind popup storage is unavailable')
         }
         pending.state = state
@@ -200,8 +208,44 @@ export function AccountBindingsTab({
     [clearPendingOAuthBinding, t]
   )
 
+  // Silently refresh the LinuxDO trust level via the stored refresh token. When
+  // the token is gone/revoked the backend returns reauth_required and we fall
+  // back to a popup consent flow (refresh intent) so the level and tokens sync.
+  const handleLinuxDoRefresh = useCallback(async () => {
+    try {
+      const res = await api.post(
+        '/api/oauth/linuxdo/refresh',
+        undefined,
+        { skipBusinessError: true }
+      )
+      if (res.data?.success) {
+        toast.success(t('LinuxDo trust level refreshed!'))
+        onUpdate()
+        return
+      }
+      if (res.data?.code === 'reauth_required') {
+        const clientId = status?.linuxdo_client_id
+        if (!clientId) {
+          toast.error(t('LinuxDO is not configured'))
+          return
+        }
+        await startOAuthBinding('linuxdo', 'refresh', (state) =>
+          buildLinuxDOOAuthUrl(clientId, state)
+        )
+        return
+      }
+      toast.error(res.data?.message || t('Refresh failed'))
+    } catch (error: unknown) {
+      toast.error(
+        (error as { response?: { data?: { message?: string } } }).response?.data
+          ?.message ||
+          (error instanceof Error ? error.message : t('Refresh failed'))
+      )
+    }
+  }, [onUpdate, startOAuthBinding, status?.linuxdo_client_id, t])
+
   const handleBindCustomOAuth = async (provider: CustomOAuthProviderInfo) => {
-    await startOAuthBinding(provider.slug, (state) => {
+    await startOAuthBinding(provider.slug, 'bind', (state) => {
       const redirectUri = `${window.location.origin}/oauth/${provider.slug}`
       const url = new URL(provider.authorization_endpoint)
       url.searchParams.set('client_id', provider.client_id)
@@ -250,10 +294,17 @@ export function AccountBindingsTab({
         })
         success = Boolean(response.data?.success)
         resultMessage = response.data?.message || resultMessage
+        const isRefresh = message.intent === 'refresh'
         if (success) {
-          toast.success(t('Binding successful!'))
+          toast.success(
+            isRefresh
+              ? t('LinuxDo trust level refreshed!')
+              : t('Binding successful!')
+          )
           onUpdate()
-          await fetchCustomBindings()
+          if (!isRefresh) {
+            await fetchCustomBindings()
+          }
         } else {
           toast.error(resultMessage)
         }
@@ -329,7 +380,7 @@ export function AccountBindingsTab({
         onBind: () => {
           const clientId = status?.github_client_id
           if (clientId) {
-            void startOAuthBinding('github', (state) =>
+            void startOAuthBinding('github', 'bind', (state) =>
               buildGitHubOAuthUrl(clientId, state)
             )
           }
@@ -349,7 +400,7 @@ export function AccountBindingsTab({
         onBind: () => {
           const clientId = status?.discord_client_id
           if (clientId) {
-            void startOAuthBinding('discord', (state) =>
+            void startOAuthBinding('discord', 'bind', (state) =>
               buildDiscordOAuthUrl(clientId, state)
             )
           }
@@ -370,7 +421,7 @@ export function AccountBindingsTab({
           const authorizationEndpoint = status?.oidc_authorization_endpoint
           const clientId = status?.oidc_client_id
           if (authorizationEndpoint && clientId) {
-            void startOAuthBinding('oidc', (state) =>
+            void startOAuthBinding('oidc', 'bind', (state) =>
               buildOIDCOAuthUrl(authorizationEndpoint, clientId, state)
             )
           }
@@ -407,7 +458,7 @@ export function AccountBindingsTab({
         onBind: () => {
           const clientId = status?.linuxdo_client_id
           if (clientId) {
-            void startOAuthBinding('linuxdo', (state) =>
+            void startOAuthBinding('linuxdo', 'bind', (state) =>
               buildLinuxDOOAuthUrl(clientId, state)
             )
           }
@@ -455,15 +506,28 @@ export function AccountBindingsTab({
                   </p>
                 </div>
               </div>
-              <Button
-                variant='outline'
-                size='sm'
-                className='h-7 shrink-0 px-2.5 text-xs'
-                onClick={binding.onBind}
-                disabled={binding.isBound && binding.id !== 'email'}
-              >
-                {actionLabel}
-              </Button>
+              <div className='flex shrink-0 items-center gap-2'>
+                {binding.id === 'linuxdo' && binding.isBound ? (
+                  <Button
+                    variant='outline'
+                    size='sm'
+                    className='h-7 shrink-0 px-2.5 text-xs'
+                    onClick={() => void handleLinuxDoRefresh()}
+                  >
+                    {t('Refresh level')}
+                  </Button>
+                ) : (
+                  <Button
+                    variant='outline'
+                    size='sm'
+                    className='h-7 shrink-0 px-2.5 text-xs'
+                    onClick={binding.onBind}
+                    disabled={binding.isBound && binding.id !== 'email'}
+                  >
+                    {actionLabel}
+                  </Button>
+                )}
+              </div>
             </div>
           )
         })}

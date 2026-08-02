@@ -36,6 +36,7 @@ For commercial licensing, please contact support@quantumnous.com
  */
 
 const OAUTH_BIND_FLOW_KEY_PREFIX = 'oauth_bind_flow:'
+const OAUTH_REFRESH_FLOW_KEY_PREFIX = 'oauth_refresh_flow:'
 
 /** Minimal shape of `sessionStorage`, kept structural so tests can fake it. */
 export interface OAuthModeStorage {
@@ -58,7 +59,7 @@ export interface OAuthCallbackModeContext {
   storage: OAuthModeStorage | null | undefined
 }
 
-export type OAuthCallbackMode = 'login' | 'bind'
+export type OAuthCallbackMode = 'login' | 'bind' | 'refresh'
 
 /**
  * Access `sessionStorage` without letting browser privacy settings crash the
@@ -95,12 +96,35 @@ export function markOAuthBindPopup(
 }
 
 /**
+ * Stamp a freshly opened, still same-origin popup as an OAuth refresh flow
+ * (re-consent for a LinuxDO trust-level refresh). Call this before navigating
+ * the popup to the provider, mirroring markOAuthBindPopup.
+ */
+export function markOAuthRefreshPopup(
+  storage: OAuthModeStorage | null | undefined,
+  provider: string,
+  state: string
+): boolean {
+  if (!storage || !provider || !state) return false
+
+  try {
+    const key = `${OAUTH_REFRESH_FLOW_KEY_PREFIX}${provider}`
+    storage.setItem(key, state)
+    return storage.getItem(key) === state
+  } catch {
+    return false
+  }
+}
+
+/**
  * Resolve how a callback on `/oauth/:provider` should be handled.
  *
- * A bind requires all three pieces of evidence: our own stamp for this exact
- * provider and state, plus a live opener to hand the result back to. Anything
- * else is a login, which is also the safe default — a login callback recovers
- * on its own, while a wrongly assumed bind can only time out.
+ * A bind or refresh requires all three pieces of evidence: our own stamp for
+ * this exact provider and state, plus a live opener to hand the result back to.
+ * The refresh stamp is checked first (it is also positive proof of a popup we
+ * opened). Anything else is a login, which is also the safe default — a login
+ * callback recovers on its own, while a wrongly assumed popup flow can only
+ * time out.
  */
 export function resolveOAuthCallbackMode(
   provider: string,
@@ -111,10 +135,18 @@ export function resolveOAuthCallbackMode(
 
   let markedState: string | null = null
   try {
+    markedState = storage.getItem(
+      `${OAUTH_REFRESH_FLOW_KEY_PREFIX}${provider}`
+    )
+  } catch {
+    return 'login'
+  }
+  if (markedState === state) return 'refresh'
+
+  try {
     markedState = storage.getItem(`${OAUTH_BIND_FLOW_KEY_PREFIX}${provider}`)
   } catch {
     return 'login'
   }
-
   return markedState === state ? 'bind' : 'login'
 }

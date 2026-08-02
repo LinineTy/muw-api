@@ -22,6 +22,7 @@ import { describe, test } from 'node:test'
 import {
   getOAuthSessionStorage,
   markOAuthBindPopup,
+  markOAuthRefreshPopup,
   resolveOAuthCallbackMode,
   type OAuthModeStorage,
 } from '../oauth-callback-mode'
@@ -143,6 +144,61 @@ describe('resolveOAuthCallbackMode', () => {
         storage,
       }),
       'login'
+    )
+  })
+
+  test('matching refresh marker resolves to a refresh flow', () => {
+    const storage = fakeStorage()
+    const refreshState = 'refresh-state'
+    assert.equal(markOAuthRefreshPopup(storage, 'linuxdo', refreshState), true)
+
+    assert.equal(
+      resolveOAuthCallbackMode('linuxdo', refreshState, {
+        opener: openOpener,
+        storage,
+      }),
+      'refresh'
+    )
+  })
+
+  test('refresh marker wins over a bind marker for the same provider', () => {
+    const storage = fakeStorage()
+    const state = 'same-state'
+    markOAuthBindPopup(storage, 'linuxdo', state)
+    markOAuthRefreshPopup(storage, 'linuxdo', state)
+
+    assert.equal(
+      resolveOAuthCallbackMode('linuxdo', state, {
+        opener: openOpener,
+        storage,
+      }),
+      'refresh'
+    )
+  })
+
+  test('refresh marker for another provider does not hijack this callback', () => {
+    const storage = fakeStorage()
+    markOAuthRefreshPopup(storage, 'github', bindState)
+
+    assert.equal(
+      resolveOAuthCallbackMode('linuxdo', bindState, {
+        opener: openOpener,
+        storage,
+      }),
+      'login'
+    )
+  })
+
+  test('bind marker is still recognized when no refresh marker exists', () => {
+    const storage = fakeStorage()
+    markOAuthBindPopup(storage, 'oidc', bindState)
+
+    assert.equal(
+      resolveOAuthCallbackMode('oidc', bindState, {
+        opener: openOpener,
+        storage,
+      }),
+      'bind'
     )
   })
 })

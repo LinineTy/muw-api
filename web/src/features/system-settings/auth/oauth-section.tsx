@@ -91,6 +91,8 @@ const oauthSchema = z.object({
   LinuxDOMinimumTrustLevel: z.string(),
   LinuxDOGroupMapping: z.string(),
   LinuxDOBlacklist: z.string(),
+  LinuxDoRefreshEnabled: z.boolean(),
+  LinuxDoRefreshIntervalHours: z.string(),
   WeChatAuthEnabled: z.boolean(),
   WeChatServerAddress: z.string(),
   WeChatServerToken: z.string(),
@@ -123,6 +125,8 @@ type FlatOAuthDefaults = {
   LinuxDOMinimumTrustLevel: string
   LinuxDOGroupMapping: string
   LinuxDOBlacklist: string
+  LinuxDoRefreshEnabled: boolean
+  LinuxDoRefreshIntervalHours: string
   WeChatAuthEnabled: boolean
   WeChatServerAddress: string
   WeChatServerToken: string
@@ -209,6 +213,9 @@ const buildFormDefaults = (defaults: FlatOAuthDefaults): OAuthFormValues => ({
   LinuxDOMinimumTrustLevel: defaults.LinuxDOMinimumTrustLevel ?? '',
   LinuxDOGroupMapping: defaults.LinuxDOGroupMapping ?? '',
   LinuxDOBlacklist: defaults.LinuxDOBlacklist ?? '',
+  LinuxDoRefreshEnabled: defaults.LinuxDoRefreshEnabled,
+  LinuxDoRefreshIntervalHours:
+    defaults.LinuxDoRefreshIntervalHours ?? '24',
   WeChatAuthEnabled: defaults.WeChatAuthEnabled,
   WeChatServerAddress: defaults.WeChatServerAddress ?? '',
   WeChatServerToken: defaults.WeChatServerToken ?? '',
@@ -239,6 +246,8 @@ const normalizeFormValues = (values: OAuthFormValues): FlatOAuthDefaults => ({
   LinuxDOMinimumTrustLevel: values.LinuxDOMinimumTrustLevel,
   LinuxDOGroupMapping: values.LinuxDOGroupMapping,
   LinuxDOBlacklist: values.LinuxDOBlacklist,
+  LinuxDoRefreshEnabled: values.LinuxDoRefreshEnabled,
+  LinuxDoRefreshIntervalHours: values.LinuxDoRefreshIntervalHours,
   WeChatAuthEnabled: values.WeChatAuthEnabled,
   WeChatServerAddress: values.WeChatServerAddress,
   WeChatServerToken: values.WeChatServerToken,
@@ -1049,6 +1058,58 @@ export function OAuthSection(props: OAuthSectionProps) {
                       <FormDescription>
                         {t(
                           'LinuxDO user ids or usernames that are blocked from logging in or registering, one per line. Matching ignores case for usernames and applies even when the trust level meets the minimum.'
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='LinuxDoRefreshEnabled'
+                  render={({ field }) => (
+                    <SettingsSwitchItem>
+                      <SettingsSwitchContent>
+                        <FormLabel>{t('Refresh LinuxDO trust levels')}</FormLabel>
+                        <FormDescription>
+                          {t(
+                            'Periodically re-sync each LinuxDO user trust level (and auto-managed group) using their stored refresh token, without requiring them to re-authorize.'
+                          )}
+                        </FormDescription>
+                      </SettingsSwitchContent>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </SettingsSwitchItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='LinuxDoRefreshIntervalHours'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Refresh interval (hours)')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder='24'
+                          autoComplete='off'
+                          value={field.value ?? ''}
+                          onChange={(event) =>
+                            field.onChange(event.target.value)
+                          }
+                          name={field.name}
+                          onBlur={field.onBlur}
+                          ref={field.ref}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t(
+                          'How often the background job refreshes LinuxDO trust levels. Values below 1 are clamped to 1 hour.'
                         )}
                       </FormDescription>
                       <FormMessage />

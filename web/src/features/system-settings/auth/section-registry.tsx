@@ -73,6 +73,8 @@ const AUTH_SECTIONS = [
           LinuxDOMinimumTrustLevel: settings.LinuxDOMinimumTrustLevel,
           LinuxDOGroupMapping: settings.LinuxDOGroupMapping,
           LinuxDOBlacklist: settings.LinuxDOBlacklist,
+          LinuxDoRefreshEnabled: settings.LinuxDoRefreshEnabled,
+          LinuxDoRefreshIntervalHours: settings.LinuxDoRefreshIntervalHours,
           WeChatAuthEnabled: settings.WeChatAuthEnabled,
           WeChatServerAddress: settings.WeChatServerAddress,
           WeChatServerToken: settings.WeChatServerToken,

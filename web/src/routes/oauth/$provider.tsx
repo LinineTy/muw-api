@@ -76,7 +76,7 @@ function OAuthCallback() {
   const isTelegramBindCallback =
     provider === 'telegram' &&
     (search.telegram_bind === 'success' || search.telegram_bind === 'error')
-  let mode: 'login' | 'bind' = 'login'
+  let mode: 'login' | 'bind' | 'refresh' = 'login'
   if (isTelegramBindCallback) {
     mode = 'bind'
   } else if (typeof window !== 'undefined') {
@@ -116,7 +116,7 @@ function OAuthCallback() {
       return
     }
 
-    if (mode === 'bind') {
+    if (mode === 'bind' || mode === 'refresh') {
       const opener = window.opener
       if (!opener || opener.closed) {
         toast.error(i18next.t('OAuth binding window is no longer available'))
@@ -143,7 +143,13 @@ function OAuthCallback() {
         }
         cancelResultTimeout()
         if (result.success) {
-          toast.success(i18next.t('Binding successful!'))
+          toast.success(
+            i18next.t(
+              mode === 'refresh'
+                ? 'LinuxDo trust level refreshed!'
+                : 'Binding successful!'
+            )
+          )
           window.close()
           return
         }
@@ -160,6 +166,7 @@ function OAuthCallback() {
         {
           type: OAUTH_BIND_CALLBACK_MESSAGE,
           provider,
+          intent: mode,
           code,
           state,
           error: search.error,

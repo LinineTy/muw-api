@@ -25,7 +25,7 @@ import { AuthLayout } from '../auth-layout'
 
 type OAuthCallbackScreenProps = {
   provider: string
-  mode: 'login' | 'bind'
+  mode: 'login' | 'bind' | 'refresh'
 }
 
 type ProviderMeta = {
@@ -72,17 +72,31 @@ export function OAuthCallbackScreen({
   }, [provider])
 
   const providerLabel = t(label)
-  const isBindMode = mode === 'bind'
+  const isPopupMode = mode === 'bind' || mode === 'refresh'
 
-  const headline = isBindMode
-    ? t('Binding your {{provider}} account', { provider: providerLabel })
-    : t('Signing you in with {{provider}}', { provider: providerLabel })
+  let headline: string
+  let description: string
+  if (mode === 'refresh') {
+    headline = t('Refreshing your {{provider}} trust level', {
+      provider: providerLabel,
+    })
+    description = t(
+      'Hang tight while we re-authorize with {{provider}} and sync your level.',
+      { provider: providerLabel }
+    )
+  } else if (isPopupMode) {
+    headline = t('Binding your {{provider}} account', {
+      provider: providerLabel,
+    })
+    description = t('Hang tight while we securely link this account to your profile.')
+  } else {
+    headline = t('Signing you in with {{provider}}', {
+      provider: providerLabel,
+    })
+    description = t('Hang tight while we finish connecting your account.')
+  }
 
-  const description = isBindMode
-    ? t('Hang tight while we securely link this account to your profile.')
-    : t('Hang tight while we finish connecting your account.')
-
-  const secondaryNote = isBindMode
+  const secondaryNote = isPopupMode
     ? t(
         'You can close this tab once the binding completes or a success message appears in the original window.'
       )

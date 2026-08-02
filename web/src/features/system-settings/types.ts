@@ -141,6 +141,8 @@ export type AuthSettings = {
   LinuxDOMinimumTrustLevel: string
   LinuxDOGroupMapping: string
   LinuxDOBlacklist: string
+  LinuxDoRefreshEnabled: boolean
+  LinuxDoRefreshIntervalHours: string
   WeChatAuthEnabled: boolean
   WeChatServerAddress: string
   WeChatServerToken: string
