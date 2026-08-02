@@ -150,19 +150,21 @@ type SubscriptionPlan struct {
 	Title    string `json:"title" gorm:"type:varchar(128);not null"`
 	Subtitle string `json:"subtitle" gorm:"type:varchar(255);default:''"`
 
-	// Display money amount (follow existing code style: float64 for money)
-	PriceAmount float64 `json:"price_amount" gorm:"type:decimal(10,6);not null;default:0"`
+	// Display money amount (follow existing code style: float64 for money).
+	// No default:0 tag — MySQL stores decimal defaults as '0.000000', which GORM
+	// compares against '0' and re-issues MODIFY COLUMN on every startup.
+	PriceAmount float64 `json:"price_amount" gorm:"type:decimal(10,6);not null"`
 	Currency    string  `json:"currency" gorm:"type:varchar(8);not null;default:'USD'"`
 
 	DurationUnit  string `json:"duration_unit" gorm:"type:varchar(16);not null;default:'month'"`
 	DurationValue int    `json:"duration_value" gorm:"type:int;not null;default:1"`
 	CustomSeconds int64  `json:"custom_seconds" gorm:"type:bigint;not null;default:0"`
 
-	Enabled   bool `json:"enabled" gorm:"default:true"`
+	Enabled   bool `json:"enabled"`
 	SortOrder int  `json:"sort_order" gorm:"type:int;default:0"`
 
 	// Recommended plan shown with a highlighted badge on the user-facing catalog
-	IsRecommended bool `json:"is_recommended" gorm:"default:false"`
+	IsRecommended bool `json:"is_recommended"`
 
 	AllowBalancePay *bool `json:"allow_balance_pay"`
 
@@ -204,8 +206,10 @@ type SubscriptionPlan struct {
 	ExclusiveGroup string `json:"exclusive_group" gorm:"type:varchar(64);default:''"`
 
 	// User group whitelist (JSON array of group names, e.g. ["vip","pro"]).
-	// Empty means any group may subscribe.
-	AllowedGroups string `json:"allowed_groups" gorm:"type:text;default:''"`
+	// Empty means any group may subscribe. TEXT column cannot carry a literal
+	// DEFAULT in MySQL (error 1101), so the zero value (empty string) is applied
+	// by the application layer.
+	AllowedGroups string `json:"allowed_groups" gorm:"type:text"`
 
 	CreatedAt int64 `json:"created_at" gorm:"bigint"`
 	UpdatedAt int64 `json:"updated_at" gorm:"bigint"`
