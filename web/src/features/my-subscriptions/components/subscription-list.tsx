@@ -238,31 +238,6 @@ function SubscriptionItem({
             <div className='text-muted-foreground mt-1 text-xs'>
               {t('Remaining')} {formatQuota(remainAmount)}
             </div>
-            {(hasCycleLimit || weekLimit > 0 || monthLimit > 0) && isActive && (
-              <div className='mt-2 space-y-1.5'>
-                {hasCycleLimit && (
-                  <CycleUsageRow
-                    label={t('This cycle')}
-                    used={cycleUsed}
-                    total={cycleLimit}
-                  />
-                )}
-                {weekLimit > 0 && (
-                  <CycleUsageRow
-                    label={t('This week')}
-                    used={weekUsed}
-                    total={weekLimit}
-                  />
-                )}
-                {monthLimit > 0 && (
-                  <CycleUsageRow
-                    label={t('This month')}
-                    used={monthUsed}
-                    total={monthLimit}
-                  />
-                )}
-              </div>
-            )}
           </>
         ) : (
           <div className='flex items-center gap-2'>
@@ -272,6 +247,33 @@ function SubscriptionItem({
             <span className='text-muted-foreground text-xs'>
               {t('Unlimited')}
             </span>
+          </div>
+        )}
+
+        {/* 周期/周/月限额独立于总额度展示：总额度 0（无限）时仍需显示用量 */}
+        {(hasCycleLimit || weekLimit > 0 || monthLimit > 0) && isActive && (
+          <div className='mt-2 space-y-1.5'>
+            {hasCycleLimit && (
+              <CycleUsageRow
+                label={t('This cycle')}
+                used={cycleUsed}
+                total={cycleLimit}
+              />
+            )}
+            {weekLimit > 0 && (
+              <CycleUsageRow
+                label={t('This week')}
+                used={weekUsed}
+                total={weekLimit}
+              />
+            )}
+            {monthLimit > 0 && (
+              <CycleUsageRow
+                label={t('This month')}
+                used={monthUsed}
+                total={monthLimit}
+              />
+            )}
           </div>
         )}
       </div>
