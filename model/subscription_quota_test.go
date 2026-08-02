@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 // 复用独立计数器模型，验证四个限额各自独立生效：
@@ -196,4 +197,41 @@ func TestAdvanceSubscriptionWindowsCustomCycle(t *testing.T) {
 	assert.True(t, changed)
 	assert.Zero(t, sub.CycleUsed)
 	assert.InDelta(t, float64(now+3600), float64(sub.NextCycleResetAt), 5)
+}
+
+// TestRenewPreservesResetSchedule 保护续费语义：续费只延长订阅有效期并累加总额，
+// 不能重新武装已排期的重置周期（否则会吞掉下一次重置，用户损失一个周期的配额）。
+func TestRenewPreservesResetSchedule(t *testing.T) {
+	truncateTables(t)
+
+	now := GetDBTimestamp()
+	nextReset := now + 11*86400 // 已排期的下次重置（如每月 1 号）
+	plan := &SubscriptionPlan{
+		Id: 7205, Title: "monthly-reset", PriceAmount: 10,
+		DurationUnit: SubscriptionDurationMonth, DurationValue: 1,
+		TotalAmount: 1000, QuotaResetPeriod: SubscriptionResetMonthly,
+	}
+	require.NoError(t, DB.Create(plan).Error)
+	InvalidateSubscriptionPlanCache(7205)
+
+	sub := &UserSubscription{
+		Id: 7206, UserId: 902, PlanId: plan.Id, Status: "active",
+		AmountTotal: 1000, AmountUsed: 100,
+		StartTime: now - 20 * 86400, EndTime: nextReset,
+		CycleStartAt: now - 20 * 86400, CycleUsed: 40, NextCycleResetAt: nextReset,
+	}
+	require.NoError(t, DB.Create(sub).Error)
+
+	// 在下一次重置之前续费。
+	require.NoError(t, DB.Transaction(func(tx *gorm.DB) error {
+		var locked UserSubscription
+		require.NoError(t, tx.Where("id = ?", sub.Id).First(&locked).Error)
+		return RenewSubscriptionTx(tx, &locked, plan, now)
+	}))
+
+	var after UserSubscription
+	require.NoError(t, DB.Where("id = ?", sub.Id).First(&after).Error)
+	assert.Equal(t, nextReset, after.NextCycleResetAt, "续费不应推后已排期的重置周期")
+	assert.Greater(t, after.EndTime, nextReset, "续费应延长订阅有效期")
+	assert.EqualValues(t, 2000, after.AmountTotal)
 }

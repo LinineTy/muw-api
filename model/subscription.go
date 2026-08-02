@@ -1248,8 +1248,10 @@ func PurchaseWithStrategy(userId int, planId int, subscriptionId int) (string, e
 
 // RenewSubscriptionTx extends an existing active subscription by one plan period.
 // The subscription must already be locked by the caller. Renewal appends the plan
-// duration to EndTime (from the later of EndTime/now), accumulates TotalAmount and,
-// for plans with a per-cycle cap, re-arms the cycle window at the renewal point.
+// duration to EndTime (from the later of EndTime/now) and accumulates TotalAmount.
+// The quota reset cycle is deliberately left untouched: it continues on its natural
+// calendar schedule (advanceSubscriptionWindows resets CycleUsed when the boundary
+// arrives), so renewing before a reset never swallows that reset.
 func RenewSubscriptionTx(tx *gorm.DB, sub *UserSubscription, plan *SubscriptionPlan, now int64) error {
 	if tx == nil || sub == nil || plan == nil {
 		return errors.New("invalid renew args")
@@ -1272,14 +1274,9 @@ func RenewSubscriptionTx(tx *gorm.DB, sub *UserSubscription, plan *SubscriptionP
 	}
 	sub.EndTime = endUnix
 	sub.AmountTotal += plan.TotalAmount
-	// Renewing the same period re-arms the reset schedule relative to the new start.
-	// The cycle counter is NOT reset here — the renewal point acts as the new cycle
-	// window start, so cycle usage before the renewal stays counted in this cycle.
-	if period := NormalizeResetPeriod(plan.QuotaResetPeriod); period != SubscriptionResetNever {
-		nextReset := calcNextResetTime(start, plan, endUnix)
-		sub.CycleStartAt = start.Unix()
-		sub.NextCycleResetAt = nextReset
-	}
+	// 注意：不改 CycleStartAt/NextCycleResetAt——续费只延长订阅，重置周期照常按
+	// 自然日历推进；若在此重新武装下次重置，会吞掉已排期的下一次重置（用户损失
+	// 一个周期的重置额度）。
 	// A user-initiated renewal overrides a pending cancel-at-end and clears any
 	// previous auto-renew failure so the task may retry.
 	sub.CancelAtEnd = false
