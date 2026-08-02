@@ -37,6 +37,15 @@ const SECURITY_SECTIONS = [
           ModelRequestRateLimitDurationMinutes:
             settings.ModelRequestRateLimitDurationMinutes,
           ModelRequestRateLimitGroup: settings.ModelRequestRateLimitGroup,
+          CriticalRateLimitEnable: settings.CriticalRateLimitEnable,
+          CriticalRateLimitNum: settings.CriticalRateLimitNum,
+          CriticalRateLimitDuration: settings.CriticalRateLimitDuration,
+          GlobalApiRateLimitEnable: settings.GlobalApiRateLimitEnable,
+          GlobalApiRateLimitNum: settings.GlobalApiRateLimitNum,
+          GlobalApiRateLimitDuration: settings.GlobalApiRateLimitDuration,
+          GlobalWebRateLimitEnable: settings.GlobalWebRateLimitEnable,
+          GlobalWebRateLimitNum: settings.GlobalWebRateLimitNum,
+          GlobalWebRateLimitDuration: settings.GlobalWebRateLimitDuration,
         }}
       />
     ),

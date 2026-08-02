@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Code2, Palette } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useFormContext } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import * as z from 'zod'
 
@@ -78,12 +78,138 @@ const createRateLimitSchema = (t: (key: string) => string) =>
       .refine(isValidJSON, {
         message: t('Invalid JSON format or values out of allowed range'),
       }),
+    // IP 维度限流：次数 >= 1，窗口以秒存储（>= 60 秒 = 1 分钟）
+    CriticalRateLimitEnable: z.boolean(),
+    CriticalRateLimitNum: z.number().min(1).max(100000000),
+    CriticalRateLimitDuration: z.number().min(60).max(2147483647),
+    GlobalApiRateLimitEnable: z.boolean(),
+    GlobalApiRateLimitNum: z.number().min(1).max(100000000),
+    GlobalApiRateLimitDuration: z.number().min(60).max(2147483647),
+    GlobalWebRateLimitEnable: z.boolean(),
+    GlobalWebRateLimitNum: z.number().min(1).max(100000000),
+    GlobalWebRateLimitDuration: z.number().min(60).max(2147483647),
   })
 
 type RateLimitFormValues = z.infer<ReturnType<typeof createRateLimitSchema>>
 
 type RateLimitSectionProps = {
   defaultValues: RateLimitFormValues
+}
+
+type IpRateLimitEnableField =
+  | 'CriticalRateLimitEnable'
+  | 'GlobalApiRateLimitEnable'
+  | 'GlobalWebRateLimitEnable'
+
+type IpRateLimitNumField =
+  | 'CriticalRateLimitNum'
+  | 'GlobalApiRateLimitNum'
+  | 'GlobalWebRateLimitNum'
+
+type IpRateLimitDurationField =
+  | 'CriticalRateLimitDuration'
+  | 'GlobalApiRateLimitDuration'
+  | 'GlobalWebRateLimitDuration'
+
+// RateLimitGroupFields 渲染一组 IP 维度限流：开关 + 次数 + 时间窗口。
+// 时间窗口以「分钟」输入、以「秒」存储（与后端 common 变量及现有环境变量单位一致），
+// 保存后立即生效，无需重启。
+function RateLimitGroupFields({
+  title,
+  description,
+  enableField,
+  numField,
+  durationField,
+}: {
+  title: string
+  description: string
+  enableField: IpRateLimitEnableField
+  numField: IpRateLimitNumField
+  durationField: IpRateLimitDurationField
+}) {
+  const { t } = useTranslation()
+  const { control } = useFormContext<RateLimitFormValues>()
+
+  return (
+    <div className='space-y-3'>
+      <FormField
+        control={control}
+        name={enableField}
+        render={({ field }) => (
+          <SettingsSwitchItem>
+            <SettingsSwitchContent>
+              <FormLabel>{title}</FormLabel>
+              <FormDescription>{description}</FormDescription>
+            </SettingsSwitchContent>
+            <FormControl>
+              <Switch checked={field.value} onCheckedChange={field.onChange} />
+            </FormControl>
+          </SettingsSwitchItem>
+        )}
+      />
+      <div className='grid gap-4 md:grid-cols-2'>
+        <FormField
+          control={control}
+          name={numField}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t('Max requests')}</FormLabel>
+              <FormControl>
+                <div className='flex items-center gap-2'>
+                  <Input
+                    type='number'
+                    min={1}
+                    step={1}
+                    {...field}
+                    onChange={(e) =>
+                      field.onChange(parseInt(e.target.value) || 0)
+                    }
+                  />
+                  <span className='text-muted-foreground text-sm'>
+                    {t('times')}
+                  </span>
+                </div>
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={control}
+          name={durationField}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t('Time window (minutes)')}</FormLabel>
+              <FormControl>
+                <div className='flex items-center gap-2'>
+                  <Input
+                    type='number'
+                    min={1}
+                    step={1}
+                    {...field}
+                    value={Math.round((field.value / 60) * 100) / 100}
+                    onChange={(e) => {
+                      const minutes = parseFloat(e.target.value)
+                      field.onChange(
+                        Number.isNaN(minutes) ? 0 : Math.round(minutes * 60)
+                      )
+                    }}
+                  />
+                  <span className='text-muted-foreground text-sm'>
+                    {t('minutes')}
+                  </span>
+                </div>
+              </FormControl>
+              <FormDescription>
+                {t('Shared by all requests behind the same IP')}
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+    </div>
+  )
 }
 
 export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
@@ -132,7 +258,7 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
                   <FormLabel>{t('Enable rate limiting')}</FormLabel>
                   <FormDescription>
                     {t(
-                      'This controls model request rate limiting. Web/API route throttling is configured by environment variables and may still return 429.'
+                      'Applies to model relay requests, keyed per user/group'
                     )}
                   </FormDescription>
                 </SettingsSwitchContent>
@@ -317,6 +443,33 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
               </FormItem>
             )}
           />
+
+          {/* IP 维度限流：与 relay 模型限流不同，按客户端 IP 统计，覆盖敏感操作与整组路由 */}
+          <div className='border-border/60 space-y-5 border-t pt-4'>
+            <RateLimitGroupFields
+              title={t('Critical Rate Limit')}
+              description={t(
+                'Sensitive operations: login, session refresh, OAuth and purchases'
+              )}
+              enableField='CriticalRateLimitEnable'
+              numField='CriticalRateLimitNum'
+              durationField='CriticalRateLimitDuration'
+            />
+            <RateLimitGroupFields
+              title={t('Global API Rate Limit')}
+              description={t('Applies to all /api requests')}
+              enableField='GlobalApiRateLimitEnable'
+              numField='GlobalApiRateLimitNum'
+              durationField='GlobalApiRateLimitDuration'
+            />
+            <RateLimitGroupFields
+              title={t('Global Web Rate Limit')}
+              description={t('Applies to web page assets and fallback routes')}
+              enableField='GlobalWebRateLimitEnable'
+              numField='GlobalWebRateLimitNum'
+              durationField='GlobalWebRateLimitDuration'
+            />
+          </div>
         </SettingsForm>
       </Form>
     </SettingsSection>

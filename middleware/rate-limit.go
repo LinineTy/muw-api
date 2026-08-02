@@ -144,46 +144,34 @@ func writeRateLimited(c *gin.Context, retryAfterSeconds int64) {
 	c.Abort()
 }
 
-func rateLimitFactory(maxRequestNum int, duration int64, mark string) func(c *gin.Context) {
-	if common.RedisEnabled {
-		return func(c *gin.Context) {
-			redisRateLimiter(c, maxRequestNum, duration, mark)
-		}
-	}
-	// It's safe to call multi times.
-	inMemoryRateLimiter.Init(common.RateLimitKeyExpirationDuration)
+// rateLimitFactory 返回一个 IP 维度限流中间件。参数通过指针引用 common 包
+// 配置变量，闭包在每次请求时实时读取，因此设置页修改限流参数后无需重启即可生效。
+func rateLimitFactory(enable *bool, num *int, duration *int64, mark string) func(c *gin.Context) {
 	return func(c *gin.Context) {
-		memoryRateLimiter(c, maxRequestNum, duration, mark)
+		if !*enable {
+			c.Next()
+			return
+		}
+		if common.RedisEnabled {
+			redisRateLimiter(c, *num, *duration, mark)
+			return
+		}
+		// It's safe to call multi times.
+		inMemoryRateLimiter.Init(common.RateLimitKeyExpirationDuration)
+		memoryRateLimiter(c, *num, *duration, mark)
 	}
 }
 
 func GlobalWebRateLimit() func(c *gin.Context) {
-	if common.GlobalWebRateLimitEnable {
-		return rateLimitFactory(common.GlobalWebRateLimitNum, common.GlobalWebRateLimitDuration, "GW")
-	}
-	return defNext
+	return rateLimitFactory(&common.GlobalWebRateLimitEnable, &common.GlobalWebRateLimitNum, &common.GlobalWebRateLimitDuration, "GW")
 }
 
 func GlobalAPIRateLimit() func(c *gin.Context) {
-	if common.GlobalApiRateLimitEnable {
-		return rateLimitFactory(common.GlobalApiRateLimitNum, common.GlobalApiRateLimitDuration, "GA")
-	}
-	return defNext
+	return rateLimitFactory(&common.GlobalApiRateLimitEnable, &common.GlobalApiRateLimitNum, &common.GlobalApiRateLimitDuration, "GA")
 }
 
 func CriticalRateLimit() func(c *gin.Context) {
-	if common.CriticalRateLimitEnable {
-		return rateLimitFactory(common.CriticalRateLimitNum, common.CriticalRateLimitDuration, "CT")
-	}
-	return defNext
-}
-
-func DownloadRateLimit() func(c *gin.Context) {
-	return rateLimitFactory(common.DownloadRateLimitNum, common.DownloadRateLimitDuration, "DW")
-}
-
-func UploadRateLimit() func(c *gin.Context) {
-	return rateLimitFactory(common.UploadRateLimitNum, common.UploadRateLimitDuration, "UP")
+	return rateLimitFactory(&common.CriticalRateLimitEnable, &common.CriticalRateLimitNum, &common.CriticalRateLimitDuration, "CT")
 }
 
 // userRateLimitFactory creates a rate limiter keyed by authenticated user ID

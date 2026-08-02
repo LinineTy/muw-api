@@ -152,6 +152,17 @@ func InitOptionMap() {
 	common.OptionMap["SubscriptionGroupUpgradeEnabled"] = strconv.FormatBool(common.SubscriptionGroupUpgradeEnabled)
 	common.OptionMap["SubscriptionExclusiveGroupEnabled"] = strconv.FormatBool(common.SubscriptionExclusiveGroupEnabled)
 
+	// IP 维度限流（Critical / Global API / Global Web），支持设置页热生效
+	common.OptionMap["CriticalRateLimitEnable"] = strconv.FormatBool(common.CriticalRateLimitEnable)
+	common.OptionMap["CriticalRateLimitNum"] = strconv.Itoa(common.CriticalRateLimitNum)
+	common.OptionMap["CriticalRateLimitDuration"] = strconv.FormatInt(common.CriticalRateLimitDuration, 10)
+	common.OptionMap["GlobalApiRateLimitEnable"] = strconv.FormatBool(common.GlobalApiRateLimitEnable)
+	common.OptionMap["GlobalApiRateLimitNum"] = strconv.Itoa(common.GlobalApiRateLimitNum)
+	common.OptionMap["GlobalApiRateLimitDuration"] = strconv.FormatInt(common.GlobalApiRateLimitDuration, 10)
+	common.OptionMap["GlobalWebRateLimitEnable"] = strconv.FormatBool(common.GlobalWebRateLimitEnable)
+	common.OptionMap["GlobalWebRateLimitNum"] = strconv.Itoa(common.GlobalWebRateLimitNum)
+	common.OptionMap["GlobalWebRateLimitDuration"] = strconv.FormatInt(common.GlobalWebRateLimitDuration, 10)
+
 	// 自动添加所有注册的模型配置
 	modelConfigs := config.GlobalConfig.ExportAllConfigs()
 	for k, v := range modelConfigs {
@@ -371,6 +382,12 @@ func updateOptionMap(key string, value string) (err error) {
 			common.SubscriptionGroupUpgradeEnabled = boolValue
 		case "SubscriptionExclusiveGroupEnabled":
 			common.SubscriptionExclusiveGroupEnabled = boolValue
+		case "CriticalRateLimitEnable":
+			common.CriticalRateLimitEnable = boolValue
+		case "GlobalApiRateLimitEnable":
+			common.GlobalApiRateLimitEnable = boolValue
+		case "GlobalWebRateLimitEnable":
+			common.GlobalWebRateLimitEnable = boolValue
 		}
 	}
 	switch key {
@@ -466,6 +483,18 @@ func updateOptionMap(key string, value string) (err error) {
 		common.PreConsumedQuota, _ = strconv.Atoi(value)
 	case "SubscriptionMaxSimultaneous":
 		common.SubscriptionMaxSimultaneous, _ = strconv.Atoi(value)
+	case "CriticalRateLimitNum":
+		common.CriticalRateLimitNum, _ = strconv.Atoi(value)
+	case "CriticalRateLimitDuration":
+		common.CriticalRateLimitDuration, _ = strconv.ParseInt(value, 10, 64)
+	case "GlobalApiRateLimitNum":
+		common.GlobalApiRateLimitNum, _ = strconv.Atoi(value)
+	case "GlobalApiRateLimitDuration":
+		common.GlobalApiRateLimitDuration, _ = strconv.ParseInt(value, 10, 64)
+	case "GlobalWebRateLimitNum":
+		common.GlobalWebRateLimitNum, _ = strconv.Atoi(value)
+	case "GlobalWebRateLimitDuration":
+		common.GlobalWebRateLimitDuration, _ = strconv.ParseInt(value, 10, 64)
 	case "ModelRequestRateLimitCount":
 		setting.ModelRequestRateLimitCount, _ = strconv.Atoi(value)
 	case "ModelRequestRateLimitDurationMinutes":
