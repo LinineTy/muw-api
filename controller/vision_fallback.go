@@ -97,8 +97,40 @@ func applyDescriptions(req *dto.GeneralOpenAIRequest, descriptions map[imageRef]
 		contentsByMessage[ref.messageIdx] = contents
 	}
 	for messageIdx, contents := range contentsByMessage {
-		req.Messages[messageIdx].SetMediaContent(contents)
+		// 所有图片都已被描述后，消息只剩文本。此时用纯字符串 content 更稳
+		// 健：它是非视觉模型收到普通文本请求的标准格式，StringContent()/ParseContent()
+		// 都能正确处理，不会被 OpenAI→Claude 等转换因 []MediaContent 内容而丢空。
+		if allTextParts(contents) {
+			req.Messages[messageIdx].SetStringContent(joinTextParts(contents))
+		} else {
+			req.Messages[messageIdx].SetMediaContent(contents)
+		}
 	}
+}
+
+// allTextParts reports whether every part in contents is a plain text part.
+func allTextParts(contents []dto.MediaContent) bool {
+	for _, part := range contents {
+		if part.Type != dto.ContentTypeText {
+			return false
+		}
+	}
+	return true
+}
+
+// joinTextParts flattens a message's text parts into a single string.
+func joinTextParts(contents []dto.MediaContent) string {
+	var sb strings.Builder
+	for i, part := range contents {
+		if part.Type != dto.ContentTypeText {
+			continue
+		}
+		if i > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString(part.Text)
+	}
+	return sb.String()
 }
 
 // collectImageParts returns the (message, part) positions and URLs of every

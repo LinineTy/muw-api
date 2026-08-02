@@ -560,6 +560,15 @@ func (m *Message) ParseContent() []MediaContent {
 		return contentList
 	}
 
+	// 尝试解析为 MediaContent 切片（SetMediaContent 写入的类型）。浅拷贝/重
+	// 构造 Message 时 parsedContent 缓存会丢失，此时 Content 仍是
+	// []MediaContent，必须能直接返回，否则下游转换（如 OpenAI→Claude）会拿到空内容。
+	mediaContent, ok := m.Content.([]MediaContent)
+	if ok {
+		m.parsedContent = mediaContent
+		return mediaContent
+	}
+
 	// 尝试解析为数组
 	//var arrayContent []map[string]interface{}
 
