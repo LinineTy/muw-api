@@ -49,7 +49,7 @@ const subscriptionSettingsSchema = z.object({
   SubscriptionPriorityEnabled: z.boolean(),
   SubscriptionGroupUpgradeEnabled: z.boolean(),
   SubscriptionExclusiveGroupEnabled: z.boolean(),
-  SubscriptionMaxSimultaneous: z.coerce.number().int().min(0),
+  SubscriptionMaxSimultaneous: z.number().int().min(0),
 })
 
 type SubscriptionSettingsFormValues = z.infer<
