@@ -343,6 +343,11 @@ export function ModelMutateDrawer({
       'channel_affinity_setting.max_entries': 100000,
       'channel_affinity_setting.default_ttl_seconds': 3600,
       'channel_affinity_setting.rules': '[]',
+      SubscriptionAutoRenewEnabled: true,
+      SubscriptionPriorityEnabled: true,
+      SubscriptionGroupUpgradeEnabled: true,
+      SubscriptionExclusiveGroupEnabled: true,
+      SubscriptionMaxSimultaneous: 0,
     }
     return getOptionValue(systemOptionsData.data, defaultModelSettings)
   }, [systemOptionsData])
