@@ -251,3 +251,12 @@ func QuotaPoolActionRateLimit() func(c *gin.Context) {
 	return userRateLimitFactory(10, 60, "QP")
 }
 
+// SubscriptionActionRateLimit returns a per-user rate limiter for subscription
+// write operations (purchase/renew/cancel/auto-renew/priority). These must NOT
+// share the per-IP CriticalRateLimit bucket with /auth/refresh and /login:
+// a burst of subscription actions would drain that bucket and 429 the next
+// session refresh, force-kicking the logged-in user. Each user gets their own
+// generous bucket instead.
+func SubscriptionActionRateLimit() func(c *gin.Context) {
+	return userRateLimitFactory(30, 60, "SUB")
+}
