@@ -29,20 +29,22 @@ function ModelsContent() {
   const { t } = useTranslation()
 
   return (
-    <SectionPageLayout fixedContent>
-      <SectionPageLayout.Title>{t('Metadata')}</SectionPageLayout.Title>
-      <SectionPageLayout.Actions>
-        <ModelsPrimaryButtons />
-      </SectionPageLayout.Actions>
-      <SectionPageLayout.Content>
-        <div className='flex h-full min-h-0 flex-col gap-4'>
-          <div className='min-h-0 flex-1'>
-            <ModelsTable />
+    <>
+      <SectionPageLayout fixedContent>
+        <SectionPageLayout.Title>{t('Metadata')}</SectionPageLayout.Title>
+        <SectionPageLayout.Actions>
+          <ModelsPrimaryButtons />
+        </SectionPageLayout.Actions>
+        <SectionPageLayout.Content>
+          <div className='flex h-full min-h-0 flex-col gap-4'>
+            <div className='min-h-0 flex-1'>
+              <ModelsTable />
+            </div>
           </div>
-        </div>
-      </SectionPageLayout.Content>
+        </SectionPageLayout.Content>
+      </SectionPageLayout>
       <ModelsDialogs />
-    </SectionPageLayout>
+    </>
   )
 }
 
