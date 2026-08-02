@@ -87,9 +87,15 @@ func (p *LinuxDOProvider) ExchangeToken(ctx context.Context, code string, c *gin
 
 	logger.LogDebug(ctx, "[OAuth-LinuxDO] ExchangeToken response status: %d", res.StatusCode)
 
+	// Decode token response; Linux Do returns access_token + refresh_token +
+	// expires_in (3600s). The refresh_token is kept so the trust level can be
+	// refreshed silently later without re-consenting.
 	var tokenRes struct {
-		AccessToken string `json:"access_token"`
-		Message     string `json:"message"`
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		ExpiresIn    int    `json:"expires_in"`
+		Error        string `json:"error"`
+		Message      string `json:"message"`
 	}
 	if err := json.NewDecoder(res.Body).Decode(&tokenRes); err != nil {
 		logger.LogError(ctx, fmt.Sprintf("[OAuth-LinuxDO] ExchangeToken decode error: %s", err.Error()))
@@ -97,18 +103,98 @@ func (p *LinuxDOProvider) ExchangeToken(ctx context.Context, code string, c *gin
 	}
 
 	if tokenRes.AccessToken == "" {
-		logger.LogError(ctx, fmt.Sprintf("[OAuth-LinuxDO] ExchangeToken failed: %s", tokenRes.Message))
+		logger.LogError(ctx, fmt.Sprintf("[OAuth-LinuxDO] ExchangeToken failed: %s (%s)", tokenRes.Message, tokenRes.Error))
 		return nil, NewOAuthErrorWithRaw(i18n.MsgOAuthTokenFailed, map[string]any{"Provider": "Linux DO"}, tokenRes.Message)
 	}
 
 	logger.LogDebug(ctx, "[OAuth-LinuxDO] ExchangeToken success")
 
 	return &OAuthToken{
-		AccessToken: tokenRes.AccessToken,
+		AccessToken:  tokenRes.AccessToken,
+		RefreshToken: tokenRes.RefreshToken,
+		ExpiresIn:    tokenRes.ExpiresIn,
 	}, nil
 }
 
+// RefreshAccessToken exchanges a refresh_token for a fresh access_token at the
+// Linux Do token endpoint (grant_type=refresh_token). A refreshed response may
+// also carry a new refresh_token, which callers should persist back.
+func (p *LinuxDOProvider) RefreshAccessToken(ctx context.Context, refreshToken string) (*OAuthToken, error) {
+	if refreshToken == "" {
+		return nil, ErrLinuxDOTokenInvalid
+	}
+
+	tokenEndpoint := common.GetEnvOrDefaultString("LINUX_DO_TOKEN_ENDPOINT", "https://connect.linux.do/oauth2/token")
+	credentials := common.LinuxDOClientId + ":" + common.LinuxDOClientSecret
+	basicAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte(credentials))
+
+	data := url.Values{}
+	data.Set("grant_type", "refresh_token")
+	data.Set("refresh_token", refreshToken)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", tokenEndpoint, strings.NewReader(data.Encode()))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", basicAuth)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+
+	client := http.Client{Timeout: 5 * time.Second}
+	res, err := client.Do(req)
+	if err != nil {
+		logger.LogError(ctx, fmt.Sprintf("[OAuth-LinuxDO] RefreshAccessToken error: %s", err.Error()))
+		return nil, NewOAuthErrorWithRaw(i18n.MsgOAuthConnectFailed, map[string]any{"Provider": "Linux DO"}, err.Error())
+	}
+	defer res.Body.Close()
+
+	var tokenRes struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		ExpiresIn    int    `json:"expires_in"`
+		Error        string `json:"error"`
+		Message      string `json:"message"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&tokenRes); err != nil {
+		logger.LogError(ctx, fmt.Sprintf("[OAuth-LinuxDO] RefreshAccessToken decode error: %s", err.Error()))
+		return nil, err
+	}
+
+	if tokenRes.AccessToken == "" {
+		// An expired/revoked refresh_token comes back as invalid_grant; treat it
+		// as re-auth required rather than a transient failure.
+		if tokenRes.Error == "invalid_grant" || tokenRes.Message != "" {
+			return nil, ErrLinuxDOTokenInvalid
+		}
+		return nil, NewOAuthErrorWithRaw(i18n.MsgOAuthTokenFailed, map[string]any{"Provider": "Linux DO"}, tokenRes.Message)
+	}
+
+	return &OAuthToken{
+		AccessToken:  tokenRes.AccessToken,
+		RefreshToken: tokenRes.RefreshToken,
+		ExpiresIn:    tokenRes.ExpiresIn,
+	}, nil
+}
+
+// ErrLinuxDOTokenInvalid marks a Linux Do refresh_token that has been revoked or
+// expired (invalid_grant), meaning the user must re-authorize. Silent refresh
+// paths (scheduled task, manual refresh button) use it to decide whether to fall
+// back to a full OAuth consent flow.
+var ErrLinuxDOTokenInvalid = NewOAuthError(i18n.MsgOAuthTokenFailed, map[string]any{"Provider": "Linux DO"})
+
 func (p *LinuxDOProvider) GetUserInfo(ctx context.Context, token *OAuthToken) (*OAuthUser, error) {
+	return p.fetchUserInfo(ctx, token, true)
+}
+
+// GetUserInfoForRefresh fetches the user profile for a silent level refresh. It
+// skips the trust-level minimum and blacklist checks because refreshing an
+// existing account is not a login gate; a level drop must still be reflected,
+// not denied.
+func (p *LinuxDOProvider) GetUserInfoForRefresh(ctx context.Context, token *OAuthToken) (*OAuthUser, error) {
+	return p.fetchUserInfo(ctx, token, false)
+}
+
+func (p *LinuxDOProvider) fetchUserInfo(ctx context.Context, token *OAuthToken, enforce bool) (*OAuthUser, error) {
 	userEndpoint := common.GetEnvOrDefaultString("LINUX_DO_USER_ENDPOINT", "https://connect.linux.do/api/user")
 
 	logger.LogDebug(ctx, "[OAuth-LinuxDO] GetUserInfo: user_endpoint=%s", userEndpoint)
@@ -144,21 +230,23 @@ func (p *LinuxDOProvider) GetUserInfo(ctx context.Context, token *OAuthToken) (*
 	logger.LogDebug(ctx, "[OAuth-LinuxDO] GetUserInfo: id=%d, username=%s, name=%s, trust_level=%d, active=%v, silenced=%v",
 		linuxdoUser.Id, linuxdoUser.Username, linuxdoUser.Name, linuxdoUser.TrustLevel, linuxdoUser.Active, linuxdoUser.Silenced)
 
-	// Check trust level
-	if linuxdoUser.TrustLevel < common.LinuxDOMinimumTrustLevel {
-		logger.LogWarn(ctx, fmt.Sprintf("[OAuth-LinuxDO] GetUserInfo: trust level too low (required=%d, current=%d)",
-			common.LinuxDOMinimumTrustLevel, linuxdoUser.TrustLevel))
-		return nil, &TrustLevelError{
-			Required: common.LinuxDOMinimumTrustLevel,
-			Current:  linuxdoUser.TrustLevel,
+	if enforce {
+		// Check trust level
+		if linuxdoUser.TrustLevel < common.LinuxDOMinimumTrustLevel {
+			logger.LogWarn(ctx, fmt.Sprintf("[OAuth-LinuxDO] GetUserInfo: trust level too low (required=%d, current=%d)",
+				common.LinuxDOMinimumTrustLevel, linuxdoUser.TrustLevel))
+			return nil, &TrustLevelError{
+				Required: common.LinuxDOMinimumTrustLevel,
+				Current:  linuxdoUser.TrustLevel,
+			}
 		}
-	}
 
-	// Check blacklist (id or username)
-	if common.IsLinuxDOBlacklisted(linuxdoUser.Id, linuxdoUser.Username) {
-		logger.LogWarn(ctx, fmt.Sprintf("[OAuth-LinuxDO] GetUserInfo: user is blacklisted (id=%d, username=%s)",
-			linuxdoUser.Id, linuxdoUser.Username))
-		return nil, &LinuxDOBlacklistedError{}
+		// Check blacklist (id or username)
+		if common.IsLinuxDOBlacklisted(linuxdoUser.Id, linuxdoUser.Username) {
+			logger.LogWarn(ctx, fmt.Sprintf("[OAuth-LinuxDO] GetUserInfo: user is blacklisted (id=%d, username=%s)",
+				linuxdoUser.Id, linuxdoUser.Username))
+			return nil, &LinuxDOBlacklistedError{}
+		}
 	}
 
 	logger.LogDebug(ctx, "[OAuth-LinuxDO] GetUserInfo success: id=%d, username=%s", linuxdoUser.Id, linuxdoUser.Username)

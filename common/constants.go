@@ -111,6 +111,13 @@ var LinuxDOClientId = ""
 var LinuxDOClientSecret = ""
 var LinuxDOMinimumTrustLevel = 0
 
+// LinuxDoRefreshEnabled controls the scheduled background refresh of LinuxDo
+// trust levels. LinuxDoRefreshIntervalHours is the interval in hours (>=1).
+// The names deliberately avoid the Token/Secret/Key suffixes so the admin
+// settings page can read/write them (see controller/option.go hiding rules).
+var LinuxDoRefreshEnabled = true
+var LinuxDoRefreshIntervalHours = 24
+
 // LinuxDOBlacklist lists LinuxDO user ids or usernames that are forbidden from
 // logging in or registering, regardless of trust level.
 var LinuxDOBlacklist = []string{}
