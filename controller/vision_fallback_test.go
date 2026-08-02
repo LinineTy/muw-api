@@ -63,17 +63,19 @@ func TestApplyDescriptions(t *testing.T) {
 		{messageIdx: 2, partIdx: 0}: "[图片描述] a blue square",
 	})
 
-	// The text part stays untouched; the image part becomes a text description.
-	msg1 := req.Messages[1].ParseContent()
-	require.Len(t, msg1, 2)
-	assert.Equal(t, "look at this", msg1[0].Text)
-	assert.Equal(t, "[图片描述] a red circle", msg1[1].Text)
-	assert.Equal(t, dto.ContentTypeText, msg1[1].Type)
+	// 图片全部被描述后，消息退化为纯文本：content 应该是普通字符串，
+	// 保证 StringContent()/ParseContent() 与 OpenAI→Claude 等转换都能正确处理。
+	assert.True(t, req.Messages[1].IsStringContent())
+	assert.Equal(t, "look at this\n[图片描述] a red circle", req.Messages[1].StringContent())
+	assert.True(t, req.Messages[2].IsStringContent())
+	assert.Equal(t, "[图片描述] a blue square", req.Messages[2].StringContent())
 
-	msg2 := req.Messages[2].ParseContent()
-	require.Len(t, msg2, 1)
-	assert.Equal(t, "[图片描述] a blue square", msg2[0].Text)
-
-	// A message without images is untouched.
+	// 无图片的消息保持不变。
 	assert.Equal(t, "plain text", req.Messages[0].StringContent())
+}
+
+func TestAllTextPartsAndJoin(t *testing.T) {
+	assert.True(t, allTextParts([]dto.MediaContent{{Type: dto.ContentTypeText, Text: "a"}}))
+	assert.False(t, allTextParts([]dto.MediaContent{{Type: dto.ContentTypeText, Text: "a"}, {Type: dto.ContentTypeImageURL, ImageUrl: &dto.MessageImageUrl{Url: "x"}}}))
+	assert.Equal(t, "a\nb", joinTextParts([]dto.MediaContent{{Type: dto.ContentTypeText, Text: "a"}, {Type: dto.ContentTypeText, Text: "b"}}))
 }
