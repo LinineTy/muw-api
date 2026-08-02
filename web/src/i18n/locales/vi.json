@@ -3299,6 +3299,7 @@
     "Apply the plan upgrade group on purchase and downgrade on expiry/cancel. Disabled keeps the user group unchanged.": "Áp dụng nhóm nâng cấp khi mua và hạ cấp khi hết hạn/hủy. Khi tắt, nhóm người dùng không đổi.",
     "Plans in the same exclusive group cannot coexist; purchasing another triggers a prorated upgrade/downgrade. Disabled lets users hold several plans.": "Các gói trong cùng nhóm loại trừ không thể cùng tồn tại; mua gói khác sẽ kích hoạt nâng/hạ cấp theo tỷ lệ. Khi tắt, người dùng có thể giữ nhiều gói.",
     "Global cap on how many active subscriptions one user may hold. 0 means unlimited.": "Giới hạn toàn cục về số đăng ký đang hoạt động mỗi người dùng có thể giữ. 0 nghĩa là không giới hạn.",
+    "Tier within the mutual-exclusion group, higher is a higher tier. Used to decide upgrade/downgrade direction.": "Cấp độ gói trong nhóm loại trừ lẫn nhau, càng cao thì cấp càng lớn. Dùng để xác định hướng nâng/hạ cấp.",
     "Payment request failed": "Yêu cầu thanh toán thất bại",
     "Payment return URL": "URL trả về thanh toán",
     "Payment return URL is empty. Create the product without a SuccessURL redirect?": "URL trả về thanh toán đang trống. Tạo sản phẩm mà không có chuyển hướng SuccessURL?",

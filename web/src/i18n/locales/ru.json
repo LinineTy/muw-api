@@ -3299,6 +3299,7 @@
     "Apply the plan upgrade group on purchase and downgrade on expiry/cancel. Disabled keeps the user group unchanged.": "Применяет группу повышения при покупке и понижение при истечении/отмене. При отключении группа пользователя не меняется.",
     "Plans in the same exclusive group cannot coexist; purchasing another triggers a prorated upgrade/downgrade. Disabled lets users hold several plans.": "Тарифы одной взаимоисключающей группы не могут сосуществовать; покупка другого вызывает пропорциональное повышение/понижение. При отключении можно держать несколько тарифов.",
     "Global cap on how many active subscriptions one user may hold. 0 means unlimited.": "Глобальный лимит активных подписок одного пользователя. 0 — без ограничений.",
+    "Tier within the mutual-exclusion group, higher is a higher tier. Used to decide upgrade/downgrade direction.": "Уровень тарифа во взаимоисключающей группе, чем выше — тем выше уровень. Используется для определения направления повышения/понижения.",
     "Payment request failed": "Запрос на оплату не удался",
     "Payment return URL": "URL возврата после оплаты",
     "Payment return URL is empty. Create the product without a SuccessURL redirect?": "URL возврата платежа пуст. Создать продукт без перенаправления SuccessURL?",

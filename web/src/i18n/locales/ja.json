@@ -3299,6 +3299,7 @@
     "Apply the plan upgrade group on purchase and downgrade on expiry/cancel. Disabled keeps the user group unchanged.": "購入時にアップグレードグループ、期限切れ/キャンセル時に降格グループを適用します。無効にするとユーザーグループは変わりません。",
     "Plans in the same exclusive group cannot coexist; purchasing another triggers a prorated upgrade/downgrade. Disabled lets users hold several plans.": "同じ相互排他グループのプランは同時に持てません。別のプランを購入すると按分のアップグレード/ダウングレードが発生します。無効にすると複数プランを保持できます。",
     "Global cap on how many active subscriptions one user may hold. 0 means unlimited.": "1人のユーザーが同時に持てる有効なサブスクリプション数の上限。0は無制限。",
+    "Tier within the mutual-exclusion group, higher is a higher tier. Used to decide upgrade/downgrade direction.": "相互排他グループ内のプラン階層。大きいほど上位です。アップグレード/ダウングレードの方向判定に使われます。",
     "Payment request failed": "支払いリクエストが失敗しました",
     "Payment return URL": "決済完了後のリダイレクトURL",
     "Payment return URL is empty. Create the product without a SuccessURL redirect?": "支払い戻り URL が空です。SuccessURL リダイレクトなしで商品を作成しますか？",
