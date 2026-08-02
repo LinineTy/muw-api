@@ -251,13 +251,32 @@ func InitLogDB() (err error) {
 }
 
 func migrateDB() error {
-	// Migrate price_amount column from float/double to decimal for existing tables
-	migrateSubscriptionPlanPriceAmount()
-	// Migrate model_limits column from varchar to text for existing tables
-	if err := migrateTokenModelLimitsToText(); err != nil {
+	// 版本化迁移：已应用过（版本戳 >= CurrentSchemaVersion）就跳过 AutoMigrate
+	// 与迁移，避免 SQLite 每次启动整表重建；旧库/无戳库走完整迁移并打戳。
+	if err := ensureSchemaMigrationsTable(DB); err != nil {
 		return err
 	}
+	applied, err := appliedSchemaVersion(DB)
+	if err != nil {
+		return err
+	}
+	if shouldSkipMigration(applied) {
+		common.SysLog(fmt.Sprintf("schema already at version %d, skipping migration", applied))
+		return nil
+	}
+	if err := autoMigrateAll(); err != nil {
+		return err
+	}
+	if err := applyPendingMigrations(DB, applied, migrations); err != nil {
+		return err
+	}
+	common.SysLog(fmt.Sprintf("database migrated to schema version %d", CurrentSchemaVersion))
+	return nil
+}
 
+// autoMigrateAll 把全部业务模型 AutoMigrate 到当前 model 定义，并处理
+// SubscriptionPlan 的 SQLite 手工 DDL 分支。
+func autoMigrateAll() error {
 	err := DB.AutoMigrate(
 		&Channel{},
 		&Token{},
@@ -298,12 +317,6 @@ func migrateDB() error {
 	if err != nil {
 		return err
 	}
-	if err := InitializeUserAuthVersions(); err != nil {
-		return err
-	}
-	if err := InitializeExternalIdentityClaims(); err != nil {
-		return err
-	}
 	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
 		if err := ensureSubscriptionPlanTableSQLite(); err != nil {
 			return err
@@ -313,13 +326,21 @@ func migrateDB() error {
 			return err
 		}
 	}
-	if err := ensureQuotaClaimRecordsClean(); err != nil {
-		return err
-	}
-	if err := ensureQuotaClaimLockSeeded(); err != nil {
-		return err
-	}
 	return nil
+}
+
+// ensureSubscriptionPlanRecommendedBackfill 升级兼容：is_recommended 已从 model
+// 移除 gorm default 标签（避免 MySQL/PG 每次启动对 boolean 默认值反复 ALTER）。
+// MySQL/PG 升级时该新列由 AutoMigrate 加列且无 DB 默认值，存量行会是 NULL；
+// 统一回填 0 保证语义一致。SQLite 手工 DDL 带 DEFAULT 0，无 NULL 行，此函数
+// 幂等无副作用。
+func ensureSubscriptionPlanRecommendedBackfill() error {
+	if !DB.Migrator().HasColumn(&SubscriptionPlan{}, "is_recommended") {
+		return nil
+	}
+	return DB.Model(&SubscriptionPlan{}).
+		Where("is_recommended IS NULL").
+		Update("is_recommended", 0).Error
 }
 
 // ensureQuotaClaimLockSeeded 确保额度池全局锁行存在（id=1），供 MySQL/PG 并发领取串行化
@@ -387,88 +408,6 @@ func dropLegacyQuotaClaimColumns() error {
 		return DB.Exec("ALTER TABLE quota_claim_records DROP COLUMN period_key").Error
 	}
 	return DB.Exec("ALTER TABLE quota_claim_records DROP COLUMN pool_id, DROP COLUMN period_key").Error
-}
-
-func migrateDBFast() error {
-
-	var wg sync.WaitGroup
-
-	migrations := []struct {
-		model interface{}
-		name  string
-	}{
-		{&Channel{}, "Channel"},
-		{&Token{}, "Token"},
-		{&User{}, "User"},
-		{&UserSession{}, "UserSession"},
-		{&AuthFlow{}, "AuthFlow"},
-		{&ExternalIdentityClaim{}, "ExternalIdentityClaim"},
-		{&PasskeyCredential{}, "PasskeyCredential"},
-		{&Option{}, "Option"},
-		{&Redemption{}, "Redemption"},
-		{&Ability{}, "Ability"},
-		{&Log{}, "Log"},
-		{&Midjourney{}, "Midjourney"},
-		{&TopUp{}, "TopUp"},
-		{&QuotaData{}, "QuotaData"},
-		{&Task{}, "Task"},
-		{&Model{}, "Model"},
-		{&Vendor{}, "Vendor"},
-		{&PrefillGroup{}, "PrefillGroup"},
-		{&Setup{}, "Setup"},
-		{&TwoFA{}, "TwoFA"},
-		{&TwoFABackupCode{}, "TwoFABackupCode"},
-		{&SubscriptionOrder{}, "SubscriptionOrder"},
-		{&UserSubscription{}, "UserSubscription"},
-		{&SubscriptionPreConsumeRecord{}, "SubscriptionPreConsumeRecord"},
-		{&CustomOAuthProvider{}, "CustomOAuthProvider"},
-		{&UserOAuthBinding{}, "UserOAuthBinding"},
-		{&PerfMetric{}, "PerfMetric"},
-		{&SystemInstance{}, "SystemInstance"},
-		{&SystemTask{}, "SystemTask"},
-		{&SystemTaskLock{}, "SystemTaskLock"},
-		{&ChannelTestRecord{}, "ChannelTestRecord"},
-	}
-	// 动态计算migration数量，确保errChan缓冲区足够大
-	errChan := make(chan error, len(migrations))
-
-	for _, m := range migrations {
-		wg.Add(1)
-		go func(model interface{}, name string) {
-			defer wg.Done()
-			if err := DB.AutoMigrate(model); err != nil {
-				errChan <- fmt.Errorf("failed to migrate %s: %v", name, err)
-			}
-		}(m.model, m.name)
-	}
-
-	// Wait for all migrations to complete
-	wg.Wait()
-	close(errChan)
-
-	// Check for any errors
-	for err := range errChan {
-		if err != nil {
-			return err
-		}
-	}
-	if err := InitializeUserAuthVersions(); err != nil {
-		return err
-	}
-	if err := InitializeExternalIdentityClaims(); err != nil {
-		return err
-	}
-	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
-		if err := ensureSubscriptionPlanTableSQLite(); err != nil {
-			return err
-		}
-	} else {
-		if err := DB.AutoMigrate(&SubscriptionPlan{}); err != nil {
-			return err
-		}
-	}
-	common.SysLog("database migrated")
-	return nil
 }
 
 func migrateLOGDB() error {
