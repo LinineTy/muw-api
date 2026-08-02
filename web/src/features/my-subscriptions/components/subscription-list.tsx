@@ -94,20 +94,17 @@ function SubscriptionItem({
     totalAmount > 0 ? Math.max(0, totalAmount - usedAmount) : 0
   const remainDays = getRemainingDays(sub)
   const usagePercent = getUsagePercent(sub)
-  const nextResetTime = subscription?.next_reset_time ?? 0
+  const nextResetTime = subscription?.next_cycle_reset_at ?? 0
   const { isActive, isCancelled } = classifySubscriptionStatus(sub)
 
-  const hasCycleLimit = Number(plan?.reset_amount_limit || 0) > 0
-  const cycleStartUsed = Number(subscription?.cycle_start_used || 0)
-  const cycleUsed = Math.max(0, usedAmount - cycleStartUsed)
+  // 独立额度计数器：周期/周/月各自累计，不由 amount_used 快照推演。
   const cycleLimit = Number(plan?.reset_amount_limit || 0)
+  const cycleUsed = Number(subscription?.cycle_used || 0)
+  const hasCycleLimit = cycleLimit > 0
   const weekLimit = Number(plan?.weekly_amount_limit || 0)
   const monthLimit = Number(plan?.monthly_amount_limit || 0)
-  const weekUsed = Math.max(0, usedAmount - Number(subscription?.week_start_used || 0))
-  const monthUsed = Math.max(
-    0,
-    usedAmount - Number(subscription?.month_start_used || 0)
-  )
+  const weekUsed = Number(subscription?.week_used || 0)
+  const monthUsed = Number(subscription?.month_used || 0)
 
   let statusBadge = (
     <StatusBadge label={t('Expired')} variant='neutral' copyable={false} />

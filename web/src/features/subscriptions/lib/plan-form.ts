@@ -45,6 +45,7 @@ export function getPlanFormSchema(t: TFunction) {
     max_cumulative_days: z.coerce.number().min(0),
     exclusive_group: z.string().optional(),
     allowed_groups: z.array(z.string()).optional(),
+    priority: z.coerce.number().min(0),
     enabled: z.boolean(),
     sort_order: z.coerce.number(),
     is_recommended: z.boolean(),
@@ -86,6 +87,7 @@ export const PLAN_FORM_DEFAULTS: PlanFormValues = {
   max_cumulative_days: 0,
   exclusive_group: '',
   allowed_groups: [],
+  priority: 0,
   enabled: true,
   sort_order: 0,
   is_recommended: false,
@@ -113,6 +115,7 @@ export function planToFormValues(plan: SubscriptionPlan): PlanFormValues {
     max_cumulative_days: Math.round(Number(plan.max_cumulative_seconds || 0) / 86400),
     exclusive_group: plan.exclusive_group || '',
     allowed_groups: parseAllowedGroups(plan.allowed_groups),
+    priority: Number(plan.priority || 0),
     enabled: plan.enabled !== false,
     sort_order: Number(plan.sort_order || 0),
     is_recommended: plan.is_recommended === true,
@@ -143,7 +146,12 @@ export function formValuesToPlanPayload(values: PlanFormValues): PlanPayload {
       monthly_amount_limit: parseQuotaFromDollars(Number(values.monthly_amount_limit || 0)),
       max_cumulative_seconds: Math.round(Number(values.max_cumulative_days || 0)) * 86400,
       exclusive_group: values.exclusive_group?.trim() || '',
-      allowed_groups: JSON.stringify(values.allowed_groups || []),
+      // 空选择序列化为空串（而非 "[]"），保持「空 = 全部组允许」的后端语义。
+      allowed_groups:
+        values.allowed_groups && values.allowed_groups.length > 0
+          ? JSON.stringify(values.allowed_groups)
+          : '',
+      priority: Number(values.priority || 0),
       sort_order: Number(values.sort_order || 0),
       max_purchase_per_user: Number(values.max_purchase_per_user || 0),
       total_amount: parseQuotaFromDollars(Number(values.total_amount || 0)),

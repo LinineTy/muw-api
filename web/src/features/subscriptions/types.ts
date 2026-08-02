@@ -43,6 +43,8 @@ export const subscriptionPlanSchema = z.object({
   enabled: z.boolean(),
   sort_order: z.number(),
   is_recommended: z.boolean().optional().default(false),
+  // Tier priority within a mutual-exclusion group (higher = higher tier).
+  priority: z.number().optional().default(0),
   allow_balance_pay: z.boolean().optional().default(true),
   allow_wallet_overflow: z.boolean().optional().default(true),
   max_purchase_per_user: z.number(),
@@ -71,17 +73,20 @@ export const userSubscriptionSchema = z.object({
   end_time: z.number(),
   amount_total: z.number(),
   amount_used: z.number(),
-  next_reset_time: z.number().optional(),
   auto_renew: z.boolean().optional().default(false),
   auto_renew_failed: z.boolean().optional().default(false),
   priority: z.number().optional().default(0),
   cancel_at_end: z.boolean().optional().default(false),
-  cycle_start_used: z.number().optional().default(0),
+  // Independent quota window counters (no snapshot derivation).
+  cycle_start_at: z.number().optional().default(0),
+  cycle_used: z.number().optional().default(0),
+  next_cycle_reset_at: z.number().optional().default(0),
   week_start_at: z.number().optional().default(0),
-  week_start_used: z.number().optional().default(0),
+  week_used: z.number().optional().default(0),
   month_start_at: z.number().optional().default(0),
-  month_start_used: z.number().optional().default(0),
+  month_used: z.number().optional().default(0),
   exclusive_group: z.string().optional().default(''),
+  tier_priority: z.number().optional().default(0),
 })
 
 export type UserSubscription = z.infer<typeof userSubscriptionSchema>
