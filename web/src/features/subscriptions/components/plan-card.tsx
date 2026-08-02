@@ -150,10 +150,10 @@ function PlanCardComponent({
         </div>
       </div>
 
-      {/* 底线：优先级（仅卡片视图展示） */}
+      {/* 底线：套餐档位（仅卡片视图展示） */}
       <div className='flex items-center gap-2 text-xs'>
-        <span className={labelClass}>{t('Priority')}</span>
-        <span className='text-muted-foreground'>{plan.sort_order}</span>
+        <span className={labelClass}>{t('Plan Tier')}</span>
+        <span className='text-muted-foreground'>{plan.priority ?? 0}</span>
       </div>
     </div>
   )

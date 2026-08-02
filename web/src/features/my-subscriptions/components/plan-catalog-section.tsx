@@ -122,6 +122,36 @@ export function PlanCatalogSection() {
     [allSubscriptions, planMap]
   )
 
+  // 当前已订阅的本套餐（按 plan_id 匹配活跃订阅，与互斥组无关）。
+  const findActiveSubByPlanId = useCallback(
+    (planId?: number) => {
+      if (!planId) return null
+      for (const s of allSubscriptions) {
+        const sub = s.subscription
+        if (!sub || sub.plan_id !== planId) continue
+        if (!classifySubscriptionStatus(s).isActive) continue
+        return { sub, plan: planMap.get(sub.plan_id) || null }
+      }
+      return null
+    },
+    [allSubscriptions, planMap]
+  )
+
+  // 档位比较：优先比套餐 Priority，相等回退比价格。>0 = target 更高档。
+  const comparePlanTier = useCallback(
+    (target?: SubscriptionPlan | null, current?: SubscriptionPlan | null) => {
+      if (!target || !current) return 0
+      const tp = Number(target.priority || 0)
+      const cp = Number(current.priority || 0)
+      if (tp !== cp) return tp > cp ? 1 : -1
+      const ta = Number(target.price_amount || 0)
+      const ca = Number(current.price_amount || 0)
+      if (ta !== ca) return ta > ca ? 1 : -1
+      return 0
+    },
+    []
+  )
+
   const switchInfo = switchTarget
     ? findSameGroupSub(switchTarget.plan)
     : null
@@ -151,6 +181,11 @@ export function PlanCatalogSection() {
           const groupRestricted =
             allowedGroups.length > 0 && !allowedGroups.includes(userGroup)
           const sameGroupActive = findSameGroupSub(plan)
+          const activeSubByPlan = findActiveSubByPlanId(plan.id)
+          const isCurrent = !!activeSubByPlan
+          const tierDirection = sameGroupActive
+            ? comparePlanTier(plan, sameGroupActive.oldPlan)
+            : 0
 
           const weekLimit = Number(plan.weekly_amount_limit || 0)
           const monthLimit = Number(plan.monthly_amount_limit || 0)
@@ -215,6 +250,15 @@ export function PlanCatalogSection() {
                       {t('Recommended')}
                     </StatusBadge>
                   )}
+                  {isCurrent && (
+                    <StatusBadge
+                      variant='success'
+                      copyable={false}
+                      className='shrink-0'
+                    >
+                      {t('Current')}
+                    </StatusBadge>
+                  )}
                 </div>
                 {plan.subtitle && (
                   <span className='text-muted-foreground truncate text-xs'>
@@ -269,6 +313,10 @@ export function PlanCatalogSection() {
                       {allowedGroups.join(', ')}
                     </TooltipContent>
                   </Tooltip>
+                ) : isCurrent ? (
+                  <Button variant='outline' className='w-full' disabled>
+                    {t('Subscribed')}
+                  </Button>
                 ) : sameGroupActive ? (
                   <Button
                     variant='outline'
@@ -276,7 +324,11 @@ export function PlanCatalogSection() {
                     onClick={() => setSwitchTarget(p)}
                   >
                     <ArrowLeftRight className='size-4' />
-                    {t('Upgrade / Downgrade')}
+                    {tierDirection > 0
+                      ? t('Upgrade')
+                      : tierDirection < 0
+                        ? t('Downgrade')
+                        : t('Upgrade / Downgrade')}
                   </Button>
                 ) : (
                   <Button

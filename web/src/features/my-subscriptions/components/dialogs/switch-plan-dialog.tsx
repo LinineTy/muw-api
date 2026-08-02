@@ -72,16 +72,28 @@ export function SwitchPlanDialog(props: Props) {
   const remainingValue = calcSubscriptionRemainingValue(oldSub, oldPlan)
   const diff = Number(plan.price_amount || 0) - remainingValue
   const diffAbs = Math.abs(diff)
-  const isUpgrade = diff > 0.005
-  const isDowngrade = diff < -0.005
+  // 升降级方向按套餐档位判定（Priority → 价格兜底），与后端 comparePlanTier 一致。
+  const tierDir =
+    Number(plan.priority || 0) !== Number(oldPlan.priority || 0)
+      ? Number(plan.priority || 0) > Number(oldPlan.priority || 0)
+        ? 1
+        : -1
+      : Number(plan.price_amount || 0) > Number(oldPlan.price_amount || 0)
+        ? 1
+        : Number(plan.price_amount || 0) < Number(oldPlan.price_amount || 0)
+          ? -1
+          : 0
+  const isUpgrade = tierDir > 0
+  const isDowngrade = tierDir < 0
+  // 金额仍按价格差额：diff>0 补差额，diff<0 退差额。
+  const payAmount = diff > 0.005
+  const refundAmount = diff < -0.005
 
   const quotaPerUnit =
     currency?.quotaPerUnit && currency.quotaPerUnit > 0
       ? currency.quotaPerUnit
       : DEFAULT_CURRENCY_CONFIG.quotaPerUnit
-  const chargeQuota = isUpgrade
-    ? Math.ceil(diff * quotaPerUnit)
-    : 0
+  const chargeQuota = payAmount ? Math.ceil(diff * quotaPerUnit) : 0
   const available = Math.max(0, Number(userQuota || 0))
 
   const handleConfirm = async () => {
@@ -142,18 +154,18 @@ export function SwitchPlanDialog(props: Props) {
           </div>
           <div className='flex items-center justify-between font-medium'>
             <span className='text-muted-foreground'>
-              {isUpgrade ? t('Amount to Pay') : isDowngrade ? t('Refund Amount') : t('Difference')}
+              {payAmount ? t('Amount to Pay') : refundAmount ? t('Refund Amount') : t('Difference')}
             </span>
             <span
               className={
-                isUpgrade
+                payAmount
                   ? 'text-destructive'
-                  : isDowngrade
+                  : refundAmount
                     ? 'text-primary'
                     : undefined
               }
             >
-              {isUpgrade ? '+' : isDowngrade ? '-' : ''}$
+              {payAmount ? '+' : refundAmount ? '-' : ''}$
               {diffAbs.toFixed(2)}
             </span>
           </div>
@@ -169,7 +181,7 @@ export function SwitchPlanDialog(props: Props) {
           </p>
         </div>
 
-        {isUpgrade && (
+        {payAmount && (
           <div className='flex flex-col gap-2 rounded-md border p-3 text-xs'>
             <div className='flex items-center justify-between'>
               <span className='text-muted-foreground'>{t('Required')}</span>
@@ -191,7 +203,7 @@ export function SwitchPlanDialog(props: Props) {
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={paying || (isUpgrade && available < chargeQuota)}
+            disabled={paying || (payAmount && available < chargeQuota)}
           >
             {paying ? t('Saving...') : t('Confirm Switch')}
           </Button>

@@ -24,6 +24,7 @@ import { GeminiSettingsCard } from './gemini-settings-card'
 import { GlobalSettingsCard } from './global-settings-card'
 import { GrokSettingsCard } from './grok-settings-card'
 import { RoutingReliabilitySection } from './routing-reliability-section'
+import { SubscriptionSettingsSection } from './subscription-settings-section'
 
 function formatJsonForEditor(value: string, fallback: string) {
   const raw = (value ?? '').toString().trim()
@@ -166,6 +167,26 @@ const MODELS_SECTIONS = [
             settings['channel_affinity_setting.default_ttl_seconds'],
           'channel_affinity_setting.rules':
             settings['channel_affinity_setting.rules'],
+        }}
+      />
+    ),
+  },
+  {
+    id: 'subscription',
+    titleKey: 'Subscription',
+    build: (settings: ModelSettings) => (
+      <SubscriptionSettingsSection
+        defaultValues={{
+          SubscriptionAutoRenewEnabled:
+            settings.SubscriptionAutoRenewEnabled ?? true,
+          SubscriptionPriorityEnabled:
+            settings.SubscriptionPriorityEnabled ?? true,
+          SubscriptionGroupUpgradeEnabled:
+            settings.SubscriptionGroupUpgradeEnabled ?? true,
+          SubscriptionExclusiveGroupEnabled:
+            settings.SubscriptionExclusiveGroupEnabled ?? true,
+          SubscriptionMaxSimultaneous:
+            settings.SubscriptionMaxSimultaneous ?? 0,
         }}
       />
     ),

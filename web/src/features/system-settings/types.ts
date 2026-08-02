@@ -234,6 +234,11 @@ export type ModelSettings = {
   'channel_affinity_setting.max_entries': number
   'channel_affinity_setting.default_ttl_seconds': number
   'channel_affinity_setting.rules': string
+  SubscriptionAutoRenewEnabled: boolean
+  SubscriptionPriorityEnabled: boolean
+  SubscriptionGroupUpgradeEnabled: boolean
+  SubscriptionExclusiveGroupEnabled: boolean
+  SubscriptionMaxSimultaneous: number
 }
 
 export type BillingSettings = {
