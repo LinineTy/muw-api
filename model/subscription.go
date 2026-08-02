@@ -2127,7 +2127,7 @@ func RefundSubscriptionPreConsume(requestId string) error {
 			record.Status = "refunded"
 			return tx.Save(&record).Error
 		}
-		if err := PostConsumeUserSubscriptionDelta(record.UserSubscriptionId, -record.PreConsumed); err != nil {
+		if err := PostConsumeUserSubscriptionDelta(tx, record.UserSubscriptionId, -record.PreConsumed); err != nil {
 			return err
 		}
 		record.Status = "refunded"
@@ -2218,14 +2218,21 @@ func GetSubscriptionPlanInfoByUserSubscriptionId(userSubscriptionId int) (*Subsc
 }
 
 // Update subscription used amount by delta (positive consume more, negative refund).
-func PostConsumeUserSubscriptionDelta(userSubscriptionId int, delta int64) error {
+// db 指定执行事务的连接：传 nil 使用全局 DB；调用方若已处于事务内，应传入外层 tx，
+// 让 delta 更新作为 savepoint 嵌套在同一个连接上，保证与事务一起提交/回滚。切勿在
+// 外层事务中再对全局 DB 另开事务（不同连接）：SQLite+WAL 下会因读快照过期触发
+// SQLITE_BUSY_SNAPSHOT（database is locked），MySQL 下则破坏外层事务原子性。
+func PostConsumeUserSubscriptionDelta(db *gorm.DB, userSubscriptionId int, delta int64) error {
 	if userSubscriptionId <= 0 {
 		return errors.New("invalid userSubscriptionId")
 	}
 	if delta == 0 {
 		return nil
 	}
-	return DB.Transaction(func(tx *gorm.DB) error {
+	if db == nil {
+		db = DB
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
 		var sub UserSubscription
 		if err := lockForUpdate(tx).
 			Where("id = ?", userSubscriptionId).
