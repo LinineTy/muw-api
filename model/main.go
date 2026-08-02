@@ -256,6 +256,12 @@ func migrateDB() error {
 	if err := ensureSchemaMigrationsTable(DB); err != nil {
 		return err
 	}
+	// SQLite 的 subscription_plans 走手工 DDL（AutoMigrate 不管理它），且列补齐是
+	// 幂等的：每次启动都必须执行，不能放在会被 skip 跳过的 autoMigrateAll 里——
+	// 否则已到最新版本的库永远不会补上新增列（如 priority）。
+	if err := ensureSubscriptionPlanTableSQLite(); err != nil {
+		return err
+	}
 	applied, err := appliedSchemaVersion(DB)
 	if err != nil {
 		return err
@@ -317,11 +323,9 @@ func autoMigrateAll() error {
 	if err != nil {
 		return err
 	}
-	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
-		if err := ensureSubscriptionPlanTableSQLite(); err != nil {
-			return err
-		}
-	} else {
+	// 注意：subscription_plans 的 SQLite 手工 DDL 在 migrateDB 每次启动时执行
+	// （见 migrateDB），此处不再重复。非 SQLite 走 AutoMigrate 管理该表。
+	if !common.UsingMainDatabase(common.DatabaseTypeSQLite) {
 		if err := DB.AutoMigrate(&SubscriptionPlan{}); err != nil {
 			return err
 		}
@@ -528,6 +532,7 @@ func ensureSubscriptionPlanTableSQLite() error {
 ` + "`custom_seconds`" + ` bigint NOT NULL DEFAULT 0,
 ` + "`enabled`" + ` numeric DEFAULT 1,
 ` + "`sort_order`" + ` integer DEFAULT 0,
+` + "`priority`" + ` integer NOT NULL DEFAULT 0,
 ` + "`is_recommended`" + ` numeric DEFAULT 0,
 ` + "`allow_balance_pay`" + ` numeric DEFAULT 1,
 ` + "`allow_wallet_overflow`" + ` numeric DEFAULT 1,
@@ -569,6 +574,7 @@ PRIMARY KEY (` + "`id`" + `)
 		{Name: "custom_seconds", DDL: "`custom_seconds` bigint NOT NULL DEFAULT 0"},
 		{Name: "enabled", DDL: "`enabled` numeric DEFAULT 1"},
 		{Name: "sort_order", DDL: "`sort_order` integer DEFAULT 0"},
+		{Name: "priority", DDL: "`priority` integer NOT NULL DEFAULT 0"},
 		{Name: "is_recommended", DDL: "`is_recommended` numeric DEFAULT 0"},
 		{Name: "allow_balance_pay", DDL: "`allow_balance_pay` numeric DEFAULT 1"},
 		{Name: "allow_wallet_overflow", DDL: "`allow_wallet_overflow` numeric DEFAULT 1"},
