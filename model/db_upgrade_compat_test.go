@@ -93,7 +93,7 @@ func TestAutoMigrateUpgradesLegacyUserSubscriptionsAndOrders(t *testing.T) {
 
 	require.NoError(t, db.AutoMigrate(&UserSubscription{}, &SubscriptionOrder{}))
 
-	for _, col := range []string{"exclusive_group", "auto_renew", "auto_renew_failed", "cycle_start_used", "week_start_at", "week_start_used", "month_start_at", "month_start_used", "priority", "cancel_at_end"} {
+	for _, col := range []string{"exclusive_group", "auto_renew", "auto_renew_failed", "cycle_start_at", "cycle_used", "next_cycle_reset_at", "week_start_at", "week_used", "month_start_at", "month_used", "priority", "cancel_at_end", "tier_priority"} {
 		assertHasColumn(t, db, &UserSubscription{}, col)
 	}
 	assertHasColumn(t, db, &SubscriptionOrder{}, "extend_subscription_id")

@@ -75,3 +75,17 @@
 **历史痛点已解决**：
 - **SQLite 每次启动整表重建**（glebarez 驱动对 `unique;index` 列判断不一致导致）：已最新库跳过 AutoMigrate，不再重建。实测同一 SQLite 库连启两次，第二次 0 条 DDL。
 - **升级路径不明确**：旧库首次跑新代码走「AutoMigrate 补结构 + v1 基线迁移（吸收此前全部专项迁移）→ 打 v1 戳」，之后即跳过。
+
+### ⚠️ v2 迁移：订阅功能重设计（破坏性清空）
+
+从 v2 起订阅模型重构（独立额度计数器 + 套餐档位 Priority + 功能开关）。**升级到 v2 会一次性清空全部订阅数据**：`subscription_plans`、`user_subscriptions`、`subscription_orders`、`subscription_pre_consume_records` 四张表的数据全部删除（表结构由 AutoMigrate 升级为新版）。
+
+- 升级后需**重新配置套餐**，并为受影响用户**重新分配等额新套餐**（此为有意的产品决策，不做旧数据兼容）。
+- 迁移在启动时自动执行一次（日志含 `[WARN] 订阅功能重设计迁移已执行...`），之后由 v2 版本戳防止重复。
+- `user_subscriptions` 新增 `cycle_start_at`/`cycle_used`/`next_cycle_reset_at`/`week_used`/`month_used`/`tier_priority`；旧的 `cycle_start_used`/`week_start_used`/`month_start_used`/`last_reset_time` 等列保留为孤儿列，不参与运行。
+
+**未来开发流程（改 model 时）**：
+1. 修改 `model/` 下的结构体。
+2. **递增 `CurrentSchemaVersion`**（必须，否则生产已最新库会跳过、新列不建）。
+3. 如需数据转换/特殊适配（AutoMigrate 做不了的结构改造、存量数据回填等），在 `model/schema_migration.go` 的 `migrations` 里新增一条 `Migration{Version: N, Name: "...", Up: ...}`，`Up` 里用传入的 `db` 执行。
+4. 忘了递增的兜底：本地 `DEBUG=true` 启动会强制 AutoMigrate 并暴露结构差异。

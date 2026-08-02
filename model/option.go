@@ -146,6 +146,11 @@ func InitOptionMap() {
 	common.OptionMap["AutomaticDisableStatusCodes"] = operation_setting.AutomaticDisableStatusCodesToString()
 	common.OptionMap["AutomaticRetryStatusCodes"] = operation_setting.AutomaticRetryStatusCodesToString()
 	common.OptionMap["ExposeRatioEnabled"] = strconv.FormatBool(ratio_setting.IsExposeRatioEnabled())
+	common.OptionMap["SubscriptionMaxSimultaneous"] = strconv.Itoa(common.SubscriptionMaxSimultaneous)
+	common.OptionMap["SubscriptionAutoRenewEnabled"] = strconv.FormatBool(common.SubscriptionAutoRenewEnabled)
+	common.OptionMap["SubscriptionPriorityEnabled"] = strconv.FormatBool(common.SubscriptionPriorityEnabled)
+	common.OptionMap["SubscriptionGroupUpgradeEnabled"] = strconv.FormatBool(common.SubscriptionGroupUpgradeEnabled)
+	common.OptionMap["SubscriptionExclusiveGroupEnabled"] = strconv.FormatBool(common.SubscriptionExclusiveGroupEnabled)
 
 	// 自动添加所有注册的模型配置
 	modelConfigs := config.GlobalConfig.ExportAllConfigs()
@@ -358,6 +363,14 @@ func updateOptionMap(key string, value string) (err error) {
 			setting.DefaultUseAutoGroup = boolValue
 		case "ExposeRatioEnabled":
 			ratio_setting.SetExposeRatioEnabled(boolValue)
+		case "SubscriptionAutoRenewEnabled":
+			common.SubscriptionAutoRenewEnabled = boolValue
+		case "SubscriptionPriorityEnabled":
+			common.SubscriptionPriorityEnabled = boolValue
+		case "SubscriptionGroupUpgradeEnabled":
+			common.SubscriptionGroupUpgradeEnabled = boolValue
+		case "SubscriptionExclusiveGroupEnabled":
+			common.SubscriptionExclusiveGroupEnabled = boolValue
 		}
 	}
 	switch key {
@@ -451,6 +464,8 @@ func updateOptionMap(key string, value string) (err error) {
 		common.QuotaRemindThreshold, _ = strconv.Atoi(value)
 	case "PreConsumedQuota":
 		common.PreConsumedQuota, _ = strconv.Atoi(value)
+	case "SubscriptionMaxSimultaneous":
+		common.SubscriptionMaxSimultaneous, _ = strconv.Atoi(value)
 	case "ModelRequestRateLimitCount":
 		setting.ModelRequestRateLimitCount, _ = strconv.Atoi(value)
 	case "ModelRequestRateLimitDurationMinutes":

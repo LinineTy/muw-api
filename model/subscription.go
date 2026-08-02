@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -163,6 +164,11 @@ type SubscriptionPlan struct {
 	Enabled   bool `json:"enabled"`
 	SortOrder int  `json:"sort_order" gorm:"type:int;default:0"`
 
+	// Tier priority within a mutual-exclusion group (higher = higher tier). Used to
+	// decide upgrade/downgrade direction when switching between plans in the same
+	// ExclusiveGroup; equal priorities fall back to PriceAmount comparison.
+	Priority int `json:"priority" gorm:"type:int;not null;default:0"`
+
 	// Recommended plan shown with a highlighted badge on the user-facing catalog
 	IsRecommended bool `json:"is_recommended"`
 
@@ -285,6 +291,10 @@ type UserSubscription struct {
 	UserId int `json:"user_id" gorm:"index;index:idx_user_sub_active,priority:1"`
 	PlanId int `json:"plan_id" gorm:"index"`
 
+	// Quota windows use independent monotonic counters — no snapshot derivation.
+	// Each counter is only reset by its own window boundary, so the calendar
+	// week/month caps survive the subscription-relative reset period and no cap
+	// silently disables the others.
 	AmountTotal int64 `json:"amount_total" gorm:"type:bigint;not null;default:0"`
 	AmountUsed  int64 `json:"amount_used" gorm:"type:bigint;not null;default:0"`
 
@@ -292,10 +302,18 @@ type UserSubscription struct {
 	EndTime   int64  `json:"end_time" gorm:"bigint;index;index:idx_user_sub_active,priority:3"`
 	Status    string `json:"status" gorm:"type:varchar(32);index;index:idx_user_sub_active,priority:2"` // active/expired/cancelled
 
-	Source string `json:"source" gorm:"type:varchar(32);default:'order'"` // order/admin
+	Source string `json:"source" gorm:"type:varchar(32);default:'order'"` // order/admin/balance
 
-	LastResetTime int64 `json:"last_reset_time" gorm:"type:bigint;default:0"`
-	NextResetTime int64 `json:"next_reset_time" gorm:"type:bigint;default:0;index"`
+	// Reset-cycle window (only meaningful when the plan has a reset period).
+	CycleStartAt     int64 `json:"cycle_start_at" gorm:"type:bigint;not null;default:0"`
+	CycleUsed        int64 `json:"cycle_used" gorm:"type:bigint;not null;default:0"`
+	NextCycleResetAt int64 `json:"next_cycle_reset_at" gorm:"type:bigint;not null;default:0;index"`
+
+	// Natural calendar week/month windows (only meaningful when the plan caps them).
+	WeekStartAt  int64 `json:"week_start_at" gorm:"type:bigint;not null;default:0"`
+	WeekUsed     int64 `json:"week_used" gorm:"type:bigint;not null;default:0"`
+	MonthStartAt int64 `json:"month_start_at" gorm:"type:bigint;not null;default:0"`
+	MonthUsed    int64 `json:"month_used" gorm:"type:bigint;not null;default:0"`
 
 	UpgradeGroup  string `json:"upgrade_group" gorm:"type:varchar(64);default:''"`
 	PrevUserGroup string `json:"prev_user_group" gorm:"type:varchar(64);default:''"`
@@ -312,17 +330,7 @@ type UserSubscription struct {
 	// Set when the last automatic renewal attempt failed (e.g. insufficient balance).
 	AutoRenewFailed bool `json:"auto_renew_failed"`
 
-	// Cumulative usage at the start of the current reset cycle (only meaningful when
-	// the plan has a ResetAmountLimit; otherwise reset zeroes AmountUsed as before).
-	CycleStartUsed int64 `json:"cycle_start_used" gorm:"type:bigint;not null;default:0"`
-
-	// Natural calendar week/month cycle tracking for weekly/monthly caps.
-	WeekStartAt   int64 `json:"week_start_at" gorm:"type:bigint;not null;default:0"`
-	WeekStartUsed int64 `json:"week_start_used" gorm:"type:bigint;not null;default:0"`
-	MonthStartAt   int64 `json:"month_start_at" gorm:"type:bigint;not null;default:0"`
-	MonthStartUsed int64 `json:"month_start_used" gorm:"type:bigint;not null;default:0"`
-
-	// Consumption priority, lower value is consumed first.
+	// Consumption priority, smaller value is consumed first.
 	Priority int `json:"priority" gorm:"type:int;not null;default:0"`
 
 	// Cancel at the end of the current period: keeps the subscription active until
@@ -332,6 +340,10 @@ type UserSubscription struct {
 
 	// Mutual exclusion group snapshot from plan (empty = not exclusive).
 	ExclusiveGroup string `json:"exclusive_group" gorm:"type:varchar(64);default:''"`
+
+	// Plan tier-priority snapshot at purchase, so upgrade/downgrade direction stays
+	// stable even if the plan's Priority is edited later.
+	TierPriority int `json:"tier_priority" gorm:"type:int;not null;default:0"`
 
 	CreatedAt int64 `json:"created_at" gorm:"bigint"`
 	UpdatedAt int64 `json:"updated_at" gorm:"bigint"`
@@ -412,24 +424,43 @@ func monthStartUnix(t time.Time) int64 {
 	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.Location()).Unix()
 }
 
-// syncNaturalCycleStart advances the calendar week/month cycle tracking for a
-// subscription to the current period, returning whether any snapshot changed. The
-// caller must persist the subscription (e.g. via tx.Save) when it returns true,
-// otherwise the weekly/monthly caps could be bypassed by never landing on a
-// successful pre-consume path.
-func syncNaturalCycleStart(sub *UserSubscription, now int64) bool {
+// advanceSubscriptionWindows advances the reset-cycle and calendar week/month
+// windows for a subscription to now, resetting each independent usage counter at
+// its own boundary. Returns whether any window changed; the caller must persist
+// the subscription when it returns true, otherwise stale counters could bypass
+// the caps. The calendar week/month counters survive the subscription-relative
+// reset period because they are never reset here except by their own rollover.
+func advanceSubscriptionWindows(sub *UserSubscription, plan *SubscriptionPlan, now int64) bool {
+	if sub == nil || plan == nil {
+		return false
+	}
 	changed := false
+	if period := NormalizeResetPeriod(plan.QuotaResetPeriod); period != SubscriptionResetNever {
+		if sub.NextCycleResetAt > 0 && sub.NextCycleResetAt <= now {
+			sub.CycleUsed = 0
+			sub.CycleStartAt = now
+			sub.NextCycleResetAt = calcNextResetTime(time.Unix(now, 0), plan, sub.EndTime)
+			changed = true
+		} else if sub.NextCycleResetAt == 0 {
+			// Plan has a reset period but the window was never armed (fresh or
+			// legacy row): grant a full cycle from now.
+			sub.CycleUsed = 0
+			sub.CycleStartAt = now
+			sub.NextCycleResetAt = calcNextResetTime(time.Unix(now, 0), plan, sub.EndTime)
+			changed = true
+		}
+	}
 	nowT := time.Unix(now, 0)
 	weekStart := weekStartUnix(nowT)
 	if sub.WeekStartAt < weekStart {
 		sub.WeekStartAt = weekStart
-		sub.WeekStartUsed = sub.AmountUsed
+		sub.WeekUsed = 0
 		changed = true
 	}
 	monthStart := monthStartUnix(nowT)
 	if sub.MonthStartAt < monthStart {
 		sub.MonthStartAt = monthStart
-		sub.MonthStartUsed = sub.AmountUsed
+		sub.MonthUsed = 0
 		changed = true
 	}
 	return changed
@@ -535,6 +566,9 @@ func downgradeUserGroupForSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now
 	if tx == nil || sub == nil {
 		return "", errors.New("invalid downgrade args")
 	}
+	if !common.SubscriptionGroupUpgradeEnabled {
+		return "", nil
+	}
 	downgradeGroup := strings.TrimSpace(sub.DowngradeGroup)
 	upgradeGroup := strings.TrimSpace(sub.UpgradeGroup)
 	// Nothing to do if neither an explicit downgrade target nor an upgrade snapshot exists.
@@ -596,7 +630,8 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 			return nil, errors.New("已达到该套餐购买上限")
 		}
 	}
-	nowUnix := GetDBTimestamp()
+	nowUnix := common.GetTimestamp() // app time: GetDBTimestamp() would need a second
+	// connection, deadlocking when this runs inside a transaction on SQLite.
 	now := time.Unix(nowUnix, 0)
 	endUnix, err := calcPlanEndTime(now, plan)
 	if err != nil {
@@ -606,23 +641,26 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 		return nil, errors.New("该套餐单次最长时长超过累计上限")
 	}
 	resetBase := now
-	nextReset := calcNextResetTime(resetBase, plan, endUnix)
-	lastReset := int64(0)
-	if nextReset > 0 {
-		lastReset = now.Unix()
+	nextCycleReset := calcNextResetTime(resetBase, plan, endUnix)
+	cycleStartAt := int64(0)
+	if nextCycleReset > 0 {
+		cycleStartAt = now.Unix()
 	}
-	upgradeGroup := strings.TrimSpace(plan.UpgradeGroup)
+	upgradeGroup := ""
 	prevGroup := ""
-	if upgradeGroup != "" {
-		currentGroup, err := getUserGroupByIdTx(tx, userId)
-		if err != nil {
-			return nil, err
-		}
-		if currentGroup != upgradeGroup {
-			prevGroup = currentGroup
-			if err := tx.Model(&User{}).Where("id = ?", userId).
-				Update("group", upgradeGroup).Error; err != nil {
+	if common.SubscriptionGroupUpgradeEnabled {
+		upgradeGroup = strings.TrimSpace(plan.UpgradeGroup)
+		if upgradeGroup != "" {
+			currentGroup, err := getUserGroupByIdTx(tx, userId)
+			if err != nil {
 				return nil, err
+			}
+			if currentGroup != upgradeGroup {
+				prevGroup = currentGroup
+				if err := tx.Model(&User{}).Where("id = ?", userId).
+					Update("group", upgradeGroup).Error; err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -630,27 +668,31 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 	if plan.AllowWalletOverflow != nil {
 		allowWalletOverflow = *plan.AllowWalletOverflow
 	}
+	nowUnixAtCreate := now.Unix()
 	sub := &UserSubscription{
-		UserId:              userId,
-		PlanId:              plan.Id,
-		AmountTotal:         plan.TotalAmount,
-		AmountUsed:          0,
-		StartTime:           now.Unix(),
-		EndTime:             endUnix,
-		Status:              "active",
-		Source:              source,
-		LastResetTime:       lastReset,
-		NextResetTime:       nextReset,
-		UpgradeGroup:        upgradeGroup,
-		PrevUserGroup:       prevGroup,
-		DowngradeGroup:      strings.TrimSpace(plan.DowngradeGroup),
+		UserId:           userId,
+		PlanId:           plan.Id,
+		AmountTotal:      plan.TotalAmount,
+		AmountUsed:       0,
+		StartTime:        nowUnixAtCreate,
+		EndTime:          endUnix,
+		Status:           "active",
+		Source:           source,
+		CycleStartAt:     cycleStartAt,
+		CycleUsed:        0,
+		NextCycleResetAt: nextCycleReset,
+		WeekStartAt:      weekStartUnix(now),
+		WeekUsed:         0,
+		MonthStartAt:     monthStartUnix(now),
+		MonthUsed:        0,
+		UpgradeGroup:     upgradeGroup,
+		PrevUserGroup:    prevGroup,
+		DowngradeGroup:   strings.TrimSpace(plan.DowngradeGroup),
 		AllowWalletOverflow: allowWalletOverflow,
-		CycleStartUsed:      0,
-		WeekStartAt:         weekStartUnix(now),
-		MonthStartAt:        monthStartUnix(now),
-		ExclusiveGroup:      strings.TrimSpace(plan.ExclusiveGroup),
-		CreatedAt:           common.GetTimestamp(),
-		UpdatedAt:           common.GetTimestamp(),
+		ExclusiveGroup:   strings.TrimSpace(plan.ExclusiveGroup),
+		TierPriority:     plan.Priority,
+		CreatedAt:        common.GetTimestamp(),
+		UpdatedAt:        common.GetTimestamp(),
 	}
 	if err := tx.Create(sub).Error; err != nil {
 		return nil, err
@@ -680,6 +722,7 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 	var logMoney float64
 	var logPaymentMethod string
 	var upgradeGroup string
+	now := GetDBTimestamp()
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		var order SubscriptionOrder
 		if err := lockForUpdate(tx).Where(refCol+" = ?", tradeNo).First(&order).Error; err != nil {
@@ -709,7 +752,7 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 				First(&target).Error; err != nil {
 				return errors.New("续费目标订阅不存在")
 			}
-			if err := RenewSubscriptionTx(tx, &target, plan, GetDBTimestamp()); err != nil {
+			if err := RenewSubscriptionTx(tx, &target, plan, now); err != nil {
 				return err
 			}
 		} else {
@@ -826,6 +869,17 @@ func AdminBindSubscription(userId int, planId int, sourceNote string) (string, e
 	}
 	groupChanged := false
 	err = DB.Transaction(func(tx *gorm.DB) error {
+		if common.SubscriptionMaxSimultaneous > 0 {
+			var activeCount int64
+			if err := tx.Model(&UserSubscription{}).
+				Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", common.GetTimestamp()).
+				Count(&activeCount).Error; err != nil {
+				return err
+			}
+			if activeCount >= int64(common.SubscriptionMaxSimultaneous) {
+				return fmt.Errorf("该用户同时持有的订阅数已达上限 %d", common.SubscriptionMaxSimultaneous)
+			}
+		}
 		subscription, err := CreateUserSubscriptionFromPlanTx(tx, userId, plan, "admin")
 		if err == nil {
 			groupChanged = subscription.PrevUserGroup != ""
@@ -913,7 +967,7 @@ func calcSubscriptionRemainingValue(sub *UserSubscription, plan *SubscriptionPla
 }
 
 // userGroupAllowed reports whether a user group may subscribe to a plan. An empty
-// whitelist allows every group; a malformed whitelist is treated as unrestricted.
+// whitelist (empty string, malformed JSON, or an empty JSON array) allows every group.
 func userGroupAllowed(plan *SubscriptionPlan, group string) bool {
 	if plan == nil || strings.TrimSpace(plan.AllowedGroups) == "" || strings.TrimSpace(group) == "" {
 		return true
@@ -922,7 +976,49 @@ func userGroupAllowed(plan *SubscriptionPlan, group string) bool {
 	if err := common.UnmarshalJsonStr(plan.AllowedGroups, &groups); err != nil {
 		return true
 	}
-	return slices.Contains(groups, group)
+	// A legacy "[]" stored by an old frontend must not reject every group.
+	return len(groups) == 0 || slices.Contains(groups, group)
+}
+
+// NormalizeSubscriptionPlanAllowedGroups collapses an allowed-groups whitelist to ""
+// when it is empty (including a legacy "[]" JSON array), so the "empty = all groups
+// allowed" invariant holds no matter how a frontend serialized the selection.
+func NormalizeSubscriptionPlanAllowedGroups(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	var groups []string
+	if err := common.UnmarshalJsonStr(raw, &groups); err != nil {
+		return raw // malformed JSON is treated as unrestricted at runtime; leave it
+	}
+	if len(groups) == 0 {
+		return ""
+	}
+	return raw
+}
+
+// comparePlanTier compares the tier of two plans: >0 when a is higher, <0 when
+// lower, 0 when equal. Tier is the plan Priority (higher = higher tier), with
+// PriceAmount as a tiebreaker when priorities are equal. Used to label a mutual
+// exclusion switch as an upgrade or downgrade.
+func comparePlanTier(a, b *SubscriptionPlan) int {
+	if a == nil || b == nil {
+		return 0
+	}
+	if a.Priority != b.Priority {
+		if a.Priority > b.Priority {
+			return 1
+		}
+		return -1
+	}
+	if a.PriceAmount != b.PriceAmount {
+		if a.PriceAmount > b.PriceAmount {
+			return 1
+		}
+		return -1
+	}
+	return 0
 }
 
 // ValidateSubscriptionPurchaseGate checks the plan-level purchase gates for a user:
@@ -940,7 +1036,7 @@ func ValidateSubscriptionPurchaseGate(userId int, plan *SubscriptionPlan, subscr
 	if !userGroupAllowed(plan, userGroup) {
 		return errors.New("该套餐仅限特定用户组订阅")
 	}
-	if plan.ExclusiveGroup != "" {
+	if plan.ExclusiveGroup != "" && common.SubscriptionExclusiveGroupEnabled {
 		now := GetDBTimestamp()
 		var count int64
 		if err := DB.Model(&UserSubscription{}).
@@ -973,7 +1069,9 @@ func PurchaseWithStrategy(userId int, planId int, subscriptionId int) (string, e
 	var upgradeGroupChanged bool
 	var message string
 	err := DB.Transaction(func(tx *gorm.DB) error {
-		now := GetDBTimestamp()
+		// App time: a DB-time round trip inside the transaction would need a second
+		// connection, deadlocking on a single-connection SQLite pool.
+		now := common.GetTimestamp()
 		plan, err := getSubscriptionPlanByIdTx(tx, planId)
 		if err != nil {
 			return err
@@ -991,9 +1089,10 @@ func PurchaseWithStrategy(userId int, planId int, subscriptionId int) (string, e
 		if !userGroupAllowed(plan, userGroup) {
 			return errors.New("该套餐仅限特定用户组订阅")
 		}
-		// Same exclusivity-group active subscription (if any).
+		// Same exclusivity-group active subscription (if any). Skipped entirely when
+		// the mutual-exclusion feature is disabled, so users may hold several plans.
 		var sameGroup UserSubscription
-		if plan.ExclusiveGroup != "" {
+		if plan.ExclusiveGroup != "" && common.SubscriptionExclusiveGroupEnabled {
 			if err := lockForUpdate(tx).
 				Where("user_id = ? AND status = ? AND end_time > ? AND exclusive_group = ?",
 					userId, "active", now, plan.ExclusiveGroup).
@@ -1070,10 +1169,10 @@ func PurchaseWithStrategy(userId int, planId int, subscriptionId int) (string, e
 			}
 			logTitle = plan.Title
 			logMoney = diff
-			switch {
-			case diff > 0:
+			switch tier := comparePlanTier(plan, oldPlan); {
+			case tier > 0:
 				message = fmt.Sprintf("已升级到 %s，补差额 %.2f", plan.Title, diff)
-			case diff < 0:
+			case tier < 0:
 				message = fmt.Sprintf("已降级到 %s，退还差额 %.2f", plan.Title, -diff)
 			default:
 				message = fmt.Sprintf("已切换到 %s", plan.Title)
@@ -1083,6 +1182,17 @@ func PurchaseWithStrategy(userId int, planId int, subscriptionId int) (string, e
 		// Full purchase.
 		if plan.AllowBalancePay != nil && !*plan.AllowBalancePay {
 			return errors.New("该套餐不允许使用余额兑换")
+		}
+		if common.SubscriptionMaxSimultaneous > 0 {
+			var activeCount int64
+			if err := tx.Model(&UserSubscription{}).
+				Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", now).
+				Count(&activeCount).Error; err != nil {
+				return err
+			}
+			if activeCount >= int64(common.SubscriptionMaxSimultaneous) {
+				return fmt.Errorf("同时持有的订阅数已达上限 %d", common.SubscriptionMaxSimultaneous)
+			}
 		}
 		quota, err := calcSubscriptionBalanceQuota(plan.PriceAmount)
 		if err != nil {
@@ -1162,14 +1272,13 @@ func RenewSubscriptionTx(tx *gorm.DB, sub *UserSubscription, plan *SubscriptionP
 	}
 	sub.EndTime = endUnix
 	sub.AmountTotal += plan.TotalAmount
-	if plan.ResetAmountLimit > 0 {
-		sub.CycleStartUsed = sub.AmountUsed
-	}
 	// Renewing the same period re-arms the reset schedule relative to the new start.
-	nextReset := calcNextResetTime(start, plan, endUnix)
-	if nextReset > 0 {
-		sub.NextResetTime = nextReset
-		sub.LastResetTime = start.Unix()
+	// The cycle counter is NOT reset here — the renewal point acts as the new cycle
+	// window start, so cycle usage before the renewal stays counted in this cycle.
+	if period := NormalizeResetPeriod(plan.QuotaResetPeriod); period != SubscriptionResetNever {
+		nextReset := calcNextResetTime(start, plan, endUnix)
+		sub.CycleStartAt = start.Unix()
+		sub.NextCycleResetAt = nextReset
 	}
 	// A user-initiated renewal overrides a pending cancel-at-end and clears any
 	// previous auto-renew failure so the task may retry.
@@ -1281,8 +1390,11 @@ func UserCancelSubscription(userId int, subscriptionId int, mode string) (string
 }
 
 // SetSubscriptionPriority makes the target subscription the most preferred
-// (priority 0) and shifts the other active subscriptions down by one.
+// (lowest priority value) among the user's active subscriptions.
 func SetSubscriptionPriority(userId int, subscriptionId int) error {
+	if !common.SubscriptionPriorityEnabled {
+		return errors.New("订阅消费优先级功能未启用")
+	}
 	if userId <= 0 || subscriptionId <= 0 {
 		return errors.New("invalid userId or subscriptionId")
 	}
@@ -1294,6 +1406,7 @@ func SetSubscriptionPriority(userId int, subscriptionId int) error {
 			First(&sub).Error; err != nil {
 			return errors.New("订阅不存在或已失效")
 		}
+		// The most preferred subscription gets priority 0; others shift down by one.
 		if err := tx.Model(&UserSubscription{}).
 			Where("user_id = ? AND status = ? AND end_time > ? AND id <> ?", userId, "active", now, subscriptionId).
 			Update("priority", gorm.Expr("priority + 1")).Error; err != nil {
@@ -1353,6 +1466,9 @@ func flagAutoRenewFailed(tx *gorm.DB, subId int) {
 // the user's wallet balance; on failure the subscription is flagged so the task
 // does not retry every tick. Renewing extends EndTime, so it is naturally idempotent.
 func AutoRenewDueSubscriptions(limit int) (int, error) {
+	if !common.SubscriptionAutoRenewEnabled {
+		return 0, nil
+	}
 	if limit <= 0 {
 		limit = 200
 	}
@@ -1450,6 +1566,21 @@ func HasActiveUserSubscription(userId int) (bool, error) {
 		return false, err
 	}
 	return count > 0, nil
+}
+
+// CountActiveUserSubscriptions returns the number of active subscriptions a user holds.
+func CountActiveUserSubscriptions(userId int) (int64, error) {
+	if userId <= 0 {
+		return 0, errors.New("invalid userId")
+	}
+	now := common.GetTimestamp()
+	var count int64
+	if err := DB.Model(&UserSubscription{}).
+		Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", now).
+		Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 // UserActiveSubscriptionsAllowWalletOverflow returns whether wallet balance may be used
@@ -1680,21 +1811,17 @@ func resetUserSubscriptionTx(tx *gorm.DB, sub *UserSubscription, plan *Subscript
 	if tx == nil || sub == nil || plan == nil {
 		return errors.New("invalid reset args")
 	}
-	if plan.ResetAmountLimit > 0 {
-		// Per-cycle cap: keep the cumulative usage and snapshot the cycle start,
-		// so TotalAmount stays a cumulative cap across cycles.
-		sub.CycleStartUsed = sub.AmountUsed
-	} else {
+	period := NormalizeResetPeriod(plan.QuotaResetPeriod)
+	if period == SubscriptionResetNever {
+		// No reset period: a manual reset grants the full TotalAmount again.
 		sub.AmountUsed = 0
+	} else {
+		// Reset cycle: grant a fresh cycle, keep the cumulative AmountUsed.
+		sub.CycleUsed = 0
+		sub.CycleStartAt = now
 	}
 	if advanceResetTime {
-		nextReset := calcNextResetTime(time.Unix(now, 0), plan, sub.EndTime)
-		sub.NextResetTime = nextReset
-		if nextReset > 0 {
-			sub.LastResetTime = now
-		} else {
-			sub.LastResetTime = 0
-		}
+		sub.NextCycleResetAt = calcNextResetTime(time.Unix(now, 0), plan, sub.EndTime)
 	}
 	return tx.Save(sub).Error
 }
@@ -1846,6 +1973,10 @@ func ExpireDueSubscriptions(limit int) (int, error) {
 			}
 			expiredCount += int(res.RowsAffected)
 
+			if !common.SubscriptionGroupUpgradeEnabled {
+				return nil // 组升降级功能关闭：到期只标记状态，不改用户组
+			}
+
 			// If there's an active upgraded subscription, keep current group.
 			var activeSub UserSubscription
 			activeQuery := tx.Where("user_id = ? AND status = ? AND end_time > ? AND upgrade_group <> ''",
@@ -1931,45 +2062,44 @@ func (r *SubscriptionPreConsumeRecord) BeforeUpdate(tx *gorm.DB) error {
 	return nil
 }
 
-func maybeResetUserSubscriptionWithPlanTx(tx *gorm.DB, sub *UserSubscription, plan *SubscriptionPlan, now int64) error {
-	if tx == nil || sub == nil || plan == nil {
-		return errors.New("invalid reset args")
-	}
-	if sub.NextResetTime > 0 && sub.NextResetTime > now {
-		return nil
-	}
-	if NormalizeResetPeriod(plan.QuotaResetPeriod) == SubscriptionResetNever {
-		return nil
-	}
-	baseUnix := sub.LastResetTime
-	if baseUnix <= 0 {
-		baseUnix = sub.StartTime
-	}
-	base := time.Unix(baseUnix, 0)
-	next := calcNextResetTime(base, plan, sub.EndTime)
-	advanced := false
-	for next > 0 && next <= now {
-		advanced = true
-		base = time.Unix(next, 0)
-		next = calcNextResetTime(base, plan, sub.EndTime)
-	}
-	if !advanced {
-		if sub.NextResetTime == 0 && next > 0 {
-			sub.NextResetTime = next
-			sub.LastResetTime = base.Unix()
-			return tx.Save(sub).Error
+// subscriptionRemaining returns the quota still available on a subscription after
+// the caller has already advanced its windows. Each cap is independent and only
+// applies when configured, so a zero TotalAmount (unlimited) never disables the
+// cycle/week/month caps and a reset period never erases calendar usage.
+// Returns math.MaxInt64 when nothing limits the subscription.
+func subscriptionRemaining(sub *UserSubscription, plan *SubscriptionPlan) int64 {
+	remaining := int64(math.MaxInt64)
+	period := NormalizeResetPeriod(plan.QuotaResetPeriod)
+	// TotalAmount is a cumulative cap only when no reset period exists or when a
+	// per-cycle cap is configured on top of it; otherwise it is the per-cycle grant.
+	cumulativeTotal := period == SubscriptionResetNever || plan.ResetAmountLimit > 0
+	if cumulativeTotal && sub.AmountTotal > 0 {
+		if r := sub.AmountTotal - sub.AmountUsed; r < remaining {
+			remaining = r
 		}
-		return nil
 	}
-	if plan.ResetAmountLimit > 0 {
-		// Per-cycle cap: keep cumulative usage, snapshot the cycle start.
-		sub.CycleStartUsed = sub.AmountUsed
-	} else {
-		sub.AmountUsed = 0
+	if period != SubscriptionResetNever {
+		grant := plan.ResetAmountLimit
+		if grant <= 0 {
+			grant = sub.AmountTotal
+		}
+		if grant > 0 {
+			if r := grant - sub.CycleUsed; r < remaining {
+				remaining = r
+			}
+		}
 	}
-	sub.LastResetTime = base.Unix()
-	sub.NextResetTime = next
-	return tx.Save(sub).Error
+	if plan.WeeklyAmountLimit > 0 {
+		if r := plan.WeeklyAmountLimit - sub.WeekUsed; r < remaining {
+			remaining = r
+		}
+	}
+	if plan.MonthlyAmountLimit > 0 {
+		if r := plan.MonthlyAmountLimit - sub.MonthUsed; r < remaining {
+			remaining = r
+		}
+	}
+	return remaining
 }
 
 // PreConsumeUserSubscription pre-consumes from any active subscription total quota.
@@ -2025,49 +2155,15 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 			if err != nil {
 				return err
 			}
-			if err := maybeResetUserSubscriptionWithPlanTx(tx, &sub, plan, now); err != nil {
-				return err
-			}
-			if syncNaturalCycleStart(&sub, now) {
+			if advanceSubscriptionWindows(&sub, plan, now) {
 				if err := tx.Save(&sub).Error; err != nil {
 					return err
 				}
 			}
-			usedBefore := sub.AmountUsed
-			if sub.AmountTotal > 0 {
-				remain := sub.AmountTotal - usedBefore
-				if plan.ResetAmountLimit > 0 {
-					// Per-cycle cap on top of the cumulative cap.
-					cycleUsed := usedBefore - sub.CycleStartUsed
-					if cycleUsed < 0 {
-						cycleUsed = 0
-					}
-					if cycleRemain := plan.ResetAmountLimit - cycleUsed; cycleRemain < remain {
-						remain = cycleRemain
-					}
-				}
-				if plan.WeeklyAmountLimit > 0 {
-					weekUsed := usedBefore - sub.WeekStartUsed
-					if weekUsed < 0 {
-						weekUsed = 0
-					}
-					if weekRemain := plan.WeeklyAmountLimit - weekUsed; weekRemain < remain {
-						remain = weekRemain
-					}
-				}
-				if plan.MonthlyAmountLimit > 0 {
-					monthUsed := usedBefore - sub.MonthStartUsed
-					if monthUsed < 0 {
-						monthUsed = 0
-					}
-					if monthRemain := plan.MonthlyAmountLimit - monthUsed; monthRemain < remain {
-						remain = monthRemain
-					}
-				}
-				if remain < amount {
-					continue
-				}
+			if subscriptionRemaining(&sub, plan) < amount {
+				continue
 			}
+			usedBefore := sub.AmountUsed
 			record := &SubscriptionPreConsumeRecord{
 				RequestId:          requestId,
 				UserId:             userId,
@@ -2091,6 +2187,9 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 				return err
 			}
 			sub.AmountUsed += amount
+			sub.CycleUsed += amount
+			sub.WeekUsed += amount
+			sub.MonthUsed += amount
 			if err := tx.Save(&sub).Error; err != nil {
 				return err
 			}
@@ -2135,15 +2234,18 @@ func RefundSubscriptionPreConsume(requestId string) error {
 	})
 }
 
-// ResetDueSubscriptions resets subscriptions whose next_reset_time has passed.
+// ResetDueSubscriptions proactively advances the reset-cycle windows of
+// subscriptions whose next_cycle_reset_at has passed. This only keeps admin views
+// and notifications fresh; correctness does not depend on it because
+// PreConsumeUserSubscription advances windows lazily before every cap check.
 func ResetDueSubscriptions(limit int) (int, error) {
 	if limit <= 0 {
 		limit = 200
 	}
 	now := GetDBTimestamp()
 	var subs []UserSubscription
-	if err := DB.Where("next_reset_time > 0 AND next_reset_time <= ? AND status = ?", now, "active").
-		Order("next_reset_time asc").
+	if err := DB.Where("next_cycle_reset_at > 0 AND next_cycle_reset_at <= ? AND status = ?", now, "active").
+		Order("next_cycle_reset_at asc").
 		Limit(limit).
 		Find(&subs).Error; err != nil {
 		return 0, err
@@ -2161,12 +2263,14 @@ func ResetDueSubscriptions(limit int) (int, error) {
 		err = DB.Transaction(func(tx *gorm.DB) error {
 			var locked UserSubscription
 			if err := lockForUpdate(tx).
-				Where("id = ? AND next_reset_time > 0 AND next_reset_time <= ?", subCopy.Id, now).
+				Where("id = ? AND next_cycle_reset_at > 0 AND next_cycle_reset_at <= ?", subCopy.Id, now).
 				First(&locked).Error; err != nil {
 				return nil
 			}
-			if err := maybeResetUserSubscriptionWithPlanTx(tx, &locked, plan, now); err != nil {
-				return err
+			if advanceSubscriptionWindows(&locked, plan, now) {
+				if err := tx.Save(&locked).Error; err != nil {
+					return err
+				}
 			}
 			resetCount++
 			return nil
@@ -2239,14 +2343,32 @@ func PostConsumeUserSubscriptionDelta(db *gorm.DB, userSubscriptionId int, delta
 			First(&sub).Error; err != nil {
 			return err
 		}
+		// AmountTotal is a cumulative cap only when the plan has no reset period or
+		// has a per-cycle cap on top; otherwise usage legitimately exceeds it across
+		// cycles, so the guard is skipped.
+		cumulativeTotal := true
+		if plan, err := getSubscriptionPlanByIdTx(tx, sub.PlanId); err == nil && plan != nil {
+			period := NormalizeResetPeriod(plan.QuotaResetPeriod)
+			cumulativeTotal = period == SubscriptionResetNever || plan.ResetAmountLimit > 0
+		}
 		newUsed := sub.AmountUsed + delta
 		if newUsed < 0 {
 			newUsed = 0
 		}
-		if sub.AmountTotal > 0 && newUsed > sub.AmountTotal {
+		if cumulativeTotal && sub.AmountTotal > 0 && newUsed > sub.AmountTotal {
 			return fmt.Errorf("subscription used exceeds total, used=%d total=%d", newUsed, sub.AmountTotal)
 		}
 		sub.AmountUsed = newUsed
+		sub.CycleUsed = clampNonNegative(sub.CycleUsed+delta)
+		sub.WeekUsed = clampNonNegative(sub.WeekUsed+delta)
+		sub.MonthUsed = clampNonNegative(sub.MonthUsed+delta)
 		return tx.Save(&sub).Error
 	})
+}
+
+func clampNonNegative(v int64) int64 {
+	if v < 0 {
+		return 0
+	}
+	return v
 }

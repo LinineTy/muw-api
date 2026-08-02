@@ -322,6 +322,10 @@ func AdminCreateSubscriptionPlan(c *gin.Context) {
 		return
 	}
 	req.Plan.ExclusiveGroup = strings.TrimSpace(req.Plan.ExclusiveGroup)
+	if req.Plan.Priority < 0 {
+		common.ApiErrorMsg(c, "套餐优先级不能为负数")
+		return
+	}
 	if req.Plan.AllowedGroups != "" {
 		var groups []string
 		if err := common.UnmarshalJsonStr(req.Plan.AllowedGroups, &groups); err != nil {
@@ -329,6 +333,7 @@ func AdminCreateSubscriptionPlan(c *gin.Context) {
 			return
 		}
 	}
+	req.Plan.AllowedGroups = model.NormalizeSubscriptionPlanAllowedGroups(req.Plan.AllowedGroups)
 	err := model.DB.Create(&req.Plan).Error
 	if err != nil {
 		common.ApiError(c, err)
@@ -409,6 +414,10 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 		return
 	}
 	req.Plan.ExclusiveGroup = strings.TrimSpace(req.Plan.ExclusiveGroup)
+	if req.Plan.Priority < 0 {
+		common.ApiErrorMsg(c, "套餐优先级不能为负数")
+		return
+	}
 	if req.Plan.AllowedGroups != "" {
 		var groups []string
 		if err := common.UnmarshalJsonStr(req.Plan.AllowedGroups, &groups); err != nil {
@@ -416,6 +425,7 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 			return
 		}
 	}
+	req.Plan.AllowedGroups = model.NormalizeSubscriptionPlanAllowedGroups(req.Plan.AllowedGroups)
 
 	err := model.DB.Transaction(func(tx *gorm.DB) error {
 		// update plan (allow zero values updates with map)
