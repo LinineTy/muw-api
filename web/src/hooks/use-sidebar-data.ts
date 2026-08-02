@@ -99,6 +99,11 @@ export function useSidebarData(): SidebarData {
             configUrls: ['/usage-logs/drawing', '/usage-logs/task'],
             icon: ListTodo,
           },
+          {
+            title: t('Model Health'),
+            url: '/model-health',
+            icon: HeartPulse,
+          },
         ],
       },
       {
@@ -135,11 +140,6 @@ export function useSidebarData(): SidebarData {
             title: t('Models'),
             url: '/models/metadata',
             icon: Box,
-          },
-          {
-            title: t('Model Health'),
-            url: '/model-health',
-            icon: HeartPulse,
           },
           {
             title: t('Users'),

@@ -34,6 +34,13 @@ func registerChannelRoutes(apiRouter *gin.RouterGroup) {
 			route.handler,
 		)
 	}
+
+	// Model health is readable by any logged-in user, but the raw probe records
+	// backing the expandable detail panel stay admin-only.
+	healthRoute := apiRouter.Group("/channel/health")
+	healthRoute.Use(middleware.UserAuth())
+	healthRoute.GET("/models", controller.GetModelHealth)
+	healthRoute.GET("/records", middleware.AdminAuth(), controller.GetChannelTestRecords)
 }
 
 var channelPermissionRoutes = []permissionRoute{
@@ -45,8 +52,6 @@ var channelPermissionRoutes = []permissionRoute{
 	{method: http.MethodGet, path: "/:id", permission: authz.ChannelRead, handler: controller.GetChannel},
 	{method: http.MethodGet, path: "/test", permission: authz.ChannelOperate, handler: controller.TestAllChannels},
 	{method: http.MethodGet, path: "/test/:id", permission: authz.ChannelOperate, handler: controller.TestChannel},
-	{method: http.MethodGet, path: "/health/models", permission: authz.ChannelOperate, handler: controller.GetModelHealth},
-	{method: http.MethodGet, path: "/health/records", permission: authz.ChannelOperate, handler: controller.GetChannelTestRecords},
 	{method: http.MethodGet, path: "/update_balance", permission: authz.ChannelOperate, handler: controller.UpdateAllChannelsBalance},
 	{method: http.MethodGet, path: "/update_balance/:id", permission: authz.ChannelOperate, handler: controller.UpdateChannelBalance},
 	{method: http.MethodPost, path: "/", permission: authz.ChannelSensitiveWrite, handler: controller.AddChannel},

@@ -140,3 +140,53 @@ func AggregateChannelTestRecords(records []ChannelTestRecord) []ModelHealthRow {
 	}
 	return rows
 }
+
+// CollapseToModelLevel folds per-(channel, model) ModelHealthRow aggregation
+// into one model-level row per model, dropping channel-scoped details. It backs
+// the model health page for non-admin users, who must not learn channel
+// identity, per-channel latency or error reasons. ChannelId, ChannelName and
+// LastError are therefore always zeroed. Counts sum across channels, average
+// response time is test-count weighted, and trends are merged and re-sorted
+// chronologically. The result order is first-seen by model name.
+func CollapseToModelLevel(rows []ModelHealthRow) []ModelHealthRow {
+	type acc struct {
+		row        ModelHealthRow
+		latencySum int64
+	}
+	groups := make(map[string]*acc)
+	var order []string
+	for _, row := range rows {
+		a, ok := groups[row.ModelName]
+		if !ok {
+			a = &acc{row: ModelHealthRow{ModelName: row.ModelName}}
+			groups[row.ModelName] = a
+			order = append(order, row.ModelName)
+		}
+		a.row.TestCount += row.TestCount
+		a.row.SuccessCount += row.SuccessCount
+		a.row.UserTrafficCount += row.UserTrafficCount
+		a.latencySum += int64(row.AvgResponseTime) * int64(row.TestCount)
+		if row.LastTestTime > a.row.LastTestTime {
+			a.row.LastTestTime = row.LastTestTime
+			a.row.LastResponseTime = row.LastResponseTime
+		}
+		a.row.Trend = append(a.row.Trend, row.Trend...)
+	}
+
+	out := make([]ModelHealthRow, 0, len(order))
+	for _, key := range order {
+		a := groups[key]
+		if a.row.TestCount > 0 {
+			a.row.AvgResponseTime = int(math.Round(float64(a.latencySum) / float64(a.row.TestCount)))
+			a.row.SuccessRate = math.Round(float64(a.row.SuccessCount)/float64(a.row.TestCount)*1000) / 10
+		}
+		sort.SliceStable(a.row.Trend, func(i, j int) bool {
+			if a.row.Trend[i].CreatedAt != a.row.Trend[j].CreatedAt {
+				return a.row.Trend[i].CreatedAt < a.row.Trend[j].CreatedAt
+			}
+			return a.row.Trend[i].ResponseTime < a.row.Trend[j].ResponseTime
+		})
+		out = append(out, a.row)
+	}
+	return out
+}
