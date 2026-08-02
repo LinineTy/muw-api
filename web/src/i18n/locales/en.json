@@ -3299,6 +3299,7 @@
     "Apply the plan upgrade group on purchase and downgrade on expiry/cancel. Disabled keeps the user group unchanged.": "Apply the plan upgrade group on purchase and downgrade on expiry/cancel. Disabled keeps the user group unchanged.",
     "Plans in the same exclusive group cannot coexist; purchasing another triggers a prorated upgrade/downgrade. Disabled lets users hold several plans.": "Plans in the same exclusive group cannot coexist; purchasing another triggers a prorated upgrade/downgrade. Disabled lets users hold several plans.",
     "Global cap on how many active subscriptions one user may hold. 0 means unlimited.": "Global cap on how many active subscriptions one user may hold. 0 means unlimited.",
+    "Tier within the mutual-exclusion group, higher is a higher tier. Used to decide upgrade/downgrade direction.": "Tier within the mutual-exclusion group, higher is a higher tier. Used to decide upgrade/downgrade direction.",
     "Payment request failed": "Payment request failed",
     "Payment return URL": "Payment return URL",
     "Payment return URL is empty. Create the product without a SuccessURL redirect?": "Payment return URL is empty. Create the product without a SuccessURL redirect?",

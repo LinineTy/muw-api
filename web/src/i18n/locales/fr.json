@@ -3299,6 +3299,7 @@
     "Apply the plan upgrade group on purchase and downgrade on expiry/cancel. Disabled keeps the user group unchanged.": "Applique le groupe de mise à niveau à l'achat et la réduction à l'expiration/annulation. Désactivé, le groupe utilisateur reste inchangé.",
     "Plans in the same exclusive group cannot coexist; purchasing another triggers a prorated upgrade/downgrade. Disabled lets users hold several plans.": "Les plans du même groupe exclusif ne peuvent pas coexister ; acheter un autre déclenche une mise à niveau/réduction au prorata. Désactivé, on peut tenir plusieurs plans.",
     "Global cap on how many active subscriptions one user may hold. 0 means unlimited.": "Limite mondiale du nombre d'abonnements actifs par utilisateur. 0 signifie illimité.",
+    "Tier within the mutual-exclusion group, higher is a higher tier. Used to decide upgrade/downgrade direction.": "Niveau du plan dans le groupe d'exclusion mutuelle, plus élevé = niveau supérieur. Utilisé pour déterminer la direction de mise à niveau/réduction.",
     "Payment request failed": "Requête de paiement échouée",
     "Payment return URL": "URL de retour de paiement",
     "Payment return URL is empty. Create the product without a SuccessURL redirect?": "L’URL de retour de paiement est vide. Créer le produit sans redirection SuccessURL ?",
