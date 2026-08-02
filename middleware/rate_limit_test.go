@@ -52,7 +52,10 @@ func TestRedisIPRateLimiterThresholdTTLAndNamespace(t *testing.T) {
 
 	router := gin.New()
 	require.NoError(t, router.SetTrustedProxies(nil))
-	router.GET("/limited", rateLimitFactory(2, 37, "TEST"), func(c *gin.Context) {
+	enable := true
+	num := 2
+	duration := int64(37)
+	router.GET("/limited", rateLimitFactory(&enable, &num, &duration, "TEST"), func(c *gin.Context) {
 		c.Status(http.StatusNoContent)
 	})
 
@@ -241,7 +244,10 @@ func TestRedisFailurePolicies(t *testing.T) {
 
 	router := gin.New()
 	require.NoError(t, router.SetTrustedProxies(nil))
-	router.GET("/ip", rateLimitFactory(1, 30, "FAIL-IP"), func(c *gin.Context) {
+	ipEnable := true
+	ipNum := 1
+	ipDuration := int64(30)
+	router.GET("/ip", rateLimitFactory(&ipEnable, &ipNum, &ipDuration, "FAIL-IP"), func(c *gin.Context) {
 		c.Status(http.StatusNoContent)
 	})
 	router.GET(

@@ -344,6 +344,15 @@ export type SecuritySettings = {
   ModelRequestRateLimitSuccessCount: number
   ModelRequestRateLimitDurationMinutes: number
   ModelRequestRateLimitGroup: string
+  CriticalRateLimitEnable: boolean
+  CriticalRateLimitNum: number
+  CriticalRateLimitDuration: number
+  GlobalApiRateLimitEnable: boolean
+  GlobalApiRateLimitNum: number
+  GlobalApiRateLimitDuration: number
+  GlobalWebRateLimitEnable: boolean
+  GlobalWebRateLimitNum: number
+  GlobalWebRateLimitDuration: number
   CheckSensitiveEnabled: boolean
   CheckSensitiveOnPromptEnabled: boolean
   SensitiveWords: string
