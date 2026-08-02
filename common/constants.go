@@ -142,6 +142,24 @@ var AutomaticEnableChannelEnabled = false
 var QuotaRemindThreshold = 1000
 var PreConsumedQuota = 500
 
+// Subscription feature toggles (synced from the options table).
+var (
+	// SubscriptionMaxSimultaneous caps how many active subscriptions a user may hold
+	// at once. 0 disables the cap.
+	SubscriptionMaxSimultaneous = 0
+	// SubscriptionAutoRenewEnabled toggles the automatic renewal task.
+	SubscriptionAutoRenewEnabled = true
+	// SubscriptionPriorityEnabled toggles the user-facing "Use First" consumption
+	// priority feature.
+	SubscriptionPriorityEnabled = true
+	// SubscriptionGroupUpgradeEnabled toggles the user group upgrade on purchase and
+	// downgrade on expiry/cancel.
+	SubscriptionGroupUpgradeEnabled = true
+	// SubscriptionExclusiveGroupEnabled toggles mutual-exclusion groups (same-group
+	// plans cannot coexist and purchases trigger a prorated switch).
+	SubscriptionExclusiveGroupEnabled = true
+)
+
 var RetryTimes = 0
 
 //var RootUserEmail = ""

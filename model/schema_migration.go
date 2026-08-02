@@ -39,7 +39,7 @@ func (SchemaMigration) TableName() string { return "schema_migrations" }
 // CurrentSchemaVersion 是当前代码期望的 schema 版本。修改任何 model 结构时
 // 必须递增该值；如需数据转换/特殊适配，同时新增对应的 Migration 条目。
 // 兜底：DEBUG=true 启动时即使已最新也强制 AutoMigrate 校验结构。
-const CurrentSchemaVersion = 1
+const CurrentSchemaVersion = 2
 
 // Migration 是一个可单独应用、记录版本戳的迁移步骤。Up 按版本升序执行，
 // 用于 AutoMigrate 补不了的结构改造（换类型、删列）与数据迁移/特殊适配。
@@ -51,8 +51,11 @@ type Migration struct {
 
 // migrations 按版本升序排列。v1 为版本化改造的基线：吸收此前 migrateDB 中
 // AutoMigrate 之外的全部专项迁移与初始化逻辑（见 migrationBaselineV1）。
+// v2 为订阅功能重设计：清空四张订阅表（AutoMigrate 已先把表结构升级到新版），
+// 一次性破坏性操作，之后不再执行。
 var migrations = []Migration{
 	{Version: 1, Name: "baseline-2026-08", Up: migrationBaselineV1},
+	{Version: 2, Name: "subscription-redesign-wipe", Up: migrationSubscriptionWipe},
 }
 
 // ensureSchemaMigrationsTable 用纯 SQL 建版本表，避免对版本表自身跑 AutoMigrate。
@@ -118,4 +121,23 @@ func migrationBaselineV1(db *gorm.DB) error {
 		return err
 	}
 	return ensureSubscriptionPlanRecommendedBackfill()
+}
+
+// migrationSubscriptionWipe 是订阅功能重设计的破坏性迁移：清空四张订阅表。
+// AutoMigrate 已先于本迁移执行，表结构已升级到新版；这里 DELETE 清掉旧数据，
+// 让用户重新配置套餐并重新分配。一次性执行，之后由 v2 版本戳防止重复。
+func migrationSubscriptionWipe(db *gorm.DB) error {
+	tables := []string{
+		"subscription_pre_consume_records",
+		"subscription_orders",
+		"user_subscriptions",
+		"subscription_plans",
+	}
+	for _, table := range tables {
+		if err := db.Exec("DELETE FROM " + table).Error; err != nil {
+			return fmt.Errorf("subscription redesign wipe %s: %w", table, err)
+		}
+	}
+	common.SysLog("[WARN] 订阅功能重设计迁移已执行：清空了 subscription_plans / user_subscriptions / subscription_orders / subscription_pre_consume_records，请重新配置套餐并为用户分配")
+	return nil
 }

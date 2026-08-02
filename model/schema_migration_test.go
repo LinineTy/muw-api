@@ -104,3 +104,25 @@ func TestApplyPendingMigrationsStampsAndSkipsApplied(t *testing.T) {
 	assert.Equal(t, "two", rec.Name)
 	assert.NotZero(t, rec.AppliedAt)
 }
+
+// TestMigrationSubscriptionWipe 保护订阅重设计的破坏性迁移：清空四张订阅表。
+func TestMigrationSubscriptionWipe(t *testing.T) {
+	db := openSchemaMigrationTestDB(t)
+	require.NoError(t, db.AutoMigrate(&SubscriptionPlan{}, &SubscriptionOrder{}, &UserSubscription{}, &SubscriptionPreConsumeRecord{}))
+	require.NoError(t, db.Create(&SubscriptionPlan{Id: 1, Title: "p", PriceAmount: 1, DurationUnit: "month", DurationValue: 1}).Error)
+	require.NoError(t, db.Create(&UserSubscription{Id: 1, UserId: 1, PlanId: 1, Status: "active", EndTime: 100}).Error)
+	require.NoError(t, db.Create(&SubscriptionOrder{Id: 1, UserId: 1, PlanId: 1, TradeNo: "TN1", Status: "pending"}).Error)
+	require.NoError(t, db.Create(&SubscriptionPreConsumeRecord{Id: 1, RequestId: "R1", UserId: 1, PreConsumed: 1, Status: "consumed"}).Error)
+
+	require.NoError(t, migrationSubscriptionWipe(db))
+
+	var planCount, subCount, orderCount, recCount int64
+	require.NoError(t, db.Model(&SubscriptionPlan{}).Count(&planCount).Error)
+	require.NoError(t, db.Model(&UserSubscription{}).Count(&subCount).Error)
+	require.NoError(t, db.Model(&SubscriptionOrder{}).Count(&orderCount).Error)
+	require.NoError(t, db.Model(&SubscriptionPreConsumeRecord{}).Count(&recCount).Error)
+	assert.Zero(t, planCount)
+	assert.Zero(t, subCount)
+	assert.Zero(t, orderCount)
+	assert.Zero(t, recCount)
+}

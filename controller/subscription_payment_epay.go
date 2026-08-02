@@ -63,6 +63,17 @@ func SubscriptionRequestEpay(c *gin.Context) {
 			return
 		}
 	}
+	if req.SubscriptionId == 0 && common.SubscriptionMaxSimultaneous > 0 {
+		activeCount, err := model.CountActiveUserSubscriptions(userId)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		if activeCount >= int64(common.SubscriptionMaxSimultaneous) {
+			common.ApiErrorMsg(c, fmt.Sprintf("同时持有的订阅数已达上限 %d", common.SubscriptionMaxSimultaneous))
+			return
+		}
+	}
 	if req.SubscriptionId > 0 {
 		// Renewal target must belong to the user and be active.
 		var target model.UserSubscription
