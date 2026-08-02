@@ -27,12 +27,12 @@ func openLegacyUpgradeDB(t *testing.T) *gorm.DB {
 // max_cumulative_seconds、exclusive_group、allowed_groups 这些当前版本新增列。
 type legacySubscriptionPlan struct {
 	Id           int
-	Title        string  `gorm:"type:varchar(128);not null"`
+	Title        string `gorm:"type:varchar(128);not null"`
 	PriceAmount  float64
 	Enabled      bool
 	UpgradeGroup string `gorm:"type:varchar(64);default:''"`
-	CreatedAt    int64   `gorm:"bigint"`
-	UpdatedAt    int64   `gorm:"bigint"`
+	CreatedAt    int64  `gorm:"bigint"`
+	UpdatedAt    int64  `gorm:"bigint"`
 }
 
 func (legacySubscriptionPlan) TableName() string { return "subscription_plans" }
@@ -40,13 +40,13 @@ func (legacySubscriptionPlan) TableName() string { return "subscription_plans" }
 // legacyUserSubscription 复刻旧版 user_subscriptions：缺少 auto_renew、priority、
 // exclusive_group 及周期限额等当前版本新增列。
 type legacyUserSubscription struct {
-	Id        int
-	UserId    int
-	PlanId    int
+	Id         int
+	UserId     int
+	PlanId     int
 	AmountUsed int64
-	Status    string
-	EndTime   int64
-	CreatedAt int64
+	Status     string
+	EndTime    int64
+	CreatedAt  int64
 }
 
 func (legacyUserSubscription) TableName() string { return "user_subscriptions" }
@@ -112,8 +112,8 @@ func TestAutoMigrateUpgradesLegacyUserSubscriptionsAndOrders(t *testing.T) {
 // avatar_custom 这些当前版本新增列，其余结构与当前 model 一致。
 type legacyUser struct {
 	Id          int
-	Username    string  `gorm:"unique;index"`
-	Password    string  `gorm:"not null"`
+	Username    string `gorm:"unique;index"`
+	Password    string `gorm:"not null"`
 	Role        int
 	Status      int
 	Group       string  `gorm:"type:varchar(64);default:'default'"`
@@ -132,7 +132,8 @@ func TestAutoMigrateUpgradesLegacyUsers(t *testing.T) {
 
 	require.NoError(t, db.AutoMigrate(&User{}))
 
-	for _, col := range []string{"linux_do_trust_level", "group_auto", "avatar", "avatar_custom"} {
+	for _, col := range []string{"linux_do_trust_level", "group_auto", "avatar", "avatar_custom",
+		"linux_do_access_token", "linux_do_refresh_token", "linux_do_token_expires_at"} {
 		assertHasColumn(t, db, &User{}, col)
 	}
 
@@ -178,4 +179,51 @@ func TestEnsureSubscriptionPlanRecommendedBackfill(t *testing.T) {
 	var got bool
 	require.NoError(t, DB.Model(&SubscriptionPlan{}).Where("id = ?", plan.Id).Pluck("is_recommended", &got).Error)
 	assert.False(t, got)
+}
+
+func TestLinuxDOTokensPersistAndLoadRoundTrip(t *testing.T) {
+	original := common.CryptoSecret
+	defer func() { common.CryptoSecret = original }()
+	common.CryptoSecret = "test-crypto-secret-for-tokens"
+
+	user := &User{Username: "linuxdo-token-user", Password: "x", Role: common.RoleCommonUser, LinuxDOId: "12345", AffCode: "aff-token-1"}
+	require.NoError(t, DB.Create(user).Error)
+
+	require.NoError(t, PersistLinuxDOTokens(user.Id, "access-secret", "refresh-secret", 1700000000))
+
+	// DB 中必须是密文，不能出现明文。
+	var rawUser User
+	require.NoError(t, DB.Select("linux_do_access_token", "linux_do_refresh_token").
+		Where("id = ?", user.Id).First(&rawUser).Error)
+	assert.NotEqual(t, "access-secret", rawUser.LinuxDOAccessToken)
+	assert.NotEqual(t, "refresh-secret", rawUser.LinuxDORefreshToken)
+	assert.NotEmpty(t, rawUser.LinuxDOAccessToken)
+
+	access, refresh, expiresAt, err := LoadLinuxDOTokens(user.Id)
+	require.NoError(t, err)
+	assert.Equal(t, "access-secret", access)
+	assert.Equal(t, "refresh-secret", refresh)
+	assert.EqualValues(t, 1700000000, expiresAt)
+}
+
+func TestListLinuxDOUsersForRefreshOnlyReturnsTokenUsers(t *testing.T) {
+	original := common.CryptoSecret
+	defer func() { common.CryptoSecret = original }()
+	common.CryptoSecret = "test-crypto-secret-list"
+
+	withToken := &User{Username: "linuxdo-with-token", Password: "x", Role: common.RoleCommonUser, LinuxDOId: "1", AffCode: "aff-token-2"}
+	noToken := &User{Username: "linuxdo-no-token", Password: "x", Role: common.RoleCommonUser, LinuxDOId: "2", AffCode: "aff-token-3"}
+	require.NoError(t, DB.Create(withToken).Error)
+	require.NoError(t, DB.Create(noToken).Error)
+
+	require.NoError(t, PersistLinuxDOTokens(withToken.Id, "a", "r", 1))
+
+	users, err := ListLinuxDOUsersForRefresh()
+	require.NoError(t, err)
+	ids := map[int]bool{}
+	for _, u := range users {
+		ids[u.Id] = true
+	}
+	assert.True(t, ids[withToken.Id], "user with refresh token must be listed")
+	assert.False(t, ids[noToken.Id], "user without refresh token must not be listed")
 }

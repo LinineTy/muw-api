@@ -24,6 +24,7 @@ const (
 	AuthFlowPurposeTelegramAssertion = "telegram_assertion"
 	AuthFlowIntentLogin              = "login"
 	AuthFlowIntentBind               = "bind"
+	AuthFlowIntentRefresh            = "refresh"
 	AuthFlowTokenBytes               = 32
 	AuthFlowDefaultCleanupRetention  = 24 * time.Hour
 )

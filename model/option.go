@@ -42,6 +42,8 @@ func InitOptionMap() {
 	common.OptionMap["GitHubOAuthEnabled"] = strconv.FormatBool(common.GitHubOAuthEnabled)
 	common.OptionMap["LinuxDOOAuthEnabled"] = strconv.FormatBool(common.LinuxDOOAuthEnabled)
 	common.OptionMap["LinuxDOBlacklist"] = strings.Join(common.LinuxDOBlacklist, "\n")
+	common.OptionMap["LinuxDoRefreshEnabled"] = strconv.FormatBool(common.LinuxDoRefreshEnabled)
+	common.OptionMap["LinuxDoRefreshIntervalHours"] = strconv.Itoa(common.LinuxDoRefreshIntervalHours)
 	common.OptionMap["TelegramOAuthEnabled"] = strconv.FormatBool(common.TelegramOAuthEnabled)
 	common.OptionMap["WeChatAuthEnabled"] = strconv.FormatBool(common.WeChatAuthEnabled)
 	common.OptionMap["TurnstileCheckEnabled"] = strconv.FormatBool(common.TurnstileCheckEnabled)
@@ -298,6 +300,8 @@ func updateOptionMap(key string, value string) (err error) {
 			common.GitHubOAuthEnabled = boolValue
 		case "LinuxDOOAuthEnabled":
 			common.LinuxDOOAuthEnabled = boolValue
+		case "LinuxDoRefreshEnabled":
+			common.LinuxDoRefreshEnabled = boolValue
 		case "WeChatAuthEnabled":
 			common.WeChatAuthEnabled = boolValue
 		case "TelegramOAuthEnabled":
@@ -440,6 +444,8 @@ func updateOptionMap(key string, value string) (err error) {
 		common.LinuxDOClientSecret = value
 	case "LinuxDOMinimumTrustLevel":
 		common.LinuxDOMinimumTrustLevel, _ = strconv.Atoi(value)
+	case "LinuxDoRefreshIntervalHours":
+		common.LinuxDoRefreshIntervalHours, _ = strconv.Atoi(value)
 	case "LinuxDOGroupMapping":
 		err = common.UpdateLinuxDOGroupMappingByJSONString(value)
 	case "LinuxDOBlacklist":

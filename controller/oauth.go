@@ -46,15 +46,17 @@ func GenerateOAuthCode(c *gin.Context) {
 	request.Intent = strings.TrimSpace(request.Intent)
 	request.Aff = strings.TrimSpace(request.Aff)
 	if oauth.GetProvider(request.Provider) == nil ||
-		(request.Intent != model.AuthFlowIntentLogin && request.Intent != model.AuthFlowIntentBind) ||
+		(request.Intent != model.AuthFlowIntentLogin &&
+			request.Intent != model.AuthFlowIntentBind &&
+			request.Intent != model.AuthFlowIntentRefresh) ||
 		len(request.Aff) > 32 ||
-		(request.Intent == model.AuthFlowIntentBind && request.Aff != "") {
+		((request.Intent == model.AuthFlowIntentBind || request.Intent == model.AuthFlowIntentRefresh) && request.Aff != "") {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
 	userID := 0
 	sessionID := ""
-	if request.Intent == model.AuthFlowIntentBind {
+	if request.Intent == model.AuthFlowIntentBind || request.Intent == model.AuthFlowIntentRefresh {
 		identity, ok := middleware.GetSessionAuthIdentity(c)
 		if !ok {
 			c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "绑定操作需要登录"})
@@ -123,8 +125,10 @@ func HandleOAuth(c *gin.Context) {
 		Provider: providerName,
 		Intent:   pendingFlow.Intent,
 	}
-	// 2. Bind flows are bound to the live dashboard Session that created them.
-	if pendingFlow.Intent == model.AuthFlowIntentBind {
+	// 2. Bind and refresh flows are bound to the live dashboard Session that
+	// created them; a refresh re-consents an already-logged-in user without
+	// starting a new login session.
+	if pendingFlow.Intent == model.AuthFlowIntentBind || pendingFlow.Intent == model.AuthFlowIntentRefresh {
 		identity, ok := middleware.GetSessionAuthIdentity(c)
 		if !ok || identity.UserID != pendingFlow.UserId || identity.SessionID != pendingFlow.SessionId {
 			c.JSON(http.StatusForbidden, gin.H{
@@ -165,6 +169,10 @@ func HandleOAuth(c *gin.Context) {
 	}
 	if pendingFlow.Intent == model.AuthFlowIntentBind {
 		handleOAuthBind(c, provider, pendingFlow, state)
+		return
+	}
+	if pendingFlow.Intent == model.AuthFlowIntentRefresh {
+		handleOAuthRefresh(c, provider, pendingFlow, state)
 		return
 	}
 
@@ -218,6 +226,10 @@ func HandleOAuth(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgOAuthUserBanned)
 		return
 	}
+
+	// 8.5 Persist the OAuth tokens (LinuxDO only) so the trust level can be
+	// refreshed silently later without another consent.
+	persistLinuxDOToken(provider, user, token)
 
 	// 9. Setup login
 	setupLogin(user, c)
@@ -289,8 +301,153 @@ func handleOAuthBind(c *gin.Context, provider oauth.Provider, pendingFlow *model
 		}
 	}
 
+	// Persist LinuxDO OAuth tokens so the bound account's trust level can be
+	// refreshed silently later.
+	persistLinuxDOToken(provider, &user, token)
+
 	common.ApiSuccessI18n(c, i18n.MsgOAuthBindSuccess, gin.H{
 		"action": "bind",
+	})
+}
+
+// persistLinuxDOToken stores the OAuth tokens for LinuxDO accounts (a no-op for
+// other providers) so their trust level can be refreshed silently later. Token
+// persistence is best-effort: a failure only degrades silent refresh, never the
+// login or bind itself.
+func persistLinuxDOToken(provider oauth.Provider, user *model.User, token *oauth.OAuthToken) {
+	if user == nil || token == nil {
+		return
+	}
+	if _, ok := provider.(*oauth.LinuxDOProvider); !ok {
+		return
+	}
+	expiresAt := time.Now().Add(time.Duration(token.ExpiresIn) * time.Second).Unix()
+	if err := model.PersistLinuxDOTokens(user.Id, token.AccessToken, token.RefreshToken, expiresAt); err != nil {
+		common.SysError(fmt.Sprintf("[OAuth-LinuxDO] failed to persist tokens for user %d: %s", user.Id, err.Error()))
+	}
+}
+
+// handleOAuthRefresh handles the refresh-consent callback: the user re-authorizes
+// with Linux Do so their trust level and the stored OAuth tokens can be
+// refreshed. Unlike login it does NOT setup a new session — the user stays on
+// their existing login.
+func handleOAuthRefresh(c *gin.Context, provider oauth.Provider, pendingFlow *model.AuthFlow, state string) {
+	lp, ok := provider.(*oauth.LinuxDOProvider)
+	if !ok {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+
+	code := c.Query("code")
+	token, err := lp.ExchangeToken(c.Request.Context(), code, c)
+	if err != nil {
+		handleOAuthError(c, err)
+		return
+	}
+
+	oauthUser, err := lp.GetUserInfoForRefresh(c.Request.Context(), token)
+	if err != nil {
+		handleOAuthError(c, err)
+		return
+	}
+
+	if _, err := model.ConsumeAuthFlow(state, model.AuthFlowMatch{
+		Purpose:   model.AuthFlowPurposeOAuth,
+		Provider:  pendingFlow.Provider,
+		Intent:    model.AuthFlowIntentRefresh,
+		UserId:    pendingFlow.UserId,
+		SessionId: pendingFlow.SessionId,
+	}); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": i18n.T(c, i18n.MsgOAuthStateInvalid)})
+		return
+	}
+
+	user := model.User{Id: pendingFlow.UserId}
+	if err := user.FillUserById(); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	applyLinuxDOProfile(&user, oauthUser, false)
+	persistLinuxDOToken(provider, &user, token)
+
+	common.ApiSuccessI18n(c, i18n.MsgOAuthBindSuccess, gin.H{
+		"action":      "refresh",
+		"trust_level": user.LinuxDOTrustLevel,
+		"group":       user.Group,
+	})
+}
+
+// RefreshLinuxDOTrustLevel is the silent manual refresh endpoint. It uses the
+// stored LinuxDO refresh token to pull the latest trust level without any user
+// interaction. When the stored token is missing/revoked it returns a
+// "reauth_required" code so the client falls back to the interactive
+// refresh-consent flow.
+func RefreshLinuxDOTrustLevel(c *gin.Context) {
+	identity, ok := middleware.GetSessionAuthIdentity(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "登录状态已失效"})
+		return
+	}
+
+	user := model.User{Id: identity.UserID}
+	if err := user.FillUserById(); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if user.LinuxDOId == "" {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+
+	_, refresh, _, err := model.LoadLinuxDOTokens(user.Id)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if refresh == "" {
+		// 200 + business code so the client interceptor does not treat this as a
+		// session-expiry 401 (which would refresh + replay the request).
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"code":    "reauth_required",
+			"message": "需要重新授权以刷新 LinuxDo 等级",
+		})
+		return
+	}
+
+	provider := &oauth.LinuxDOProvider{}
+	token, err := provider.RefreshAccessToken(c.Request.Context(), refresh)
+	if err != nil {
+		if errors.Is(err, oauth.ErrLinuxDOTokenInvalid) {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"code":    "reauth_required",
+				"message": "需要重新授权以刷新 LinuxDo 等级",
+			})
+			return
+		}
+		handleOAuthError(c, err)
+		return
+	}
+
+	oauthUser, err := provider.GetUserInfoForRefresh(c.Request.Context(), token)
+	if err != nil {
+		handleOAuthError(c, err)
+		return
+	}
+
+	applyLinuxDOProfile(&user, oauthUser, false)
+	persistLinuxDOToken(provider, &user, token)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data": gin.H{
+			"action":      "refresh",
+			"trust_level": user.LinuxDOTrustLevel,
+			"group":       user.Group,
+		},
 	})
 }
 

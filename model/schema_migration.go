@@ -29,9 +29,9 @@ import (
 // CurrentSchemaVersion 就跳过 AutoMigrate 与迁移，避免 SQLite（glebarez 驱动）
 // 每次启动整表重建，也为旧库升级提供按版本的特殊适配通道。
 type SchemaMigration struct {
-	Version   int   `gorm:"primaryKey"`
+	Version   int    `gorm:"primaryKey"`
 	Name      string `gorm:"type:varchar(128)"`
-	AppliedAt int64 `gorm:"autoCreateTime"`
+	AppliedAt int64  `gorm:"autoCreateTime"`
 }
 
 func (SchemaMigration) TableName() string { return "schema_migrations" }
@@ -39,7 +39,7 @@ func (SchemaMigration) TableName() string { return "schema_migrations" }
 // CurrentSchemaVersion 是当前代码期望的 schema 版本。修改任何 model 结构时
 // 必须递增该值；如需数据转换/特殊适配，同时新增对应的 Migration 条目。
 // 兜底：DEBUG=true 启动时即使已最新也强制 AutoMigrate 校验结构。
-const CurrentSchemaVersion = 2
+const CurrentSchemaVersion = 3
 
 // Migration 是一个可单独应用、记录版本戳的迁移步骤。Up 按版本升序执行，
 // 用于 AutoMigrate 补不了的结构改造（换类型、删列）与数据迁移/特殊适配。
@@ -56,6 +56,10 @@ type Migration struct {
 var migrations = []Migration{
 	{Version: 1, Name: "baseline-2026-08", Up: migrationBaselineV1},
 	{Version: 2, Name: "subscription-redesign-wipe", Up: migrationSubscriptionWipe},
+	// v3: users 表新增 LinuxDO token 三列。列本身由 AutoMigrate 添加（本迁移在其后
+	// 执行），此条目只打版本戳，避免每次启动 SQLite 整表重建。空 Up 表明无需数据
+	// 转换：旧用户无 token，下次 LinuxDO 登录时写入。
+	{Version: 3, Name: "linuxdo-token-columns", Up: func(db *gorm.DB) error { return nil }},
 }
 
 // ensureSchemaMigrationsTable 用纯 SQL 建版本表，避免对版本表自身跑 AutoMigrate。
