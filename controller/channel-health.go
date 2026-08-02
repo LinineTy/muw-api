@@ -57,6 +57,11 @@ func GetModelHealth(c *gin.Context) {
 	}
 
 	rows := model.AggregateChannelTestRecords(records)
+	if c.GetInt("role") < common.RoleAdminUser {
+		// Non-admin viewers get model-level aggregation only: channel identity,
+		// per-channel latency and error reasons must not leak.
+		rows = model.CollapseToModelLevel(rows)
+	}
 	if unhealthyOnly {
 		filtered := rows[:0]
 		for _, row := range rows {

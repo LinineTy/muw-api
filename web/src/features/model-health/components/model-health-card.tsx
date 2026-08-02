@@ -27,6 +27,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 
 import type { ModelHealthRow, TestTrendPoint } from '../types'
 import { ChannelTestDetailPanel } from './channel-test-detail-panel'
@@ -60,6 +62,8 @@ export function ModelHealthCard({
 }) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
+  const userRole = useAuthStore((s) => s.auth.user?.role)
+  const isAdmin = Boolean(userRole && userRole >= ROLE.ADMIN)
 
   const totalTests = rows.reduce((sum, row) => sum + row.test_count, 0)
   const totalSuccess = rows.reduce((sum, row) => sum + row.success_count, 0)
@@ -89,24 +93,26 @@ export function ModelHealthCard({
 
       <div className='flex items-center gap-2 px-3 pb-1.5 sm:px-4'>
         <HealthBlocks trend={mergeTrend(rows)} />
-        <Button
-          variant='ghost'
-          size='sm'
-          className='ml-auto h-6 px-1.5'
-          onClick={() => setExpanded(!expanded)}
-        >
-          {expanded ? (
-            <ChevronUp className='size-3.5' />
-          ) : (
-            <ChevronDown className='size-3.5' />
-          )}
-          <span className='hidden text-xs md:inline'>
-            {expanded ? t('Collapse') : t('Detail')}
-          </span>
-        </Button>
+        {isAdmin ? (
+          <Button
+            variant='ghost'
+            size='sm'
+            className='ml-auto h-6 px-1.5'
+            onClick={() => setExpanded(!expanded)}
+          >
+            {expanded ? (
+              <ChevronUp className='size-3.5' />
+            ) : (
+              <ChevronDown className='size-3.5' />
+            )}
+            <span className='hidden text-xs md:inline'>
+              {expanded ? t('Collapse') : t('Detail')}
+            </span>
+          </Button>
+        ) : null}
       </div>
 
-      {expanded ? (
+      {isAdmin && expanded ? (
         <div className='bg-muted/30 border-t px-3 py-2 sm:px-4'>
           <div className='space-y-3'>
             {rows.map((row) => (

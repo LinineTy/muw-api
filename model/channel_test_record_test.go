@@ -81,6 +81,73 @@ func TestAggregateChannelTestRecordsEmpty(t *testing.T) {
 	assert.Empty(t, rows)
 }
 
+func TestCollapseToModelLevel(t *testing.T) {
+	rows := []ModelHealthRow{
+		{
+			ChannelId: 1, ChannelName: "A", ModelName: "gpt-4o",
+			TestCount: 3, SuccessCount: 2, SuccessRate: 66.7, AvgResponseTime: 200,
+			LastResponseTime: 200, LastTestTime: 3000, LastError: "upstream 500", UserTrafficCount: 1,
+			Trend: []TestTrendPoint{
+				{CreatedAt: 1000, ResponseTime: 100, Success: true},
+				{CreatedAt: 2000, ResponseTime: 300, Success: false},
+				{CreatedAt: 3000, ResponseTime: 200, Success: true},
+			},
+		},
+		{
+			ChannelId: 2, ChannelName: "B", ModelName: "gpt-4o",
+			TestCount: 1, SuccessCount: 1, SuccessRate: 100, AvgResponseTime: 50,
+			LastResponseTime: 50, LastTestTime: 2500, LastError: "", UserTrafficCount: 0,
+			Trend: []TestTrendPoint{{CreatedAt: 2500, ResponseTime: 50, Success: true}},
+		},
+		{
+			ChannelId: 3, ChannelName: "C", ModelName: "gpt-4o-mini",
+			TestCount: 1, SuccessCount: 0, SuccessRate: 0, AvgResponseTime: 500,
+			LastResponseTime: 500, LastTestTime: 1500, LastError: "timeout", UserTrafficCount: 0,
+			Trend: []TestTrendPoint{{CreatedAt: 1500, ResponseTime: 500, Success: false}},
+		},
+	}
+
+	merged := CollapseToModelLevel(rows)
+	require.Len(t, merged, 2)
+
+	byModel := map[string]ModelHealthRow{}
+	for _, row := range merged {
+		byModel[row.ModelName] = row
+	}
+
+	// gpt-4o merges both channels: counts sum, latency is test-count weighted.
+	row := byModel["gpt-4o"]
+	assert.Equal(t, 4, row.TestCount)
+	assert.Equal(t, 3, row.SuccessCount)
+	assert.InDelta(t, 75, row.SuccessRate, 0.1)
+	assert.Equal(t, 163, row.AvgResponseTime) // round((200*3+50*1)/4) = round(162.5) = 163
+	assert.Equal(t, 1, row.UserTrafficCount)
+	assert.Equal(t, int64(3000), row.LastTestTime)
+	assert.Equal(t, 200, row.LastResponseTime)
+	// Channel-scoped details are zeroed for non-admin viewers.
+	assert.Equal(t, 0, row.ChannelId)
+	assert.Equal(t, "", row.ChannelName)
+	assert.Equal(t, "", row.LastError)
+
+	// Trends are merged and re-sorted chronologically (tie-break by latency).
+	require.Len(t, row.Trend, 4)
+	assert.Equal(t, []int64{1000, 2000, 2500, 3000}, []int64{
+		row.Trend[0].CreatedAt, row.Trend[1].CreatedAt, row.Trend[2].CreatedAt, row.Trend[3].CreatedAt,
+	})
+
+	// A single channel row collapses to one model row, still sanitized.
+	mini := byModel["gpt-4o-mini"]
+	assert.Equal(t, 1, mini.TestCount)
+	assert.Equal(t, 0, mini.ChannelId)
+	assert.Equal(t, "", mini.ChannelName)
+	assert.Equal(t, "", mini.LastError)
+}
+
+func TestCollapseToModelLevelEmpty(t *testing.T) {
+	merged := CollapseToModelLevel(nil)
+	assert.Empty(t, merged)
+}
+
 func TestAggregateChannelTestRecordsUserTrafficSource(t *testing.T) {
 	records := []ChannelTestRecord{
 		{Id: 1, ChannelId: 1, ChannelName: "A", ModelName: "deepseek-chat", Success: true, ResponseTime: 100, Source: ChannelTestSourceUser, CreatedAt: 1000},
