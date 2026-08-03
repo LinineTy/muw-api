@@ -238,6 +238,14 @@ func newSubContext(c *gin.Context, body []byte) (*gin.Context, *httptest.Respons
 		if k == common.KeyBodyStorage {
 			continue
 		}
+		// 视觉兜底子请求必须拥有独立的 request_id：父请求的 request_id 已被用作
+		// 订阅预扣的幂等键（PreConsumeUserSubscription 按 request_id 去重）。
+		// 若子请求复用同一 id，第二个及以后的子请求预扣会命中幂等分支不再增加
+		// amount_used，但每个子请求结算仍会按自身预扣执行退款，导致订阅额度被
+		// 反复回滚（表现为余额逐笔回升）。
+		if k == common.RequestIdKey {
+			continue
+		}
 		keys[k] = v
 	}
 	subCtx.Keys = keys
