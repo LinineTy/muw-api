@@ -4606,7 +4606,7 @@
     "This page has not been created yet.": "Эта страница еще не создана.",
     "This period global quota has been fully claimed": "This period global quota has been fully claimed",
     "This plan does not allow balance redemption": "Этот план не разрешает оплату балансом",
-    "This platform has enabled image vision fallback. When you send an image to a model without vision support, the image is automatically described by a vision model, which may incur extra charges.": "This platform has enabled image vision fallback. When you send an image to a model without vision support, the image is automatically described by a vision model, which may incur extra charges.",
+    "This platform has enabled image vision fallback. When you send an image to a model without vision support, the image is automatically described by a vision model, which may incur extra charges. This fallback only applies to the OpenAI chat interface (/v1/chat/completions); Claude Messages and Responses requests are not affected.": "This platform has enabled image vision fallback. When you send an image to a model without vision support, the image is automatically described by a vision model, which may incur extra charges. This fallback only applies to the OpenAI chat interface (/v1/chat/completions); Claude Messages and Responses requests are not affected.",
     "This pool is fully claimed this period": "This pool is fully claimed this period",
     "This project must be used in compliance with the": "Этот проект должен использоваться в соответствии с",
     "This removes {{count}} failed models from this channel. This action cannot be undone.": "Это удалит {{count}} неуспешных моделей из этого канала. Действие необратимо.",
