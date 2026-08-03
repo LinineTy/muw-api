@@ -33,7 +33,10 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
+import { ComboboxInput } from '@/components/ui/combobox-input'
 import { Input } from '@/components/ui/input'
+
+import { useSystemGroups } from '../hooks/use-system-options'
 
 const rateLimitDialogSchema = z.object({
   groupName: z.string().min(1, 'Group name is required'),
@@ -62,6 +65,8 @@ type RateLimitDialogProps = {
   onOpenChange: (open: boolean) => void
   onSave: (data: RateLimitEntryData) => void
   editData?: RateLimitEntryData | null
+  /** 已在限速配置中占用的分组名，下拉里过滤掉避免重复添加 */
+  usedGroups?: string[]
 }
 
 export function RateLimitDialog({
@@ -69,8 +74,14 @@ export function RateLimitDialog({
   onOpenChange,
   onSave,
   editData,
+  usedGroups = [],
 }: RateLimitDialogProps) {
   const { t } = useTranslation()
+  const { data: groups = [] } = useSystemGroups()
+  const usedGroupSet = new Set(usedGroups)
+  const groupOptions = groups
+    .filter((group) => !usedGroupSet.has(group))
+    .map((group) => ({ value: group, label: group }))
   const isEditMode = !!editData
 
   const form = useForm<RateLimitDialogFormValues>({
@@ -141,11 +152,18 @@ export function RateLimitDialog({
               <FormItem>
                 <FormLabel>{t('Group Name')}</FormLabel>
                 <FormControl>
-                  <Input
-                    placeholder={t('e.g., default, vip, premium')}
-                    {...field}
-                    disabled={isEditMode}
-                  />
+                  {isEditMode ? (
+                    <Input {...field} disabled />
+                  ) : (
+                    <ComboboxInput
+                      options={groupOptions}
+                      value={field.value ?? ''}
+                      onValueChange={field.onChange}
+                      placeholder={t('Select or enter group name')}
+                      allowCustomValue
+                      openOnFocus={false}
+                    />
+                  )}
                 </FormControl>
                 <FormDescription>
                   {isEditMode

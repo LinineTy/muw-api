@@ -18,12 +18,31 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 
-import { getSystemOptions } from '../api'
+import { getAllSystemModels, getSystemGroups, getSystemOptions } from '../api'
 
 export function useSystemOptions() {
   return useQuery({
     queryKey: ['system-options'],
     queryFn: getSystemOptions,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+// useSystemGroups 返回全部分组名。系统设置中多个 section（默认分组、限速
+// 分组）共用同一 queryKey，react-query 会自动去重共享缓存。
+export function useSystemGroups() {
+  return useQuery({
+    queryKey: ['system-option-groups'],
+    queryFn: getSystemGroups,
+  })
+}
+
+// useSystemModels 返回全部模型（含禁用）。模型列表不常变，加 staleTime
+// 避免多个 section 同时挂载时重复拉取。
+export function useSystemModels() {
+  return useQuery({
+    queryKey: ['system-option-models'],
+    queryFn: getAllSystemModels,
     staleTime: 5 * 60 * 1000,
   })
 }
