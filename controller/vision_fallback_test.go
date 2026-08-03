@@ -64,16 +64,16 @@ func TestApplyDescriptions(t *testing.T) {
 	}
 
 	applyDescriptions(req, map[imageRef]string{
-		{messageIdx: 1, partIdx: 1}: "[图片描述] a red circle",
-		{messageIdx: 2, partIdx: 0}: "[图片描述] a blue square",
+		{messageIdx: 1, partIdx: 1}: "[图片描述（由视觉辅助模型自动生成）] a red circle",
+		{messageIdx: 2, partIdx: 0}: "[图片描述（由视觉辅助模型自动生成）] a blue square",
 	})
 
 	// 图片全部被描述后，消息退化为纯文本：content 应该是普通字符串，
 	// 保证 StringContent()/ParseContent() 与 OpenAI→Claude 等转换都能正确处理。
 	assert.True(t, req.Messages[1].IsStringContent())
-	assert.Equal(t, "look at this\n[图片描述] a red circle", req.Messages[1].StringContent())
+	assert.Equal(t, "look at this\n[图片描述（由视觉辅助模型自动生成）] a red circle", req.Messages[1].StringContent())
 	assert.True(t, req.Messages[2].IsStringContent())
-	assert.Equal(t, "[图片描述] a blue square", req.Messages[2].StringContent())
+	assert.Equal(t, "[图片描述（由视觉辅助模型自动生成）] a blue square", req.Messages[2].StringContent())
 
 	// 无图片的消息保持不变。
 	assert.Equal(t, "plain text", req.Messages[0].StringContent())

@@ -74,7 +74,7 @@ func applyVisionFallback(c *gin.Context, info *relaycommon.RelayInfo) *types.New
 		if apiErr != nil {
 			return apiErr
 		}
-		descriptions[ref] = "[图片描述] " + desc
+		descriptions[ref] = "[图片描述（由视觉辅助模型自动生成）] " + desc
 	}
 
 	applyDescriptions(req, descriptions)
