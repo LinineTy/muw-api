@@ -1,13 +1,17 @@
 package controller
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -97,7 +101,7 @@ func TestNewSubContextStripsRequestId(t *testing.T) {
 		"some-other-key":      "kept",
 	}
 
-	subCtx, _ := newSubContext(parent, []byte(`{"model":"vision"}`))
+	subCtx, _ := newSubContext(parent.Request.Context(), parent, []byte(`{"model":"vision"}`))
 
 	// The sub-request must not inherit the parent request id: the parent id is
 	// already consumed as the subscription pre-consume idempotency key, so reusing
@@ -117,5 +121,56 @@ func TestNewSubContextStripsRequestId(t *testing.T) {
 	bodyBytes := make([]byte, 128)
 	n, _ := subCtx.Request.Body.Read(bodyBytes)
 	assert.True(t, strings.Contains(string(bodyBytes[:n]), `"vision"`))
+
+	// The sub-request runs under the fallback's bounded context, not the parent
+	// request context, so a stuck vision model cannot hold the parent request.
+	assert.Equal(t, parent.Request.Context(), subCtx.Request.Context())
+}
+
+func TestStartVisionFallbackKeepAlive(t *testing.T) {
+	oldInterval := fallbackKeepAliveInterval
+	fallbackKeepAliveInterval = 50 * time.Millisecond
+	defer func() { fallbackKeepAliveInterval = oldInterval }()
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+
+	stop := startVisionFallbackKeepAlive(c)
+	require.NotNil(t, stop)
+	defer stop()
+
+	// SSE response is committed and the flag is set so the relay error handler
+	// knows to report a later failure as an SSE event instead of a JSON body.
+	assert.Equal(t, "text/event-stream", c.Writer.Header().Get("Content-Type"))
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.True(t, common.GetContextKeyBool(c, constant.ContextKeyVisionFallbackSSEStarted))
+
+	// Keep-alive pings actually reach the client during the fallback.
+	require.Eventually(t, func() bool {
+		return strings.Contains(rec.Body.String(), ": PING")
+	}, time.Second, 20*time.Millisecond)
+
+	// The stop func terminates the ping loop cleanly.
+	stop()
+	bodyAfterStop := rec.Body.String()
+	time.Sleep(100 * time.Millisecond)
+	assert.Equal(t, bodyAfterStop, rec.Body.String(), "no pings should be written after stop")
+}
+
+func TestWriteVisionFallbackSSEError(t *testing.T) {
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+
+	apiErr := types.NewError(fmt.Errorf("vision model blew up"), types.ErrorCodeBadResponse)
+	writeVisionFallbackSSEError(c, apiErr)
+
+	// The failure is reported as an SSE data event carrying the OpenAI error, the
+	// shape OpenAI-compatible clients treat as a stream error.
+	body := rec.Body.String()
+	assert.True(t, strings.HasPrefix(body, "data: {"), "expected an SSE data event, got: %s", body)
+	assert.Contains(t, body, `"error"`)
+	assert.Contains(t, body, "vision model blew up")
 }
 

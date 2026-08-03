@@ -2,26 +2,45 @@ package controller
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/middleware"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 
+	"github.com/bytedance/gopkg/util/gopool"
 	"github.com/gin-gonic/gin"
+	"github.com/samber/lo"
 )
 
 // maxVisionFallbackImages bounds how many images per request are described by
 // the vision model, so a single request cannot fan out into unbounded sub-calls.
 const maxVisionFallbackImages = 4
+
+// maxVisionFallbackDuration bounds the whole vision fallback (all images). A
+// stuck vision model must fail the request fast instead of holding it forever.
+// Descriptions run in parallel, so the bound is roughly the single-image time
+// with headroom for retries.
+const maxVisionFallbackDuration = 30 * time.Second
+
+// fallbackKeepAliveInterval is how often a streaming request receives an SSE
+// keep-alive while images are being described. Clients with read-idle timeouts
+// would otherwise drop the connection during the silent fallback period. It is
+// a var (not a const) so tests can shorten the interval.
+var fallbackKeepAliveInterval = 2 * time.Second
 
 // imageRef locates one image part inside a request message.
 type imageRef struct {
@@ -61,24 +80,114 @@ func applyVisionFallback(c *gin.Context, info *relaycommon.RelayInfo) *types.New
 		return nil
 	}
 
-	// Describe every image through the vision model (bounded), then rewrite the
-	// messages in a second pass so a failure never leaves a partially rewritten
-	// request.
+	// Streaming requests wait silently while images are described, which can
+	// exceed client read-idle timeouts and drop the connection (client_gone).
+	// Open the SSE response first and keep it alive with pings during the
+	// fallback so the client sees a live connection instead of a hang.
+	var stopKeepAlive func()
+	if lo.FromPtrOr(req.Stream, false) {
+		stopKeepAlive = startVisionFallbackKeepAlive(c)
+	}
+
+	// Bound the whole fallback so a stuck vision model fails fast. Descriptions
+	// run in parallel (bounded by maxVisionFallbackImages), so all images finish
+	// in roughly the single-image time. Cancelling the context on the first
+	// failure aborts in-flight descriptions immediately.
+	fallbackCtx, cancel := context.WithTimeout(c.Request.Context(), maxVisionFallbackDuration)
+	defer cancel()
+
 	descriptions := make(map[imageRef]string, len(refs))
+	var (
+		wg       sync.WaitGroup
+		mu       sync.Mutex
+		firstErr *types.NewAPIError
+	)
 	for i, ref := range refs {
 		if i >= maxVisionFallbackImages {
 			descriptions[ref] = "[附加图片已省略]"
 			continue
 		}
-		desc, apiErr := describeImage(c, info, setting, ref.url)
-		if apiErr != nil {
-			return apiErr
-		}
-		descriptions[ref] = "[图片描述（由视觉辅助模型自动生成）] " + desc
+		wg.Add(1)
+		gopool.Go(func() {
+			defer wg.Done()
+			desc, apiErr := describeImage(fallbackCtx, c, info, setting, ref.url)
+			mu.Lock()
+			defer mu.Unlock()
+			if apiErr != nil {
+				if firstErr == nil {
+					firstErr = apiErr
+					cancel() // abort in-flight descriptions on the first failure
+				}
+				return
+			}
+			descriptions[ref] = "[图片描述（由视觉辅助模型自动生成）] " + desc
+		})
+	}
+	wg.Wait()
+
+	if stopKeepAlive != nil {
+		stopKeepAlive()
+	}
+	if firstErr != nil {
+		return firstErr
 	}
 
 	applyDescriptions(req, descriptions)
 	return nil
+}
+
+// startVisionFallbackKeepAlive opens the SSE response for a streaming request
+// and starts sending keep-alive pings so clients waiting through the (several
+// seconds long) vision descriptions do not drop the connection. It returns a
+// stop func that must be called once the fallback finishes.
+func startVisionFallbackKeepAlive(c *gin.Context) func() {
+	helper.SetEventStreamHeaders(c)
+	c.Writer.WriteHeader(http.StatusOK)
+	_ = helper.FlushWriter(c)
+
+	// Mark that an SSE response is committed: a later relay failure must be
+	// written as an SSE error event instead of a JSON body.
+	common.SetContextKey(c, constant.ContextKeyVisionFallbackSSEStarted, true)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	wg.Add(1)
+	gopool.Go(func() {
+		defer wg.Done()
+		ticker := time.NewTicker(fallbackKeepAliveInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if err := helper.PingData(c); err != nil {
+					// Client gone or write failed; nothing more to keep alive.
+					return
+				}
+			case <-ctx.Done():
+				return
+			case <-c.Request.Context().Done():
+				return
+			}
+		}
+	})
+	return func() {
+		cancel()
+		wg.Wait()
+	}
+}
+
+// writeVisionFallbackSSEError reports a relay failure on a request whose SSE
+// response was already opened by the vision fallback. The 200 status and
+// event-stream headers are committed, so the error is delivered as an SSE data
+// event (which OpenAI-compatible clients surface as a stream error) instead of
+// a JSON body.
+func writeVisionFallbackSSEError(c *gin.Context, apiErr *types.NewAPIError) {
+	payload := gin.H{"error": apiErr.ToOpenAIError()}
+	data, err := common.Marshal(payload)
+	if err != nil {
+		return
+	}
+	_ = helper.StringData(c, string(data))
 }
 
 // applyDescriptions replaces the image parts referenced by descriptions with
@@ -154,8 +263,9 @@ func collectImageParts(req *dto.GeneralOpenAIRequest) []imageRef {
 // describeImage sends one image to the vision model and returns its text
 // description. The sub-request runs through the full relay pipeline (channel
 // selection, billing, response parsing) on an isolated gin context so the main
-// request's context and response are never touched.
-func describeImage(c *gin.Context, info *relaycommon.RelayInfo, setting *operation_setting.VisualFallbackSetting, imageURL string) (string, *types.NewAPIError) {
+// request's context and response are never touched. ctx bounds the sub-request
+// so a stuck vision model fails fast instead of hanging the parent request.
+func describeImage(ctx context.Context, c *gin.Context, info *relaycommon.RelayInfo, setting *operation_setting.VisualFallbackSetting, imageURL string) (string, *types.NewAPIError) {
 	visionReq := &dto.GeneralOpenAIRequest{
 		Model: setting.Model,
 		Messages: []dto.Message{
@@ -175,7 +285,7 @@ func describeImage(c *gin.Context, info *relaycommon.RelayInfo, setting *operati
 		return "", types.NewError(fmt.Errorf("failed to build vision request: %w", err), types.ErrorCodeInvalidRequest)
 	}
 
-	subCtx, rec := newSubContext(c, body)
+	subCtx, rec := newSubContext(ctx, c, body)
 
 	retryParam := &service.RetryParam{
 		Ctx:         subCtx,
@@ -228,8 +338,10 @@ func describeImage(c *gin.Context, info *relaycommon.RelayInfo, setting *operati
 
 // newSubContext builds an isolated gin context for a sub-request: it copies the
 // caller's identity keys (minus the cached request body, which is replaced by
-// body) and captures the response into rec.
-func newSubContext(c *gin.Context, body []byte) (*gin.Context, *httptest.ResponseRecorder) {
+// body) and captures the response into rec. ctx is the fallback's bounded
+// context, so the sub-request shares the fallback timeout instead of the parent
+// request context.
+func newSubContext(ctx context.Context, c *gin.Context, body []byte) (*gin.Context, *httptest.ResponseRecorder) {
 	rec := httptest.NewRecorder()
 	subCtx, _ := gin.CreateTestContext(rec)
 
@@ -250,7 +362,7 @@ func newSubContext(c *gin.Context, body []byte) (*gin.Context, *httptest.Respons
 	}
 	subCtx.Keys = keys
 
-	newReq := c.Request.Clone(c.Request.Context())
+	newReq := c.Request.Clone(ctx)
 	newReq.Body = io.NopCloser(bytes.NewReader(body))
 	newReq.ContentLength = int64(len(body))
 	subCtx.Request = newReq
