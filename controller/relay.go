@@ -93,6 +93,14 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		if newAPIError != nil {
 			logger.LogError(c, fmt.Sprintf("relay error: %s", common.LocalLogPreview(newAPIError.Error())))
 			newAPIError.SetMessage(common.MessageWithRequestId(newAPIError.Error(), requestId))
+			// If the vision fallback already opened an SSE response for a
+			// streaming request, the 200/event-stream headers are committed and a
+			// JSON error body would corrupt the stream. Report the failure as an
+			// SSE error event instead.
+			if common.GetContextKeyBool(c, constant.ContextKeyVisionFallbackSSEStarted) {
+				writeVisionFallbackSSEError(c, newAPIError)
+				return
+			}
 			switch relayFormat {
 			case types.RelayFormatOpenAIRealtime:
 				helper.WssError(c, ws, newAPIError.ToOpenAIError())

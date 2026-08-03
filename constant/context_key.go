@@ -73,4 +73,10 @@ const (
 	// fallback in authHelper (finishAdminAudit) skips its record to avoid
 	// duplicate entries.
 	ContextKeyAuditLogged ContextKey = "audit_logged"
+
+	// ContextKeyVisionFallbackSSEStarted marks that the vision fallback already
+	// opened an SSE response for a streaming request (200 + event-stream headers
+	// committed). Any later relay failure must then be reported as an SSE error
+	// event instead of a JSON body.
+	ContextKeyVisionFallbackSSEStarted ContextKey = "vision_fallback_sse_started"
 )
