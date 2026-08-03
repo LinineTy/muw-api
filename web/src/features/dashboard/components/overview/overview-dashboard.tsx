@@ -64,7 +64,7 @@ export function OverviewDashboard() {
           <AlertTitle>{t('Image vision assistance enabled')}</AlertTitle>
           <AlertDescription>
             {t(
-              'This platform has enabled image vision fallback. When you send an image to a model without vision support, the image is automatically described by a vision model, which may incur extra charges.'
+              'This platform has enabled image vision fallback. When you send an image to a model without vision support, the image is automatically described by a vision model, which may incur extra charges. This fallback only applies to the OpenAI chat interface (/v1/chat/completions); Claude Messages and Responses requests are not affected.'
             )}
           </AlertDescription>
         </Alert>
