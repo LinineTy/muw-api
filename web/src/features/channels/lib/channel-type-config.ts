@@ -164,6 +164,17 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
       models: 'Models',
     },
   },
+  61: {
+    id: 61,
+    name: CHANNEL_TYPES[61],
+    icon: 'SenseNova',
+    defaultBaseUrl: 'https://token.sensenova.cn',
+    hints: {
+      baseUrl: 'Default: https://token.sensenova.cn (do not append /v1)',
+      key: 'Format: sk-...',
+      models: 'sensenova-u1-fast',
+    },
+  },
 }
 
 /**

@@ -187,6 +187,11 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 			requestPath = "/v1/images/generations"
 		}
 
+		// SenseNova U1 Fast 图像生成模型
+		if channel.Type == constant.ChannelTypeSenseNova && strings.Contains(testModel, "sensenova-u1") {
+			requestPath = "/v1/images/generations"
+		}
+
 		// responses-only models
 		if strings.Contains(strings.ToLower(testModel), "codex") {
 			requestPath = "/v1/responses"
