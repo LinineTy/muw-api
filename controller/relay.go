@@ -68,6 +68,20 @@ func geminiRelayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.NewA
 	return err
 }
 
+// shouldRecordUserTraffic reports whether a real user call outcome should be
+// recorded into the model health history (source "user"). Every single-shot
+// request/response relay mode (chat, image, embedding, audio, rerank, responses,
+// ...) produces a meaningful health probe (success + latency); realtime
+// websocket sessions are excluded because their lifetime is a long-lived stream
+// rather than one request. Synthetic channel tests are recorded separately with
+// source "test".
+func shouldRecordUserTraffic(info *relaycommon.RelayInfo) bool {
+	if info == nil || info.IsChannelTest {
+		return false
+	}
+	return info.RelayMode != relayconstant.RelayModeRealtime
+}
+
 func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	requestId := c.GetString(common.RequestIdKey)
@@ -251,9 +265,8 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		// model health page reflects actual usage (source "user"). Synthetic
 		// channel tests are recorded separately with source "test". The insert
 		// runs off the request hot path to avoid adding a blocking DB write (and
-		// write-lock contention) to every chat request.
-		if !relayInfo.IsChannelTest &&
-			relayInfo.RelayMode == relayconstant.RelayModeChatCompletions &&
+		// write-lock contention) to every request.
+		if shouldRecordUserTraffic(relayInfo) &&
 			operation_setting.GetMonitorSetting().RecordUserTraffic {
 			errMsg := ""
 			if newAPIError != nil {
