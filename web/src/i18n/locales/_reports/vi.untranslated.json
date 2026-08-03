@@ -18,6 +18,7 @@
   "Only available for admins. Receive a summary notification when the scheduled model check detects upstream changes.": "Only available for admins. Receive a summary notification when the scheduled model check detects upstream changes.",
   "Periodically re-sync each LinuxDO user trust level (and auto-managed group) using their stored refresh token, without requiring them to re-authorize.": "Periodically re-sync each LinuxDO user trust level (and auto-managed group) using their stored refresh token, without requiring them to re-authorize.",
   "Please retry or refresh the page.": "Please retry or refresh the page.",
+  "This platform has enabled image vision fallback. When you send an image to a model without vision support, the image is automatically described by a vision model, which may incur extra charges.": "This platform has enabled image vision fallback. When you send an image to a model without vision support, the image is automatically described by a vision model, which may incur extra charges.",
   "Sensitive operations: login, session refresh, OAuth and purchases": "Sensitive operations: login, session refresh, OAuth and purchases",
   "Applies to all /api requests": "Applies to all /api requests",
   "Applies to web page assets and fallback routes": "Applies to web page assets and fallback routes",

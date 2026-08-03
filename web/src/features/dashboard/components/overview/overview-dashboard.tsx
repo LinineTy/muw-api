@@ -20,9 +20,13 @@ import {
   CardStaggerContainer,
   CardStaggerItem,
 } from '@/components/page-transition'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { useStatus } from '@/hooks/use-status'
 import { ROLE } from '@/lib/roles'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
+import { Info } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { useDashboardContentVisibility } from '../../hooks/use-status-data'
 import { AnnouncementsPanel } from './announcements-panel'
@@ -33,7 +37,9 @@ import { SummaryCards } from './summary-cards'
 import { UptimePanel } from './uptime-panel'
 
 export function OverviewDashboard() {
+  const { t } = useTranslation()
   const user = useAuthStore((state) => state.auth.user)
+  const { status } = useStatus()
   const {
     apiInfo: showApiInfoPanel,
     announcements: showAnnouncementsPanel,
@@ -46,8 +52,24 @@ export function OverviewDashboard() {
     isAdmin || showApiInfoPanel || showAnnouncementsPanel || showFAQPanel
   const showContentPanels = showLeftContentPanels || showUptimePanel
 
+  // 视觉兜底开启时提示用户：发图给不支持视觉的模型会被自动描述，
+  // 可能产生额外扣费（普通用户只能从公开的 /api/status 拿到该开关）。
+  const visionFallbackEnabled = status?.visual_fallback_enabled === true
+
   return (
     <div className='flex flex-col gap-4'>
+      {visionFallbackEnabled && (
+        <Alert>
+          <Info />
+          <AlertTitle>{t('Image vision assistance enabled')}</AlertTitle>
+          <AlertDescription>
+            {t(
+              'This platform has enabled image vision fallback. When you send an image to a model without vision support, the image is automatically described by a vision model, which may incur extra charges.'
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+
       <SummaryCards />
 
       {showContentPanels && (
