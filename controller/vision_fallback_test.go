@@ -1,9 +1,14 @@
 package controller
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -79,3 +84,38 @@ func TestAllTextPartsAndJoin(t *testing.T) {
 	assert.False(t, allTextParts([]dto.MediaContent{{Type: dto.ContentTypeText, Text: "a"}, {Type: dto.ContentTypeImageURL, ImageUrl: &dto.MessageImageUrl{Url: "x"}}}))
 	assert.Equal(t, "a\nb", joinTextParts([]dto.MediaContent{{Type: dto.ContentTypeText, Text: "a"}, {Type: dto.ContentTypeText, Text: "b"}}))
 }
+
+func TestNewSubContextStripsRequestId(t *testing.T) {
+	// Build a parent context carrying the request id plus identity keys.
+	parent, _ := gin.CreateTestContext(nil)
+	parent.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"vision"}`))
+	parent.Keys = map[string]any{
+		common.RequestIdKey:   "parent-request-id",
+		common.KeyBodyStorage: "cached-body",
+		"X-Identity":          "user-42",
+		"X-Oneapi-User-Id":    42,
+		"some-other-key":      "kept",
+	}
+
+	subCtx, _ := newSubContext(parent, []byte(`{"model":"vision"}`))
+
+	// The sub-request must not inherit the parent request id: the parent id is
+	// already consumed as the subscription pre-consume idempotency key, so reusing
+	// it would make later sub-requests skip pre-consume while still refunding on
+	// settle, rolling the subscription balance back repeatedly.
+	_, hasReqID := subCtx.Get(common.RequestIdKey)
+	assert.False(t, hasReqID, "sub-request must not inherit the parent request id")
+
+	// Identity keys survive, cached body is dropped.
+	assert.Equal(t, "user-42", subCtx.GetString("X-Identity"))
+	assert.Equal(t, 42, subCtx.GetInt("X-Oneapi-User-Id"))
+	_, hasBody := subCtx.Get(common.KeyBodyStorage)
+	assert.False(t, hasBody, "cached body must be replaced by the new sub-request body")
+	assert.Equal(t, "kept", subCtx.GetString("some-other-key"))
+
+	// The sub-request body is replaced.
+	bodyBytes := make([]byte, 128)
+	n, _ := subCtx.Request.Body.Read(bodyBytes)
+	assert.True(t, strings.Contains(string(bodyBytes[:n]), `"vision"`))
+}
+
