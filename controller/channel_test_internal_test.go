@@ -95,6 +95,16 @@ func TestNewAPIChannelRegistration(t *testing.T) {
 	assert.Empty(t, constant.ChannelBaseURLs[constant.ChannelTypeNewAPI])
 }
 
+func TestSenseNovaChannelRegistration(t *testing.T) {
+	apiType, ok := common.ChannelType2APIType(constant.ChannelTypeSenseNova)
+
+	require.True(t, ok)
+	assert.Equal(t, constant.APITypeSenseNova, apiType)
+	assert.Equal(t, "SenseNova", constant.GetChannelTypeName(constant.ChannelTypeSenseNova))
+	require.Greater(t, len(constant.ChannelBaseURLs), constant.ChannelTypeSenseNova)
+	assert.Equal(t, "https://token.sensenova.cn", constant.ChannelBaseURLs[constant.ChannelTypeSenseNova])
+}
+
 func TestResponsesCompactAPITypeSupport(t *testing.T) {
 	tests := []struct {
 		name    string
