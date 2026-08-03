@@ -173,7 +173,7 @@ export function ModelHealth() {
         </div>
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
-        {content}
+        <div className='h-full overflow-y-auto px-2 py-2'>{content}</div>
       </SectionPageLayout.Content>
     </SectionPageLayout>
   )
