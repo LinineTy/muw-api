@@ -20,10 +20,12 @@ package controller
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
@@ -133,6 +135,7 @@ func ClaimQuotaPool(c *gin.Context) {
 		common.ApiErrorMsg(c, quotaPoolErrMessage(err))
 		return
 	}
+	model.RecordLog(userId, model.LogTypeSystem, fmt.Sprintf("从额度池领取 %s", logger.LogQuota(record.Quota)))
 	common.ApiSuccess(c, gin.H{
 		"quota": record.Quota,
 	})
@@ -150,6 +153,7 @@ func QuotaCheckIn(c *gin.Context) {
 		common.ApiErrorMsg(c, quotaPoolErrMessage(err))
 		return
 	}
+	model.RecordLog(userId, model.LogTypeSystem, "额度池打卡成功")
 	common.ApiSuccess(c, gin.H{
 		"checked_in_at": record.ClaimedAt,
 	})
