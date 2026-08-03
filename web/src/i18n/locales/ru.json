@@ -4075,6 +4075,7 @@
     "Select models to process. Unselected \"add\" models will be ignored.": "Выберите модели для обработки. Невыбранные модели «добавить» будут проигнорированы.",
     "Select models to run batch tests.": "Выберите модели для запуска пакетных тестов.",
     "Select or enter color value": "Выбрать или ввести значение цвета",
+    "Select or enter group name": "Выберите или введите имя группы",
     "Select or enter method identifier": "Выберите или введите идентификатор способа",
     "Select or enter model name": "Выберите или введите имя модели",
     "Select or enter payment type": "Выбрать или ввести тип оплаты",

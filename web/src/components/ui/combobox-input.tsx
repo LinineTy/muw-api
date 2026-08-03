@@ -186,7 +186,10 @@ export function ComboboxInput({
           }
         }}
         onFocus={() => {
-          setSearchValue(allowCustomValue && !selectedOption ? value : '')
+          // 仅当没有任何选项可展示且允许自定义输入时，才把当前值填入搜索框
+          // 便于编辑；一旦存在选项列表，聚焦应展示全部选项，否则当前值会被
+          // 当作过滤词导致下拉显示 "No option found"。
+          setSearchValue(allowCustomValue && options.length === 0 ? value : '')
           if (openOnFocus || pointerFocusRef.current) {
             setOpen(true)
           }

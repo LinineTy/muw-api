@@ -31,9 +31,10 @@ import {
   FormItem,
   FormLabel,
 } from '@/components/ui/form'
-import { Input } from '@/components/ui/input'
+import { ComboboxInput } from '@/components/ui/combobox-input'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { MultiSelect } from '@/components/multi-select'
 
 import {
   SettingsForm,
@@ -43,6 +44,7 @@ import {
 import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useResetForm } from '../hooks/use-reset-form'
+import { useSystemModels } from '../hooks/use-system-options'
 import { useUpdateOption } from '../hooks/use-update-option'
 
 // react-hook-form resolves dotted field names as nested paths, so the form
@@ -109,6 +111,26 @@ export function VisualFallbackSection({
 }: VisualFallbackSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
+  const { data: models = [] } = useSystemModels()
+
+  // 下拉选中保存的是纯净 model_name；禁用模型只在列表项里做记号
+  // （ComboboxInput 用 icon，MultiSelect 用 label 后缀）。
+  const fallbackModelOptions = models.map((m) => ({
+    value: m.model_name,
+    label: m.model_name,
+    icon:
+      m.status !== 1 ? (
+        <span className='text-destructive text-[10px]'>
+          {t('Disabled')}
+        </span>
+      ) : undefined,
+  }))
+  const visionModelOptions = models.map((m) => ({
+    value: m.model_name,
+    label:
+      m.status !== 1 ? `${m.model_name} (${t('Disabled')})` : m.model_name,
+  }))
+
   const baselineRef = useRef<FlatVisualFallbackDefaults>(
     normalizeDefaults(defaultValues)
   )
@@ -192,11 +214,12 @@ export function VisualFallbackSection({
               <FormItem>
                 <FormLabel>{t('Vision fallback model')}</FormLabel>
                 <FormControl>
-                  <Input
-                    placeholder='gpt-4o'
-                    autoComplete='off'
+                  <ComboboxInput
+                    options={fallbackModelOptions}
                     value={field.value ?? ''}
-                    onChange={(event) => field.onChange(event.target.value)}
+                    onValueChange={field.onChange}
+                    placeholder={t('Select or enter model name')}
+                    allowCustomValue
                   />
                 </FormControl>
                 <FormDescription>
@@ -237,10 +260,15 @@ export function VisualFallbackSection({
               <FormItem>
                 <FormLabel>{t('Vision-capable models')}</FormLabel>
                 <FormControl>
-                  <Textarea
-                    value={field.value ?? ''}
-                    onChange={field.onChange}
-                    rows={8}
+                  <MultiSelect
+                    options={visionModelOptions}
+                    selected={(field.value ?? '')
+                      .split('\n')
+                      .map((item) => item.trim())
+                      .filter(Boolean)}
+                    onChange={(values) => field.onChange(values.join('\n'))}
+                    placeholder={t('Select or enter model name')}
+                    allowCreate
                   />
                 </FormControl>
                 <FormDescription>

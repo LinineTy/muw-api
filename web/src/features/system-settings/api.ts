@@ -89,6 +89,43 @@ export async function getUpstreamChannels() {
   return res.data
 }
 
+export async function getSystemGroups(): Promise<string[]> {
+  const res = await api.get<{
+    success: boolean
+    message?: string
+    data: string[]
+  }>('/api/group/')
+  return res.data.data ?? []
+}
+
+// SystemOptionModel 只取设置下拉需要的字段（模型名 + 启用状态），避免耦合
+// 管理端完整的 Model 类型。
+type SystemOptionModel = {
+  model_name: string
+  status: number
+}
+
+// 后端 GetPageQuery 将 page_size 截断为 100，模型数量可能超过一页，
+// 因此循环拉取所有页直到拿满 total。
+export async function getAllSystemModels(): Promise<SystemOptionModel[]> {
+  const pageSize = 100
+  const all: SystemOptionModel[] = []
+  for (let page = 1; ; page++) {
+    const res = await api.get<{
+      success: boolean
+      message?: string
+      data?: { items: SystemOptionModel[]; total: number }
+    }>('/api/models/', { params: { p: page, page_size: pageSize } })
+    const items = res.data.data?.items ?? []
+    const total = res.data.data?.total ?? 0
+    all.push(...items)
+    if (items.length === 0 || all.length >= total) break
+    // 兜底：避免异常时无限循环
+    if (page >= 1000) break
+  }
+  return all
+}
+
 export async function fetchUpstreamRatios(request: FetchUpstreamRatiosRequest) {
   const res = await api.post<UpstreamRatiosResponse>(
     '/api/ratio_sync/fetch',

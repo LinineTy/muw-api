@@ -29,7 +29,7 @@ import {
   FormItem,
   FormLabel,
 } from '@/components/ui/form'
-import { Input } from '@/components/ui/input'
+import { ComboboxInput } from '@/components/ui/combobox-input'
 import { Switch } from '@/components/ui/switch'
 
 import {
@@ -39,6 +39,7 @@ import {
 } from '../components/settings-form-layout'
 import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
+import { useSystemGroups } from '../hooks/use-system-options'
 import { useResetForm } from '../hooks/use-reset-form'
 import { useUpdateOption } from '../hooks/use-update-option'
 
@@ -61,6 +62,8 @@ export function SystemBehaviorSection({
 }: SystemBehaviorSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
+  const { data: groups = [] } = useSystemGroups()
+  const groupOptions = groups.map((group) => ({ value: group, label: group }))
 
   const form = useForm({
     resolver: zodResolver(behaviorSchema),
@@ -178,14 +181,12 @@ export function SystemBehaviorSection({
               <FormItem>
                 <FormLabel>{t('Default User Group')}</FormLabel>
                 <FormControl>
-                  <Input
-                    placeholder='default'
-                    autoComplete='off'
+                  <ComboboxInput
+                    options={groupOptions}
                     value={field.value ?? ''}
-                    onChange={(event) => field.onChange(event.target.value)}
-                    name={field.name}
-                    onBlur={field.onBlur}
-                    ref={field.ref}
+                    onValueChange={field.onChange}
+                    placeholder='default'
+                    allowCustomValue
                   />
                 </FormControl>
                 <FormDescription>
