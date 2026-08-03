@@ -26,7 +26,6 @@ import type {
   SubscriptionPlan,
   UserSubscriptionRecord,
 } from '@/features/subscriptions/types'
-import { cn } from '@/lib/utils'
 
 import { useMySubscriptions } from './my-subscriptions-provider'
 import { SubscriptionList } from './subscription-list'
@@ -140,7 +139,7 @@ export function MySubscriptionsTabs() {
   }
 
   return (
-    <div className={cn('flex min-h-0 flex-1 flex-col gap-3')}>
+    <div className='flex h-full min-h-0 flex-col gap-3'>
       <ExpiringBanner />
       <Tabs defaultValue='active' className='flex min-h-0 flex-1 flex-col'>
         <TabsList className='w-fit'>
@@ -155,16 +154,16 @@ export function MySubscriptionsTabs() {
           </TabsTrigger>
           <TabsTrigger value='plans'>{t('Subscription Plans')}</TabsTrigger>
         </TabsList>
-        <TabsContent value='active' className='pt-3'>
+        <TabsContent value='active' className='min-h-0 overflow-y-auto px-2 pt-3 pb-3'>
           <SubscriptionList subscriptions={active} planMap={planMap} />
         </TabsContent>
-        <TabsContent value='expired' className='pt-3'>
+        <TabsContent value='expired' className='min-h-0 overflow-y-auto px-2 pt-3 pb-3'>
           <SubscriptionList subscriptions={expired} planMap={planMap} />
         </TabsContent>
-        <TabsContent value='cancelled' className='pt-3'>
+        <TabsContent value='cancelled' className='min-h-0 overflow-y-auto px-2 pt-3 pb-3'>
           <SubscriptionList subscriptions={cancelled} planMap={planMap} />
         </TabsContent>
-        <TabsContent value='plans' className='pt-3'>
+        <TabsContent value='plans' className='min-h-0 overflow-y-auto px-2 pt-3 pb-3'>
           <PlanCatalogSection />
         </TabsContent>
       </Tabs>
