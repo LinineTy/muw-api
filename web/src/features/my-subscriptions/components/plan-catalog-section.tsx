@@ -16,19 +16,20 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ArrowLeftRight, ChevronDown, Sparkles } from 'lucide-react'
-import { useCallback, useMemo, useState } from 'react'
+import { ArrowLeftRight, Sparkles } from 'lucide-react'
+import { Fragment, useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { GroupBadge } from '@/components/group-badge'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { SubscriptionPurchaseDialog } from '@/features/subscriptions/components/dialogs/subscription-purchase-dialog'
+import { GroupCollapsibleSection } from '@/features/subscriptions/components/group-collapsible-section'
 import {
   formatDuration,
   formatResetPeriod,
@@ -182,6 +183,7 @@ function CatalogPlanCard({
   const price = Number(plan.price_amount || 0).toFixed(2)
   const isPopular = plan.is_recommended === true
 
+  const cycleLimit = Number(plan.reset_amount_limit || 0)
   const weekLimit = Number(plan.weekly_amount_limit || 0)
   const monthLimit = Number(plan.monthly_amount_limit || 0)
   const maxDays = Math.floor(Number(plan.max_cumulative_seconds || 0) / 86400)
@@ -195,6 +197,9 @@ function CatalogPlanCard({
       label: t('Plan Quota'),
       value: totalAmount > 0 ? formatQuota(totalAmount) : t('Unlimited'),
     },
+    cycleLimit > 0
+      ? { label: t('Per-Cycle Quota'), value: formatQuota(cycleLimit) }
+      : null,
     weekLimit > 0
       ? { label: t('Weekly Quota'), value: formatQuota(weekLimit) }
       : null,
@@ -283,61 +288,6 @@ function CatalogPlanCard({
           onSwitch={onSwitch}
         />
       </div>
-    </div>
-  )
-}
-
-// 分组视图下的互斥组容器：一格一组，组头可折叠（折叠后只剩组名一条），
-// 组内套餐复用完整的平铺卡片，信息零省略。
-function CatalogGroupCard({
-  group,
-  plans,
-  resolvePlanState,
-  onSubscribe,
-  onSwitch,
-}: {
-  group: string
-  plans: SubscriptionPlan[]
-  resolvePlanState: (plan: SubscriptionPlan) => PlanActionState
-  onSubscribe: (plan: SubscriptionPlan) => void
-  onSwitch: (plan: SubscriptionPlan) => void
-}) {
-  const { t } = useTranslation()
-  const [expanded, setExpanded] = useState(true)
-
-  return (
-    <div className='rounded-2xl border bg-card'>
-      <button
-        type='button'
-        onClick={() => setExpanded((v) => !v)}
-        className='flex w-full items-center justify-between gap-2 px-4 py-3 text-left'
-      >
-        <span className='flex min-w-0 items-center gap-2'>
-          <GroupBadge group={group} />
-          <span className='text-muted-foreground shrink-0 text-xs'>
-            {t('{{count}} plans', { count: plans.length })}
-          </span>
-        </span>
-        <ChevronDown
-          className={cn(
-            'size-4 shrink-0 transition-transform',
-            !expanded && '-rotate-90'
-          )}
-        />
-      </button>
-      {expanded && (
-        <div className='grid grid-cols-1 gap-3 border-t p-3 sm:grid-cols-2'>
-          {plans.map((plan) => (
-            <CatalogPlanCard
-              key={plan.id}
-              plan={plan}
-              state={resolvePlanState(plan)}
-              onSubscribe={onSubscribe}
-              onSwitch={onSwitch}
-            />
-          ))}
-        </div>
-      )}
     </div>
   )
 }
@@ -511,24 +461,16 @@ export function PlanCatalogSection({ grouped }: { grouped: boolean }) {
     <>
       <div className='space-y-3'>
         {grouped ? (
-          <div className='space-y-3'>
-            {groupedData.groups.map(([group, groupPlans]) => (
-              <CatalogGroupCard
-                key={group}
-                group={group}
-                plans={groupPlans}
-                resolvePlanState={resolvePlanState}
-                onSubscribe={handleSubscribe}
-                onSwitch={handleSwitch}
-              />
-            ))}
-            {groupedData.standalone.length > 0 && (
-              <div className='rounded-2xl border bg-card'>
-                <div className='text-muted-foreground px-4 py-3 text-sm font-medium'>
-                  {t('Standalone plans')}
-                </div>
-                <div className='grid grid-cols-1 gap-3 border-t p-3 sm:grid-cols-2'>
-                  {groupedData.standalone.map((plan) => (
+          <div className='space-y-2'>
+            {groupedData.groups.map(([group, groupPlans], index) => (
+              <Fragment key={group}>
+                {index > 0 && <Separator />}
+                <GroupCollapsibleSection
+                  group={group}
+                  count={groupPlans.length}
+                  contentClassName='lg:grid-cols-2 2xl:grid-cols-3 2xl:gap-4'
+                >
+                  {groupPlans.map((plan) => (
                     <CatalogPlanCard
                       key={plan.id}
                       plan={plan}
@@ -537,8 +479,29 @@ export function PlanCatalogSection({ grouped }: { grouped: boolean }) {
                       onSwitch={handleSwitch}
                     />
                   ))}
+                </GroupCollapsibleSection>
+              </Fragment>
+            ))}
+            {groupedData.standalone.length > 0 && (
+              <>
+                <Separator />
+                <div>
+                  <div className='text-muted-foreground px-2 py-1.5 text-sm font-medium'>
+                    {t('Standalone plans')}
+                  </div>
+                  <div className='mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3 2xl:gap-4'>
+                    {groupedData.standalone.map((plan) => (
+                      <CatalogPlanCard
+                        key={plan.id}
+                        plan={plan}
+                        state={resolvePlanState(plan)}
+                        onSubscribe={handleSubscribe}
+                        onSwitch={handleSwitch}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
+              </>
             )}
           </div>
         ) : (

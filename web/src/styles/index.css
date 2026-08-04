@@ -544,6 +544,11 @@ For commercial licensing, please contact support@quantumnous.com
     transform: scale(0.98);
   }
 
+  /* 个别整行可点控件（如订阅分组折叠条）可退出按压缩放 */
+  button[data-press-scale='false']:active {
+    transform: none;
+  }
+
   [data-slot='table'] tr {
     transition: background-color 120ms ease;
   }
