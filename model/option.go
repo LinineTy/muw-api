@@ -41,7 +41,7 @@ func InitOptionMap() {
 	common.OptionMap["EmailVerificationEnabled"] = strconv.FormatBool(common.EmailVerificationEnabled)
 	common.OptionMap["GitHubOAuthEnabled"] = strconv.FormatBool(common.GitHubOAuthEnabled)
 	common.OptionMap["LinuxDOOAuthEnabled"] = strconv.FormatBool(common.LinuxDOOAuthEnabled)
-	common.OptionMap["LinuxDOBlacklist"] = strings.Join(common.LinuxDOBlacklist, "\n")
+	common.OptionMap["LinuxDOBlacklist"] = common.SerializeLinuxDOBlacklist()
 	common.OptionMap["LinuxDoRefreshEnabled"] = strconv.FormatBool(common.LinuxDoRefreshEnabled)
 	common.OptionMap["LinuxDoRefreshIntervalHours"] = strconv.Itoa(common.LinuxDoRefreshIntervalHours)
 	common.OptionMap["TelegramOAuthEnabled"] = strconv.FormatBool(common.TelegramOAuthEnabled)

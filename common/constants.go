@@ -118,9 +118,10 @@ var LinuxDOMinimumTrustLevel = 0
 var LinuxDoRefreshEnabled = true
 var LinuxDoRefreshIntervalHours = 24
 
-// LinuxDOBlacklist lists LinuxDO user ids or usernames that are forbidden from
-// logging in or registering, regardless of trust level.
-var LinuxDOBlacklist = []string{}
+// LinuxDOBlacklist lists LinuxDO accounts that are forbidden from logging in or
+// registering, regardless of trust level. Each entry carries a match type so a
+// numeric id and a username that happen to be identical are never conflated.
+var LinuxDOBlacklist = []LinuxDOBlacklistEntry{}
 
 // LinuxDOGroupMapping maps a LinuxDO trust level (L0-L4) to a user group, e.g.
 // {"2":"vip","3":"svip"}. An empty map disables LinuxDO auto group assignment.
