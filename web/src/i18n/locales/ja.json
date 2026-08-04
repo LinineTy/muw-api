@@ -1317,6 +1317,7 @@
     "Delete {{count}} API key(s)?": "{{count}}個のAPIキーを削除しますか？",
     "Delete {{count}} stale instance records? Online instances will not be deleted.": "期限切れインスタンスレコードを {{count}} 件削除しますか？オンラインのインスタンスは削除されません。",
     "Deleted": "削除済み",
+    "Delete subscription plan \"{{title}}\"? This cannot be undone. Only plans without active subscriptions or pending orders can be deleted.": "Delete subscription plan \"{{title}}\"? This cannot be undone. Only plans without active subscriptions or pending orders can be deleted.",
     "Delete subscription?": "Delete subscription?",
     "History Subscriptions": "History Subscriptions",
     "Invalidate subscription?": "Invalidate subscription?",

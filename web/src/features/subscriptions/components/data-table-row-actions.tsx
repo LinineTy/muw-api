@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Pencil, Power, PowerOff, RotateCcw } from 'lucide-react'
+import { Pencil, Power, PowerOff, RotateCcw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -52,6 +52,11 @@ export function DataTableRowActions({ plan }: DataTableRowActionsProps) {
   const handleResetSubscriptions = () => {
     setCurrentRow(plan)
     setOpen('reset-subscriptions')
+  }
+
+  const handleDelete = () => {
+    setCurrentRow(plan)
+    setOpen('delete')
   }
 
   return (
@@ -107,6 +112,23 @@ export function DataTableRowActions({ plan }: DataTableRowActionsProps) {
           {isEnabled ? <PowerOff /> : <Power />}
         </TooltipTrigger>
         <TooltipContent>{toggleLabel}</TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant='ghost'
+              size='icon-sm'
+              onClick={handleDelete}
+              aria-label={t('Delete')}
+              className='text-destructive hover:text-destructive'
+            />
+          }
+        >
+          <Trash2 />
+        </TooltipTrigger>
+        <TooltipContent>{t('Delete')}</TooltipContent>
       </Tooltip>
     </div>
   )
