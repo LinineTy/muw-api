@@ -33,11 +33,18 @@ import { cn } from '@/lib/utils'
 
 import { formatTimestamp } from '../lib'
 import type { AdminUserSubscriptionSummary } from '../types'
+import { HistoryPurgeAction } from './subscription-history-purge-action'
+import { SubscriptionAdminActions } from './subscription-admin-actions'
 
 function getSubscriptionStatusBadge(
   subscription: { status: string; end_time: number },
   t: (key: string) => string
 ) {
+  if (subscription.status === 'deleted') {
+    return (
+      <StatusBadge label={t('Deleted')} variant='danger' copyable={false} />
+    )
+  }
   const isExpired =
     subscription.status !== 'cancelled' &&
     (subscription.status === 'expired' || subscription.end_time <= Date.now() / 1000)
@@ -69,11 +76,15 @@ function getUsageProgressColor(percentage: number): string {
   return '[&_[data-slot=progress-indicator]]:bg-emerald-500'
 }
 
-export function useAdminSubscriptionsColumns(): ColumnDef<AdminUserSubscriptionSummary>[] {
+export function useAdminSubscriptionsColumns(options?: {
+  actions?: 'standard' | 'purge' | false
+}): ColumnDef<AdminUserSubscriptionSummary>[] {
   const { t } = useTranslation()
+  const actions = options?.actions ?? 'standard'
 
   return useMemo(
-    (): ColumnDef<AdminUserSubscriptionSummary>[] => [
+    (): ColumnDef<AdminUserSubscriptionSummary>[] => {
+      const columns: ColumnDef<AdminUserSubscriptionSummary>[] = [
       {
         accessorFn: (row) => row.subscription.id,
         id: 'id',
@@ -200,7 +211,23 @@ export function useAdminSubscriptionsColumns(): ColumnDef<AdminUserSubscriptionS
         },
         size: 160,
       },
-    ],
-    [t]
+      ];
+      if (actions !== false) {
+        columns.push({
+          id: 'actions',
+          header: t('Actions'),
+          meta: { mobileHidden: true },
+          cell: ({ row }) =>
+            actions === 'purge' ? (
+              <HistoryPurgeAction summary={row.original} />
+            ) : (
+              <SubscriptionAdminActions summary={row.original} />
+            ),
+          size: 90,
+        })
+      }
+      return columns
+    },
+    [t, actions]
   )
 }

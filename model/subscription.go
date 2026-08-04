@@ -1655,7 +1655,8 @@ func GetAllUserSubscriptions(userId int) ([]SubscriptionSummary, error) {
 		return nil, errors.New("invalid userId")
 	}
 	var subs []UserSubscription
-	err := DB.Where("user_id = ?", userId).
+	// 管理端软删除（status = deleted）的订阅只保留在管理历史里，不出现在用户侧列表。
+	err := DB.Where("user_id = ? AND status <> ?", userId, "deleted").
 		Order("end_time desc, id desc").
 		Find(&subs).Error
 	if err != nil {
@@ -1703,7 +1704,9 @@ func GetAllSubscriptionsByAdmin(status string, userKeyword string, planId int, s
 
 	base := DB.Model(&UserSubscription{})
 	if status != "" {
-		base = base.Where("status = ?", status)
+		// 支持逗号分隔多状态，例如 status=deleted,cancelled,expired（历史订阅视图）。
+		statuses := strings.Split(status, ",")
+		base = base.Where("status IN ?", statuses)
 	}
 	if planId > 0 {
 		base = base.Where("plan_id = ?", planId)
@@ -1814,7 +1817,9 @@ func AdminInvalidateUserSubscription(userSubscriptionId int) (string, error) {
 	return "", nil
 }
 
-// AdminDeleteUserSubscription hard-deletes a user subscription.
+// AdminDeleteUserSubscription soft-deletes a user subscription: the record is
+// kept (status becomes "deleted") so it stays visible in the admin history view,
+// and the user's group is downgraded as if the subscription had ended.
 func AdminDeleteUserSubscription(userSubscriptionId int) (string, error) {
 	if userSubscriptionId <= 0 {
 		return "", errors.New("invalid userSubscriptionId")
@@ -1838,7 +1843,11 @@ func AdminDeleteUserSubscription(userSubscriptionId int) (string, error) {
 			cacheGroup = target
 			downgradeGroup = target
 		}
-		if err := tx.Where("id = ?", userSubscriptionId).Delete(&UserSubscription{}).Error; err != nil {
+		if err := tx.Model(&sub).Updates(map[string]interface{}{
+			"status":     "deleted",
+			"end_time":   now,
+			"updated_at": now,
+		}).Error; err != nil {
 			return err
 		}
 		return nil
@@ -1848,6 +1857,53 @@ func AdminDeleteUserSubscription(userSubscriptionId int) (string, error) {
 	}
 	if cacheGroup != "" && userId > 0 {
 		refreshSubscriptionUserGroupCache(userId, "admin subscription deletion")
+	}
+	if downgradeGroup != "" {
+		return fmt.Sprintf("用户分组将回退到 %s", downgradeGroup), nil
+	}
+	return "", nil
+}
+
+// AdminPurgeUserSubscription permanently deletes a user subscription row so it is
+// gone from every view including the history list. Only non-active subscriptions
+// (deleted/cancelled/expired) may be purged; an active subscription must be
+// invalidated first so the user's group downgrade is not bypassed.
+func AdminPurgeUserSubscription(userSubscriptionId int) (string, error) {
+	if userSubscriptionId <= 0 {
+		return "", errors.New("invalid userSubscriptionId")
+	}
+	now := common.GetTimestamp()
+	cacheGroup := ""
+	downgradeGroup := ""
+	var userId int
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var sub UserSubscription
+		if err := lockForUpdate(tx).
+			Where("id = ?", userSubscriptionId).First(&sub).Error; err != nil {
+			return err
+		}
+		if sub.Status == "active" {
+			return errors.New("无法彻底删除活跃订阅，请先作废")
+		}
+		userId = sub.UserId
+		target, err := downgradeUserGroupForSubscriptionTx(tx, &sub, now)
+		if err != nil {
+			return err
+		}
+		if target != "" {
+			cacheGroup = target
+			downgradeGroup = target
+		}
+		if err := tx.Where("id = ?", userSubscriptionId).Delete(&UserSubscription{}).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	if cacheGroup != "" && userId > 0 {
+		refreshSubscriptionUserGroupCache(userId, "admin subscription purge")
 	}
 	if downgradeGroup != "" {
 		return fmt.Sprintf("用户分组将回退到 %s", downgradeGroup), nil

@@ -689,7 +689,7 @@ func AdminInvalidateUserSubscription(c *gin.Context) {
 	common.ApiSuccess(c, nil)
 }
 
-// AdminDeleteUserSubscription hard-deletes a user subscription.
+// AdminDeleteUserSubscription soft-deletes a user subscription (record kept).
 func AdminDeleteUserSubscription(c *gin.Context) {
 	subId, _ := strconv.Atoi(c.Param("id"))
 	if subId <= 0 {
@@ -697,6 +697,25 @@ func AdminDeleteUserSubscription(c *gin.Context) {
 		return
 	}
 	msg, err := model.AdminDeleteUserSubscription(subId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if msg != "" {
+		common.ApiSuccess(c, gin.H{"message": msg})
+		return
+	}
+	common.ApiSuccess(c, nil)
+}
+
+// AdminPurgeUserSubscription permanently deletes a non-active user subscription row.
+func AdminPurgeUserSubscription(c *gin.Context) {
+	subId, _ := strconv.Atoi(c.Param("id"))
+	if subId <= 0 {
+		common.ApiErrorMsg(c, "无效的订阅ID")
+		return
+	}
+	msg, err := model.AdminPurgeUserSubscription(subId)
 	if err != nil {
 		common.ApiError(c, err)
 		return
