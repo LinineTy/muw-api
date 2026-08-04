@@ -1021,6 +1021,37 @@ func comparePlanTier(a, b *SubscriptionPlan) int {
 	return 0
 }
 
+// subscriptionEffectiveGroup resolves the mutual-exclusion group a subscription
+// effectively belongs to: the snapshot stored at purchase wins, and when that is
+// empty (rows created before the plan joined a group, or admin/DB-inserted rows)
+// the plan's current group is used. The fallback keeps exclusivity and
+// upgrade/downgrade detection correct for rows whose snapshot is missing.
+func subscriptionEffectiveGroup(sub *UserSubscription, plan *SubscriptionPlan) string {
+	if sub == nil {
+		return ""
+	}
+	if g := strings.TrimSpace(sub.ExclusiveGroup); g != "" {
+		return g
+	}
+	if plan == nil {
+		return ""
+	}
+	return strings.TrimSpace(plan.ExclusiveGroup)
+}
+
+// effectiveSubscriptionExclusiveGroupTx resolves a subscription's mutual-exclusion
+// group using the given DB/tx to look up the plan when the row snapshot is empty.
+func effectiveSubscriptionExclusiveGroupTx(tx *gorm.DB, sub *UserSubscription) string {
+	if sub == nil {
+		return ""
+	}
+	plan, err := getSubscriptionPlanByIdTx(tx, sub.PlanId)
+	if err != nil {
+		plan = nil
+	}
+	return subscriptionEffectiveGroup(sub, plan)
+}
+
 // ValidateSubscriptionPurchaseGate checks the plan-level purchase gates for a user:
 // the group whitelist and the exclusivity-group conflict. Returns an error when the
 // purchase/renewal should be blocked. Used by the Epay path (which cannot run inside
@@ -1038,14 +1069,25 @@ func ValidateSubscriptionPurchaseGate(userId int, plan *SubscriptionPlan, subscr
 	}
 	if plan.ExclusiveGroup != "" && common.SubscriptionExclusiveGroupEnabled {
 		now := GetDBTimestamp()
-		var count int64
-		if err := DB.Model(&UserSubscription{}).
-			Where("user_id = ? AND status = ? AND end_time > ? AND exclusive_group = ? AND id <> ?",
-				userId, "active", now, plan.ExclusiveGroup, subscriptionId).
-			Count(&count).Error; err != nil {
+		// The snapshot on a row can be empty (admin/DB-assigned before the plan
+		// joined a group), so fall back to the plan's current group via
+		// effectiveSubscriptionExclusiveGroupTx instead of a bare SQL filter.
+		var subs []UserSubscription
+		if err := DB.Where("user_id = ? AND status = ? AND end_time > ?",
+			userId, "active", now).Find(&subs).Error; err != nil {
 			return err
 		}
-		if count > 0 {
+		conflict := false
+		for i := range subs {
+			if subs[i].Id == subscriptionId {
+				continue
+			}
+			if effectiveSubscriptionExclusiveGroupTx(nil, &subs[i]) == plan.ExclusiveGroup {
+				conflict = true
+				break
+			}
+		}
+		if conflict {
 			if subscriptionId > 0 {
 				return errors.New("目标订阅与互斥组冲突，请先处理同组其他订阅")
 			}
@@ -1091,13 +1133,22 @@ func PurchaseWithStrategy(userId int, planId int, subscriptionId int) (string, e
 		}
 		// Same exclusivity-group active subscription (if any). Skipped entirely when
 		// the mutual-exclusion feature is disabled, so users may hold several plans.
+		// The snapshot on a row can be empty (admin/DB-assigned before the plan
+		// joined a group), so match via effectiveSubscriptionExclusiveGroupTx.
 		var sameGroup UserSubscription
 		if plan.ExclusiveGroup != "" && common.SubscriptionExclusiveGroupEnabled {
+			var candidates []UserSubscription
 			if err := lockForUpdate(tx).
-				Where("user_id = ? AND status = ? AND end_time > ? AND exclusive_group = ?",
-					userId, "active", now, plan.ExclusiveGroup).
-				Order("end_time asc, id asc").Limit(1).Find(&sameGroup).Error; err != nil {
+				Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", now).
+				Order("end_time asc, id asc").
+				Find(&candidates).Error; err != nil {
 				return err
+			}
+			for i := range candidates {
+				if effectiveSubscriptionExclusiveGroupTx(tx, &candidates[i]) == plan.ExclusiveGroup {
+					sameGroup = candidates[i]
+					break
+				}
 			}
 		}
 		nowUnix := common.GetTimestamp()
