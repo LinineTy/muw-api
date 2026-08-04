@@ -2589,6 +2589,7 @@
     "Max Requests (incl. failures)": "Макс. запросов (вкл. сбои)",
     "Max Requests (including failures)": "Макс. запросов (включая сбои)",
     "Max Retries": "Макс. повторов",
+    "Max Simultaneous Reached": "Max Simultaneous Reached",
     "Max Success": "Макс. успешных",
     "Max Successful Requests": "Макс. успешных запросов",
     "Max Tokens": "Макс. токены",

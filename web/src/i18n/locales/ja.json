@@ -2589,6 +2589,7 @@
     "Max Requests (incl. failures)": "最大リクエスト数（失敗を含む）",
     "Max Requests (including failures)": "最大リクエスト数（失敗を含む）",
     "Max Retries": "最大再試行",
+    "Max Simultaneous Reached": "Max Simultaneous Reached",
     "Max Success": "最大成功数",
     "Max Successful Requests": "最大成功リクエスト数",
     "Max Tokens": "最大トークン数",

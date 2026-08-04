@@ -2589,6 +2589,7 @@
     "Max Requests (incl. failures)": "最大请求数（包括失败）",
     "Max Requests (including failures)": "最大请求数（包括失败）",
     "Max Retries": "最大重试",
+    "Max Simultaneous Reached": "同时持有上限",
     "Max Success": "最大成功数",
     "Max Successful Requests": "最大成功请求数",
     "Max Tokens": "最大 Tokens",

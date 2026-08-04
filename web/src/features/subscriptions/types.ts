@@ -160,6 +160,7 @@ export interface SelfSubscriptionData {
   billing_preference: string
   subscriptions: UserSubscriptionRecord[]
   all_subscriptions: UserSubscriptionRecord[]
+  max_simultaneous?: number
 }
 
 // ============================================================================

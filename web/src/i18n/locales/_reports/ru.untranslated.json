@@ -143,6 +143,7 @@
   "Max Cumulative Duration": "Max Cumulative Duration",
   "Max Cumulative Duration (days)": "Max Cumulative Duration (days)",
   "Max Duration": "Max Duration",
+  "Max Simultaneous Reached": "Max Simultaneous Reached",
   "Max quota usable within each reset cycle, separate from the total quota. 0 means no per-cycle cap. Requires a reset cycle to take effect.": "Max quota usable within each reset cycle, separate from the total quota. 0 means no per-cycle cap. Requires a reset cycle to take effect.",
   "Max requests": "Max requests",
   "Maximum Claim Amount": "Maximum Claim Amount",
