@@ -23,7 +23,7 @@ import { useTranslation } from 'react-i18next'
 import { DataTablePage, useDataTable } from '@/components/data-table'
 
 import { getAdminPlans } from '../api'
-import { ExclusiveGroupShelf } from './exclusive-group-shelf'
+import { GroupedPlansList } from './grouped-plans'
 import { PlanCard } from './plan-card'
 import { useSubscriptionsColumns } from './subscriptions-columns'
 import { useSubscriptions } from './subscriptions-provider'
@@ -33,7 +33,7 @@ const SUBSCRIPTIONS_VIEW_MODE_STORAGE_KEY = 'subscriptions:view-mode'
 export function SubscriptionsTable() {
   const { t } = useTranslation()
   const columns = useSubscriptionsColumns()
-  const { refreshTrigger } = useSubscriptions()
+  const { refreshTrigger, grouped } = useSubscriptions()
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-subscription-plans', refreshTrigger],
@@ -55,28 +55,31 @@ export function SubscriptionsTable() {
 
   return (
     <div className='flex h-full min-h-0 flex-col gap-3'>
-      <ExclusiveGroupShelf plans={plans} />
-      <DataTablePage
-        table={table}
-        columns={columns}
-        isLoading={isLoading}
-        emptyTitle={t('No subscription plans yet')}
-        emptyDescription={t(
-          'Click "Create Plan" to create your first subscription plan'
-        )}
-        skeletonKeyPrefix='subscriptions-skeleton'
-        enableCardView
-        viewModeStorageKey={SUBSCRIPTIONS_VIEW_MODE_STORAGE_KEY}
-        renderCard={(row, { isSelected }) => (
-          <PlanCard row={row} isSelected={isSelected} />
-        )}
-        cardGridClassName='grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2 2xl:grid-cols-3'
-        toolbarProps={{
-          searchPlaceholder: t('Filter plans...'),
-        }}
-        applyHeaderSize
-        className='min-h-0 flex-1'
-      />
+      {grouped ? (
+        <GroupedPlansList plans={plans} />
+      ) : (
+        <DataTablePage
+          table={table}
+          columns={columns}
+          isLoading={isLoading}
+          emptyTitle={t('No subscription plans yet')}
+          emptyDescription={t(
+            'Click "Create Plan" to create your first subscription plan'
+          )}
+          skeletonKeyPrefix='subscriptions-skeleton'
+          enableCardView
+          viewModeStorageKey={SUBSCRIPTIONS_VIEW_MODE_STORAGE_KEY}
+          renderCard={(row, { isSelected }) => (
+            <PlanCard row={row} isSelected={isSelected} />
+          )}
+          cardGridClassName='grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2 2xl:grid-cols-3'
+          toolbarProps={{
+            searchPlaceholder: t('Filter plans...'),
+          }}
+          applyHeaderSize
+          className='min-h-0 flex-1'
+        />
+      )}
     </div>
   )
 }

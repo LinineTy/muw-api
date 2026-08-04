@@ -20,7 +20,7 @@ import React, { useState } from 'react'
 
 import useDialogState from '@/hooks/use-dialog'
 
-import { type PlanRecord, type SubscriptionsDialogType } from '../types'
+import type { PlanRecord, SubscriptionsDialogType } from '../types'
 
 type SubscriptionsContextType = {
   open: SubscriptionsDialogType | null
@@ -29,6 +29,8 @@ type SubscriptionsContextType = {
   setCurrentRow: React.Dispatch<React.SetStateAction<PlanRecord | null>>
   refreshTrigger: number
   triggerRefresh: () => void
+  grouped: boolean
+  setGrouped: (value: boolean) => void
 }
 
 const SubscriptionsContext =
@@ -42,6 +44,9 @@ export function SubscriptionsProvider({
   const [open, setOpen] = useDialogState<SubscriptionsDialogType>(null)
   const [currentRow, setCurrentRow] = useState<PlanRecord | null>(null)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [grouped, setGrouped] = useState(() => {
+    return localStorage.getItem('subscriptions:grouped') === 'true'
+  })
 
   const triggerRefresh = () => setRefreshTrigger((prev) => prev + 1)
 
@@ -54,6 +59,8 @@ export function SubscriptionsProvider({
         setCurrentRow,
         refreshTrigger,
         triggerRefresh,
+        grouped,
+        setGrouped,
       }}
     >
       {children}

@@ -16,7 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { Row } from '@tanstack/react-table'
 import { Pencil, Power, PowerOff, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -31,27 +30,27 @@ import type { PlanRecord } from '../types'
 import { useSubscriptions } from './subscriptions-provider'
 
 interface DataTableRowActionsProps {
-  row: Row<PlanRecord>
+  plan: PlanRecord
 }
 
-export function DataTableRowActions({ row }: DataTableRowActionsProps) {
+export function DataTableRowActions({ plan }: DataTableRowActionsProps) {
   const { t } = useTranslation()
   const { setOpen, setCurrentRow } = useSubscriptions()
-  const isEnabled = row.original.plan.enabled
+  const isEnabled = plan.plan.enabled
   const toggleLabel = isEnabled ? t('Disable') : t('Enable')
 
   const handleEdit = () => {
-    setCurrentRow(row.original)
+    setCurrentRow(plan)
     setOpen('update')
   }
 
   const handleToggleStatus = () => {
-    setCurrentRow(row.original)
+    setCurrentRow(plan)
     setOpen('toggle-status')
   }
 
   const handleResetSubscriptions = () => {
-    setCurrentRow(row.original)
+    setCurrentRow(plan)
     setOpen('reset-subscriptions')
   }
 
