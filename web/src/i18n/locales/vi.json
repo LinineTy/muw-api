@@ -2589,6 +2589,7 @@
     "Max Requests (incl. failures)": "Maximum number of requests (including errors)",
     "Max Requests (including failures)": "Số yêu cầu tối đa (bao gồm cả các lỗi)",
     "Max Retries": "Số lần thử lại tối đa",
+    "Max Simultaneous Reached": "Max Simultaneous Reached",
     "Max Success": "Thành công tối đa",
     "Max Successful Requests": "Yêu cầu thành công tối đa",
     "Max Tokens": "Token tối đa",

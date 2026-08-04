@@ -2589,6 +2589,7 @@
     "Max Requests (incl. failures)": "Max Requêtes (incl. échecs)",
     "Max Requests (including failures)": "Max Requêtes (incluant les échecs)",
     "Max Retries": "Relances max",
+    "Max Simultaneous Reached": "Max Simultaneous Reached",
     "Max Success": "Max Succès",
     "Max Successful Requests": "Max Requêtes réussies",
     "Max Tokens": "Tokens max.",

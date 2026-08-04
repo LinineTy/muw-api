@@ -84,6 +84,9 @@ interface PlanActionState {
     oldPlan: SubscriptionPlan | null
   } | null
   tierDirection: number
+  maxSimultaneous: number
+  activeCount: number
+  simultaneousReached: boolean
 }
 
 function PlanActionButton({
@@ -153,6 +156,21 @@ function PlanActionButton({
         <ArrowLeftRight className='size-4' />
         {direction}
       </Button>
+    )
+  }
+  if (state.simultaneousReached) {
+    return (
+      <Tooltip>
+        <TooltipTrigger render={<div />}>
+          <Button variant='outline' className='w-full' disabled>
+            {t('Max Simultaneous Reached')}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          {t('Max simultaneous subscriptions')} ({state.activeCount}/
+          {state.maxSimultaneous})
+        </TooltipContent>
+      </Tooltip>
     )
   }
   return (
@@ -417,6 +435,14 @@ export function PlanCatalogSection({ grouped }: { grouped: boolean }) {
       const tierDirection = sameGroupActive
         ? comparePlanTier(plan, sameGroupActive.oldPlan)
         : 0
+      // 全局同时持有订阅数上限：与每套餐购买上限独立。达到上限后整份购买被后端拒绝，
+      // 这里提前置灰；互斥组内切换不新增订阅，仍允许。
+      const maxSimultaneous = Number(selfData?.max_simultaneous || 0)
+      const activeCount = selfData?.subscriptions?.length ?? 0
+      const simultaneousReached =
+        maxSimultaneous > 0 &&
+        activeCount >= maxSimultaneous &&
+        !sameGroupActive
       return {
         count,
         limit,
@@ -426,6 +452,9 @@ export function PlanCatalogSection({ grouped }: { grouped: boolean }) {
         isCurrent,
         sameGroupActive,
         tierDirection,
+        maxSimultaneous,
+        activeCount,
+        simultaneousReached,
       }
     },
     [
@@ -434,6 +463,7 @@ export function PlanCatalogSection({ grouped }: { grouped: boolean }) {
       findSameGroupSub,
       findActiveSubByPlanId,
       comparePlanTier,
+      selfData,
     ]
   )
 

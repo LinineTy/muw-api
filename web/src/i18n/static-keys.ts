@@ -301,6 +301,7 @@ export const STATIC_I18N_KEYS = [
   'Purchase Limit',
   'Purchase limit reached',
   'Limit Reached',
+  'Max Simultaneous Reached',
   'No plans available',
   'Select payment method',
   'Wallet First',

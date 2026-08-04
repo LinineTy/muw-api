@@ -65,6 +65,7 @@ func GetSubscriptionSelf(c *gin.Context) {
 		"billing_preference": pref,
 		"subscriptions":      activeSubscriptions, // all active subscriptions
 		"all_subscriptions":  allSubscriptions,    // all subscriptions including expired
+		"max_simultaneous":   common.SubscriptionMaxSimultaneous,
 	})
 }
 
