@@ -1317,6 +1317,7 @@
     "Delete {{count}} API key(s)?": "刪除 {{count}} 個 API 金鑰？",
     "Delete {{count}} stale instance records? Online instances will not be deleted.": "刪除 {{count}} 筆失聯實例記錄？線上實例不會被刪除。",
     "Deleted": "已註銷",
+    "Delete subscription plan \"{{title}}\"? This cannot be undone. Only plans without active subscriptions or pending orders can be deleted.": "刪除套餐「{{title}}」？此操作不可撤銷。僅無活躍訂閱且無未完成訂單的套餐可刪除。",
     "Delete subscription?": "Delete subscription?",
     "History Subscriptions": "History Subscriptions",
     "Invalidate subscription?": "Invalidate subscription?",

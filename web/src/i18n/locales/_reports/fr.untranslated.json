@@ -20,6 +20,7 @@
   "Configure the pool grant amount and claiming rules.": "Configure the pool grant amount and claiming rules.",
   "Configured as PayMethods JSON. The type value is sent to Epay as the type parameter to select the payment flow.": "Configured as PayMethods JSON. The type value is sent to Epay as the type parameter to select the payment flow.",
   "Create your first vendor to get started.": "Create your first vendor to get started.",
+  "Delete subscription plan \"{{title}}\"? This cannot be undone. Only plans without active subscriptions or pending orders can be deleted.": "Delete subscription plan \"{{title}}\"? This cannot be undone. Only plans without active subscriptions or pending orders can be deleted.",
   "This immediately stops the subscription and downgrades the user group. The record is kept as cancelled.": "This immediately stops the subscription and downgrades the user group. The record is kept as cancelled.",
   "This removes the subscription from the active list. The record is preserved in History Subscriptions.": "This removes the subscription from the active list. The record is preserved in History Subscriptions.",
   "This action cannot be undone. The record will be permanently deleted from the database.": "This action cannot be undone. The record will be permanently deleted from the database.",

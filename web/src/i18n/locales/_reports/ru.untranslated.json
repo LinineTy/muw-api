@@ -68,6 +68,7 @@
   "Delete Quota Pool?": "Delete Quota Pool?",
   "Delete Vendor": "Delete Vendor",
   "Delete model \"{{name}}\"? This cannot be undone.": "Delete model \"{{name}}\"? This cannot be undone.",
+  "Delete subscription plan \"{{title}}\"? This cannot be undone. Only plans without active subscriptions or pending orders can be deleted.": "Delete subscription plan \"{{title}}\"? This cannot be undone. Only plans without active subscriptions or pending orders can be deleted.",
   "Delete subscription?": "Delete subscription?",
   "History Subscriptions": "History Subscriptions",
   "Invalidate subscription?": "Invalidate subscription?",

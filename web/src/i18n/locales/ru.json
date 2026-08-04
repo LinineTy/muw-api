@@ -1317,6 +1317,7 @@
     "Delete {{count}} API key(s)?": "Удалить {{count}} API-ключ(а/ей)?",
     "Delete {{count}} stale instance records? Online instances will not be deleted.": "Удалить {{count}} записей устаревших экземпляров? Онлайн-экземпляры не будут удалены.",
     "Deleted": "Удалён",
+    "Delete subscription plan \"{{title}}\"? This cannot be undone. Only plans without active subscriptions or pending orders can be deleted.": "Delete subscription plan \"{{title}}\"? This cannot be undone. Only plans without active subscriptions or pending orders can be deleted.",
     "Delete subscription?": "Delete subscription?",
     "History Subscriptions": "History Subscriptions",
     "Invalidate subscription?": "Invalidate subscription?",

@@ -461,6 +461,7 @@ export const STATIC_I18N_KEYS = [
   'Delete',
   'Confirm invalidate',
   'Confirm delete',
+  'Delete subscription plan "{{title}}"? This cannot be undone. Only plans without active subscriptions or pending orders can be deleted.',
   'After invalidating, this subscription will be immediately deactivated. Historical records are not affected. Continue?',
   'Deleting will permanently remove this subscription record (including benefit details). Continue?',
   'Loading failed',

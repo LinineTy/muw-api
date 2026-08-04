@@ -535,6 +535,45 @@ func getSubscriptionPlanByIdTx(tx *gorm.DB, id int) (*SubscriptionPlan, error) {
 	return &plan, nil
 }
 
+// DeleteSubscriptionPlan permanently removes a subscription plan. Only records that
+// still resolve the plan by id at runtime block deletion: active subscriptions
+// (billing, quota reset and renewal) and pending orders (payment callback). Historical
+// records (expired/cancelled/deleted subscriptions, completed/expired orders) only
+// affect display and fall back to the plan id, so they do not block. This lets admins
+// delete a plan once its remaining subscriptions/orders have been cleaned up.
+func DeleteSubscriptionPlan(planId int) (string, error) {
+	if planId <= 0 {
+		return "", errors.New("invalid plan id")
+	}
+	var plan SubscriptionPlan
+	if err := DB.Where("id = ?", planId).First(&plan).Error; err != nil {
+		return "", err
+	}
+	var activeSubCount int64
+	if err := DB.Model(&UserSubscription{}).
+		Where("plan_id = ? AND status = ? AND end_time > ?", planId, "active", common.GetTimestamp()).
+		Count(&activeSubCount).Error; err != nil {
+		return "", err
+	}
+	if activeSubCount > 0 {
+		return "", errors.New("该套餐仍有活跃订阅，无法删除，请先作废相关订阅")
+	}
+	var pendingOrderCount int64
+	if err := DB.Model(&SubscriptionOrder{}).
+		Where("plan_id = ? AND status = ?", planId, common.TopUpStatusPending).
+		Count(&pendingOrderCount).Error; err != nil {
+		return "", err
+	}
+	if pendingOrderCount > 0 {
+		return "", errors.New("该套餐仍有未完成订单，无法删除，请先处理相关订单")
+	}
+	if err := DB.Delete(&plan).Error; err != nil {
+		return "", err
+	}
+	InvalidateSubscriptionPlanCache(planId)
+	return "删除成功", nil
+}
+
 func CountUserSubscriptionsByPlan(userId int, planId int) (int64, error) {
 	if userId <= 0 || planId <= 0 {
 		return 0, errors.New("invalid userId or planId")
