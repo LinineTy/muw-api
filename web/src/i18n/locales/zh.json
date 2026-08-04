@@ -5538,6 +5538,7 @@
     "{{count}} models": "{{count}} 个模型",
     "{{count}} months ago": "{{count}} 个月前",
     "{{count}} override": "{{count}} 个覆盖",
+    "{{count}} plans": "{{count}} 个套餐",
     "{{count}} selected targets available for bulk copy.": "已选择 {{count}} 个目标，可用于批量复制。",
     "{{count}} subscription(s) expire within 7 days": "{{count}} 个订阅将在 7 天内到期",
     "{{count}} tiers": "{{count}} 档",

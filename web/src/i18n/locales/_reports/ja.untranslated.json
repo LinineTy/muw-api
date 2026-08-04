@@ -223,7 +223,7 @@
   "This cycle": "This cycle",
   "This month {{quota}} claimed": "This month {{quota}} claimed",
   "This period global quota has been fully claimed": "This period global quota has been fully claimed",
-  "This platform has enabled image vision fallback. When you send an image to a model without vision support, the image is automatically described by a vision model, which may incur extra charges.": "This platform has enabled image vision fallback. When you send an image to a model without vision support, the image is automatically described by a vision model, which may incur extra charges.",
+  "This platform has enabled image vision fallback. When you send an image to a model without vision support, the image is automatically described by a vision model, which may incur extra charges. This fallback only applies to the OpenAI chat interface (/v1/chat/completions); Claude Messages and Responses requests are not affected.": "This platform has enabled image vision fallback. When you send an image to a model without vision support, the image is automatically described by a vision model, which may incur extra charges. This fallback only applies to the OpenAI chat interface (/v1/chat/completions); Claude Messages and Responses requests are not affected.",
   "This pool is fully claimed this period": "This pool is fully claimed this period",
   "This will permanently delete the pool": "This will permanently delete the pool",
   "Threshold used by the balance rule.": "Threshold used by the balance rule.",

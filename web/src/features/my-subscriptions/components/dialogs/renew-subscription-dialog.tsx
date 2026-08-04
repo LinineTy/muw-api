@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Dialog } from '@/components/dialog'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -39,8 +40,7 @@ import { DEFAULT_CURRENCY_CONFIG } from '@/stores/system-config-store'
 import { renewSubscriptionBalance, paySubscriptionEpay } from '../../api'
 import { formatDuration } from '@/features/subscriptions/lib'
 import { getEpayMethods } from '../../lib/helpers'
-import type { UserSubscriptionRecord } from '@/features/subscriptions/types'
-import type { SubscriptionPlan } from '@/features/subscriptions/types'
+import type { SubscriptionPlan, UserSubscriptionRecord } from '@/features/subscriptions/types'
 import { useMySubscriptions } from '../my-subscriptions-provider'
 
 interface Props {
@@ -85,6 +85,7 @@ export function RenewSubscriptionDialog(props: Props) {
   )
   const available = Math.max(0, Number(userQuota || 0))
   const insufficientBalance = available < balanceCost
+  const allowBalancePay = plan.allow_balance_pay !== false
   const hasEpay = enableOnlineTopUp && epayMethods.length > 0
 
   const isSafari =
@@ -218,14 +219,22 @@ export function RenewSubscriptionDialog(props: Props) {
           <Button
             variant='outline'
             onClick={handleRenewBalance}
-            disabled={paying || insufficientBalance}
+            disabled={paying || insufficientBalance || !allowBalancePay}
           >
             {t('Renew with Balance')}
           </Button>
-          {insufficientBalance && (
-            <p className='text-destructive text-xs'>
-              {t('Insufficient balance')}
-            </p>
+          {!allowBalancePay ? (
+            <Alert variant='destructive'>
+              <AlertDescription>
+                {t('This plan does not allow balance redemption')}
+              </AlertDescription>
+            </Alert>
+          ) : (
+            insufficientBalance && (
+              <Alert variant='destructive'>
+                <AlertDescription>{t('Insufficient balance')}</AlertDescription>
+              </Alert>
+            )
           )}
         </div>
 
