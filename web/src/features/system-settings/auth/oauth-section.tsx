@@ -39,7 +39,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Textarea } from '@/components/ui/textarea'
 
 import { FormDirtyIndicator } from '../components/form-dirty-indicator'
 import { FormNavigationGuard } from '../components/form-navigation-guard'
@@ -51,6 +50,7 @@ import {
 import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
+import { LinuxDOBlacklistEditor } from './linuxdo-blacklist-editor'
 import { LinuxDOGroupMappingEditor } from './linuxdo-group-mapping-editor'
 import {
   buildOAuthCallbackUrl,
@@ -1048,16 +1048,14 @@ export function OAuthSection(props: OAuthSectionProps) {
                     <FormItem>
                       <FormLabel>{t('LinuxDO Blacklist')}</FormLabel>
                       <FormControl>
-                        <Textarea
+                        <LinuxDOBlacklistEditor
                           value={field.value ?? ''}
                           onChange={field.onChange}
-                          rows={5}
-                          placeholder={'12345\nblocked-username'}
                         />
                       </FormControl>
                       <FormDescription>
                         {t(
-                          'LinuxDO user ids or usernames that are blocked from logging in or registering, one per line. Matching ignores case for usernames and applies even when the trust level meets the minimum.'
+                          'Blocked LinuxDO accounts, one per row. An ID entry matches the numeric account id exactly; a Username entry matches the username case-insensitively. Untyped legacy entries match either. Applies even when the trust level meets the minimum.'
                         )}
                       </FormDescription>
                       <FormMessage />
