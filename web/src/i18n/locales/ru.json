@@ -5538,6 +5538,7 @@
     "{{count}} models": "моделей: {{count}}",
     "{{count}} months ago": "{{count}} месяцев назад",
     "{{count}} override": "{{count}} переопределений",
+    "{{count}} plans": "{{count}} plans",
     "{{count}} selected targets available for bulk copy.": "Для массового копирования выбрано целей: {{count}}.",
     "{{count}} subscription(s) expire within 7 days": "{{count}} subscription(s) expire within 7 days",
     "{{count}} tiers": "{{count}} уровней",

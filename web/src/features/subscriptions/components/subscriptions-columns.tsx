@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '@tanstack/react-table'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -110,11 +110,23 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
       {
         accessorFn: (row) => row.plan.sort_order,
         id: 'sort_order',
-        header: t('Priority'),
+        header: t('Sort Order'),
         meta: { mobileHidden: true },
         cell: ({ row }) => (
           <span className='text-muted-foreground'>
             {row.original.plan.sort_order}
+          </span>
+        ),
+        size: 100,
+      },
+      {
+        accessorFn: (row) => row.plan.priority,
+        id: 'plan_tier',
+        header: t('Plan Tier'),
+        meta: { mobileHidden: true },
+        cell: ({ row }) => (
+          <span className='text-muted-foreground'>
+            {row.original.plan.priority ?? 0}
           </span>
         ),
         size: 100,
