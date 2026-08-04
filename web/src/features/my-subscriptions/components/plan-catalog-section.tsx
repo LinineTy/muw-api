@@ -70,7 +70,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   )
 }
 
-// 每个套餐在目录里展示时的可购买状态，供无组卡片与互斥组书架条目共用。
+// 每个套餐在目录里展示时的可购买状态，供平铺卡片与分组视图条目共用。
 interface PlanActionState {
   count: number
   limit: number
@@ -165,7 +165,7 @@ function PlanActionButton({
   )
 }
 
-// 无互斥组的套餐：保留原有单卡片布局。
+// 平铺视图下的单套餐卡片。
 function CatalogPlanCard({
   plan,
   state,
@@ -287,8 +287,9 @@ function CatalogPlanCard({
   )
 }
 
-// 互斥组书架格子：一格一组，组内套餐一目了然，可展开/折叠。
-function ExclusiveGroupShelfCard({
+// 分组视图下的互斥组容器：一格一组，组头可折叠（折叠后只剩组名一条），
+// 组内套餐复用完整的平铺卡片，信息零省略。
+function CatalogGroupCard({
   group,
   plans,
   resolvePlanState,
@@ -305,7 +306,7 @@ function ExclusiveGroupShelfCard({
   const [expanded, setExpanded] = useState(true)
 
   return (
-    <div className='bg-card flex flex-col overflow-hidden rounded-2xl border shadow-xs'>
+    <div className='rounded-2xl border bg-card'>
       <button
         type='button'
         onClick={() => setExpanded((v) => !v)}
@@ -325,69 +326,23 @@ function ExclusiveGroupShelfCard({
         />
       </button>
       {expanded && (
-        <div className='space-y-2 border-t px-3 py-3'>
-          {plans.map((plan) => {
-            const state = resolvePlanState(plan)
-            return (
-              <div key={plan.id} className='bg-muted/40 rounded-lg border p-3'>
-                <div className='flex items-center justify-between gap-2'>
-                  <div className='flex min-w-0 items-center gap-2'>
-                    <span className='truncate text-sm font-medium'>
-                      {plan.title}
-                    </span>
-                    {state.isCurrent && (
-                      <StatusBadge
-                        variant='success'
-                        copyable={false}
-                        className='shrink-0'
-                      >
-                        {t('Current')}
-                      </StatusBadge>
-                    )}
-                    {plan.is_recommended && (
-                      <StatusBadge
-                        variant='info'
-                        copyable={false}
-                        className='shrink-0'
-                      >
-                        <Sparkles className='h-3 w-3' />
-                        {t('Recommended')}
-                      </StatusBadge>
-                    )}
-                  </div>
-                  <span className='text-primary shrink-0 text-base font-bold'>
-                    ${Number(plan.price_amount || 0).toFixed(2)}
-                  </span>
-                </div>
-                <div className='text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs'>
-                  <span>{formatDuration(plan, t)}</span>
-                  <span>
-                    {t('Plan Tier')}: {plan.priority ?? 0}
-                  </span>
-                  {plan.upgrade_group && (
-                    <span>
-                      {t('Upgrade Group')}: {plan.upgrade_group}
-                    </span>
-                  )}
-                </div>
-                <div className='mt-2'>
-                  <PlanActionButton
-                    plan={plan}
-                    state={state}
-                    onSubscribe={onSubscribe}
-                    onSwitch={onSwitch}
-                  />
-                </div>
-              </div>
-            )
-          })}
+        <div className='grid grid-cols-1 gap-3 border-t p-3 sm:grid-cols-2'>
+          {plans.map((plan) => (
+            <CatalogPlanCard
+              key={plan.id}
+              plan={plan}
+              state={resolvePlanState(plan)}
+              onSubscribe={onSubscribe}
+              onSwitch={onSwitch}
+            />
+          ))}
         </div>
       )}
     </div>
   )
 }
 
-export function PlanCatalogSection() {
+export function PlanCatalogSection({ grouped }: { grouped: boolean }) {
   const { t } = useTranslation()
   const { plans, selfData, topupInfo, userQuota, userGroup, refresh } =
     useMySubscriptions()
@@ -477,8 +432,8 @@ export function PlanCatalogSection() {
     []
   )
 
-  // 套餐按互斥组分组：互斥组进书架格子，无组套餐单独放。
-  const { groups, standalone } = useMemo(() => {
+  // 分组视图：互斥组聚合成块，无互斥组的套餐单独列出。
+  const groupedData = useMemo(() => {
     const groupMap = new Map<string, SubscriptionPlan[]>()
     const standalone: SubscriptionPlan[] = []
     for (const p of plans) {
@@ -554,26 +509,55 @@ export function PlanCatalogSection() {
 
   return (
     <>
-      <div className='grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3 2xl:gap-4'>
-        {groups.map(([group, groupPlans]) => (
-          <ExclusiveGroupShelfCard
-            key={group}
-            group={group}
-            plans={groupPlans}
-            resolvePlanState={resolvePlanState}
-            onSubscribe={handleSubscribe}
-            onSwitch={handleSwitch}
-          />
-        ))}
-        {standalone.map((plan) => (
-          <CatalogPlanCard
-            key={plan.id}
-            plan={plan}
-            state={resolvePlanState(plan)}
-            onSubscribe={handleSubscribe}
-            onSwitch={handleSwitch}
-          />
-        ))}
+      <div className='space-y-3'>
+        {grouped ? (
+          <div className='space-y-3'>
+            {groupedData.groups.map(([group, groupPlans]) => (
+              <CatalogGroupCard
+                key={group}
+                group={group}
+                plans={groupPlans}
+                resolvePlanState={resolvePlanState}
+                onSubscribe={handleSubscribe}
+                onSwitch={handleSwitch}
+              />
+            ))}
+            {groupedData.standalone.length > 0 && (
+              <div className='rounded-2xl border bg-card'>
+                <div className='text-muted-foreground px-4 py-3 text-sm font-medium'>
+                  {t('Standalone plans')}
+                </div>
+                <div className='grid grid-cols-1 gap-3 border-t p-3 sm:grid-cols-2'>
+                  {groupedData.standalone.map((plan) => (
+                    <CatalogPlanCard
+                      key={plan.id}
+                      plan={plan}
+                      state={resolvePlanState(plan)}
+                      onSubscribe={handleSubscribe}
+                      onSwitch={handleSwitch}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className='grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3 2xl:gap-4'>
+            {plans.map((p) => {
+              const plan = p?.plan
+              if (!plan) return null
+              return (
+                <CatalogPlanCard
+                  key={plan.id}
+                  plan={plan}
+                  state={resolvePlanState(plan)}
+                  onSubscribe={handleSubscribe}
+                  onSwitch={handleSwitch}
+                />
+              )
+            })}
+          </div>
+        )}
       </div>
 
       <SubscriptionPurchaseDialog

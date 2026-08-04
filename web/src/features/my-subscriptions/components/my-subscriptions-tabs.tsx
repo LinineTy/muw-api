@@ -16,11 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { CalendarClock, X } from 'lucide-react'
+import { CalendarClock, Layers, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type {
   SubscriptionPlan,
@@ -96,6 +98,11 @@ function ExpiringBanner() {
 export function MySubscriptionsTabs() {
   const { t } = useTranslation()
   const { selfData, plans, loading } = useMySubscriptions()
+  const [tab, setTab] = useState<'active' | 'expired' | 'cancelled' | 'plans'>(
+    'active'
+  )
+  // 套餐目录的「分组显示」开关：默认关（每个套餐平铺独立显示）。
+  const [grouped, setGrouped] = useState(false)
 
   const allSubscriptions = useMemo(
     () => selfData?.all_subscriptions ?? [],
@@ -141,19 +148,43 @@ export function MySubscriptionsTabs() {
   return (
     <div className='flex h-full min-h-0 flex-col gap-3'>
       <ExpiringBanner />
-      <Tabs defaultValue='active' className='flex min-h-0 flex-1 flex-col'>
-        <TabsList className='w-fit'>
-          <TabsTrigger value='active'>
-            {t('Active')} ({active.length})
-          </TabsTrigger>
-          <TabsTrigger value='expired'>
-            {t('Expired')} ({expired.length})
-          </TabsTrigger>
-          <TabsTrigger value='cancelled'>
-            {t('Cancelled')} ({cancelled.length})
-          </TabsTrigger>
-          <TabsTrigger value='plans'>{t('Subscription Plans')}</TabsTrigger>
-        </TabsList>
+      <Tabs
+        value={tab}
+        onValueChange={(value) => setTab(value as typeof tab)}
+        className='flex min-h-0 flex-1 flex-col'
+      >
+        <div className='flex items-center justify-between gap-2'>
+          <TabsList className='w-fit'>
+            <TabsTrigger value='active'>
+              {t('Active')} ({active.length})
+            </TabsTrigger>
+            <TabsTrigger value='expired'>
+              {t('Expired')} ({expired.length})
+            </TabsTrigger>
+            <TabsTrigger value='cancelled'>
+              {t('Cancelled')} ({cancelled.length})
+            </TabsTrigger>
+            <TabsTrigger value='plans'>
+              {t('Subscription Plans')}
+            </TabsTrigger>
+          </TabsList>
+          {tab === 'plans' && (
+            <div className='flex items-center gap-2 rounded-md border px-3 py-1.5'>
+              <Layers className='text-muted-foreground h-4 w-4' />
+              <Label
+                htmlFor='catalog-grouped'
+                className='cursor-pointer text-sm'
+              >
+                {t('Group display')}
+              </Label>
+              <Switch
+                id='catalog-grouped'
+                checked={grouped}
+                onCheckedChange={setGrouped}
+              />
+            </div>
+          )}
+        </div>
         <TabsContent value='active' className='min-h-0 overflow-y-auto px-2 pt-3 pb-3'>
           <SubscriptionList subscriptions={active} planMap={planMap} />
         </TabsContent>
@@ -164,7 +195,7 @@ export function MySubscriptionsTabs() {
           <SubscriptionList subscriptions={cancelled} planMap={planMap} />
         </TabsContent>
         <TabsContent value='plans' className='min-h-0 overflow-y-auto px-2 pt-3 pb-3'>
-          <PlanCatalogSection />
+          <PlanCatalogSection grouped={grouped} />
         </TabsContent>
       </Tabs>
     </div>
