@@ -54,6 +54,7 @@ export const SUBSCRIPTION_STATUS_OPTIONS = [
   { value: 'active', labelKey: 'Active' },
   { value: 'expired', labelKey: 'Expired' },
   { value: 'cancelled', labelKey: 'Cancelled' },
+  { value: 'deleted', labelKey: 'Deleted' },
 ] as const
 
 export function getSubscriptionStatusOptions(t: TFunction) {

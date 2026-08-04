@@ -128,6 +128,15 @@ export async function deleteUserSubscription(
   return res.data
 }
 
+export async function purgeUserSubscription(
+  subId: number
+): Promise<ApiResponse> {
+  const res = await api.post(
+    `/api/subscription/admin/user_subscriptions/${subId}/purge`
+  )
+  return res.data
+}
+
 export async function resetUserSubscriptionsByPlan(
   userId: number,
   data: ResetUserSubscriptionsRequest

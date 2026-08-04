@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next'
 import { SectionPageLayout } from '@/components/layout'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
+import { AdminHistorySubscriptionsTable } from './components/admin-history-subscriptions-table'
 import { AdminSubscriptionsTable } from './components/admin-subscriptions-table'
 import { SubscriptionsDialogs } from './components/subscriptions-dialogs'
 import { SubscriptionsPrimaryButtons } from './components/subscriptions-primary-buttons'
@@ -30,7 +31,7 @@ import { SubscriptionsTable } from './components/subscriptions-table'
 
 function SubscriptionsContent() {
   const { t } = useTranslation()
-  const [tab, setTab] = useState<'plans' | 'all'>('plans')
+  const [tab, setTab] = useState<'plans' | 'all' | 'history'>('plans')
 
   return (
     <>
@@ -45,7 +46,9 @@ function SubscriptionsContent() {
           <div className='flex h-full min-h-0 flex-col gap-4'>
             <Tabs
               value={tab}
-              onValueChange={(value) => setTab(value as 'plans' | 'all')}
+              onValueChange={(value) =>
+                setTab(value as 'plans' | 'all' | 'history')
+              }
               className='flex min-h-0 flex-1 flex-col'
             >
               <TabsList className='w-fit'>
@@ -53,13 +56,16 @@ function SubscriptionsContent() {
                 <TabsTrigger value='all'>
                   {t('All Subscriptions')}
                 </TabsTrigger>
+                <TabsTrigger value='history'>
+                  {t('History Subscriptions')}
+                </TabsTrigger>
               </TabsList>
               <div className='min-h-0 flex-1 pt-2'>
-                {tab === 'plans' ? (
-                  <SubscriptionsTable />
-                ) : (
-                  <AdminSubscriptionsTable />
-                )}
+                {{
+                  plans: <SubscriptionsTable />,
+                  all: <AdminSubscriptionsTable />,
+                  history: <AdminHistorySubscriptionsTable />,
+                }[tab]}
               </div>
             </Tabs>
           </div>
