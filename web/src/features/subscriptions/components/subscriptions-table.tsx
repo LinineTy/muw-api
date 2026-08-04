@@ -56,7 +56,7 @@ export function SubscriptionsTable() {
   return (
     <div className='flex h-full min-h-0 flex-col gap-3'>
       {grouped ? (
-        <GroupedPlansList plans={plans} />
+        <GroupedPlansList rows={table.getCoreRowModel().rows} />
       ) : (
         <DataTablePage
           table={table}
@@ -72,7 +72,7 @@ export function SubscriptionsTable() {
           renderCard={(row, { isSelected }) => (
             <PlanCard row={row} isSelected={isSelected} />
           )}
-          cardGridClassName='grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2 2xl:grid-cols-3'
+          cardGridClassName='grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3'
           toolbarProps={{
             searchPlaceholder: t('Filter plans...'),
           }}
