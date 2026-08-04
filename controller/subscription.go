@@ -452,6 +452,7 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 			"max_cumulative_seconds":     req.Plan.MaxCumulativeSeconds,
 			"exclusive_group":            req.Plan.ExclusiveGroup,
 			"allowed_groups":             req.Plan.AllowedGroups,
+			"priority":                   req.Plan.Priority,
 			"updated_at":                 common.GetTimestamp(),
 		}
 		if req.Plan.AllowBalancePay != nil {
