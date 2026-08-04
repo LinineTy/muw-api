@@ -16,12 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useQuery } from '@tanstack/react-query'
 import { Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Select,
   SelectContent,
@@ -30,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { getGroups } from '@/features/users/api'
 
 const TRUST_LEVELS = ['0', '1', '2', '3', '4']
 
@@ -88,6 +90,21 @@ export function LinuxDOGroupMappingEditor({
   const { t } = useTranslation()
   const [rows, setRows] = useState<MappingRow[]>(() => parseMapping(value))
   const lastCommittedRef = useRef(value)
+
+  // Existing user groups, offered as dropdown options. Custom values are still
+  // allowed so a mapping can target a group that does not exist yet.
+  const { data: groupsData } = useQuery({
+    queryKey: ['groups'],
+    queryFn: getGroups,
+  })
+  const groupOptions = useMemo(
+    () =>
+      (groupsData?.data ?? []).map((group) => ({
+        label: group,
+        value: group,
+      })),
+    [groupsData]
+  )
 
   // Re-sync from the prop only when the change did not originate from this
   // editor (e.g. the settings form reset after navigation).
@@ -169,11 +186,13 @@ export function LinuxDOGroupMappingEditor({
                 </SelectGroup>
               </SelectContent>
             </Select>
-            <Input
+            <Combobox
               className='flex-1'
-              placeholder={t('Group name, e.g. vip')}
+              options={groupOptions}
               value={row.group}
-              onChange={(event) => updateGroup(row.id, event.target.value)}
+              onValueChange={(group) => updateGroup(row.id, group ?? '')}
+              allowCustomValue
+              placeholder={t('Group name, e.g. vip')}
             />
             <Button
               type='button'
