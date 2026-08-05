@@ -14,6 +14,14 @@ logs
 web/dist
 web/node_modules
 .env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.secret
+.release.env
 one-api
 new-api
 /__debug_bin*
