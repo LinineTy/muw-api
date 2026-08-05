@@ -281,6 +281,10 @@ func Register(c *gin.Context) {
 			common.ApiErrorI18n(c, i18n.MsgUserEmailAlreadyTaken)
 			return
 		}
+		if errors.Is(err, model.ErrUserLimitReached) {
+			common.ApiErrorI18n(c, i18n.MsgUserLimitReached)
+			return
+		}
 		common.ApiError(c, err)
 		return
 	}
@@ -1047,6 +1051,10 @@ func CreateUser(c *gin.Context) {
 		authzTouched = touched
 		return err
 	}); err != nil {
+		if errors.Is(err, model.ErrUserLimitReached) {
+			common.ApiErrorI18n(c, i18n.MsgUserLimitReached)
+			return
+		}
 		common.ApiError(c, err)
 		return
 	}
