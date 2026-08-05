@@ -174,7 +174,7 @@ func TestEnsureSubscriptionPlanRecommendedBackfill(t *testing.T) {
 	// 模拟升级加列后的 NULL 存量值。
 	require.NoError(t, DB.Model(&SubscriptionPlan{}).Where("id = ?", plan.Id).Update("is_recommended", nil).Error)
 
-	require.NoError(t, ensureSubscriptionPlanRecommendedBackfill())
+	require.NoError(t, ensureSubscriptionPlanRecommendedBackfill(DB))
 
 	var got bool
 	require.NoError(t, DB.Model(&SubscriptionPlan{}).Where("id = ?", plan.Id).Pluck("is_recommended", &got).Error)

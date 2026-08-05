@@ -87,17 +87,24 @@ func shouldSkipMigration(applied int) bool {
 }
 
 // applyPendingMigrations 依次执行 applied 之后的所有迁移并逐个打版本戳。
-// ms 参数便于测试注入；生产路径传入包级 migrations。
+// 每个迁移在独立事务中执行:Up 与打戳同事务,Up 失败则整体回滚且不写戳,
+// 下次启动会从该版本重新执行,杜绝"半迁移 + 已打戳"的不完整状态。
+// 注意:MySQL 的 DDL 会隐式提交,事务只能保护数据操作(DML);SQLite 与
+// PostgreSQL 支持事务性 DDL,回滚更彻底。数据转换类迁移仍应在 Up 内部
+// 自行保证幂等。ms 参数便于测试注入;生产路径传入包级 migrations。
 func applyPendingMigrations(db *gorm.DB, applied int, ms []Migration) error {
 	for _, m := range ms {
 		if m.Version <= applied {
 			continue
 		}
-		if err := m.Up(db); err != nil {
+		err := db.Transaction(func(tx *gorm.DB) error {
+			if err := m.Up(tx); err != nil {
+				return err
+			}
+			return tx.Create(&SchemaMigration{Version: m.Version, Name: m.Name}).Error
+		})
+		if err != nil {
 			return fmt.Errorf("schema migration %d (%s): %w", m.Version, m.Name, err)
-		}
-		if err := db.Create(&SchemaMigration{Version: m.Version, Name: m.Name}).Error; err != nil {
-			return err
 		}
 		common.SysLog(fmt.Sprintf("applied schema migration %d (%s)", m.Version, m.Name))
 	}
@@ -105,26 +112,28 @@ func applyPendingMigrations(db *gorm.DB, applied int, ms []Migration) error {
 }
 
 // migrationBaselineV1 是版本化改造的基线迁移，吸收此前 migrateDB 中 AutoMigrate
-// 之外的全部专项迁移与初始化逻辑。它们历史依赖全局 DB（model.DB），保持原样；
-// db 参数在此版迁移中不直接使用，新迁移应优先使用传入的 db。
+// 之外的全部专项迁移与初始化逻辑。所有子步骤幂等,统一使用传入的 db
+// (由 applyPendingMigrations 在事务中执行),不再依赖全局 DB。
 func migrationBaselineV1(db *gorm.DB) error {
-	migrateSubscriptionPlanPriceAmount()
-	if err := migrateTokenModelLimitsToText(); err != nil {
+	if err := migrateSubscriptionPlanPriceAmount(db); err != nil {
 		return err
 	}
-	if err := InitializeUserAuthVersions(); err != nil {
+	if err := migrateTokenModelLimitsToText(db); err != nil {
 		return err
 	}
-	if err := InitializeExternalIdentityClaims(); err != nil {
+	if err := InitializeUserAuthVersions(db); err != nil {
 		return err
 	}
-	if err := ensureQuotaClaimRecordsClean(); err != nil {
+	if err := InitializeExternalIdentityClaims(db); err != nil {
 		return err
 	}
-	if err := ensureQuotaClaimLockSeeded(); err != nil {
+	if err := ensureQuotaClaimRecordsClean(db); err != nil {
 		return err
 	}
-	return ensureSubscriptionPlanRecommendedBackfill()
+	if err := ensureQuotaClaimLockSeeded(db); err != nil {
+		return err
+	}
+	return ensureSubscriptionPlanRecommendedBackfill(db)
 }
 
 // migrationSubscriptionWipe 是订阅功能重设计的破坏性迁移：清空四张订阅表。

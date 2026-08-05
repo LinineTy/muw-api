@@ -236,8 +236,8 @@ func PublishUserAuthCache(userId int) error {
 
 // InitializeUserAuthVersions must run after AutoMigrate when upgrading an
 // existing database. It is idempotent and portable across all supported DBs.
-func InitializeUserAuthVersions() error {
-	return DB.Model(&User{}).Where("auth_version IS NULL OR auth_version < ?", 1).Update("auth_version", 1).Error
+func InitializeUserAuthVersions(db *gorm.DB) error {
+	return db.Model(&User{}).Where("auth_version IS NULL OR auth_version < ?", 1).Update("auth_version", 1).Error
 }
 
 func updateUserCacheFieldAtVersion(userId int, field string, value interface{}, authVersion int64) error {

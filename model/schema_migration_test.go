@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 package model
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -125,4 +126,36 @@ func TestMigrationSubscriptionWipe(t *testing.T) {
 	assert.Zero(t, subCount)
 	assert.Zero(t, orderCount)
 	assert.Zero(t, recCount)
+}
+
+// TestApplyPendingMigrationsRollsBackOnUpFailure 保护事务包裹:Up 中途失败时,
+// 事务内已写入的数据与版本戳一起回滚,不产生"半迁移 + 已打戳"的不完整状态,
+// 下次启动会从失败版本重新执行。
+func TestApplyPendingMigrationsRollsBackOnUpFailure(t *testing.T) {
+	db := openSchemaMigrationTestDB(t)
+	require.NoError(t, ensureSchemaMigrationsTable(db))
+	require.NoError(t, db.AutoMigrate(&Option{}))
+
+	ms := []Migration{
+		{Version: 1, Name: "fail", Up: func(tx *gorm.DB) error {
+			// 先写入一行数据,随后返回错误:整笔事务应回滚
+			if err := tx.Create(&Option{Key: "rollback-probe", Value: "x"}).Error; err != nil {
+				return err
+			}
+			return fmt.Errorf("boom")
+		}},
+	}
+
+	err := applyPendingMigrations(db, 0, ms)
+	require.Error(t, err)
+
+	// 数据回滚:Option 无残留
+	var count int64
+	require.NoError(t, db.Model(&Option{}).Where("key = ?", "rollback-probe").Count(&count).Error)
+	assert.Zero(t, count)
+
+	// 未打戳:下次启动从版本 1 重新执行
+	applied, err := appliedSchemaVersion(db)
+	require.NoError(t, err)
+	assert.Zero(t, applied)
 }
