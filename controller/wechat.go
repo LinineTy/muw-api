@@ -96,6 +96,13 @@ func WeChatAuth(c *gin.Context) {
 			user.Group = common.DefaultUserGroup
 
 			if err := user.Insert(0); err != nil {
+				if errors.Is(err, model.ErrUserLimitReached) {
+					c.JSON(http.StatusOK, gin.H{
+						"success": false,
+						"message": "站点用户数量已达上限",
+					})
+					return
+				}
 				c.JSON(http.StatusOK, gin.H{
 					"success": false,
 					"message": err.Error(),

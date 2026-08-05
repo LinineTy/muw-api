@@ -616,9 +616,72 @@ func ensureEmailAvailableWithTx(tx *gorm.DB, email string, excludeUserID int) er
 	return nil
 }
 
+// UserCountLock 站点最大用户数校验的全局串行锁行(id=1)。
+// 并发注册时通过 lockForUpdate 锁住该行,串行化"计数+插入",避免同一时刻
+// 多个注册同时通过 count 校验导致超发(仅 MySQL/PostgreSQL 需要;
+// SQLite 单写者天然串行,无需锁)。
+type UserCountLock struct {
+	Id int `gorm:"primaryKey"`
+}
+
+func (UserCountLock) TableName() string {
+	return "user_count_locks"
+}
+
+// ensureUserCountLockSeeded 确保用户配额全局锁行存在(id=1),供注册并发串行化。
+// 幂等,每次启动执行:表不存在时先建表(已到最新版本跳过 AutoMigrate 的库也
+// 必须能建),再 seed 锁行。覆盖新装与已迁移库。
+func ensureUserCountLockSeeded(db *gorm.DB) error {
+	if !db.Migrator().HasTable(&UserCountLock{}) {
+		if err := db.Migrator().CreateTable(&UserCountLock{}); err != nil {
+			return err
+		}
+	}
+	var count int64
+	if err := db.Model(&UserCountLock{}).Count(&count).Error; err != nil {
+		return err
+	}
+	if count == 0 {
+		return db.Create(&UserCountLock{Id: 1}).Error
+	}
+	return nil
+}
+
+// checkUserLimitReached 校验站点最大用户数:0 表示不限制;超管(root)不计入
+// 额度,因此配置值 N 表示允许 N 个非超管用户(加上超管共 N+1)。
+// 校验前先 lockForUpdate 锁住 user_count_locks(id=1),把并发的注册事务
+// 串行化:后到的事务必须等前一个提交,count 才能看到新插入的用户,从而
+// 保证"同一时刻涌入多人"时既不都放行也不看脸,而是严格不超发。
+// 锁行异常缺失时降级为直接计数(尽力而为),仅记录警告。
+func checkUserLimitReached(tx *gorm.DB) error {
+	maxCount := common.MaxUserCount
+	if maxCount <= 0 {
+		return nil
+	}
+	var lock UserCountLock
+	if err := lockForUpdate(tx).Where("id = ?", 1).First(&lock).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			common.SysLog("user_count_locks lock row missing, fallback to unlocked user limit check")
+		} else {
+			return err
+		}
+	}
+	var count int64
+	if err := tx.Model(&User{}).Where("role <> ?", common.RoleRootUser).Count(&count).Error; err != nil {
+		return err
+	}
+	if count >= int64(maxCount) {
+		return ErrUserLimitReached
+	}
+	return nil
+}
+
 func (user *User) Insert(inviterId int) error {
 	if err := DB.Transaction(func(tx *gorm.DB) error {
 		return withNormalizedEmailLock(tx, user.Email, func(tx *gorm.DB) error {
+			if err := checkUserLimitReached(tx); err != nil {
+				return err
+			}
 			if err := user.prepareForInsert(tx); err != nil {
 				return err
 			}
@@ -683,6 +746,9 @@ func (user *User) FinishInsert(inviterId int) {
 // Post-creation tasks (sidebar config, logs, inviter rewards) are handled after the transaction commits.
 func (user *User) InsertWithTx(tx *gorm.DB, inviterId int) error {
 	return withNormalizedEmailLock(tx, user.Email, func(tx *gorm.DB) error {
+		if err := checkUserLimitReached(tx); err != nil {
+			return err
+		}
 		if err := user.prepareForInsert(tx); err != nil {
 			return err
 		}

@@ -676,6 +676,10 @@ func handleOAuthError(c *gin.Context, err error) {
 	case *oauth.LinuxDOBlacklistedError:
 		common.ApiErrorI18n(c, i18n.MsgOAuthLinuxDOBlacklisted)
 	default:
+		if errors.Is(err, model.ErrUserLimitReached) {
+			common.ApiErrorI18n(c, i18n.MsgUserLimitReached)
+			return
+		}
 		common.ApiError(c, err)
 	}
 }

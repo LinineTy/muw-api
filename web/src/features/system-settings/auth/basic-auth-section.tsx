@@ -32,6 +32,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Switch } from '@/components/ui/switch'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 
 import {
@@ -52,6 +53,7 @@ const basicAuthSchema = z.object({
   EmailDomainRestrictionEnabled: z.boolean(),
   EmailAliasRestrictionEnabled: z.boolean(),
   EmailDomainWhitelist: z.string(),
+  MaxUserCount: z.string(),
 })
 
 type BasicAuthFormValues = z.infer<typeof basicAuthSchema>
@@ -256,6 +258,25 @@ export function BasicAuthSection({ defaultValues }: BasicAuthSectionProps) {
                 <FormDescription>
                   {t(
                     'One domain per line (only used when domain restriction is enabled)'
+                  )}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='MaxUserCount'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Maximum Users')}</FormLabel>
+                <FormControl>
+                  <Input type='number' min={0} placeholder='0' {...field} />
+                </FormControl>
+                <FormDescription>
+                  {t(
+                    'Maximum number of users. Root user is not counted, so total accounts allowed are this value plus one. 0 = unlimited'
                   )}
                 </FormDescription>
                 <FormMessage />

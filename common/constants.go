@@ -69,6 +69,10 @@ var TelegramOAuthEnabled = false
 var TurnstileCheckEnabled = false
 var RegisterEnabled = true
 
+// MaxUserCount 站点最大非超管用户数,0 表示不限制。超管(root)不计入额度,
+// 因此配置值 N 意味着站点允许 N 个非超管用户(加上超管共 N+1)。
+var MaxUserCount = 0
+
 var EmailDomainRestrictionEnabled = false // 是否启用邮箱域名限制
 var EmailAliasRestrictionEnabled = false  // 是否启用邮箱别名限制
 var EmailDomainWhitelist = []string{

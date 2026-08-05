@@ -262,6 +262,10 @@ func migrateDB() error {
 	if err := ensureSubscriptionPlanTableSQLite(); err != nil {
 		return err
 	}
+	// 用户配额全局锁行:幂等,每次启动执行,保证新装与已迁移库都有该行
+	if err := ensureUserCountLockSeeded(DB); err != nil {
+		return err
+	}
 	applied, err := appliedSchemaVersion(DB)
 	if err != nil {
 		return err
@@ -307,6 +311,7 @@ func autoMigrateAll() error {
 		&TwoFABackupCode{},
 		&QuotaClaimRecord{},
 		&QuotaClaimLock{},
+		&UserCountLock{},
 		&SubscriptionOrder{},
 		&UserSubscription{},
 		&SubscriptionPreConsumeRecord{},
