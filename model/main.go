@@ -338,23 +338,23 @@ func autoMigrateAll() error {
 // MySQL/PG 升级时该新列由 AutoMigrate 加列且无 DB 默认值，存量行会是 NULL；
 // 统一回填 0 保证语义一致。SQLite 手工 DDL 带 DEFAULT 0，无 NULL 行，此函数
 // 幂等无副作用。
-func ensureSubscriptionPlanRecommendedBackfill() error {
-	if !DB.Migrator().HasColumn(&SubscriptionPlan{}, "is_recommended") {
+func ensureSubscriptionPlanRecommendedBackfill(db *gorm.DB) error {
+	if !db.Migrator().HasColumn(&SubscriptionPlan{}, "is_recommended") {
 		return nil
 	}
-	return DB.Model(&SubscriptionPlan{}).
+	return db.Model(&SubscriptionPlan{}).
 		Where("is_recommended IS NULL").
 		Update("is_recommended", 0).Error
 }
 
 // ensureQuotaClaimLockSeeded 确保额度池全局锁行存在（id=1），供 MySQL/PG 并发领取串行化
-func ensureQuotaClaimLockSeeded() error {
+func ensureQuotaClaimLockSeeded(db *gorm.DB) error {
 	var count int64
-	if err := DB.Model(&QuotaClaimLock{}).Count(&count).Error; err != nil {
+	if err := db.Model(&QuotaClaimLock{}).Count(&count).Error; err != nil {
 		return err
 	}
 	if count == 0 {
-		return DB.Create(&QuotaClaimLock{Id: 1}).Error
+		return db.Create(&QuotaClaimLock{Id: 1}).Error
 	}
 	return nil
 }
@@ -364,33 +364,33 @@ func ensureQuotaClaimLockSeeded() error {
 // AutoMigrate 只加列不删列，残留的 pool_id 会让新的 insert 触发
 // NOT NULL constraint failed（SQLite 扩展错误码 1299）。检测到旧列时删除，
 // 保证存量库升级后领取/打卡不报错。
-func ensureQuotaClaimRecordsClean() error {
-	hasLegacy, err := quotaClaimRecordsHasLegacyPoolId()
+func ensureQuotaClaimRecordsClean(db *gorm.DB) error {
+	hasLegacy, err := quotaClaimRecordsHasLegacyPoolId(db)
 	if err != nil {
 		return err
 	}
 	if !hasLegacy {
 		return nil
 	}
-	return dropLegacyQuotaClaimColumns()
+	return dropLegacyQuotaClaimColumns(db)
 }
 
 // quotaClaimRecordsHasLegacyPoolId 检测 quota_claim_records 表是否仍含旧版 pool_id 列。
-func quotaClaimRecordsHasLegacyPoolId() (bool, error) {
+func quotaClaimRecordsHasLegacyPoolId(db *gorm.DB) (bool, error) {
 	var count int64
 	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
-		err := DB.Raw(
+		err := db.Raw(
 			"SELECT COUNT(*) FROM pragma_table_info('quota_claim_records') WHERE name = 'pool_id'",
 		).Scan(&count).Error
 		return count > 0, err
 	}
 	if common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
-		err := DB.Raw(
+		err := db.Raw(
 			"SELECT COUNT(*) FROM information_schema.COLUMNS WHERE table_schema = current_schema() AND table_name = 'quota_claim_records' AND column_name = 'pool_id'",
 		).Scan(&count).Error
 		return count > 0, err
 	}
-	err := DB.Raw(
+	err := db.Raw(
 		"SELECT COUNT(*) FROM information_schema.COLUMNS WHERE table_schema = DATABASE() AND table_name = 'quota_claim_records' AND column_name = 'pool_id'",
 	).Scan(&count).Error
 	return count > 0, err
@@ -398,20 +398,20 @@ func quotaClaimRecordsHasLegacyPoolId() (bool, error) {
 
 // dropLegacyQuotaClaimColumns 删除旧版残留的 pool_id / period_key 列。
 // SQLite 的 DROP COLUMN 不允许列仍被索引引用，需先删对应索引。
-func dropLegacyQuotaClaimColumns() error {
+func dropLegacyQuotaClaimColumns(db *gorm.DB) error {
 	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
-		if err := DB.Exec("DROP INDEX IF EXISTS idx_quota_claim_records_pool_id").Error; err != nil {
+		if err := db.Exec("DROP INDEX IF EXISTS idx_quota_claim_records_pool_id").Error; err != nil {
 			return err
 		}
-		if err := DB.Exec("DROP INDEX IF EXISTS idx_quota_claim_records_period_key").Error; err != nil {
+		if err := db.Exec("DROP INDEX IF EXISTS idx_quota_claim_records_period_key").Error; err != nil {
 			return err
 		}
-		if err := DB.Exec("ALTER TABLE quota_claim_records DROP COLUMN pool_id").Error; err != nil {
+		if err := db.Exec("ALTER TABLE quota_claim_records DROP COLUMN pool_id").Error; err != nil {
 			return err
 		}
-		return DB.Exec("ALTER TABLE quota_claim_records DROP COLUMN period_key").Error
+		return db.Exec("ALTER TABLE quota_claim_records DROP COLUMN period_key").Error
 	}
-	return DB.Exec("ALTER TABLE quota_claim_records DROP COLUMN pool_id, DROP COLUMN period_key").Error
+	return db.Exec("ALTER TABLE quota_claim_records DROP COLUMN pool_id, DROP COLUMN period_key").Error
 }
 
 func migrateLOGDB() error {
@@ -606,7 +606,7 @@ PRIMARY KEY (` + "`id`" + `)
 
 // migrateTokenModelLimitsToText migrates model_limits column from varchar(1024) to text
 // This is safe to run multiple times - it checks the column type first
-func migrateTokenModelLimitsToText() error {
+func migrateTokenModelLimitsToText(db *gorm.DB) error {
 	// SQLite uses type affinity, so TEXT and VARCHAR are effectively the same — no migration needed
 	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
 		return nil
@@ -615,18 +615,18 @@ func migrateTokenModelLimitsToText() error {
 	tableName := "tokens"
 	columnName := "model_limits"
 
-	if !DB.Migrator().HasTable(tableName) {
+	if !db.Migrator().HasTable(tableName) {
 		return nil
 	}
 
-	if !DB.Migrator().HasColumn(&Token{}, columnName) {
+	if !db.Migrator().HasColumn(&Token{}, columnName) {
 		return nil
 	}
 
 	var alterSQL string
 	if common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
 		var dataType string
-		if err := DB.Raw(`SELECT data_type FROM information_schema.columns
+		if err := db.Raw(`SELECT data_type FROM information_schema.columns
 			WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?`,
 			tableName, columnName).Scan(&dataType).Error; err != nil {
 			common.SysLog(fmt.Sprintf("Warning: failed to query metadata for %s.%s: %v", tableName, columnName, err))
@@ -636,7 +636,7 @@ func migrateTokenModelLimitsToText() error {
 		alterSQL = fmt.Sprintf(`ALTER TABLE %s ALTER COLUMN %s TYPE text`, tableName, columnName)
 	} else if common.UsingMainDatabase(common.DatabaseTypeMySQL) {
 		var columnType string
-		if err := DB.Raw(`SELECT COLUMN_TYPE FROM information_schema.columns
+		if err := db.Raw(`SELECT COLUMN_TYPE FROM information_schema.columns
 				WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`,
 			tableName, columnName).Scan(&columnType).Error; err != nil {
 			common.SysLog(fmt.Sprintf("Warning: failed to query metadata for %s.%s: %v", tableName, columnName, err))
@@ -649,7 +649,7 @@ func migrateTokenModelLimitsToText() error {
 	}
 
 	if alterSQL != "" {
-		if err := DB.Exec(alterSQL).Error; err != nil {
+		if err := db.Exec(alterSQL).Error; err != nil {
 			return fmt.Errorf("failed to migrate %s.%s to text: %w", tableName, columnName, err)
 		}
 		common.SysLog(fmt.Sprintf("Successfully migrated %s.%s to text", tableName, columnName))
@@ -659,62 +659,62 @@ func migrateTokenModelLimitsToText() error {
 
 // migrateSubscriptionPlanPriceAmount migrates price_amount column from float/double to decimal(10,6)
 // This is safe to run multiple times - it checks the column type first
-func migrateSubscriptionPlanPriceAmount() {
+func migrateSubscriptionPlanPriceAmount(db *gorm.DB) error {
 	// SQLite doesn't support ALTER COLUMN, and its type affinity handles this automatically
 	// Skip early to avoid GORM parsing the existing table DDL which may cause issues
 	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
-		return
+		return nil
 	}
 
 	tableName := "subscription_plans"
 	columnName := "price_amount"
 
 	// Check if table exists first
-	if !DB.Migrator().HasTable(tableName) {
-		return
+	if !db.Migrator().HasTable(tableName) {
+		return nil
 	}
 
 	// Check if column exists
-	if !DB.Migrator().HasColumn(&SubscriptionPlan{}, columnName) {
-		return
+	if !db.Migrator().HasColumn(&SubscriptionPlan{}, columnName) {
+		return nil
 	}
 
 	var alterSQL string
 	if common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
 		// PostgreSQL: Check if already decimal/numeric
 		var dataType string
-		if err := DB.Raw(`SELECT data_type FROM information_schema.columns
+		if err := db.Raw(`SELECT data_type FROM information_schema.columns
 			WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?`,
 			tableName, columnName).Scan(&dataType).Error; err != nil {
 			common.SysLog(fmt.Sprintf("Warning: failed to query metadata for %s.%s: %v", tableName, columnName, err))
 		} else if dataType == "numeric" {
-			return // Already decimal/numeric
+			return nil // Already decimal/numeric
 		}
 		alterSQL = fmt.Sprintf(`ALTER TABLE %s ALTER COLUMN %s TYPE decimal(10,6) USING %s::decimal(10,6)`,
 			tableName, columnName, columnName)
 	} else if common.UsingMainDatabase(common.DatabaseTypeMySQL) {
 		// MySQL: Check if already decimal
 		var columnType string
-		if err := DB.Raw(`SELECT COLUMN_TYPE FROM information_schema.columns
+		if err := db.Raw(`SELECT COLUMN_TYPE FROM information_schema.columns
 				WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`,
 			tableName, columnName).Scan(&columnType).Error; err != nil {
 			common.SysLog(fmt.Sprintf("Warning: failed to query metadata for %s.%s: %v", tableName, columnName, err))
 		} else if strings.HasPrefix(strings.ToLower(columnType), "decimal") {
-			return // Already decimal
+			return nil // Already decimal
 		}
 		alterSQL = fmt.Sprintf("ALTER TABLE %s MODIFY COLUMN %s decimal(10,6) NOT NULL DEFAULT 0",
 			tableName, columnName)
 	} else {
-		return
+		return nil
 	}
 
 	if alterSQL != "" {
-		if err := DB.Exec(alterSQL).Error; err != nil {
-			common.SysLog(fmt.Sprintf("Warning: failed to migrate %s.%s to decimal: %v", tableName, columnName, err))
-		} else {
-			common.SysLog(fmt.Sprintf("Successfully migrated %s.%s to decimal(10,6)", tableName, columnName))
+		if err := db.Exec(alterSQL).Error; err != nil {
+			return fmt.Errorf("failed to migrate %s.%s to decimal: %w", tableName, columnName, err)
 		}
+		common.SysLog(fmt.Sprintf("Successfully migrated %s.%s to decimal(10,6)", tableName, columnName))
 	}
+	return nil
 }
 
 func closeDB(db *gorm.DB) error {

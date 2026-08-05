@@ -41,7 +41,7 @@ func TestEnsureQuotaClaimRecordsClean_DropsLegacyColumns(t *testing.T) {
 	require.EqualValues(t, 1, quotaClaimRecordsHasColumn(t, "period_key"))
 	require.EqualValues(t, 1, quotaClaimRecordsHasColumn(t, "pool_period_key"))
 
-	require.NoError(t, ensureQuotaClaimRecordsClean())
+	require.NoError(t, ensureQuotaClaimRecordsClean(DB))
 
 	require.Zero(t, quotaClaimRecordsHasColumn(t, "pool_id"))
 	require.Zero(t, quotaClaimRecordsHasColumn(t, "period_key"))
@@ -64,7 +64,7 @@ func TestEnsureQuotaClaimRecordsClean_NoopOnNewSchema(t *testing.T) {
 	require.NoError(t, DB.Migrator().DropTable("quota_claim_records"))
 	require.NoError(t, DB.Migrator().CreateTable(&QuotaClaimRecord{}))
 
-	require.NoError(t, ensureQuotaClaimRecordsClean())
+	require.NoError(t, ensureQuotaClaimRecordsClean(DB))
 
 	require.Zero(t, quotaClaimRecordsHasColumn(t, "pool_id"))
 	// 新表的新增列应保留

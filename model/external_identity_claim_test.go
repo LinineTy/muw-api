@@ -65,8 +65,8 @@ func TestInitializeExternalIdentityClaimsIsIdempotent(t *testing.T) {
 
 	user := User{Username: "telegram-legacy", Password: "password", TelegramId: "telegram-legacy-id"}
 	require.NoError(t, DB.Create(&user).Error)
-	require.NoError(t, InitializeExternalIdentityClaims())
-	require.NoError(t, InitializeExternalIdentityClaims())
+	require.NoError(t, InitializeExternalIdentityClaims(DB))
+	require.NoError(t, InitializeExternalIdentityClaims(DB))
 
 	var claim ExternalIdentityClaim
 	require.NoError(t, DB.Where("provider = ? AND subject = ?", ExternalIdentityProviderTelegram, user.TelegramId).
@@ -82,7 +82,7 @@ func TestInitializeExternalIdentityClaimsRejectsAmbiguousLegacyBindings(t *testi
 	require.NoError(t, DB.Create(&first).Error)
 	require.NoError(t, DB.Create(&second).Error)
 
-	err := InitializeExternalIdentityClaims()
+	err := InitializeExternalIdentityClaims(DB)
 	assert.ErrorIs(t, err, ErrExternalIdentityAlreadyClaimed)
 
 	var count int64
