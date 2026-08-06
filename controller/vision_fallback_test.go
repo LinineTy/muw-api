@@ -99,6 +99,10 @@ func TestNewSubContextStripsRequestId(t *testing.T) {
 		"X-Identity":          "user-42",
 		"X-Oneapi-User-Id":    42,
 		"some-other-key":      "kept",
+		// 父请求出图后遗留的 auto 分组遍历位置：子请求必须从 auto 列表开头
+		// 独立遍历，否则会跳过视觉模型渠道所在分组。
+		string(constant.ContextKeyAutoGroupIndex):      2,
+		string(constant.ContextKeyAutoGroupRetryIndex): 0,
 	}
 
 	subCtx, _ := newSubContext(parent.Request.Context(), parent, []byte(`{"model":"vision"}`))
@@ -116,6 +120,14 @@ func TestNewSubContextStripsRequestId(t *testing.T) {
 	_, hasBody := subCtx.Get(common.KeyBodyStorage)
 	assert.False(t, hasBody, "cached body must be replaced by the new sub-request body")
 	assert.Equal(t, "kept", subCtx.GetString("some-other-key"))
+
+	// The sub-request must not inherit the parent's auto-group traversal position:
+	// channel selection must start from the beginning of the auto list so vision
+	// model channels in earlier groups are not skipped.
+	_, hasAutoIndex := subCtx.Get(string(constant.ContextKeyAutoGroupIndex))
+	assert.False(t, hasAutoIndex, "sub-request must not inherit the parent auto group index")
+	_, hasAutoRetryIndex := subCtx.Get(string(constant.ContextKeyAutoGroupRetryIndex))
+	assert.False(t, hasAutoRetryIndex, "sub-request must not inherit the parent auto group retry index")
 
 	// The sub-request body is replaced.
 	bodyBytes := make([]byte, 128)

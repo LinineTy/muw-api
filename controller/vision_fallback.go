@@ -358,6 +358,14 @@ func newSubContext(ctx context.Context, c *gin.Context, body []byte) (*gin.Conte
 		if k == common.RequestIdKey {
 			continue
 		}
+		// 视觉兜底子请求必须独立选择渠道：父请求出图后遗留的 auto 分组遍历
+		// 位置（AutoGroupIndex/AutoGroupRetryIndex）指向父请求主模型实际出图的
+		// 分组下标。子请求若从该下标开始遍历 auto 分组，会跳过位于其前面的
+		// 分组，导致视觉模型渠道所在分组被漏掉，报"分组下不存在支持视觉模型
+		// 的渠道"。清除后子请求从 index 0 开始完整遍历全部可用分组。
+		if k == string(constant.ContextKeyAutoGroupIndex) || k == string(constant.ContextKeyAutoGroupRetryIndex) {
+			continue
+		}
 		keys[k] = v
 	}
 	subCtx.Keys = keys
