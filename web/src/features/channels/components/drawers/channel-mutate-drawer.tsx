@@ -129,6 +129,7 @@ import { useAuthStore } from '@/stores/auth-store'
 
 import {
   fetchModels,
+  fetchUpstreamModels,
   getAllModels,
   getChannel,
   getChannelKey,
@@ -1475,6 +1476,23 @@ export function ChannelMutateDrawer({
     }
     throw new Error(response.message || t('No models fetched from upstream'))
   }, [canEditSensitive, channelId, form, isEditing, t])
+
+  // Fetch the models available from the upstream channel for the model mapping
+  // editor's model picker. Unsaved (new or advanced-custom) channels use the
+  // live form values; saved channels use the persisted channel config.
+  const fetchChannelAvailableModels = useCallback(async (): Promise<string[]> => {
+    if (shouldPreviewUnsavedModels) {
+      return formPreviewFetcher()
+    }
+    if (channelId == null) {
+      throw new Error(t('No channel selected'))
+    }
+    const response = await fetchUpstreamModels(channelId)
+    if (response.success && Array.isArray(response.data)) {
+      return response.data
+    }
+    throw new Error(response.message || t('Failed to fetch models'))
+  }, [shouldPreviewUnsavedModels, formPreviewFetcher, channelId, t])
 
   // Handle model operations
   const handleFillRelatedModels = useCallback(() => {
@@ -3519,10 +3537,11 @@ export function ChannelMutateDrawer({
                                       value={field.value || ''}
                                       onChange={field.onChange}
                                       disabled={isSubmitting}
-                                      sourceModelOptions={currentModelsArray}
-                                      targetModelOptions={modelOptions.map(
-                                        (option) => option.value
-                                      )}
+                                      fetchChannelModels={
+                                        isEditing || canEditSensitive
+                                          ? fetchChannelAvailableModels
+                                          : undefined
+                                      }
                                     />
                                   </FormControl>
                                   {modelMappingGuardrail.invalidJson && (
