@@ -22,9 +22,13 @@ type DiskSpaceInfo struct {
 
 // SystemStatus 系统状态信息
 type SystemStatus struct {
-	CPUUsage    float64
-	MemoryUsage float64
-	DiskUsage   float64
+	CPUUsage    float64 `json:"cpu_usage"`
+	MemoryUsage float64 `json:"memory_usage"`
+	// 内存总量（字节）
+	MemoryTotal uint64 `json:"memory_total"`
+	// 已用内存（字节）
+	MemoryUsed uint64 `json:"memory_used"`
+	DiskUsage  float64 `json:"disk_usage"`
 }
 
 var latestSystemStatus atomic.Value
@@ -37,12 +41,8 @@ func init() {
 func StartSystemMonitor() {
 	go func() {
 		for {
-			config := GetPerformanceMonitorConfig()
-			if !config.Enabled {
-				time.Sleep(30 * time.Second)
-				continue
-			}
-
+			// 无论性能监控开关是否开启都持续采集，保证概览负载与系统信息始终可用。
+			// 阈值拦截（拒绝 Relay 请求）仍由 middleware 按 monitor_enabled 单独判断。
 			updateSystemStatus()
 			time.Sleep(5 * time.Second)
 		}
@@ -64,6 +64,8 @@ func updateSystemStatus() {
 	memInfo, err := mem.VirtualMemory()
 	if err == nil {
 		status.MemoryUsage = memInfo.UsedPercent
+		status.MemoryTotal = memInfo.Total
+		status.MemoryUsed = memInfo.Used
 	}
 
 	// Disk
