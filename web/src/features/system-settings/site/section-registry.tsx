@@ -54,7 +54,13 @@ const SITE_SECTIONS = [
     id: 'notice',
     titleKey: 'System Notice',
     build: (settings: SiteSettings) => (
-      <NoticeSection defaultValue={settings.Notice ?? ''} />
+      <NoticeSection
+        defaultValue={settings.Notice ?? ''}
+        popupEnabled={settings['console_setting.announcement_popup_enabled']}
+        popupDuration={
+          settings['console_setting.announcement_popup_duration']
+        }
+      />
     ),
   },
   {

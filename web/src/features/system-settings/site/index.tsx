@@ -36,6 +36,8 @@ const defaultSiteSettings: SiteSettings = {
   'legal.privacy_policy': '',
   HeaderNavModules: '',
   SidebarModulesAdmin: '',
+  'console_setting.announcement_popup_enabled': true,
+  'console_setting.announcement_popup_duration': 5,
 }
 
 export function SiteSettings() {
