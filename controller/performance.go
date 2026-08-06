@@ -26,8 +26,28 @@ type PerformanceStats struct {
 	DiskCacheInfo DiskCacheInfo `json:"disk_cache_info"`
 	// 磁盘空间信息
 	DiskSpaceInfo common.DiskSpaceInfo `json:"disk_space_info"`
+	// 系统资源使用状态（CPU/内存/磁盘百分比）
+	SystemStatus common.SystemStatus `json:"system_status"`
+	// 系统环境信息
+	SystemInfo SystemInfo `json:"system_info"`
 	// 配置信息
 	Config PerformanceConfig `json:"config"`
+}
+
+// SystemInfo 系统环境信息
+type SystemInfo struct {
+	// 操作系统
+	OS string `json:"os"`
+	// CPU 架构
+	Arch string `json:"arch"`
+	// Go 版本
+	GoVersion string `json:"go_version"`
+	// CPU 核心数
+	NumCPU int `json:"num_cpu"`
+	// 主机名
+	Hostname string `json:"hostname"`
+	// 是否在容器中运行
+	IsContainer bool `json:"is_container"`
 }
 
 // MemoryStats 内存统计
@@ -119,6 +139,16 @@ func GetPerformanceStats(c *gin.Context) {
 	// 但为了一致性，我们也可以考虑从 SystemStatus 中获取部分信息
 	diskSpaceInfo = common.GetDiskSpaceInfo()
 
+	hostname, _ := os.Hostname()
+	systemInfo := SystemInfo{
+		OS:          runtime.GOOS,
+		Arch:        runtime.GOARCH,
+		GoVersion:   runtime.Version(),
+		NumCPU:      runtime.NumCPU(),
+		Hostname:    hostname,
+		IsContainer: common.IsRunningInContainer(),
+	}
+
 	stats := PerformanceStats{
 		CacheStats: cacheStats,
 		MemoryStats: MemoryStats{
@@ -130,6 +160,8 @@ func GetPerformanceStats(c *gin.Context) {
 		},
 		DiskCacheInfo: diskCacheInfo,
 		DiskSpaceInfo: diskSpaceInfo,
+		SystemStatus:  systemStatus,
+		SystemInfo:    systemInfo,
 		Config:        config,
 	}
 

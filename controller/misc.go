@@ -107,6 +107,7 @@ func GetStatus(c *gin.Context) {
 		"announcement_popup_enabled":  cs.AnnouncementPopupEnabled,
 		"announcement_popup_duration": cs.AnnouncementPopupDuration,
 		"faq_enabled":                 cs.FAQEnabled,
+		"system_load_enabled":         cs.SystemLoadEnabled,
 
 		// 模块管理配置
 		"HeaderNavModules":    common.OptionMap["HeaderNavModules"],
@@ -130,6 +131,14 @@ func GetStatus(c *gin.Context) {
 		// 视觉兜底开启时，用户在概览页会看到提示：发图给不支持视觉的模型
 		// 会被自动描述，可能产生额外扣费。
 		"visual_fallback_enabled": operation_setting.GetVisualFallbackSetting().Enabled,
+	}
+
+	// 概览页系统负载（仅 CPU/内存占用率百分比）
+	if systemStatus := common.GetSystemStatus(); systemStatus.MemoryTotal > 0 {
+		data["system_load"] = gin.H{
+			"cpu_usage":    systemStatus.CPUUsage,
+			"memory_usage": systemStatus.MemoryUsage,
+		}
 	}
 
 	// 根据启用状态注入可选内容
