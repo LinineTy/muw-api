@@ -29,11 +29,13 @@ import { Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { useDashboardContentVisibility } from '../../hooks/use-status-data'
+import { useSystemLoad } from '../../hooks/use-system-load'
 import { AnnouncementsPanel } from './announcements-panel'
 import { ApiInfoPanel } from './api-info-panel'
 import { FAQPanel } from './faq-panel'
 import { PerformanceHealthPanel } from './performance-health-panel'
 import { SummaryCards } from './summary-cards'
+import { SystemLoadIndicator } from './system-load-indicator'
 import { UptimePanel } from './uptime-panel'
 
 export function OverviewDashboard() {
@@ -45,7 +47,9 @@ export function OverviewDashboard() {
     announcements: showAnnouncementsPanel,
     faq: showFAQPanel,
     uptimeKuma: showUptimePanel,
+    systemLoad: showSystemLoad,
   } = useDashboardContentVisibility()
+  const { load } = useSystemLoad(showSystemLoad)
 
   const isAdmin = Boolean(user?.role && user.role >= ROLE.ADMIN)
   const showLeftContentPanels =
@@ -55,19 +59,42 @@ export function OverviewDashboard() {
   // 视觉兜底开启时提示用户：发图给不支持视觉的模型会被自动描述，
   // 可能产生额外扣费（普通用户只能从公开的 /api/status 拿到该开关）。
   const visionFallbackEnabled = status?.visual_fallback_enabled === true
+  const visionFallbackHint = t(
+    'Images sent to models without vision support are automatically described by a vision model, which may incur extra charges. This applies only to the OpenAI chat interface (/v1/chat/completions); Claude Messages and Responses requests are not affected.'
+  )
 
   return (
     <div className='flex flex-col gap-4'>
-      {visionFallbackEnabled && (
+      {showSystemLoad && load && visionFallbackEnabled && (
+        // 桌面端单行：负载 1/3 + 提示 2/3；移动端上下两行（负载在上）
+        <div className='flex flex-col gap-3 lg:flex-row'>
+          <div className='flex items-center rounded-lg border px-4 py-3 lg:w-1/3'>
+            <SystemLoadIndicator load={load} />
+          </div>
+          <div className='flex items-center gap-2 rounded-lg border px-4 py-3 lg:w-2/3'>
+            <Info className='h-4 w-4 shrink-0' />
+            <div className='min-w-0'>
+              <p className='text-sm font-medium'>
+                {t('Image vision assistance enabled')}
+              </p>
+              <p className='text-muted-foreground text-sm'>
+                {visionFallbackHint}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      {visionFallbackEnabled && (!showSystemLoad || !load) && (
         <Alert>
           <Info />
           <AlertTitle>{t('Image vision assistance enabled')}</AlertTitle>
-          <AlertDescription>
-            {t(
-              'This platform has enabled image vision fallback. When you send an image to a model without vision support, the image is automatically described by a vision model, which may incur extra charges. This fallback only applies to the OpenAI chat interface (/v1/chat/completions); Claude Messages and Responses requests are not affected.'
-            )}
-          </AlertDescription>
+          <AlertDescription>{visionFallbackHint}</AlertDescription>
         </Alert>
+      )}
+      {!visionFallbackEnabled && showSystemLoad && load && (
+        <div className='flex items-center rounded-lg border px-4 py-3'>
+          <SystemLoadIndicator load={load} />
+        </div>
       )}
 
       <SummaryCards />
