@@ -14,6 +14,7 @@
   "Calendar month cap (resets on the 1st). Works alongside the weekly cap. 0 means no monthly cap.": "Calendar month cap (resets on the 1st). Works alongside the weekly cap. 0 means no monthly cap.",
   "Calendar week cap (resets every Monday). Works alongside the monthly cap. 0 means no weekly cap.": "Calendar week cap (resets every Monday). Works alongside the monthly cap. 0 means no weekly cap.",
   "Caps and limits reset each period.": "Caps and limits reset each period.",
+  "Choose a model available from the channel": "Choose a model available from the channel",
   "Claim limits and counts reset at the start of each period": "Claim limits and counts reset at the start of each period",
   "Claimed {{quota}} from the quota pool": "Claimed {{quota}} from the quota pool",
   "Click \"Create Pool\" to create your first quota pool": "Click \"Create Pool\" to create your first quota pool",
