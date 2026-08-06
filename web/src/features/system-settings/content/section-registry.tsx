@@ -24,6 +24,7 @@ import { ChatSettingsSection } from './chat-settings-section'
 import { DashboardSection } from './dashboard-section'
 import { DrawingSettingsSection } from './drawing-settings-section'
 import { FAQSection } from './faq-section'
+import { SystemLoadSection } from './system-load-section'
 import { UptimeKumaSection } from './uptime-kuma-section'
 
 /**
@@ -90,6 +91,15 @@ const CONTENT_SECTIONS = [
       <UptimeKumaSection
         enabled={settings['console_setting.uptime_kuma_enabled']}
         data={settings['console_setting.uptime_kuma_groups']}
+      />
+    ),
+  },
+  {
+    id: 'system-load',
+    titleKey: 'System Load',
+    build: (settings: ContentSettings) => (
+      <SystemLoadSection
+        enabled={settings['console_setting.system_load_enabled']}
       />
     ),
   },

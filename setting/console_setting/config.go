@@ -13,6 +13,7 @@ type ConsoleSetting struct {
 	AnnouncementPopupEnabled  bool   `json:"announcement_popup_enabled"`  // 是否自动弹出公告弹窗
 	AnnouncementPopupDuration int    `json:"announcement_popup_duration"` // 公告弹窗倒计时秒数
 	FAQEnabled                bool   `json:"faq_enabled"`                 // 是否启用常见问答面板
+	SystemLoadEnabled         bool   `json:"system_load_enabled"`         // 是否在概览页显示系统负载
 }
 
 // 默认配置
@@ -27,6 +28,7 @@ var defaultConsoleSetting = ConsoleSetting{
 	AnnouncementPopupEnabled:  true,
 	AnnouncementPopupDuration: 5,
 	FAQEnabled:                true,
+	SystemLoadEnabled:         true,
 }
 
 // 全局实例

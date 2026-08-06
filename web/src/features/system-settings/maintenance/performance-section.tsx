@@ -134,7 +134,7 @@ const normalizeFormValues = (values: PerfFormValues): FlatPerfDefaults => ({
     values.performance_setting.monitor_disk_threshold,
 })
 
-function formatBytes(bytes: number, decimals = 2): string {
+export function formatBytes(bytes: number, decimals = 2): string {
   if (!bytes || Number.isNaN(bytes)) return '0 Bytes'
   if (bytes === 0) return '0 Bytes'
   if (bytes < 0) return `-${formatBytes(-bytes, decimals)}`
