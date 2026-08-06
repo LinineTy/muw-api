@@ -107,6 +107,8 @@ export type SiteSettings = {
   'legal.privacy_policy': string
   HeaderNavModules: string
   SidebarModulesAdmin: string
+  'console_setting.announcement_popup_enabled': boolean
+  'console_setting.announcement_popup_duration': number
 }
 
 export type AuthSettings = {
