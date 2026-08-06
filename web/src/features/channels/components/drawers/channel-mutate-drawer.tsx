@@ -142,6 +142,7 @@ import {
   CHANNEL_STATUS_LABELS,
   CHANNEL_TYPE_OPTIONS,
   CHANNEL_TYPE_WARNINGS,
+  CHANNEL_TYPE_OPENCODE_ZEN,
   ERROR_MESSAGES,
   FIELD_DESCRIPTIONS,
   FIELD_PLACEHOLDERS,
@@ -282,6 +283,7 @@ const SENSITIVE_FORM_FIELDS = [
   'vertex_key_type',
   'aws_key_type',
   'azure_responses_version',
+  'opencodezen_clear_key',
   'force_format',
   'thinking_to_content',
   'proxy',
@@ -1480,7 +1482,9 @@ export function ChannelMutateDrawer({
   // Fetch the models available from the upstream channel for the model mapping
   // editor's model picker. Unsaved (new or advanced-custom) channels use the
   // live form values; saved channels use the persisted channel config.
-  const fetchChannelAvailableModels = useCallback(async (): Promise<string[]> => {
+  const fetchChannelAvailableModels = useCallback(async (): Promise<
+    string[]
+  > => {
     if (shouldPreviewUnsavedModels) {
       return formPreviewFetcher()
     }
@@ -1641,8 +1645,13 @@ export function ChannelMutateDrawer({
   // Submit handler
   const onSubmit = useCallback(
     async (data: ChannelFormValues) => {
-      // Validate key is required when creating
-      if (!isEditing && !data.key?.trim()) {
+      // Validate key is required when creating (OpenCode Zen key is optional:
+      // empty = free plan, filled = paid plan)
+      if (
+        !isEditing &&
+        !data.key?.trim() &&
+        data.type !== CHANNEL_TYPE_OPENCODE_ZEN
+      ) {
         form.setError('key', {
           type: 'manual',
           message: ERROR_MESSAGES.REQUIRED_KEY,
@@ -2930,6 +2939,35 @@ export function ChannelMutateDrawer({
                                 />
                               )}
 
+                              {/* OpenCode Zen: allow clearing the saved key to switch back to the free plan */}
+                              {currentType === CHANNEL_TYPE_OPENCODE_ZEN &&
+                                isEditing && (
+                                  <FormField
+                                    control={form.control}
+                                    name='opencodezen_clear_key'
+                                    render={({ field }) => (
+                                      <FormItem className='flex items-center justify-between'>
+                                        <div className='space-y-0.5'>
+                                          <FormLabel>
+                                            {t('Use free plan (clear API key)')}
+                                          </FormLabel>
+                                          <FormDescription>
+                                            {t(
+                                              'Clears the saved API key so this channel uses the anonymous free tier. Leave off to keep the current key.'
+                                            )}
+                                          </FormDescription>
+                                        </div>
+                                        <FormControl>
+                                          <Switch
+                                            checked={field.value}
+                                            onCheckedChange={field.onChange}
+                                          />
+                                        </FormControl>
+                                      </FormItem>
+                                    )}
+                                  />
+                                )}
+
                               <FormField
                                 control={form.control}
                                 name='key'
@@ -3004,7 +3042,12 @@ export function ChannelMutateDrawer({
                                   }
                                   return (
                                     <FormItem>
-                                      <FormLabel>{t('API Key *')}</FormLabel>
+                                      <FormLabel>
+                                        {currentType ===
+                                        CHANNEL_TYPE_OPENCODE_ZEN
+                                          ? t('API Key (Optional)')
+                                          : t('API Key *')}
+                                      </FormLabel>
                                       <FormControl>
                                         <Textarea
                                           placeholder={keyPlaceholder}
@@ -4252,9 +4295,7 @@ export function ChannelMutateDrawer({
                                         <SelectValue />
                                       </SelectTrigger>
                                     </FormControl>
-                                    <SelectContent
-                                      alignItemWithTrigger={false}
-                                    >
+                                    <SelectContent alignItemWithTrigger={false}>
                                       <SelectGroup>
                                         <SelectItem value='auto'>
                                           {t('Auto')}

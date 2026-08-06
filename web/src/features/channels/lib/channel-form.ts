@@ -20,6 +20,7 @@ import { z } from 'zod'
 
 import {
   CHANNEL_TYPE_NEW_API,
+  CHANNEL_TYPE_OPENCODE_ZEN,
   CHANNEL_STATUS,
   ERROR_MESSAGES,
   MODEL_FETCHABLE_TYPES,
@@ -266,6 +267,7 @@ export const channelFormSchema = z
     vertex_key_type: z.enum(['json', 'api_key']).optional(), // Vertex AI specific
     aws_key_type: z.enum(['ak_sk', 'api_key']).optional(), // AWS specific
     azure_responses_version: z.string().optional(), // Azure specific
+    opencodezen_clear_key: z.boolean().optional(), // OpenCode Zen: 清空密钥切回免费套餐
     // Field passthrough controls (stored in settings JSON)
     allow_service_tier: z.boolean().optional(), // OpenAI/Anthropic
     disable_store: z.boolean().optional(), // OpenAI only
@@ -438,6 +440,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   vertex_key_type: 'json',
   aws_key_type: 'ak_sk',
   azure_responses_version: '',
+  opencodezen_clear_key: false,
   // Field passthrough controls
   allow_service_tier: false,
   disable_store: false,
@@ -487,8 +490,7 @@ export function transformChannelToFormDefaults(
         thinking_to_content: parsed.thinking_to_content || false,
         proxy: parsed.proxy || '',
         http_protocol: protocol,
-        http2_connection_shards:
-          protocol === HTTP_PROTOCOL_HTTP1 ? 1 : shards,
+        http2_connection_shards: protocol === HTTP_PROTOCOL_HTTP1 ? 1 : shards,
         pass_through_body_enabled: parsed.pass_through_body_enabled || false,
         system_prompt: parsed.system_prompt || '',
         system_prompt_override: parsed.system_prompt_override || false,
@@ -583,6 +585,7 @@ export function transformChannelToFormDefaults(
     vertex_key_type: vertexKeyType,
     azure_responses_version: azureResponsesVersion,
     aws_key_type: awsKeyType,
+    opencodezen_clear_key: false,
     allow_service_tier: allowServiceTier,
     disable_store: disableStore,
     allow_include_obfuscation: allowIncludeObfuscation,
@@ -847,9 +850,16 @@ export function transformFormDataToUpdatePayload(
     other: formData.other || '',
   }
 
-  // Only include key if it was changed (not empty)
+  // Only include key if it was changed (not empty), unless the channel type
+  // allows an empty key (OpenCode Zen: empty key = free plan). When the admin
+  // explicitly toggles "clear key", send an empty key to switch back to free.
   if (formData.key && formData.key.trim()) {
     payload.key = formData.key
+  } else if (
+    formData.type === CHANNEL_TYPE_OPENCODE_ZEN &&
+    formData.opencodezen_clear_key
+  ) {
+    payload.key = ''
   }
 
   // Clean up empty strings to null for optional fields

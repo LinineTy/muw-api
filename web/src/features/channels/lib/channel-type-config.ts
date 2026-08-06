@@ -175,6 +175,17 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
       models: 'sensenova-u1-fast',
     },
   },
+  62: {
+    id: 62,
+    name: CHANNEL_TYPES[62],
+    icon: 'OpenCode',
+    defaultBaseUrl: 'https://opencode.ai/zen',
+    hints: {
+      baseUrl: 'Default: https://opencode.ai/zen (do not append /v1)',
+      key: 'Optional. Leave empty for free plan (anonymous), or enter your OpenCode Zen API key for the paid plan',
+      models: 'Comma-separated model names, or fetch from upstream /v1/models',
+    },
+  },
 }
 
 /**
