@@ -105,6 +105,41 @@ func TestSenseNovaChannelRegistration(t *testing.T) {
 	assert.Equal(t, "https://token.sensenova.cn", constant.ChannelBaseURLs[constant.ChannelTypeSenseNova])
 }
 
+func TestOpenCodeZenChannelRegistration(t *testing.T) {
+	apiType, ok := common.ChannelType2APIType(constant.ChannelTypeOpenCodeZen)
+
+	require.True(t, ok)
+	assert.Equal(t, constant.APITypeOpenCodeZen, apiType)
+	assert.Equal(t, "OpenCode Zen", constant.GetChannelTypeName(constant.ChannelTypeOpenCodeZen))
+	require.Greater(t, len(constant.ChannelBaseURLs), constant.ChannelTypeOpenCodeZen)
+	assert.Equal(t, "https://opencode.ai/zen", constant.ChannelBaseURLs[constant.ChannelTypeOpenCodeZen])
+}
+
+func TestValidateChannelAllowsEmptyKeyForOpenCodeZen(t *testing.T) {
+	channel := &model.Channel{
+		Type:   constant.ChannelTypeOpenCodeZen,
+		Models: "gpt-5,claude-sonnet-4-5",
+		Group:  "default",
+	}
+
+	err := validateChannel(channel, true)
+
+	require.NoError(t, err)
+	assert.Empty(t, channel.Key)
+}
+
+func TestValidateChannelRejectsEmptyKeyForOtherTypes(t *testing.T) {
+	channel := &model.Channel{
+		Type:   constant.ChannelTypeOpenAI,
+		Models: "gpt-5",
+		Group:  "default",
+	}
+
+	err := validateChannel(channel, true)
+
+	require.ErrorContains(t, err, "channel cannot be empty")
+}
+
 func TestResponsesCompactAPITypeSupport(t *testing.T) {
 	tests := []struct {
 		name    string

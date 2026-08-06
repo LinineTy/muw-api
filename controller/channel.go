@@ -15,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	relaychannel "github.com/QuantumNous/new-api/relay/channel"
 	"github.com/QuantumNous/new-api/relay/channel/ollama"
+	"github.com/QuantumNous/new-api/relay/channel/opencodezen"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/service"
@@ -198,6 +199,13 @@ func buildFetchModelsHeaders(channel *model.Channel, key string) (http.Header, e
 	switch channel.Type {
 	case constant.ChannelTypeAnthropic:
 		headers = GetClaudeAuthHeader(key)
+	case constant.ChannelTypeOpenCodeZen:
+		// OpenCode Zen 未填密钥时用 public 匿名访问免费套餐
+		if strings.TrimSpace(key) == "" {
+			headers = GetAuthHeader(opencodezen.PublicApiKey)
+		} else {
+			headers = GetAuthHeader(key)
+		}
 	default:
 		headers = GetAuthHeader(key)
 	}
@@ -487,7 +495,8 @@ func validateChannel(channel *model.Channel, isAdd bool) error {
 
 	// 如果是添加操作，检查 channel 和 key 是否为空
 	if isAdd {
-		if channel.Key == "" {
+		// OpenCode Zen 不填密钥时走免费套餐，key 可留空；其余渠道必须填密钥
+		if channel.Key == "" && channel.Type != constant.ChannelTypeOpenCodeZen {
 			return fmt.Errorf("channel cannot be empty")
 		}
 
@@ -682,7 +691,8 @@ func AddChannel(c *gin.Context) {
 
 	channels := make([]model.Channel, 0, len(keys))
 	for _, key := range keys {
-		if key == "" {
+		// OpenCode Zen 允许空密钥（免费套餐），其余渠道跳过空密钥
+		if key == "" && addChannelRequest.Channel.Type != constant.ChannelTypeOpenCodeZen {
 			continue
 		}
 		localChannel := addChannelRequest.Channel
@@ -1081,6 +1091,16 @@ func UpdateChannel(c *gin.Context) {
 			}
 		case "replace":
 			// 覆盖模式：直接使用新密钥（默认行为，不需要特殊处理）
+		}
+	}
+	// OpenCode Zen 支持空密钥（免费套餐）：请求显式携带 key 且需要清空时，
+	// GORM Updates 会跳过空值字段，需单独 Select key 置空。
+	if channel.Type == constant.ChannelTypeOpenCodeZen {
+		if _, keyProvided := requestData["key"]; keyProvided && channel.Key == "" && originChannel.Key != "" {
+			if err := channel.SaveKey(); err != nil {
+				common.ApiError(c, err)
+				return
+			}
 		}
 	}
 	err = channel.Update()

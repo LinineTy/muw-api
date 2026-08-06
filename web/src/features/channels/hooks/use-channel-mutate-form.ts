@@ -28,7 +28,11 @@ import {
 import { useAuthStore } from '@/stores/auth-store'
 
 import { createChannel, updateChannel } from '../api'
-import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
+import {
+  CHANNEL_TYPE_OPENCODE_ZEN,
+  ERROR_MESSAGES,
+  SUCCESS_MESSAGES,
+} from '../constants'
 import {
   transformFormDataToCreatePayload,
   transformFormDataToUpdatePayload,
@@ -96,7 +100,11 @@ export function useChannelMutateForm(props: UseChannelMutateFormParams) {
           data,
           props.currentRow.id
         )
-        if (!data.key?.trim()) {
+        // OpenCode Zen 显式勾选"清空密钥"时保留空 key，其余情况空 key 表示"保持现有密钥"
+        const openCodeZenClearKey =
+          data.type === CHANNEL_TYPE_OPENCODE_ZEN &&
+          data.opencodezen_clear_key === true
+        if (!data.key?.trim() && !openCodeZenClearKey) {
           delete payload.key
         }
         if (!canEditSensitive) {

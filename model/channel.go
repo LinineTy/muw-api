@@ -353,6 +353,15 @@ func (channel *Channel) SaveWithoutKey() error {
 	return DB.Omit("key").Save(channel).Error
 }
 
+// SaveKey 仅更新密钥列。GORM Updates 会跳过空值字段，无法用空字符串清空密钥；
+// 此方法显式 Select key，供 OpenCode Zen 等允许空密钥的渠道清空密钥（切回免费套餐）使用。
+func (channel *Channel) SaveKey() error {
+	if channel.Id == 0 {
+		return errors.New("channel ID is 0")
+	}
+	return DB.Model(channel).Select("key").Update("key", channel.Key).Error
+}
+
 func GetAllChannels(startIdx int, num int, selectAll bool, idSort bool, sortOptions ...ChannelSortOptions) ([]*Channel, error) {
 	var channels []*Channel
 	var err error
