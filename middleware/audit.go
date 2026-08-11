@@ -54,11 +54,13 @@ var auditRouteActions = map[string]string{
 	"POST /api/custom-oauth-provider/":      "custom_oauth.create",
 	"PUT /api/custom-oauth-provider/:id":    "custom_oauth.update",
 	"DELETE /api/custom-oauth-provider/:id": "custom_oauth.delete",
+	"POST /api/custom-oauth-provider/discovery": "custom_oauth.discovery",
 
 	// 性能/缓存（root）
 	"DELETE /api/performance/disk_cache": "performance.clear_disk_cache",
 	"POST /api/performance/gc":           "performance.gc",
 	"DELETE /api/performance/logs":       "performance.clear_logs",
+	"POST /api/performance/reset_stats":  "performance.reset_stats",
 
 	// 兑换码
 	"PUT /api/redemption/":           "redemption.update",
@@ -85,9 +87,33 @@ var auditRouteActions = map[string]string{
 	"POST /api/subscription/admin/plans":    "subscription.plan_create",
 	"PUT /api/subscription/admin/plans/:id": "subscription.plan_update",
 	"POST /api/subscription/admin/bind":     "subscription.bind",
+	// 订阅管理：计划状态/删除、用户订阅的新增/作废/删除/彻底清除
+	"PATCH /api/subscription/admin/plans/:id":                    "subscription.plan_status_update",
+	"DELETE /api/subscription/admin/plans/:id":                    "subscription.plan_delete",
+	"POST /api/subscription/admin/users/:id/subscriptions":        "subscription.user_subscription_create",
+	"POST /api/subscription/admin/user_subscriptions/:id/invalidate": "subscription.user_subscription_invalidate",
+	"DELETE /api/subscription/admin/user_subscriptions/:id":       "subscription.user_subscription_delete",
+	"POST /api/subscription/admin/user_subscriptions/:id/purge":   "subscription.user_subscription_purge",
+
+	// 比率同步（root）
+	"POST /api/ratio_sync/fetch": "ratio_sync.fetch",
+
+	// 系统信息（root）
+	"DELETE /api/system-info/stale-instances":      "system_info.delete_stale_instances",
+	"DELETE /api/system-info/instances/:node_name": "system_info.delete_instance",
 
 	// 日志
 	"POST /api/system-task/log-cleanup": "log.cleanup_start",
+
+	// 渠道：能力修复 / 拉取上游模型 / Codex / Ollama / 上游模型检测
+	"POST /api/channel/fix":                     "channel.fix_abilities",
+	"POST /api/channel/fetch_models":            "channel.fetch_models",
+	"POST /api/channel/:id/codex/refresh":       "channel.codex_refresh",
+	"POST /api/channel/:id/codex/usage/reset":   "channel.codex_reset_usage",
+	"POST /api/channel/ollama/pull":             "channel.ollama_pull",
+	"POST /api/channel/ollama/pull/stream":      "channel.ollama_pull_stream",
+	"DELETE /api/channel/ollama/delete":         "channel.ollama_delete",
+	"POST /api/channel/upstream_updates/detect": "channel.upstream_detect",
 }
 
 // beginAdminAudit 在管理/root 写操作进入 handler 前包装 ResponseWriter，
@@ -111,6 +137,25 @@ func beginAdminAudit(c *gin.Context) *auditResponseWriter {
 	return writer
 }
 
+// resolveAuditAction 将「METHOD + 路由模板」解析为审计 action 与 op.params：
+// 命中 auditRouteActions 时返回命名 action 并携带路由参数(如 :id/:node_name)，
+// 供前端模板引用 {{id}} 展示被操作的资源；未命中回退 action="generic"，
+// 此时 op.params 携带 method/route，前端展示 "METHOD route"。
+func resolveAuditAction(method, route string, routeParams map[string]string) (string, map[string]interface{}) {
+	action := auditRouteActions[method+" "+route]
+	opParams := map[string]interface{}{}
+	if action == "" {
+		action = "generic"
+		opParams["method"] = method
+		opParams["route"] = route
+	} else if len(routeParams) > 0 {
+		for k, v := range routeParams {
+			opParams[k] = v
+		}
+	}
+	return action, opParams
+}
+
 // finishAdminAudit 在 c.Next() 之后对管理/高危写操作做兜底审计记录。
 // 若 handler 内已手动埋点（设置 ContextKeyAuditLogged），则跳过，避免重复。
 func finishAdminAudit(c *gin.Context, writer *auditResponseWriter) {
@@ -132,22 +177,11 @@ func finishAdminAudit(c *gin.Context, writer *auditResponseWriter) {
 	success := auditResponseSuccess(status, writer.body.Bytes())
 
 	route := c.FullPath()
-	action := auditRouteActions[method+" "+route]
-	if action == "" {
-		action = "generic"
-	}
-
 	routeParams := map[string]string{}
 	for _, p := range c.Params {
 		routeParams[p.Key] = p.Value
 	}
-
-	// op.params 为语言无关参数，供前端 i18n 渲染；generic 时携带 method/route。
-	opParams := map[string]interface{}{}
-	if action == "generic" {
-		opParams["method"] = method
-		opParams["route"] = route
-	}
+	action, opParams := resolveAuditAction(method, route, routeParams)
 
 	// content 为英文兜底文本（供导出等非本地化消费者使用）。
 	content := method + " " + route
