@@ -101,6 +101,12 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 	if request == nil {
 		return nil, errors.New("request is nil")
 	}
+	// Anthropic 兼容端点(完整 /v1/messages 或 anthropic 路径):OpenAI 格式请求先转成
+	// Claude 格式再发给 /v1/messages(与 Custom 渠道同款),响应在 DoResponse 转回 OpenAI。
+	if channel.IsAnthropicNativeBaseURL(info.ChannelBaseUrl) {
+		adaptor := claude.Adaptor{}
+		return adaptor.ConvertOpenAIRequest(c, info, request)
+	}
 	return request, nil
 }
 
@@ -126,6 +132,12 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 	}
 	if info.RelayMode == constant.RelayModeImagesGenerations {
 		return miniMaxImageHandler(c, resp, info)
+	}
+	// Anthropic 兼容端点:响应走 Claude 处理器;入站是 OpenAI 格式时会把 Claude 响应
+	// 转回 OpenAI(格式转换)。
+	if channel.IsAnthropicNativeBaseURL(info.ChannelBaseUrl) {
+		adaptor := claude.Adaptor{}
+		return adaptor.DoResponse(c, resp, info)
 	}
 
 	switch info.RelayFormat {
