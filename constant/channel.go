@@ -17,7 +17,6 @@ const (
 	ChannelTypeAIGC2D         = 13
 	ChannelTypeAnthropic      = 14
 	ChannelTypeBaidu          = 15
-	ChannelTypeZhipu          = 16
 	ChannelTypeAli            = 17
 	ChannelTypeXunfei         = 18
 	ChannelType360            = 19
@@ -147,7 +146,6 @@ var ChannelTypeNames = map[int]string{
 	ChannelTypeAIGC2D:         "AIGC2D",
 	ChannelTypeAnthropic:      "Anthropic",
 	ChannelTypeBaidu:          "Baidu",
-	ChannelTypeZhipu:          "Zhipu",
 	ChannelTypeAli:            "Ali",
 	ChannelTypeXunfei:         "Xunfei",
 	ChannelType360:            "360",

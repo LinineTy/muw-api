@@ -1,6 +1,9 @@
 package relay
 
 import (
+	"errors"
+	"io"
+	"net/http"
 	"strconv"
 
 	"github.com/QuantumNous/new-api/constant"
@@ -50,8 +53,10 @@ import (
 	"github.com/QuantumNous/new-api/relay/channel/volcengine"
 	"github.com/QuantumNous/new-api/relay/channel/xai"
 	"github.com/QuantumNous/new-api/relay/channel/xunfei"
-	"github.com/QuantumNous/new-api/relay/channel/zhipu"
 	"github.com/QuantumNous/new-api/relay/channel/zhipu_4v"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -73,8 +78,6 @@ func GetAdaptor(apiType int) channel.Adaptor {
 		return &tencent.DispatchAdaptor{}
 	case constant.APITypeXunfei:
 		return &xunfei.Adaptor{}
-	case constant.APITypeZhipu:
-		return &zhipu.Adaptor{}
 	case constant.APITypeZhipuV4:
 		return &zhipu_4v.Adaptor{}
 	case constant.APITypeOllama:
@@ -135,8 +138,11 @@ func GetAdaptor(apiType int) channel.Adaptor {
 		return &sensenova.Adaptor{}
 	case constant.APITypeOpenCodeZen:
 		return &opencodezen.Adaptor{}
+	default:
+		// 已下架/未知的渠道类型没有适配器,返回兜底实现让请求诚实报错,
+		// 而不是调用方 nil 解引用崩溃。
+		return &unsupportedAdaptor{}
 	}
-	return nil
 }
 
 func GetTaskPlatform(c *gin.Context) constant.TaskPlatform {
@@ -145,6 +151,64 @@ func GetTaskPlatform(c *gin.Context) constant.TaskPlatform {
 		return constant.TaskPlatform(strconv.Itoa(channelType))
 	}
 	return constant.TaskPlatform(c.GetString("platform"))
+}
+
+// unsupportedAdaptor 已下架/未知渠道类型的兜底适配器:所有能力返回明确错误,
+// 避免调用方对 nil 适配器解引用崩溃(如存量老智谱 v3 渠道)。
+type unsupportedAdaptor struct{}
+
+func (a *unsupportedAdaptor) Init(info *relaycommon.RelayInfo) {}
+
+func (a *unsupportedAdaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
+	return "", errors.New("unsupported channel type")
+}
+
+func (a *unsupportedAdaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *relaycommon.RelayInfo) error {
+	return errors.New("unsupported channel type")
+}
+
+func (a *unsupportedAdaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.GeneralOpenAIRequest) (any, error) {
+	return nil, errors.New("unsupported channel type")
+}
+
+func (a *unsupportedAdaptor) ConvertRerankRequest(c *gin.Context, relayMode int, request dto.RerankRequest) (any, error) {
+	return nil, errors.New("unsupported channel type")
+}
+
+func (a *unsupportedAdaptor) ConvertEmbeddingRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.EmbeddingRequest) (any, error) {
+	return nil, errors.New("unsupported channel type")
+}
+
+func (a *unsupportedAdaptor) ConvertAudioRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.AudioRequest) (io.Reader, error) {
+	return nil, errors.New("unsupported channel type")
+}
+
+func (a *unsupportedAdaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.ImageRequest) (any, error) {
+	return nil, errors.New("unsupported channel type")
+}
+
+func (a *unsupportedAdaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
+	return nil, errors.New("unsupported channel type")
+}
+
+func (a *unsupportedAdaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, requestBody io.Reader) (any, error) {
+	return nil, errors.New("unsupported channel type")
+}
+
+func (a *unsupportedAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (any, *types.NewAPIError) {
+	return nil, types.NewOpenAIError(errors.New("unsupported channel type"), "", http.StatusBadRequest)
+}
+
+func (a *unsupportedAdaptor) GetModelList() []string { return []string{} }
+
+func (a *unsupportedAdaptor) GetChannelName() string { return "unsupported" }
+
+func (a *unsupportedAdaptor) ConvertClaudeRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.ClaudeRequest) (any, error) {
+	return nil, errors.New("unsupported channel type")
+}
+
+func (a *unsupportedAdaptor) ConvertGeminiRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.GeminiChatRequest) (any, error) {
+	return nil, errors.New("unsupported channel type")
 }
 
 func GetTaskAdaptor(platform constant.TaskPlatform) channel.TaskAdaptor {
