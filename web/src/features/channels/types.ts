@@ -73,6 +73,8 @@ export const channelSchema = z.object({
   settings: z.string().default('{}'), // other_settings JSON
   coding_plan_provider: z.string().nullish(), // 编码套餐厂商,空/未设置 = 未启用余量监控
   coding_plan_key_masked: z.string().nullish(), // 套餐专用密钥的脱敏预览
+  // 编码套餐余量分组指纹("厂商:密钥指纹"):同 key 多渠道共享同一值,前端据此合并成一张余量卡。
+  coding_plan_quota_group: z.string().nullish(),
 })
 
 export type Channel = z.infer<typeof channelSchema>

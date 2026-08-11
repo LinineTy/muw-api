@@ -62,6 +62,11 @@ type Channel struct {
 	CodingPlanKey       string  `json:"-" gorm:"size:512"`               // 套餐专用密钥,永不下发
 	CodingPlanKeyMasked string  `json:"coding_plan_key_masked" gorm:"-"` // 响应脱敏预览
 
+	// CodingPlanQuotaGroup 编码套餐余量的分组指纹("厂商:密钥指纹"):同 key 多渠道共享
+	// 同一值,前端据此把同 key 的渠道合并成一张余量卡。由查询生效 key 派生,不可逆,
+	// 不下发原始密钥。仅在渠道列表(GetAllChannels)填充;非套餐渠道为空。
+	CodingPlanQuotaGroup string `json:"coding_plan_quota_group,omitempty" gorm:"-"`
+
 	OtherSettings string `json:"settings" gorm:"column:settings"` // 其他设置，存储azure版本等不需要检索的信息，详见dto.ChannelOtherSettings
 
 	// cache info

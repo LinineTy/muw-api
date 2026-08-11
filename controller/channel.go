@@ -182,6 +182,39 @@ func GetAllChannels(c *gin.Context) {
 		clearChannelInfo(datum)
 	}
 
+	// 编码套餐余量分组:列表对 key 用了 Omit 不下发,额外按 id 拉一次密钥算不可逆指纹,
+	// 供前端把同 key 的多个渠道合并成一张余量卡。非套餐渠道该字段为空;查询失败仅记日志,
+	// 不阻断列表返回。
+	if len(channelData) > 0 {
+		ids := make([]int, len(channelData))
+		for i := range channelData {
+			ids[i] = channelData[i].Id
+		}
+		var keyRows []struct {
+			Id  int
+			Key string
+		}
+		if err := model.DB.Model(&model.Channel{}).
+			Where("id IN ?", ids).
+			Select("id", "key").
+			Find(&keyRows).Error; err != nil {
+			common.SysError("failed to load channel keys for coding plan grouping: " + err.Error())
+		} else {
+			mainKeyByID := make(map[int]string, len(keyRows))
+			for _, r := range keyRows {
+				mainKeyByID[r.Id] = r.Key
+			}
+			for i := range channelData {
+				ch := channelData[i]
+				effective := ch.CodingPlanKey
+				if effective == "" {
+					effective = mainKeyByID[ch.Id]
+				}
+				ch.CodingPlanQuotaGroup = codingPlanQuotaGroupID(ch, effective)
+			}
+		}
+	}
+
 	countQuery := buildChannelListQuery(groupFilter, statusFilter, -1)
 	var results []struct {
 		Type  int64
