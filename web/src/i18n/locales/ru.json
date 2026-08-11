@@ -5708,6 +5708,8 @@
     "Fetched upstream ratios": "Fetched upstream ratios",
     "Deleted stale system instances": "Deleted stale system instances",
     "Deleted system instance {{node_name}}": "Deleted system instance {{node_name}}",
-    "Fetched custom OAuth discovery": "Fetched custom OAuth discovery"
+    "Fetched custom OAuth discovery": "Fetched custom OAuth discovery",
+    "Latest version": "Latest version",
+    "Update from the official registry.": "Update from the official registry."
   }
 }
