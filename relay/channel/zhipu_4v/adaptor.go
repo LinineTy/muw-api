@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	channelconstant "github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/relay/channel"
@@ -54,6 +55,11 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	case types.RelayFormatClaude:
 		if hasSpecialPlan && specialPlan.ClaudeBaseURL != "" {
 			return fmt.Sprintf("%s/v1/messages", specialPlan.ClaudeBaseURL), nil
+		}
+		// 已带 /v1/messages 的完整 Anthropic 端点:原样透传,不自动拼路径
+		// (与 Custom 渠道同款,用户手动填完整地址或选了 Anthropic 套餐预设)。
+		if strings.HasSuffix(baseURL, "/v1/messages") {
+			return baseURL, nil
 		}
 		return fmt.Sprintf("%s/api/anthropic/v1/messages", baseURL), nil
 	default:

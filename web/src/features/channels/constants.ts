@@ -153,13 +153,60 @@ export const CODING_PLAN_SYMBOL_KEYS: string[] = CODING_PLAN_SYMBOL_OPTIONS.map(
   (option) => option.value
 )
 
+// 轻量前端探测:镜像后端 service.DetectCodingPlanProvider,供余量卡/琥珀标签在未显式
+// 配置 coding_plan_provider 时,从 base_url 判断套餐厂商(符号键或套餐专用真实地址)。
+// 只认套餐专用路径(如 /api/coding、/api/anthropic、kimi 的 /coding),避免把普通厂商
+// host(如 open.bigmodel.cn 本体、api.anthropic.com)误判成套餐渠道。
+export function detectCodingPlanProvider(
+  baseUrl: string | null | undefined
+): string | undefined {
+  const url = (baseUrl ?? '').trim().toLowerCase()
+  switch (url) {
+    case 'glm-coding-plan':
+      return 'zhipu'
+    case 'glm-coding-plan-international':
+      return 'zhipu_en'
+    case 'kimi-coding-plan':
+      return 'kimi'
+    case 'minimax-coding-plan':
+      return 'minimax'
+    case 'minimax-coding-plan-international':
+      return 'minimax_en'
+    case 'doubao-coding-plan':
+      return 'volcengine'
+  }
+  if (url.includes('api.kimi.com/coding')) return 'kimi'
+  if (url.includes('volces.com/api/coding')) return 'volcengine'
+  // MiniMax 套餐域就是 api.minimaxi.com / api.minimax.io(标准端点是 api.minimax.chat)。
+  if (url.includes('api.minimaxi.com')) return 'minimax'
+  if (url.includes('api.minimax.io')) return 'minimax_en'
+  if (
+    url.includes('open.bigmodel.cn/api/coding') ||
+    url.includes('open.bigmodel.cn/api/anthropic')
+  ) {
+    return 'zhipu'
+  }
+  if (
+    url.includes('api.z.ai/api/coding') ||
+    url.includes('api.z.ai/api/anthropic')
+  ) {
+    return 'zhipu_en'
+  }
+  if (url.includes('zenmux')) return 'zenmux'
+  return undefined
+}
+
 // 编码套餐可用的渠道类型 → base_url 预设(与火山渠道的地址选择器同款)。
 // display 是下拉里展示的真实地址(i18n key,值即地址本身);value 是真正存进 base_url 的
-// 值:编码套餐端点存符号键(后端 ChannelSpecialBases 解析成真实端点),传统端点存真实 host。
-// plan=true 表示该端点是编码套餐专用。顺序即下拉顺序,第一项是传统默认端点。
+// 值:编码套餐 OpenAI 端点存符号键(后端 ChannelSpecialBases 解析成真实端点),传统端点与
+// Anthropic 兼容端点存真实地址。plan=true 表示该端点是编码套餐专用。provider 是选中该端点
+// 后自动写入的套餐厂商(仅在余量查询用,不影响转发);不带的端点选中后清空厂商
+// (传统端点 = 不启用余量监控)。顺序即下拉顺序,第一项是传统默认端点。
+// Anthropic 兼容端点填「带 /v1/messages 的完整地址」,与 Custom 渠道同款:后端适配器
+// 对已带 /v1/messages 的 base_url 直接透传,不自动拼路径(见各套餐适配器 GetRequestURL)。
 export const CODING_PLAN_BASE_URL_PRESETS: Record<
   number,
-  { value: string; display: string; plan: boolean }[]
+  { value: string; display: string; plan: boolean; provider?: string }[]
 > = {
   26: [
     { value: 'https://open.bigmodel.cn', display: 'https://open.bigmodel.cn', plan: false },
@@ -167,11 +214,26 @@ export const CODING_PLAN_BASE_URL_PRESETS: Record<
       value: 'glm-coding-plan',
       display: 'https://open.bigmodel.cn/api/coding/paas/v4',
       plan: true,
+      provider: 'zhipu',
     },
     {
       value: 'glm-coding-plan-international',
       display: 'https://api.z.ai/api/coding/paas/v4',
       plan: true,
+      provider: 'zhipu_en',
+    },
+    // Anthropic 兼容端点:带 /v1/messages 的完整地址,后端原样透传。
+    {
+      value: 'https://open.bigmodel.cn/api/anthropic/v1/messages',
+      display: 'https://open.bigmodel.cn/api/anthropic/v1/messages',
+      plan: true,
+      provider: 'zhipu',
+    },
+    {
+      value: 'https://api.z.ai/api/anthropic/v1/messages',
+      display: 'https://api.z.ai/api/anthropic/v1/messages',
+      plan: true,
+      provider: 'zhipu_en',
     },
   ],
   25: [
@@ -180,6 +242,13 @@ export const CODING_PLAN_BASE_URL_PRESETS: Record<
       value: 'kimi-coding-plan',
       display: 'https://api.kimi.com/coding/v1',
       plan: true,
+      provider: 'kimi',
+    },
+    {
+      value: 'https://api.kimi.com/coding/v1/messages',
+      display: 'https://api.kimi.com/coding/v1/messages',
+      plan: true,
+      provider: 'kimi',
     },
   ],
   35: [
@@ -188,11 +257,25 @@ export const CODING_PLAN_BASE_URL_PRESETS: Record<
       value: 'minimax-coding-plan',
       display: 'https://api.minimaxi.com/v1',
       plan: true,
+      provider: 'minimax',
     },
     {
       value: 'minimax-coding-plan-international',
       display: 'https://api.minimax.io/v1',
       plan: true,
+      provider: 'minimax_en',
+    },
+    {
+      value: 'https://api.minimaxi.com/anthropic/v1/messages',
+      display: 'https://api.minimaxi.com/anthropic/v1/messages',
+      plan: true,
+      provider: 'minimax',
+    },
+    {
+      value: 'https://api.minimax.io/anthropic/v1/messages',
+      display: 'https://api.minimax.io/anthropic/v1/messages',
+      plan: true,
+      provider: 'minimax_en',
     },
   ],
 }

@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { UseFormReturn } from 'react-hook-form'
 
@@ -53,10 +53,11 @@ type CodingPlanBaseUrlFieldProps = {
 }
 
 /**
- * 编码套餐可用的渠道类型(智谱v4/Moonshot/MiniMax)的 base_url 选择器,与火山渠道同款:
+ * 编码套餐可用的渠道类型(Anthropic/智谱v4/Moonshot/MiniMax)的 base_url 选择器,与火山渠道同款:
  * 下拉直接展示真实地址——传统 API 端点 + 各厂商编码套餐专用端点(选中存符号键,
- * 后端 ChannelSpecialBases 解析成真实端点),另加「手动/自定义」条目回退到自由填 URL
- * 并配置额外鉴权密钥(plan key),覆盖走聚合代理等无法自动识别的场景。
+ * 后端 ChannelSpecialBases 解析成真实端点;Anthropic 类型则直接存 Anthropic 兼容端点),
+ * 另加「手动/自定义」条目回退到自由填 URL 并配置额外鉴权密钥(plan key),覆盖走聚合代理等
+ * 无法自动识别的场景。选中预设时同步写入套餐厂商(coding_plan_provider),保证余量监控可用。
  */
 export function CodingPlanBaseUrlField({
   form,
@@ -67,9 +68,16 @@ export function CodingPlanBaseUrlField({
   const presets = CODING_PLAN_BASE_URL_PRESETS[channelType] ?? []
   // 手动/自定义是独立状态,不靠 base_url 为空来区分——空字符串同时是"新渠道走内置默认"。
   // 点「手动/自定义」置 true;base_url 非空时按是否落在预设里自动同步(编辑已有自定义
-  // URL 渠道、类型切换都会经此校正)。
+  // URL 渠道、类型切换都会经此校正)。切换类型且 base_url 为空时回到预设选择态。
   const [manualMode, setManualMode] = useState(false)
+  const prevChannelTypeRef = useRef(channelType)
   useEffect(() => {
+    const prevType = prevChannelTypeRef.current
+    prevChannelTypeRef.current = channelType
+    if (prevType !== channelType && baseUrl === '') {
+      setManualMode(false)
+      return
+    }
     if (baseUrl === '') return
     const ps = CODING_PLAN_BASE_URL_PRESETS[channelType] ?? []
     setManualMode(!ps.some((preset) => preset.value === baseUrl))
@@ -104,11 +112,21 @@ export function CodingPlanBaseUrlField({
               ]}
               onValueChange={(value) => {
                 if (value === 'manual') {
+                  // 手动/自定义:完全自由填写,余量厂商交给「自动识别」或用户手动选,
+                  // 因此清空预设带入的厂商,避免残留的厂商与用户新填的地址不一致。
                   setManualMode(true)
                   field.onChange('')
+                  form.setValue('coding_plan_provider', '', {
+                    shouldDirty: true,
+                  })
                 } else {
                   setManualMode(false)
                   field.onChange(value)
+                  const preset = presets.find((item) => item.value === value)
+                  // 选中预设:同步厂商,传统端点(无 provider)清空 = 不启用余量监控。
+                  form.setValue('coding_plan_provider', preset?.provider ?? '', {
+                    shouldDirty: true,
+                  })
                 }
               }}
               value={displayValue}
@@ -122,9 +140,9 @@ export function CodingPlanBaseUrlField({
                 alignItemWithTrigger={false}
                 /* 弹层默认宽度跟随触发按钮(火山同款),但套餐地址比传统端点长、
                    还要放「编码套餐」角标。最小宽度要覆盖最长的
-                   https://open.bigmodel.cn/api/coding/paas/v4 + 角标 + 选中勾的预留区,
+                   https://open.bigmodel.cn/api/anthropic/v1/messages + 角标 + 选中勾的预留区,
                    否则角标会被裁掉或与右侧 ✅ 重叠。 */
-                className='min-w-[30rem]'
+                className='min-w-[36rem]'
               >
                 <SelectGroup>
                   {presets.map((preset) => (

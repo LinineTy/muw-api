@@ -30,8 +30,7 @@ import { cn } from '@/lib/utils'
 import { getChannelCodingPlanQuota, getChannels } from '../api'
 import {
   CODING_PLAN_PROVIDER_OPTIONS,
-  CODING_PLAN_SYMBOL_KEYS,
-  CODING_PLAN_SYMBOL_OPTIONS,
+  detectCodingPlanProvider,
 } from '../constants'
 import type { Channel, CodingPlanTier } from '../types'
 import { useChannels } from './channels-provider'
@@ -41,29 +40,29 @@ const QUOTA_REFRESH_MS = 5 * 60 * 1000
 // 同 key 渠道标签的默认可见数量,超出折叠成 +N(展开/收起),避免卡片被撑高。
 const MAX_CHANNEL_TAGS = 3
 
-// 渠道是否启用编码套餐余量监控:base_url 填了符号键,或手动指定了厂商。
+// 渠道是否启用编码套餐余量监控:显式配置了厂商,或 base_url 是套餐符号键/套餐专用地址。
 function isQuotaEnabled(channel: Channel): boolean {
-  return (
-    CODING_PLAN_SYMBOL_KEYS.includes(channel.base_url ?? '') ||
-    Boolean(channel.coding_plan_provider)
+  return Boolean(
+    channel.coding_plan_provider ||
+      detectCodingPlanProvider(channel.base_url)
   )
 }
 
-// 厂商展示名:手动 provider 优先,其次 base_url 符号键。
+// 厂商展示名:显式 provider 优先,其次按 base_url 探测出的厂商。
 function providerLabel(
   channel: Channel,
   t: (key: string) => string
 ): string {
-  if (channel.coding_plan_provider) {
+  const provider =
+    channel.coding_plan_provider ||
+    detectCodingPlanProvider(channel.base_url)
+  if (provider) {
     const option = CODING_PLAN_PROVIDER_OPTIONS.find(
-      (item) => item.value === channel.coding_plan_provider
+      (item) => item.value === provider
     )
-    return option ? t(option.label) : channel.coding_plan_provider
+    return option ? t(option.label) : provider
   }
-  const symbol = CODING_PLAN_SYMBOL_OPTIONS.find(
-    (item) => item.value === channel.base_url
-  )
-  return symbol ? t(symbol.label) : ''
+  return ''
 }
 
 function tierColorClass(percent: number) {
@@ -78,8 +77,8 @@ function tierNameLabel(name: string, t: (key: string) => string) {
   // 未知窗口兜底:后端 tier name 是 snake_case(如 monthly_limit),未来厂商/套餐
   // 若返回月窗、日窗等新窗口,也转成可读文本展示,而不是直接显示下划线原名。
   return name
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (ch) => ch.toUpperCase())
+    .replaceAll('_', ' ')
+    .replaceAll(/\b\w/g, (ch) => ch.toUpperCase())
 }
 
 function formatResetsAt(resetsAt: string | null | undefined): string {
