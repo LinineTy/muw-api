@@ -143,6 +143,8 @@ import {
   CHANNEL_TYPE_OPTIONS,
   CHANNEL_TYPE_WARNINGS,
   CHANNEL_TYPE_OPENCODE_ZEN,
+  CODING_PLAN_SYMBOL_KEYS,
+  detectCodingPlanProvider,
   ERROR_MESSAGES,
   FIELD_DESCRIPTIONS,
   FIELD_PLACEHOLDERS,
@@ -2025,6 +2027,40 @@ export function ChannelMutateDrawer({
                                             Number.isInteger(nextType) &&
                                             nextType > 0
                                           ) {
+                                            if (nextType !== field.value) {
+                                              // 用户主动换类型:清掉旧类型的编码套餐残留绑定。
+                                              // 套餐符号键或套餐专用地址(如 /api/anthropic 完整端点)
+                                              // 只对特定类型有意义,换类型后既无法转发也导致渠道仍显示
+                                              // 在余量卡里;随之清除自动带出的厂商与刚填的套餐密钥。
+                                              // 手动填的聚合代理地址(非套餐端点)不动,避免误伤
+                                              // 用户精心配的自定义路径。后端在保存时(type 改变)同样
+                                              // 强制清 coding_plan_provider/key/套餐 base_url,双保险。
+                                              const prevBaseUrl =
+                                                form.getValues('base_url') ?? ''
+                                              if (
+                                                CODING_PLAN_SYMBOL_KEYS.includes(
+                                                  prevBaseUrl
+                                                ) ||
+                                                detectCodingPlanProvider(
+                                                  prevBaseUrl
+                                                )
+                                              ) {
+                                                form.setValue('base_url', '', {
+                                                  shouldDirty: true,
+                                                  shouldValidate: true,
+                                                })
+                                                form.setValue(
+                                                  'coding_plan_provider',
+                                                  '',
+                                                  { shouldDirty: true }
+                                                )
+                                                form.setValue(
+                                                  'coding_plan_key',
+                                                  '',
+                                                  { shouldDirty: true }
+                                                )
+                                              }
+                                            }
                                             field.onChange(nextType)
                                           }
                                         }}

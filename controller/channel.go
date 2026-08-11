@@ -1184,6 +1184,14 @@ func UpdateChannel(c *gin.Context) {
 			return
 		}
 	}
+	// 换类型后清掉旧类型的编码套餐绑定(独立渠道适配):套餐厂商、专用密钥、套餐端点 base_url
+	// 只对原类型有意义,保存时强制清除,避免渠道换类型后仍出现在余量卡/琥珀标签里。
+	if channel.Type != originChannel.Type {
+		if err := clearCodingPlanOnTypeChange(channel.Id, &channel.Channel); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	}
 	model.InitChannelCache()
 	if proxyChanged {
 		service.InvalidateProxyClient(originProxy)
@@ -1198,6 +1206,8 @@ func UpdateChannel(c *gin.Context) {
 	}
 	if channel.Type != originChannel.Type {
 		changedFields = append(changedFields, "type")
+		// 换类型连带清掉了套餐绑定,记录到审计,便于管理员追溯绑定为何消失。
+		changedFields = append(changedFields, "coding_plan_provider", "coding_plan_key")
 	}
 	if !equalStringPtr(channel.BaseURL, originChannel.BaseURL) {
 		changedFields = append(changedFields, "base_url")
@@ -1288,6 +1298,50 @@ func equalStringPtr(a, b *string) bool {
 		return false
 	}
 	return *a == *b
+}
+
+// isCodingPlanEndpoint 判断 base_url 是否为编码套餐专用端点:符号键(ChannelSpecialBases)
+// 或套餐专用真实地址。只认套餐专用路径,避免把普通厂商 host(如 open.bigmodel.cn 本体、
+// api.anthropic.com)误判成套餐端点。与前端 detectCodingPlanProvider 保持一致。
+func isCodingPlanEndpoint(baseURL string) bool {
+	if _, ok := constant.ChannelSpecialBases[baseURL]; ok {
+		return true
+	}
+	url := strings.ToLower(strings.TrimSpace(baseURL))
+	return strings.Contains(url, "api.kimi.com/coding") ||
+		strings.Contains(url, "volces.com/api/coding") ||
+		strings.Contains(url, "api.minimaxi.com") ||
+		strings.Contains(url, "api.minimax.io") ||
+		strings.Contains(url, "open.bigmodel.cn/api/coding") ||
+		strings.Contains(url, "open.bigmodel.cn/api/anthropic") ||
+		strings.Contains(url, "api.z.ai/api/coding") ||
+		strings.Contains(url, "api.z.ai/api/anthropic") ||
+		strings.Contains(url, "zenmux")
+}
+
+// clearCodingPlanOnTypeChange 渠道换类型后清除编码套餐绑定(独立渠道适配):
+// 套餐厂商、套餐专用密钥、套餐端点 base_url 一起清。GORM Updates(struct) 会跳过空值
+// 字段,这里显式按列更新;成功后同步内存对象,保证响应返回一致状态。
+func clearCodingPlanOnTypeChange(id int, channel *model.Channel) error {
+	updates := map[string]any{
+		"coding_plan_provider": "",
+		"coding_plan_key":      "",
+	}
+	if channel.BaseURL != nil && isCodingPlanEndpoint(*channel.BaseURL) {
+		updates["base_url"] = ""
+	}
+	if err := model.DB.Model(&model.Channel{}).
+		Where("id = ?", id).
+		Updates(updates).Error; err != nil {
+		return err
+	}
+	channel.CodingPlanProvider = common.GetPointer[string]("")
+	channel.CodingPlanKey = ""
+	if channel.BaseURL != nil && isCodingPlanEndpoint(*channel.BaseURL) {
+		empty := ""
+		channel.BaseURL = &empty
+	}
+	return nil
 }
 
 type fetchModelsRequest struct {
