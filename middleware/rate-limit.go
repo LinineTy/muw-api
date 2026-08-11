@@ -174,6 +174,17 @@ func CriticalRateLimit() func(c *gin.Context) {
 	return rateLimitFactory(&common.CriticalRateLimitEnable, &common.CriticalRateLimitNum, &common.CriticalRateLimitDuration, "CT")
 }
 
+// UserCriticalRateLimit returns a per-user critical rate limiter for endpoints
+// where a shared per-IP bucket would let one user drain the critical bucket for
+// everyone behind the same IP (access-token minting, aff transfers).
+// Must be used AFTER authentication middleware (UserAuth).
+func UserCriticalRateLimit(scope string) func(c *gin.Context) {
+	if !common.CriticalRateLimitEnable {
+		return defNext
+	}
+	return userRateLimitFactory(common.CriticalRateLimitNum, common.CriticalRateLimitDuration, "UC:"+scope)
+}
+
 // userRateLimitFactory creates a rate limiter keyed by authenticated user ID
 // instead of client IP, making it resistant to proxy rotation attacks.
 // Must be used AFTER authentication middleware (UserAuth).
