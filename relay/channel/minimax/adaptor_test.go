@@ -83,6 +83,23 @@ func TestGetRequestURLForCodingPlanSymbol(t *testing.T) {
 			relayForm: types.RelayFormatClaude,
 			want:      "https://api.minimax.io/anthropic/v1/messages",
 		},
+		{
+			// OpenAI 格式请求打到完整 Anthropic 端点:URL 仍走 /v1/messages(格式转换
+			// 由 ConvertOpenAIRequest 负责),不能把 OpenAI 路径拼上去 404。
+			name:      "minimax anthropic full endpoint openai format",
+			baseUrl:   "https://api.minimaxi.com/anthropic/v1/messages",
+			relayMode: relayconstant.RelayModeChatCompletions,
+			relayForm: types.RelayFormatOpenAI,
+			want:      "https://api.minimaxi.com/anthropic/v1/messages",
+		},
+		{
+			// anthropic 路径基址(未带 /v1/messages):补齐 /v1/messages,不双重拼接。
+			name:      "minimax anthropic base claude",
+			baseUrl:   "https://api.minimaxi.com/anthropic",
+			relayMode: relayconstant.RelayModeChatCompletions,
+			relayForm: types.RelayFormatClaude,
+			want:      "https://api.minimaxi.com/anthropic/v1/messages",
+		},
 	}
 	for _, tc := range cases {
 		tc := tc

@@ -24,6 +24,11 @@ func TestAdaptorGetRequestURLAnthropicEndpoints(t *testing.T) {
 		// 完整 Anthropic 端点(带 /v1/messages):原样透传,不自动拼路径(与 Custom 渠道同款)。
 		{name: "glm anthropic full endpoint passthrough", baseURL: "https://open.bigmodel.cn/api/anthropic/v1/messages", relayForm: types.RelayFormatClaude, want: "https://open.bigmodel.cn/api/anthropic/v1/messages"},
 		{name: "glm anthropic international full endpoint passthrough", baseURL: "https://api.z.ai/api/anthropic/v1/messages", relayForm: types.RelayFormatClaude, want: "https://api.z.ai/api/anthropic/v1/messages"},
+		// OpenAI 格式请求打到完整 Anthropic 端点:URL 仍走 /v1/messages(格式转换由
+		// ConvertOpenAIRequest 负责),不能把 OpenAI 路径拼上去 404。
+		{name: "glm anthropic full endpoint openai format", baseURL: "https://open.bigmodel.cn/api/anthropic/v1/messages", relayForm: types.RelayFormatOpenAI, want: "https://open.bigmodel.cn/api/anthropic/v1/messages"},
+		// anthropic 路径基址(未带 /v1/messages):补齐 /v1/messages,不双重拼接。
+		{name: "glm anthropic base claude", baseURL: "https://open.bigmodel.cn/api/anthropic", relayForm: types.RelayFormatClaude, want: "https://open.bigmodel.cn/api/anthropic/v1/messages"},
 		// 普通 host:仍走默认的 anthropic 路径拼接,不回归。
 		{name: "plain host claude", baseURL: "https://open.bigmodel.cn", relayForm: types.RelayFormatClaude, want: "https://open.bigmodel.cn/api/anthropic/v1/messages"},
 		{name: "plain host openai", baseURL: "https://open.bigmodel.cn", relayForm: types.RelayFormatOpenAI, want: "https://open.bigmodel.cn/api/paas/v4/chat/completions"},
