@@ -49,6 +49,34 @@ var auditContentTemplates = map[string]string{
 
 	"subscription.plan_reset":      "Reset active subscriptions for plan ${plan_id}",
 	"subscription.user_plan_reset": "Reset active plan ${plan_id} subscriptions for user ${target_user_id}",
+
+	// 订阅管理（管理员）
+	"subscription.plan_status_update":       "Updated subscription plan status (ID: ${id})",
+	"subscription.plan_delete":              "Deleted subscription plan (ID: ${id})",
+	"subscription.user_subscription_create": "Created a subscription for user (ID: ${id})",
+	"subscription.user_subscription_invalidate": "Invalidated user subscription (ID: ${id})",
+	"subscription.user_subscription_delete": "Deleted user subscription (ID: ${id})",
+	"subscription.user_subscription_purge":  "Purged user subscription (ID: ${id})",
+
+	// 渠道（已埋点但缺模板的补充）
+	"channel.status_update":       "Updated channel status (ID: ${id})",
+	"channel.status_update_batch": "Updated status of ${count} of ${total} channels",
+	"channel.upstream_detect_all": "Started upstream model update detection (task ${task_id})",
+	"channel.fix_abilities":       "Fixed channel abilities",
+	"channel.fetch_models":        "Fetched upstream models",
+	"channel.codex_refresh":       "Refreshed Codex credential (channel ID: ${id})",
+	"channel.codex_reset_usage":   "Reset Codex usage (channel ID: ${id})",
+	"channel.ollama_pull":         "Pulled Ollama model",
+	"channel.ollama_pull_stream":  "Pulled Ollama model (streaming)",
+	"channel.ollama_delete":       "Deleted Ollama model",
+	"channel.upstream_detect":     "Detected upstream model updates",
+
+	// 性能 / 比率同步 / 系统信息 / 自定义 OAuth
+	"performance.reset_stats":         "Reset performance statistics",
+	"ratio_sync.fetch":                "Fetched upstream ratios",
+	"system_info.delete_stale_instances": "Deleted stale system instances",
+	"system_info.delete_instance":     "Deleted system instance ${node_name}",
+	"custom_oauth.discovery":          "Fetched custom OAuth discovery",
 }
 
 // auditContentEN 按 action 模板渲染英文兜底文本；未登记的 action 退回 action 本身。
