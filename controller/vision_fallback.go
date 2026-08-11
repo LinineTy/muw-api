@@ -3,6 +3,8 @@ package controller
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/middleware"
+	"github.com/QuantumNous/new-api/pkg/cachex"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/relaykit/dto"
@@ -23,6 +26,7 @@ import (
 
 	"github.com/bytedance/gopkg/util/gopool"
 	"github.com/gin-gonic/gin"
+	"github.com/samber/hot"
 	"github.com/samber/lo"
 )
 
@@ -41,6 +45,52 @@ const maxVisionFallbackDuration = 30 * time.Second
 // would otherwise drop the connection during the silent fallback period. It is
 // a var (not a const) so tests can shorten the interval.
 var fallbackKeepAliveInterval = 2 * time.Second
+
+// Vision description dedup cache. Multi-turn conversations (and tool/MCP call
+// loops) resend the same image on every turn; without a cache each turn would
+// re-recognize the image through the vision model, paying for the same
+// description over and over. A cache keyed by "vision model + image URL hash"
+// lets each image be recognized once per TTL window and reused afterwards.
+const (
+	visionDescriptionCacheNamespace = "vision_desc"
+	visionDescriptionCacheTTL       = 30 * time.Minute
+	visionDescriptionCacheCapacity  = 20_000
+)
+
+var (
+	visionDescriptionCacheOnce sync.Once
+	visionDescriptionCache     *cachex.HybridCache[string]
+)
+
+func getVisionDescriptionCache() *cachex.HybridCache[string] {
+	visionDescriptionCacheOnce.Do(func() {
+		visionDescriptionCache = cachex.NewHybridCache[string](cachex.HybridCacheConfig[string]{
+			Namespace: cachex.Namespace(visionDescriptionCacheNamespace),
+			Redis:     common.RDB,
+			RedisEnabled: func() bool {
+				return common.RedisEnabled && common.RDB != nil
+			},
+			RedisCodec: cachex.StringCodec{},
+			Memory: func() *hot.HotCache[string, string] {
+				return hot.NewHotCache[string, string](hot.LRU, visionDescriptionCacheCapacity).
+					WithTTL(visionDescriptionCacheTTL).
+					WithJanitor().
+					Build()
+			},
+		})
+	})
+	return visionDescriptionCache
+}
+
+// visionDescriptionCacheKey derives the dedup key for one image: the vision
+// model (a different model may describe differently) plus a hash of the image
+// URL. Data-URI images (uploads) embed their content in the URL, so the hash is
+// stable across turns; remote URLs are bounded by the cache TTL against content
+// changing at the same address.
+func visionDescriptionCacheKey(model, imageURL string) string {
+	sum := sha256.Sum256([]byte(imageURL))
+	return model + ":" + hex.EncodeToString(sum[:])
+}
 
 // imageRef locates one image part inside a request message.
 type imageRef struct {
@@ -266,6 +316,14 @@ func collectImageParts(req *dto.GeneralOpenAIRequest) []imageRef {
 // request's context and response are never touched. ctx bounds the sub-request
 // so a stuck vision model fails fast instead of hanging the parent request.
 func describeImage(ctx context.Context, c *gin.Context, info *relaycommon.RelayInfo, setting *operation_setting.VisualFallbackSetting, imageURL string) (string, *types.NewAPIError) {
+	// 同一张图在多轮对话/工具循环里会被重发。命中描述缓存就直接复用,
+	// 跳过整个视觉子请求——不调上游,也不产生那一次识别计费。
+	cache := getVisionDescriptionCache()
+	cacheKey := visionDescriptionCacheKey(setting.Model, imageURL)
+	if cached, found, err := cache.Get(cacheKey); err == nil && found && cached != "" {
+		return cached, nil
+	}
+
 	visionReq := &dto.GeneralOpenAIRequest{
 		Model: setting.Model,
 		Messages: []dto.Message{
@@ -333,6 +391,8 @@ func describeImage(ctx context.Context, c *gin.Context, info *relaycommon.RelayI
 	if desc == "" {
 		return "", types.NewError(fmt.Errorf("视觉模型返回了空描述"), types.ErrorCodeBadResponseBody)
 	}
+	// 只缓存成功描述;失败不缓存,避免瞬时上游错误把缓存毒化。
+	_ = cache.SetWithTTL(cacheKey, desc, visionDescriptionCacheTTL)
 	return desc, nil
 }
 
