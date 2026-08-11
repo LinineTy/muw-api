@@ -28,6 +28,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -117,11 +118,26 @@ export function CodingPlanBaseUrlField({
                   <SelectValue />
                 </SelectTrigger>
               </FormControl>
-              <SelectContent alignItemWithTrigger={false}>
+              <SelectContent
+                alignItemWithTrigger={false}
+                /* 弹层默认宽度跟随触发按钮(火山同款),但套餐地址比传统端点长、
+                   还要放「编码套餐」角标。最小宽度要覆盖最长的
+                   https://open.bigmodel.cn/api/coding/paas/v4 + 角标 + 选中勾的预留区,
+                   否则角标会被裁掉或与右侧 ✅ 重叠。 */
+                className='min-w-[30rem]'
+              >
                 <SelectGroup>
                   {presets.map((preset) => (
                     <SelectItem key={preset.value} value={preset.value}>
                       {t(preset.display)}
+                      {preset.plan && (
+                        <Badge
+                          variant='warning'
+                          className='pointer-events-none shrink-0'
+                        >
+                          {t('Coding Plan')}
+                        </Badge>
+                      )}
                     </SelectItem>
                   ))}
                   <SelectItem value='manual'>{t('Manual / Custom')}</SelectItem>

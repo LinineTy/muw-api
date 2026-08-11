@@ -183,7 +183,7 @@ function CodingPlanLinkedBadge({ channel }: { channel: Channel }) {
       <Tooltip>
         <TooltipTrigger
           render={
-            <span className='text-muted-foreground inline-flex shrink-0 items-center gap-1 rounded-md bg-muted/60 px-1.5 py-0.5 text-[11px]'>
+            <span className='text-warning bg-warning/10 inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px]'>
               <Gauge className='size-3.5' aria-hidden='true' />
               <span className='max-w-[9rem] truncate'>{t(option.label)}</span>
             </span>
