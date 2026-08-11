@@ -68,6 +68,21 @@ func TestGetRequestURLForCodingPlanSymbol(t *testing.T) {
 			relayForm: types.RelayFormatClaude,
 			want:      "https://api.minimaxi.com/anthropic/v1/messages",
 		},
+		{
+			// 完整 Anthropic 端点(带 /v1/messages):原样透传,不自动拼路径(与 Custom 渠道同款)。
+			name:      "minimax anthropic full endpoint passthrough",
+			baseUrl:   "https://api.minimaxi.com/anthropic/v1/messages",
+			relayMode: relayconstant.RelayModeChatCompletions,
+			relayForm: types.RelayFormatClaude,
+			want:      "https://api.minimaxi.com/anthropic/v1/messages",
+		},
+		{
+			name:      "minimax anthropic international full endpoint passthrough",
+			baseUrl:   "https://api.minimax.io/anthropic/v1/messages",
+			relayMode: relayconstant.RelayModeChatCompletions,
+			relayForm: types.RelayFormatClaude,
+			want:      "https://api.minimax.io/anthropic/v1/messages",
+		},
 	}
 	for _, tc := range cases {
 		tc := tc

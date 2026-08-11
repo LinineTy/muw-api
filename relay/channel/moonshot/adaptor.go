@@ -59,6 +59,11 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 
 	switch info.RelayFormat {
 	case types.RelayFormatClaude:
+		// 已带 /v1/messages 的完整 Anthropic 端点:原样透传,不自动拼路径
+		// (与 Custom 渠道同款,用户手动填完整地址或选了 Anthropic 套餐预设)。
+		if strings.HasSuffix(info.ChannelBaseUrl, "/v1/messages") {
+			return info.ChannelBaseUrl, nil
+		}
 		return fmt.Sprintf("%s/anthropic/v1/messages", info.ChannelBaseUrl), nil
 	default:
 		if info.RelayMode == constant.RelayModeRerank {

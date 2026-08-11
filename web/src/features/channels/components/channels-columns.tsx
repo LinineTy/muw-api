@@ -60,7 +60,7 @@ import { getCodexUsage } from '../api'
 import {
   CHANNEL_STATUS_CONFIG,
   CODING_PLAN_PROVIDER_OPTIONS,
-  CODING_PLAN_SYMBOL_OPTIONS,
+  detectCodingPlanProvider,
   MODEL_FETCHABLE_TYPES,
 } from '../constants'
 import {
@@ -159,21 +159,20 @@ function UpstreamUpdateTags({ channel }: { channel: Channel }) {
 
 /**
  * Coding-plan quota badge: shown next to the channel name when the channel has
- * coding-plan quota monitoring enabled (base_url is a coding-plan symbol key,
- * or coding_plan_provider is set manually).
+ * coding-plan quota monitoring enabled (base_url is a coding-plan symbol key /
+ * dedicated endpoint, or coding_plan_provider is set manually).
  */
 function CodingPlanLinkedBadge({ channel }: { channel: Channel }) {
   const { t } = useTranslation()
 
-  const providerOption = channel.coding_plan_provider
+  const provider =
+    channel.coding_plan_provider ||
+    detectCodingPlanProvider(channel.base_url)
+  const option = provider
     ? CODING_PLAN_PROVIDER_OPTIONS.find(
-        (option) => option.value === channel.coding_plan_provider
+        (item) => item.value === provider
       )
     : undefined
-  const symbolOption = CODING_PLAN_SYMBOL_OPTIONS.find(
-    (option) => option.value === channel.base_url
-  )
-  const option = providerOption ?? symbolOption
   if (!option) {
     return null
   }
