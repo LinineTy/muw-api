@@ -494,7 +494,7 @@ export const STATIC_I18N_KEYS = [
   'Important',
   'Image not available',
   'Back to footnote {{id}} reference',
-  'Console Area',
+  'General Area',
   'Data management and log viewing',
   'Dashboard',
   'System data statistics',
