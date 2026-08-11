@@ -52,3 +52,6 @@ service/relayconvert/chat_responses_live_local_test.go
 service/openaicompat/chat_responses_live_local_test.go
 go.work
 go.work.sum
+
+# i18n sync 生成的孤儿键归档(无运行时作用,不跟踪)
+web/src/i18n/locales/_extras/
