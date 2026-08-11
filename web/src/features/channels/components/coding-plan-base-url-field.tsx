@@ -43,6 +43,7 @@ import {
 import {
   CHANNEL_TYPE_CODING_PLAN_SUGGEST,
   CODING_PLAN_BASE_URL_PRESETS,
+  CODING_PLAN_PROVIDER_DISABLED,
   CODING_PLAN_PROVIDER_OPTIONS,
 } from '../constants'
 import type { ChannelFormValues } from '../lib'
@@ -65,23 +66,39 @@ export function CodingPlanBaseUrlField({
 }: CodingPlanBaseUrlFieldProps) {
   const { t } = useTranslation()
   const baseUrl = form.watch('base_url') ?? ''
+  const codingPlanProvider = form.watch('coding_plan_provider') ?? ''
   const presets = CODING_PLAN_BASE_URL_PRESETS[channelType] ?? []
   // 手动/自定义是独立状态,不靠 base_url 为空来区分——空字符串同时是"新渠道走内置默认"。
   // 点「手动/自定义」置 true;base_url 非空时按是否落在预设里自动同步(编辑已有自定义
   // URL 渠道、类型切换都会经此校正)。切换类型且 base_url 为空时回到预设选择态。
   const [manualMode, setManualMode] = useState(false)
   const prevChannelTypeRef = useRef(channelType)
+  // 用户显式点过「手动/自定义」:即使填的 URL 恰好命中预设(如完整 Anthropic 套餐地址)
+  // 也保持手动,不再被 URL 自动打回预设(否则选自定义填同款地址仍会被当套餐绑定)。
+  const manualChosenRef = useRef(false)
   useEffect(() => {
     const prevType = prevChannelTypeRef.current
     prevChannelTypeRef.current = channelType
-    if (prevType !== channelType && baseUrl === '') {
-      setManualMode(false)
+    if (prevType !== channelType) {
+      // 换类型:重置显式选择,空 base_url 回到预设选择态。
+      manualChosenRef.current = false
+      if (baseUrl === '') {
+        setManualMode(false)
+        return
+      }
+    }
+    // 用户显式选过手动:保持手动,不再按 URL 是否命中预设回退。
+    if (manualChosenRef.current) return
+    // 显式关闭监控("none")= 手动/自定义渠道(默认),重新打开表单也保持手动展示,
+    // 避免命中预设的套餐地址被当成预设端点回显。
+    if (codingPlanProvider === CODING_PLAN_PROVIDER_DISABLED) {
+      setManualMode(true)
       return
     }
     if (baseUrl === '') return
     const ps = CODING_PLAN_BASE_URL_PRESETS[channelType] ?? []
     setManualMode(!ps.some((preset) => preset.value === baseUrl))
-  }, [baseUrl, channelType])
+  }, [baseUrl, codingPlanProvider, channelType])
 
   const selected = presets.find((preset) => preset.value === baseUrl)
   // 手动模式优先;否则选中预设,或新渠道(空 base_url)按首个传统端点展示。
@@ -112,14 +129,21 @@ export function CodingPlanBaseUrlField({
               ]}
               onValueChange={(value) => {
                 if (value === 'manual') {
-                  // 手动/自定义:完全自由填写,余量厂商交给「自动识别」或用户手动选,
-                  // 因此清空预设带入的厂商,避免残留的厂商与用户新填的地址不一致。
+                  // 手动/自定义:完全自由填写,默认不启用余量监控(显式关闭,即使填的
+                  // 地址是套餐端点也不再自动绑定);需要监控时再选厂商或「自动识别」。
+                  // 显式选手动后保持手动(manualChosenRef),不再被 URL 命中预设打回。
+                  manualChosenRef.current = true
                   setManualMode(true)
                   field.onChange('')
-                  form.setValue('coding_plan_provider', '', {
-                    shouldDirty: true,
-                  })
+                  form.setValue(
+                    'coding_plan_provider',
+                    CODING_PLAN_PROVIDER_DISABLED,
+                    {
+                      shouldDirty: true,
+                    }
+                  )
                 } else {
+                  manualChosenRef.current = false
                   setManualMode(false)
                   field.onChange(value)
                   const preset = presets.find((item) => item.value === value)
@@ -232,6 +256,9 @@ function ManualCodingPlanConfig({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={CODING_PLAN_PROVIDER_DISABLED}>
+                    {t('Disable quota monitoring')}
+                  </SelectItem>
                   <SelectItem value='auto'>{t('Auto detect')}</SelectItem>
                   {providerOptions.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
@@ -243,7 +270,7 @@ function ManualCodingPlanConfig({
             </FormControl>
             <FormDescription>
               {t(
-                'Only needed when the provider cannot be auto-detected (e.g. behind an aggregator proxy).'
+                'Manual channels are not monitored by default. Pick a provider to monitor its coding-plan quota, or keep it disabled.'
               )}
             </FormDescription>
             <FormMessage />

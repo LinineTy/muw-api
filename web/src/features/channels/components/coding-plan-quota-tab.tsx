@@ -29,6 +29,7 @@ import { cn } from '@/lib/utils'
 
 import { getChannelCodingPlanQuota, getChannels } from '../api'
 import {
+  CODING_PLAN_PROVIDER_DISABLED,
   CODING_PLAN_PROVIDER_OPTIONS,
   detectCodingPlanProvider,
 } from '../constants'
@@ -41,7 +42,11 @@ const QUOTA_REFRESH_MS = 5 * 60 * 1000
 const MAX_CHANNEL_TAGS = 3
 
 // 渠道是否启用编码套餐余量监控:显式配置了厂商,或 base_url 是套餐符号键/套餐专用地址。
+// 显式关闭监控("none",手动/自定义渠道默认)一律视为不监控,即使 base_url 是套餐端点。
 function isQuotaEnabled(channel: Channel): boolean {
+  if (channel.coding_plan_provider === CODING_PLAN_PROVIDER_DISABLED) {
+    return false
+  }
   return Boolean(
     channel.coding_plan_provider ||
       detectCodingPlanProvider(channel.base_url)
@@ -53,6 +58,9 @@ function providerLabel(
   channel: Channel,
   t: (key: string) => string
 ): string {
+  if (channel.coding_plan_provider === CODING_PLAN_PROVIDER_DISABLED) {
+    return ''
+  }
   const provider =
     channel.coding_plan_provider ||
     detectCodingPlanProvider(channel.base_url)

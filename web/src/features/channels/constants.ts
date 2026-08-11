@@ -129,6 +129,10 @@ export const CODING_PLAN_PROVIDER_OPTIONS: {
   { value: 'zenmux', label: 'ZenMux' },
 ]
 
+// 手动/自定义渠道显式关闭余量监控的厂商值:即使 base_url 是套餐端点也不再自动绑定。
+// 与后端 service.CodingPlanProviderDisabled("none") 保持一致。
+export const CODING_PLAN_PROVIDER_DISABLED = 'none'
+
 // 渠道类型 → 建议套餐厂商(仅表单自动建议,用户可改;与后端
 // service.CodingPlanProviderFromChannelType 保持一致)。
 export const CHANNEL_TYPE_CODING_PLAN_SUGGEST: Record<number, string> = {
