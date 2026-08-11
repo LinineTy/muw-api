@@ -217,21 +217,10 @@ export function parseSidebarModulesAdmin(
       result[sectionKey] = sectionConfig
     })
 
-    // 存储值里 defaults 没有的 section/module 也保留(前向兼容),追加到对应 section 末尾。
-    Object.entries(parsed).forEach(([sectionKey, raw]) => {
-      if (!raw || typeof raw !== 'object') return
-      const rawSection = raw as Record<string, unknown>
-      if (!result[sectionKey]) {
-        result[sectionKey] = { enabled: toBoolean(rawSection.enabled, true) }
-      }
-      Object.entries(rawSection).forEach(([moduleKey, moduleValue]) => {
-        if (moduleKey === 'enabled') return
-        if (!(moduleKey in result[sectionKey])) {
-          result[sectionKey][moduleKey] = toBoolean(moduleValue, true)
-        }
-      })
-    })
-
+    // 注意:不要从此处"前向兼容"地把 defaults 里没有的 section/module 捞回来。
+    // 存量 JSON 可能带着旧版本残留的模块(如 model_health 迁到 console 之前,
+    // admin 区仍存有 admin.model_health)——捞回来会在设置表单里出现删不掉的
+    // 残留开关。新模块上线时 defaults 必然同步更新,这里严格以 defaults 为准即可。
     return result
   } catch {
     return defaults
