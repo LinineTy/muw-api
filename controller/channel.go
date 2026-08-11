@@ -1186,8 +1186,10 @@ func UpdateChannel(c *gin.Context) {
 	}
 	// 换类型后清掉旧类型的编码套餐绑定(独立渠道适配):套餐厂商、专用密钥、套餐端点 base_url
 	// 只对原类型有意义,保存时强制清除,避免渠道换类型后仍出现在余量卡/琥珀标签里。
+	// 只清请求未显式携带的字段:同一保存里用户为新类型重新配了套餐(选套餐端点/厂商/
+	// 填套餐密钥)则保留新值,避免保存一次就把刚配的套餐清掉(需二次保存)。
 	if channel.Type != originChannel.Type {
-		if err := clearCodingPlanOnTypeChange(channel.Id, &channel.Channel); err != nil {
+		if err := clearCodingPlanOnTypeChange(channel.Id, &channel.Channel, originChannel, requestData); err != nil {
 			common.ApiError(c, err)
 			return
 		}
@@ -1319,25 +1321,49 @@ func isCodingPlanEndpoint(baseURL string) bool {
 		strings.Contains(url, "zenmux")
 }
 
+// codingPlanFieldsToClear 决定换类型时哪些编码套餐字段需要清掉:只清请求未显式携带的
+// 字段。请求带了新值(含显式清空)就尊重表单;完全没带才清旧类型的残留绑定
+// (套餐厂商、专用密钥,以及仍是套餐端点的旧 base_url)。
+func codingPlanFieldsToClear(requestData map[string]any, originBaseURL string) map[string]any {
+	updates := make(map[string]any)
+	if _, ok := requestData["coding_plan_provider"]; !ok {
+		updates["coding_plan_provider"] = ""
+	}
+	if _, ok := requestData["coding_plan_key"]; !ok {
+		updates["coding_plan_key"] = ""
+	}
+	if _, ok := requestData["base_url"]; !ok && isCodingPlanEndpoint(originBaseURL) {
+		updates["base_url"] = ""
+	}
+	return updates
+}
+
 // clearCodingPlanOnTypeChange 渠道换类型后清除编码套餐绑定(独立渠道适配):
 // 套餐厂商、套餐专用密钥、套餐端点 base_url 一起清。GORM Updates(struct) 会跳过空值
 // 字段,这里显式按列更新;成功后同步内存对象,保证响应返回一致状态。
-func clearCodingPlanOnTypeChange(id int, channel *model.Channel) error {
-	updates := map[string]any{
-		"coding_plan_provider": "",
-		"coding_plan_key":      "",
+// 只清请求未显式携带的字段:用户在同一保存里为新类型重新配了套餐则保留新值。
+func clearCodingPlanOnTypeChange(id int, channel *model.Channel, origin *model.Channel, requestData map[string]any) error {
+	var originBaseURL string
+	if origin.BaseURL != nil {
+		originBaseURL = *origin.BaseURL
 	}
-	if channel.BaseURL != nil && isCodingPlanEndpoint(*channel.BaseURL) {
-		updates["base_url"] = ""
+	updates := codingPlanFieldsToClear(requestData, originBaseURL)
+	if len(updates) == 0 {
+		return nil
 	}
 	if err := model.DB.Model(&model.Channel{}).
 		Where("id = ?", id).
 		Updates(updates).Error; err != nil {
 		return err
 	}
-	channel.CodingPlanProvider = common.GetPointer[string]("")
-	channel.CodingPlanKey = ""
-	if channel.BaseURL != nil && isCodingPlanEndpoint(*channel.BaseURL) {
+	// 同步内存对象
+	if _, ok := requestData["coding_plan_provider"]; !ok {
+		channel.CodingPlanProvider = common.GetPointer[string]("")
+	}
+	if _, ok := requestData["coding_plan_key"]; !ok {
+		channel.CodingPlanKey = ""
+	}
+	if _, ok := requestData["base_url"]; !ok && isCodingPlanEndpoint(originBaseURL) {
 		empty := ""
 		channel.BaseURL = &empty
 	}
