@@ -75,7 +75,7 @@ export function SidebarModulesCard() {
     },
     {
       key: 'console',
-      title: t('Console Area'),
+      title: t('General Area'),
       description: t('Data management and log viewing'),
       modules: [
         {
@@ -103,6 +103,11 @@ export function SidebarModulesCard() {
           title: t('Task Logs'),
           description: t('System task records'),
         },
+        {
+          key: 'model_health',
+          title: t('Model Health'),
+          description: t('Track per-model success rate and latency trends.'),
+        },
       ],
     },
     {
@@ -119,6 +124,11 @@ export function SidebarModulesCard() {
           key: 'personal',
           title: t('Personal Settings'),
           description: t('Personal info settings'),
+        },
+        {
+          key: 'my_subscriptions',
+          title: t('My Subscriptions'),
+          description: t('Manage your own subscription plans and billing.'),
         },
       ],
     },

@@ -66,22 +66,23 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     log: true,
     midjourney: true,
     task: true,
+    model_health: true,
   },
   personal: {
     enabled: true,
     topup: true,
     personal: true,
+    my_subscriptions: true,
   },
   admin: {
     enabled: true,
     channel: true,
     models: true,
-    model_health: true,
-    redemption: true,
     user: true,
-    setting: true,
+    redemption: true,
     subscription: true,
     system_info: true,
+    setting: true,
   },
 }
 
@@ -193,40 +194,40 @@ export function parseSidebarModulesAdmin(
     const parsed = JSON.parse(value) as Record<string, unknown>
     const result: SidebarModulesAdminConfig = {}
 
-    Object.entries(parsed).forEach(([sectionKey, raw]) => {
-      if (!raw || typeof raw !== 'object') return
-
-      const defaultSection = defaults[sectionKey] ?? { enabled: true }
+    // 以 defaults 的键序为准重建每个 section:开关顺序固定,不随后端存量 JSON 的
+    // 键序漂移——否则新增模块(如 coding_plan)会被追加到末尾,设置里显得很乱。
+    Object.entries(defaults).forEach(([sectionKey, defaultSection]) => {
+      const rawSection = parsed[sectionKey]
+      const raw =
+        rawSection && typeof rawSection === 'object'
+          ? (rawSection as Record<string, unknown>)
+          : {}
       const sectionConfig: SidebarSectionConfig = {
-        enabled: toBoolean(
-          (raw as Record<string, unknown>).enabled,
-          defaultSection.enabled ?? true
-        ),
+        enabled: toBoolean(raw.enabled, defaultSection.enabled ?? true),
       }
 
-      Object.entries(raw as Record<string, unknown>).forEach(
-        ([moduleKey, moduleValue]) => {
-          if (moduleKey === 'enabled') return
-          sectionConfig[moduleKey] = toBoolean(
-            moduleValue,
-            defaultSection[moduleKey] ?? true
-          )
-        }
-      )
+      Object.entries(defaultSection).forEach(([moduleKey, defaultValue]) => {
+        if (moduleKey === 'enabled') return
+        sectionConfig[moduleKey] =
+          moduleKey in raw
+            ? toBoolean(raw[moduleKey], defaultValue)
+            : defaultValue
+      })
 
       result[sectionKey] = sectionConfig
     })
 
-    // Merge defaults to ensure expected sections exist
-    Object.entries(defaults).forEach(([sectionKey, config]) => {
+    // 存储值里 defaults 没有的 section/module 也保留(前向兼容),追加到对应 section 末尾。
+    Object.entries(parsed).forEach(([sectionKey, raw]) => {
+      if (!raw || typeof raw !== 'object') return
+      const rawSection = raw as Record<string, unknown>
       if (!result[sectionKey]) {
-        result[sectionKey] = { ...config }
-        return
+        result[sectionKey] = { enabled: toBoolean(rawSection.enabled, true) }
       }
-
-      Object.entries(config).forEach(([moduleKey, moduleValue]) => {
+      Object.entries(rawSection).forEach(([moduleKey, moduleValue]) => {
+        if (moduleKey === 'enabled') return
         if (!(moduleKey in result[sectionKey])) {
-          result[sectionKey][moduleKey] = moduleValue
+          result[sectionKey][moduleKey] = toBoolean(moduleValue, true)
         }
       })
     })

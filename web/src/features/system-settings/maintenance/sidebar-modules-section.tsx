@@ -70,7 +70,7 @@ export function SidebarModulesSection({
       description: t('Playground experiments and live conversations.'),
     },
     console: {
-      title: t('Console area'),
+      title: t('General area'),
       description: t('Dashboards, tokens, and usage analytics.'),
     },
     personal: {
@@ -118,6 +118,10 @@ export function SidebarModulesSection({
         title: t('Task logs'),
         description: t('Background job tracker for queued work.'),
       },
+      model_health: {
+        title: t('Model Health'),
+        description: t('Track per-model success rate and latency trends.'),
+      },
     },
     personal: {
       topup: {
@@ -128,6 +132,10 @@ export function SidebarModulesSection({
         title: t('Profile'),
         description: t('Personal settings and profile management.'),
       },
+      my_subscriptions: {
+        title: t('My Subscriptions'),
+        description: t('Manage your own subscription plans and billing.'),
+      },
     },
     admin: {
       channel: {
@@ -137,10 +145,6 @@ export function SidebarModulesSection({
       models: {
         title: t('Models'),
         description: t('Manage catalog visibility and pricing.'),
-      },
-      model_health: {
-        title: t('Model Health'),
-        description: t('Track per-model success rate and latency trends.'),
       },
       redemption: {
         title: t('Redeem codes'),
