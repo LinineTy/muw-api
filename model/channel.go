@@ -53,6 +53,15 @@ type Channel struct {
 	// add after v0.8.5
 	ChannelInfo ChannelInfo `json:"channel_info" gorm:"type:json"`
 
+	// 编码套餐余量监控(仅影响余量查询,不影响转发):
+	// CodingPlanProvider 为空 = 关闭;否则启用,用 CodingPlanKey(为空则用渠道自身
+	// key)打该厂商官方 quota 端点。支持走前置聚合的渠道:转发用聚合地址+聚合 token,
+	// 余量用 CodingPlanKey 直接打厂商官方,互不干扰。
+	// CodingPlanProvider 用 *string:与 tag/remark 一致,允许 Updates(struct) 写入空串关闭。
+	CodingPlanProvider  *string `json:"coding_plan_provider" gorm:"size:32"`
+	CodingPlanKey       string  `json:"-" gorm:"size:512"`               // 套餐专用密钥,永不下发
+	CodingPlanKeyMasked string  `json:"coding_plan_key_masked" gorm:"-"` // 响应脱敏预览
+
 	OtherSettings string `json:"settings" gorm:"column:settings"` // 其他设置，存储azure版本等不需要检索的信息，详见dto.ChannelOtherSettings
 
 	// cache info

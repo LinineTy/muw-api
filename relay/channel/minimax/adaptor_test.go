@@ -11,6 +11,7 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/types"
 
 	"github.com/gin-gonic/gin"
 )
@@ -33,6 +34,60 @@ func TestGetRequestURLForImageGeneration(t *testing.T) {
 	want := "https://api.minimax.chat/v1/image_generation"
 	if got != want {
 		t.Fatalf("GetRequestURL() = %q, want %q", got, want)
+	}
+}
+
+func TestGetRequestURLForCodingPlanSymbol(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name       string
+		baseUrl    string
+		relayMode  int
+		relayForm  types.RelayFormat
+		want       string
+	}{
+		{
+			name:      "minimax coding plan CN chat",
+			baseUrl:   "minimax-coding-plan",
+			relayMode: relayconstant.RelayModeChatCompletions,
+			relayForm: types.RelayFormatOpenAI,
+			want:      "https://api.minimaxi.com/v1/chat/completions",
+		},
+		{
+			name:      "minimax coding plan international chat",
+			baseUrl:   "minimax-coding-plan-international",
+			relayMode: relayconstant.RelayModeChatCompletions,
+			relayForm: types.RelayFormatOpenAI,
+			want:      "https://api.minimax.io/v1/chat/completions",
+		},
+		{
+			name:      "minimax coding plan claude",
+			baseUrl:   "minimax-coding-plan",
+			relayMode: relayconstant.RelayModeChatCompletions,
+			relayForm: types.RelayFormatClaude,
+			want:      "https://api.minimaxi.com/anthropic/v1/messages",
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			info := &relaycommon.RelayInfo{
+				RelayMode:  tc.relayMode,
+				RelayFormat: tc.relayForm,
+				ChannelMeta: &relaycommon.ChannelMeta{
+					ChannelBaseUrl: tc.baseUrl,
+				},
+			}
+			got, err := GetRequestURL(info)
+			if err != nil {
+				t.Fatalf("GetRequestURL returned error: %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("GetRequestURL() = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 

@@ -266,6 +266,10 @@ func migrateDB() error {
 	if err := ensureUserCountLockSeeded(DB); err != nil {
 		return err
 	}
+	// channels.coding_plan_provider / coding_plan_key 列:幂等加列,已最新版本库也补上。
+	if err := ensureChannelCodingPlanQuotaColumns(DB); err != nil {
+		return err
+	}
 	applied, err := appliedSchemaVersion(DB)
 	if err != nil {
 		return err
@@ -518,6 +522,27 @@ func clickHouseCreateTableHasTTL(createTableSQL string) bool {
 type sqliteColumnDef struct {
 	Name string
 	DDL  string
+}
+
+// ensureChannelCodingPlanQuotaColumns 幂等加列:channels.coding_plan_provider /
+// coding_plan_key 是已有表上的新列,已到最新 schema 版本(跳过 autoMigrateAll)的库
+// 同样需要补上。HasTable/HasColumn 守卫 + AddColumn,SQLite/MySQL/PG 通用;
+// 全新安装时 channels 表尚不存在,直接返回交给 autoMigrateAll 全量建。
+func ensureChannelCodingPlanQuotaColumns(db *gorm.DB) error {
+	if !db.Migrator().HasTable(&Channel{}) {
+		return nil
+	}
+	if !db.Migrator().HasColumn(&Channel{}, "coding_plan_provider") {
+		if err := db.Migrator().AddColumn(&Channel{}, "coding_plan_provider"); err != nil {
+			return err
+		}
+	}
+	if !db.Migrator().HasColumn(&Channel{}, "coding_plan_key") {
+		if err := db.Migrator().AddColumn(&Channel{}, "coding_plan_key"); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func ensureSubscriptionPlanTableSQLite() error {

@@ -42,7 +42,6 @@ export const CHANNEL_TYPES = {
   // 13: 'AIGC2D',
   14: 'Anthropic',
   15: 'Baidu',
-  16: 'Zhipu',
   17: 'Ali',
   18: 'Xunfei',
   19: '360',
@@ -111,6 +110,92 @@ export const CHANNEL_TYPE_OPTIONS: { value: number; label: string }[] = (() => {
   }
   return ordered
 })()
+
+// ============================================================================
+// Coding-Plan Quota (余量监控挂在渠道上,仅查询,不影响转发)
+// ============================================================================
+
+// 编码套餐厂商下拉选项(label 是 i18n key)。
+export const CODING_PLAN_PROVIDER_OPTIONS: {
+  value: string
+  label: string
+}[] = [
+  { value: 'zhipu', label: 'Zhipu (GLM) · China' },
+  { value: 'zhipu_en', label: 'Zhipu (GLM) · International' },
+  { value: 'kimi', label: 'Kimi For Coding' },
+  { value: 'minimax', label: 'MiniMax · China' },
+  { value: 'minimax_en', label: 'MiniMax · International' },
+  { value: 'volcengine', label: 'Volcengine Ark' },
+  { value: 'zenmux', label: 'ZenMux' },
+]
+
+// 渠道类型 → 建议套餐厂商(仅表单自动建议,用户可改;与后端
+// service.CodingPlanProviderFromChannelType 保持一致)。
+export const CHANNEL_TYPE_CODING_PLAN_SUGGEST: Record<number, string> = {
+  26: 'zhipu', // Zhipu V4
+  25: 'kimi', // Moonshot
+  35: 'minimax', // MiniMax
+  45: 'volcengine', // VolcEngine
+}
+
+// 编码套餐专用端点符号键(label 是 i18n key),对齐后端 constant.ChannelSpecialBases。
+// base_url 填这些符号键 → 渠道自动识别为对应编码套餐,转发走专用端点、余量自动可查。
+export const CODING_PLAN_SYMBOL_OPTIONS: { value: string; label: string }[] = [
+  { value: 'glm-coding-plan', label: 'Zhipu (GLM) · China' },
+  { value: 'glm-coding-plan-international', label: 'Zhipu (GLM) · International' },
+  { value: 'kimi-coding-plan', label: 'Kimi For Coding' },
+  { value: 'minimax-coding-plan', label: 'MiniMax · China' },
+  { value: 'minimax-coding-plan-international', label: 'MiniMax · International' },
+  { value: 'doubao-coding-plan', label: 'Volcengine Ark' },
+]
+
+export const CODING_PLAN_SYMBOL_KEYS: string[] = CODING_PLAN_SYMBOL_OPTIONS.map(
+  (option) => option.value
+)
+
+// 编码套餐可用的渠道类型 → base_url 预设(与火山渠道的地址选择器同款)。
+// display 是下拉里展示的真实地址(i18n key,值即地址本身);value 是真正存进 base_url 的
+// 值:编码套餐端点存符号键(后端 ChannelSpecialBases 解析成真实端点),传统端点存真实 host。
+// plan=true 表示该端点是编码套餐专用。顺序即下拉顺序,第一项是传统默认端点。
+export const CODING_PLAN_BASE_URL_PRESETS: Record<
+  number,
+  { value: string; display: string; plan: boolean }[]
+> = {
+  26: [
+    { value: 'https://open.bigmodel.cn', display: 'https://open.bigmodel.cn', plan: false },
+    {
+      value: 'glm-coding-plan',
+      display: 'https://open.bigmodel.cn/api/coding/paas/v4',
+      plan: true,
+    },
+    {
+      value: 'glm-coding-plan-international',
+      display: 'https://api.z.ai/api/coding/paas/v4',
+      plan: true,
+    },
+  ],
+  25: [
+    { value: 'https://api.moonshot.cn', display: 'https://api.moonshot.cn', plan: false },
+    {
+      value: 'kimi-coding-plan',
+      display: 'https://api.kimi.com/coding/v1',
+      plan: true,
+    },
+  ],
+  35: [
+    { value: 'https://api.minimax.chat', display: 'https://api.minimax.chat', plan: false },
+    {
+      value: 'minimax-coding-plan',
+      display: 'https://api.minimaxi.com/v1',
+      plan: true,
+    },
+    {
+      value: 'minimax-coding-plan-international',
+      display: 'https://api.minimax.io/v1',
+      plan: true,
+    },
+  ],
+}
 
 // ============================================================================
 // Channel Status (label values are i18n keys; use t(config.label) in components)

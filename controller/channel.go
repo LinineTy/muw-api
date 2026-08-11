@@ -72,6 +72,18 @@ func clearChannelInfo(channel *model.Channel) {
 	}
 }
 
+// maskCodingPlanKey 套餐专用密钥的脱敏预览:保留前 4 位 + **** + 后 4 位;空值原样返回。
+// 真实值由 CodingPlanKey(json:"-") 持有,永不进入响应体。
+func maskCodingPlanKey(key string) string {
+	if key == "" {
+		return ""
+	}
+	if len(key) <= 8 {
+		return "****"
+	}
+	return key[:4] + "****" + key[len(key)-4:]
+}
+
 func applyChannelStatusFilter(query *gorm.DB, statusFilter int) *gorm.DB {
 	if statusFilter == common.ChannelStatusEnabled {
 		return query.Where("status = ?", common.ChannelStatusEnabled)
@@ -415,6 +427,7 @@ func GetChannel(c *gin.Context) {
 	}
 	if channel != nil {
 		clearChannelInfo(channel)
+		channel.CodingPlanKeyMasked = maskCodingPlanKey(channel.CodingPlanKey)
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -584,6 +597,8 @@ type AddChannelRequest struct {
 	MultiKeyMode              constant.MultiKeyMode `json:"multi_key_mode"`
 	BatchAddSetKeyPrefix2Name bool                  `json:"batch_add_set_key_prefix_2_name"`
 	Channel                   *model.Channel        `json:"channel"`
+	// 套餐专用密钥(可选),仅用于编码套餐余量监控,不参与转发。
+	CodingPlanKey *string `json:"coding_plan_key"`
 }
 
 func getVertexArrayKeys(keys string) ([]string, error) {
@@ -633,6 +648,10 @@ func AddChannel(c *gin.Context) {
 			"message": err.Error(),
 		})
 		return
+	}
+	// 套餐专用密钥:显式携带则随渠道一并写入(用于编码套餐余量监控)。
+	if addChannelRequest.CodingPlanKey != nil {
+		addChannelRequest.Channel.CodingPlanKey = *addChannelRequest.CodingPlanKey
 	}
 
 	addChannelRequest.Channel.CreatedTime = common.GetTimestamp()
@@ -941,6 +960,9 @@ type PatchChannel struct {
 	model.Channel
 	MultiKeyMode *string `json:"multi_key_mode"`
 	KeyMode      *string `json:"key_mode"` // 多key模式下密钥覆盖或者追加
+	// 套餐专用密钥(可选,敏感):显式携带 = 设置/清除,不携带 = 保持原值。
+	// 内嵌 model.Channel.CodingPlanKey 是 json:"-",此处用独立字段接收客户端输入。
+	CodingPlanKeyInput *string `json:"coding_plan_key"`
 }
 
 type ChannelStatusRequest struct {
@@ -973,6 +995,18 @@ func UpdateChannel(c *gin.Context) {
 		return
 	}
 	clearChannelReadOnlyFields(&channel, requestData)
+
+	// 套餐专用密钥:显式携带则设置/清除,不携带保持原值。
+	// 清除时 GORM Updates(struct) 会跳过空串,需在主更新后单独列更新。
+	clearCodingPlanKey := false
+	if channel.CodingPlanKeyInput != nil {
+		if *channel.CodingPlanKeyInput == "" {
+			clearCodingPlanKey = true
+			channel.Channel.CodingPlanKey = ""
+		} else {
+			channel.Channel.CodingPlanKey = *channel.CodingPlanKeyInput
+		}
+	}
 
 	// 使用统一的校验函数
 	if err := validateChannel(&channel.Channel, false); err != nil {
@@ -1108,6 +1142,15 @@ func UpdateChannel(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// 清除套餐专用密钥:Updates(struct) 跳过空值字段,需显式置空。
+	if clearCodingPlanKey {
+		if err := model.DB.Model(&model.Channel{}).
+			Where("id = ?", channel.Id).
+			Update("coding_plan_key", "").Error; err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	}
 	model.InitChannelCache()
 	if proxyChanged {
 		service.InvalidateProxyClient(originProxy)
@@ -1135,6 +1178,7 @@ func UpdateChannel(c *gin.Context) {
 		"changed_fields": changedFields,
 	})
 	channel.Key = ""
+	channel.CodingPlanKeyInput = nil
 	clearChannelInfo(&channel.Channel)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

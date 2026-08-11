@@ -215,6 +215,14 @@ var ChannelSpecialBases = map[string]ChannelSpecialBase{
 		ClaudeBaseURL: "https://api.kimi.com/coding",
 		OpenAIBaseURL: "https://api.kimi.com/coding/v1",
 	},
+	"minimax-coding-plan": {
+		ClaudeBaseURL: "https://api.minimaxi.com/anthropic",
+		OpenAIBaseURL: "https://api.minimaxi.com/v1",
+	},
+	"minimax-coding-plan-international": {
+		ClaudeBaseURL: "https://api.minimax.io/anthropic",
+		OpenAIBaseURL: "https://api.minimax.io/v1",
+	},
 	"doubao-coding-plan": {
 		ClaudeBaseURL: "https://ark.cn-beijing.volces.com/api/coding",
 		OpenAIBaseURL: "https://ark.cn-beijing.volces.com/api/coding/v3",

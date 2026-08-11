@@ -19,10 +19,12 @@ For commercial licensing, please contact support@quantumnous.com
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { Settings2 } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
 import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Tooltip,
   TooltipContent,
@@ -36,9 +38,11 @@ import { ChannelsDialogs } from './components/channels-dialogs'
 import { ChannelsPrimaryButtons } from './components/channels-primary-buttons'
 import { ChannelsProvider } from './components/channels-provider'
 import { ChannelsTable } from './components/channels-table'
+import { CodingPlanQuotaTab } from './components/coding-plan-quota-tab'
 
 export function Channels() {
   const { t } = useTranslation()
+  const [activeTab, setActiveTab] = useState<string>('channels')
   const isRoot = useAuthStore(
     (state) => state.auth.user?.role === ROLE.SUPER_ADMIN
   )
@@ -97,7 +101,20 @@ export function Channels() {
           <ChannelsPrimaryButtons />
         </SectionPageLayout.Actions>
         <SectionPageLayout.Content>
-          <ChannelsTable />
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value)}>
+            <TabsList>
+              <TabsTrigger value='channels'>{t('Channels')}</TabsTrigger>
+              <TabsTrigger value='coding-plan'>
+                {t('Coding Plan Quota')}
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value='channels' className='mt-3'>
+              <ChannelsTable />
+            </TabsContent>
+            <TabsContent value='coding-plan' className='mt-3'>
+              <CodingPlanQuotaTab />
+            </TabsContent>
+          </Tabs>
         </SectionPageLayout.Content>
       </SectionPageLayout>
 
