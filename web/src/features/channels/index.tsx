@@ -101,17 +101,27 @@ export function Channels() {
           <ChannelsPrimaryButtons />
         </SectionPageLayout.Actions>
         <SectionPageLayout.Content>
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value)}>
+          {/* fixedContent 页面高度链:Tabs 撑满内容区(flex 列),TabsContent 各自
+              min-h-0 承接——渠道 Tab 内部表格自滚,Coding Plan Tab 卡片区自己滚,
+              否则外层 overflow-hidden 会把内容裁掉无法上下滚动。 */}
+          <Tabs
+            value={activeTab}
+            onValueChange={(value) => setActiveTab(value)}
+            className='h-full min-h-0'
+          >
             <TabsList>
               <TabsTrigger value='channels'>{t('Channels')}</TabsTrigger>
               <TabsTrigger value='coding-plan'>
                 {t('Coding Plan Quota')}
               </TabsTrigger>
             </TabsList>
-            <TabsContent value='channels' className='mt-3'>
+            <TabsContent value='channels' className='mt-3 min-h-0'>
               <ChannelsTable />
             </TabsContent>
-            <TabsContent value='coding-plan' className='mt-3'>
+            <TabsContent
+              value='coding-plan'
+              className='mt-3 min-h-0 flex-1 overflow-y-auto'
+            >
               <CodingPlanQuotaTab />
             </TabsContent>
           </Tabs>
