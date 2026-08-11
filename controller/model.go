@@ -38,6 +38,10 @@ func init() {
 			continue
 		}
 		adaptor := relay.GetAdaptor(i)
+		if adaptor == nil {
+			// 已下架的渠道类型(如老智谱 v3)没有适配器,跳过。
+			continue
+		}
 		channelName := adaptor.GetChannelName()
 		modelNames := adaptor.GetModelList()
 		for _, modelName := range modelNames {
