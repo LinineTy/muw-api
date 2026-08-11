@@ -33,6 +33,10 @@ func channelHasSensitiveChanges(channel *PatchChannel, origin *model.Channel, re
 	if _, ok := requestData["key_mode"]; ok && channel.KeyMode != nil {
 		return true
 	}
+	// 套餐专用密钥属于敏感凭据:显式携带(设置/清除)即视为敏感变更。
+	if _, ok := requestData["coding_plan_key"]; ok && channel.CodingPlanKeyInput != nil {
+		return true
+	}
 	// Fail closed: any field present in the request that is neither a known
 	// sensitive field (gated above) nor an explicitly classified non-sensitive
 	// field must be treated as sensitive. This keeps a newly added channel field
@@ -71,6 +75,7 @@ var channelSensitiveFields = map[string]struct{}{
 	"other":               {},
 	"settings":            {},
 	"key_mode":            {},
+	"coding_plan_key":     {},
 }
 
 // channelOperationalFields lists fields managed by operation endpoints instead
@@ -82,12 +87,13 @@ var channelOperationalFields = map[string]struct{}{
 // channelReadOnlyFields lists server-managed/accounting fields that the general
 // channel edit endpoint must ignore even if a client sends them.
 var channelReadOnlyFields = map[string]struct{}{
-	"created_time":         {},
-	"test_time":            {},
-	"response_time":        {},
-	"balance":              {},
-	"balance_updated_time": {},
-	"used_quota":           {},
+	"created_time":           {},
+	"test_time":              {},
+	"response_time":          {},
+	"balance":                {},
+	"balance_updated_time":   {},
+	"used_quota":             {},
+	"coding_plan_key_masked": {},
 }
 
 func clearChannelReadOnlyFields(channel *PatchChannel, requestData map[string]any) {
@@ -118,19 +124,20 @@ func clearChannelReadOnlyFields(channel *PatchChannel, requestData map[string]an
 // to the fail-closed branch and is treated as sensitive. The
 // TestChannelFieldsAreClassified guard test enforces this.
 var channelNonSensitiveFields = map[string]struct{}{
-	"id":                  {},
-	"test_model":          {},
-	"name":                {},
-	"weight":              {},
-	"models":              {},
-	"group":               {},
-	"model_mapping":       {},
-	"status_code_mapping": {},
-	"priority":            {},
-	"auto_ban":            {},
-	"other_info":          {},
-	"tag":                 {},
-	"remark":              {},
-	"channel_info":        {},
-	"multi_key_mode":      {},
+	"id":                   {},
+	"test_model":           {},
+	"name":                 {},
+	"weight":               {},
+	"models":               {},
+	"group":                {},
+	"model_mapping":        {},
+	"status_code_mapping":  {},
+	"priority":             {},
+	"auto_ban":             {},
+	"other_info":           {},
+	"tag":                  {},
+	"remark":               {},
+	"channel_info":         {},
+	"multi_key_mode":       {},
+	"coding_plan_provider": {},
 }

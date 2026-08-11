@@ -27,6 +27,7 @@ import type {
   ChannelBalanceResponse,
   ChannelOpsResponse,
   ChannelTestResponse,
+  CodingPlanQuotaResponse,
   CopyChannelParams,
   CopyChannelResponse,
   FetchModelsResponse,
@@ -102,6 +103,17 @@ export async function searchChannels(
  */
 export async function getChannel(id: number): Promise<GetChannelResponse> {
   const res = await api.get(`/api/channel/${id}`)
+  return res.data
+}
+
+/**
+ * Query a channel's coding-plan remaining quota. Requires the channel to have
+ * coding-plan quota monitoring enabled (coding_plan_provider set).
+ */
+export async function getChannelCodingPlanQuota(
+  id: number
+): Promise<CodingPlanQuotaResponse> {
+  const res = await api.get(`/api/channel/${id}/coding_plan/quota`)
   return res.data
 }
 

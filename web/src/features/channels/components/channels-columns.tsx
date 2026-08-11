@@ -23,6 +23,7 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
+  Gauge,
   ListOrdered,
   Shuffle,
   SlidersHorizontal,
@@ -56,7 +57,12 @@ import { formatTimestampToDate } from '@/lib/format'
 import { truncateText } from '@/lib/utils'
 
 import { getCodexUsage } from '../api'
-import { CHANNEL_STATUS_CONFIG, MODEL_FETCHABLE_TYPES } from '../constants'
+import {
+  CHANNEL_STATUS_CONFIG,
+  CODING_PLAN_PROVIDER_OPTIONS,
+  CODING_PLAN_SYMBOL_OPTIONS,
+  MODEL_FETCHABLE_TYPES,
+} from '../constants'
 import {
   formatRelativeTime,
   formatResponseTime,
@@ -148,6 +154,46 @@ function UpstreamUpdateTags({ channel }: { channel: Channel }) {
         />
       )}
     </div>
+  )
+}
+
+/**
+ * Coding-plan quota badge: shown next to the channel name when the channel has
+ * coding-plan quota monitoring enabled (base_url is a coding-plan symbol key,
+ * or coding_plan_provider is set manually).
+ */
+function CodingPlanLinkedBadge({ channel }: { channel: Channel }) {
+  const { t } = useTranslation()
+
+  const providerOption = channel.coding_plan_provider
+    ? CODING_PLAN_PROVIDER_OPTIONS.find(
+        (option) => option.value === channel.coding_plan_provider
+      )
+    : undefined
+  const symbolOption = CODING_PLAN_SYMBOL_OPTIONS.find(
+    (option) => option.value === channel.base_url
+  )
+  const option = providerOption ?? symbolOption
+  if (!option) {
+    return null
+  }
+
+  return (
+    <TooltipProvider delay={100}>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <span className='text-muted-foreground inline-flex shrink-0 items-center gap-1 rounded-md bg-muted/60 px-1.5 py-0.5 text-[11px]'>
+              <Gauge className='size-3.5' aria-hidden='true' />
+              <span className='max-w-[9rem] truncate'>{t(option.label)}</span>
+            </span>
+          }
+        />
+        <TooltipContent side='top'>
+          {t('Coding-plan quota monitoring is enabled.')}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   )
 }
 
@@ -676,6 +722,7 @@ export function useChannelsColumns(
                       </Tooltip>
                     </TooltipProvider>
                   )}
+                  <CodingPlanLinkedBadge channel={channel} />
                   <UpstreamUpdateTags channel={channel} />
                 </div>
                 {channel.remark && (

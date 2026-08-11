@@ -71,6 +71,8 @@ export const channelSchema = z.object({
     multi_key_mode: 'random',
   }),
   settings: z.string().default('{}'), // other_settings JSON
+  coding_plan_provider: z.string().nullish(), // 编码套餐厂商,空/未设置 = 未启用余量监控
+  coding_plan_key_masked: z.string().nullish(), // 套餐专用密钥的脱敏预览
 })
 
 export type Channel = z.infer<typeof channelSchema>
@@ -171,6 +173,30 @@ export interface GetChannelResponse {
   success: boolean
   message?: string
   data?: Channel
+}
+
+// ============================================================================
+// Coding-Plan Quota Types
+// ============================================================================
+
+export interface CodingPlanTier {
+  name: string
+  utilization: number
+  resets_at?: string | null
+}
+
+export interface CodingPlanQuota {
+  success: boolean
+  error?: string
+  level?: string
+  tiers: CodingPlanTier[]
+  queried_at: number
+}
+
+export interface CodingPlanQuotaResponse {
+  success: boolean
+  message?: string
+  data?: CodingPlanQuota
 }
 
 export interface ChannelOpsResponse {
