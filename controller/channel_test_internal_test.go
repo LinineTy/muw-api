@@ -408,3 +408,72 @@ func TestIsCodingPlanEndpoint(t *testing.T) {
 		assert.Falsef(t, isCodingPlanEndpoint(baseURL), "expected %q not to be a coding-plan endpoint", baseURL)
 	}
 }
+
+func TestCodingPlanFieldsToClear(t *testing.T) {
+	t.Run("request carries new plan values, keep them", func(t *testing.T) {
+		// 换类型 + 同一保存里为新类型重配了套餐:厂商/密钥/套餐地址都保留,不误清。
+		got := codingPlanFieldsToClear(
+			map[string]any{
+				"coding_plan_provider": "zhipu",
+				"coding_plan_key":      "sk-new",
+				"base_url":             "https://open.bigmodel.cn/api/anthropic/v1/messages",
+			},
+			"glm-coding-plan",
+		)
+		assert.Empty(t, got)
+	})
+
+	t.Run("request omits plan fields, clear stale binding", func(t *testing.T) {
+		// 换类型但请求完全没带套餐字段:清掉旧类型残留的厂商/密钥/套餐地址。
+		got := codingPlanFieldsToClear(map[string]any{}, "glm-coding-plan")
+		assert.Equal(t, map[string]any{
+			"coding_plan_provider": "",
+			"coding_plan_key":      "",
+			"base_url":             "",
+		}, got)
+	})
+
+	t.Run("request omits plan fields and old base url is not plan, keep base url", func(t *testing.T) {
+		// 旧地址不是套餐端点:base_url 不清,只清厂商与密钥。
+		got := codingPlanFieldsToClear(map[string]any{}, "https://myproxy.example.com")
+		assert.Equal(t, map[string]any{
+			"coding_plan_provider": "",
+			"coding_plan_key":      "",
+		}, got)
+	})
+
+	t.Run("request explicitly sends empty base url, respect it", func(t *testing.T) {
+		// 前端换类型时已把套餐地址清成空串:尊重表单(空值由正常更新落库),
+		// 这里不再补一刀清 base_url,避免覆盖用户刚为新品类型填的地址。
+		got := codingPlanFieldsToClear(map[string]any{"base_url": ""}, "glm-coding-plan")
+		assert.Equal(t, map[string]any{
+			"coding_plan_provider": "",
+			"coding_plan_key":      "",
+		}, got)
+	})
+}
+
+func TestResolveChannelCodingPlanProviderDisabled(t *testing.T) {
+	// 显式关闭监控("none",手动/自定义渠道默认):即使 base_url 是套餐端点、类型也是
+	// 套餐类型,也返回错误 → 不进入余量卡/琥珀标签,彻底不监控。
+	disabled := "none"
+	ch := &model.Channel{
+		Type:               constant.ChannelTypeZhipu_v4,
+		CodingPlanProvider: &disabled,
+		BaseURL:            common.GetPointer("https://open.bigmodel.cn/api/anthropic/v1/messages"),
+	}
+	_, err := resolveChannelCodingPlanProvider(ch)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "disabled")
+
+	// 显式配置厂商:权威生效,不受 base_url/类型影响。
+	p := "zhipu"
+	ch2 := &model.Channel{
+		Type:               constant.ChannelTypeOpenAI,
+		CodingPlanProvider: &p,
+		BaseURL:            common.GetPointer("https://myproxy.example.com"),
+	}
+	got, err := resolveChannelCodingPlanProvider(ch2)
+	require.NoError(t, err)
+	assert.Equal(t, service.CodingPlanProviderZhipu, got)
+}

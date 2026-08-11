@@ -30,6 +30,9 @@ const (
 	CodingPlanProviderMiniMaxEn  CodingPlanProvider = "minimax_en" // MiniMax 国际 api.minimax.io
 	CodingPlanProviderZenMux     CodingPlanProvider = "zenmux"
 	CodingPlanProviderVolcengine CodingPlanProvider = "volcengine" // 火山方舟(需 AK/SK 签名,暂未实现)
+	// CodingPlanProviderDisabled 显式关闭余量监控的自定义渠道(手动/自定义模式默认值):
+	// 即使 base_url 是套餐端点也不再自动绑定/探测,彻底不做监控。
+	CodingPlanProviderDisabled CodingPlanProvider = "none"
 )
 
 // tier 名称:窗口标识,前端据此展示。

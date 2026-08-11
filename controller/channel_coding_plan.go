@@ -14,12 +14,17 @@ import (
 )
 
 // resolveChannelCodingPlanProvider 解析渠道的编码套餐厂商,优先级:
-//  1. 渠道显式配置的 CodingPlanProvider(权威,覆盖聚合前置场景)
+//  1. 渠道显式配置的 CodingPlanProvider(权威,覆盖聚合前置场景);"none" 表示显式
+//     关闭余量监控(手动/自定义渠道),即使 base_url 是套餐端点也不再自动绑定。
 //  2. 按 base_url 探测(含上游 ChannelSpecialBases 符号键,如 glm-coding-plan)
 //  3. 按渠道类型给出默认(智谱v4→zhipu、Moonshot→kimi、MiniMax→minimax、火山→volcengine)
 func resolveChannelCodingPlanProvider(channel *model.Channel) (service.CodingPlanProvider, error) {
 	if channel.CodingPlanProvider != nil {
-		if p := strings.TrimSpace(*channel.CodingPlanProvider); p != "" {
+		p := strings.TrimSpace(*channel.CodingPlanProvider)
+		if p == string(service.CodingPlanProviderDisabled) {
+			return "", errors.New("coding plan monitoring is disabled for this channel")
+		}
+		if p != "" {
 			if service.IsKnownCodingPlanProvider(p) {
 				return service.CodingPlanProvider(p), nil
 			}
