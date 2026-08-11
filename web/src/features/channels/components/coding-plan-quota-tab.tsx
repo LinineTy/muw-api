@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Gauge, Loader2, Pencil, RefreshCw } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -36,6 +37,9 @@ import type { Channel, CodingPlanTier } from '../types'
 import { useChannels } from './channels-provider'
 
 const QUOTA_REFRESH_MS = 5 * 60 * 1000
+
+// 同 key 渠道标签的默认可见数量,超出折叠成 +N(展开/收起),避免卡片被撑高。
+const MAX_CHANNEL_TAGS = 3
 
 // 渠道是否启用编码套餐余量监控:base_url 填了符号键,或手动指定了厂商。
 function isQuotaEnabled(channel: Channel): boolean {
@@ -71,7 +75,11 @@ function tierColorClass(percent: number) {
 function tierNameLabel(name: string, t: (key: string) => string) {
   if (name === 'five_hour') return t('5 Hour Window')
   if (name === 'weekly_limit') return t('Weekly Limit')
+  // 未知窗口兜底:后端 tier name 是 snake_case(如 monthly_limit),未来厂商/套餐
+  // 若返回月窗、日窗等新窗口,也转成可读文本展示,而不是直接显示下划线原名。
   return name
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (ch) => ch.toUpperCase())
 }
 
 function formatResetsAt(resetsAt: string | null | undefined): string {
@@ -109,9 +117,19 @@ function QuotaTierRow({ tier }: { tier: CodingPlanTier }) {
   )
 }
 
-function ChannelQuotaCard({ channel }: { channel: Channel }) {
+function ChannelQuotaCard({ channels }: { channels: Channel[] }) {
   const { t } = useTranslation()
   const { setOpen, setCurrentRow } = useChannels()
+  // 同 key 多渠道合并成一张卡:余量是账号级数据,取组内任一渠道查询即可。
+  const channel = channels[0]
+  const groupSize = channels.length
+  const isGrouped = groupSize > 1
+  // 渠道标签折叠:默认显示前 MAX_CHANNEL_TAGS 个,其余折叠成 +N,展开后全部显示。
+  const [showAllChannels, setShowAllChannels] = useState(false)
+  const hiddenCount = channels.length - MAX_CHANNEL_TAGS
+  const visibleChannels = showAllChannels
+    ? channels
+    : channels.slice(0, MAX_CHANNEL_TAGS)
 
   const quotaQuery = useQuery({
     queryKey: ['channels', 'coding-plan-quota', channel.id],
@@ -128,6 +146,11 @@ function ChannelQuotaCard({ channel }: { channel: Channel }) {
   })
 
   const providerLabelText = providerLabel(channel, t)
+
+  const openEdit = (target: Channel) => {
+    setCurrentRow(target)
+    setOpen('update-channel')
+  }
 
   let quotaArea
   if (quotaQuery.isLoading) {
@@ -155,7 +178,6 @@ function ChannelQuotaCard({ channel }: { channel: Channel }) {
     const quota = quotaQuery.data
     quotaArea = (
       <div className='space-y-3'>
-        {quota.level ? <p className='text-xs font-medium'>{quota.level}</p> : null}
         {quota.tiers.length > 0 ? (
           <div className='space-y-3'>
             {quota.tiers.map((tier) => (
@@ -174,39 +196,72 @@ function ChannelQuotaCard({ channel }: { channel: Channel }) {
   }
 
   return (
-    <div className='border-input bg-card flex flex-col gap-3 rounded-lg border p-4'>
-      <div className='flex min-w-0 items-start justify-between gap-2'>
-        <div className='flex min-w-0 items-center gap-2'>
-          <Gauge className='text-muted-foreground mt-0.5 size-4 shrink-0' aria-hidden='true' />
-          <div className='min-w-0'>
-            <p className='truncate text-sm font-semibold'>{channel.name}</p>
-            <p className='text-muted-foreground truncate text-xs'>
-              {providerLabelText}
-            </p>
+    <div className='bg-card flex flex-col overflow-hidden rounded-lg border border-input'>
+      {/* 顶栏:卡片名 = 厂商(套餐)名;渠道名做成标签,点击标签进入对应渠道编辑 */}
+      <div className='flex min-w-0 items-start justify-between gap-2 border-b px-4 py-3'>
+        <div className='flex min-w-0 flex-col gap-1.5'>
+          <div className='flex min-w-0 items-center gap-2'>
+            <Gauge className='text-muted-foreground mt-0.5 size-4 shrink-0' aria-hidden='true' />
+            <p className='truncate text-sm font-semibold'>{providerLabelText}</p>
+          </div>
+          <div className='flex flex-wrap items-center gap-1.5'>
+            {visibleChannels.map((ch) => (
+              <Button
+                key={ch.id}
+                type='button'
+                variant='ghost'
+                size='sm'
+                className='bg-muted/60 text-muted-foreground hover:text-foreground h-auto px-2 py-0.5 text-xs'
+                onClick={() => openEdit(ch)}
+              >
+                {ch.name}
+              </Button>
+            ))}
+            {hiddenCount > 0 && (
+              <Button
+                type='button'
+                variant='ghost'
+                size='sm'
+                className='bg-muted/60 text-muted-foreground hover:text-foreground h-auto px-2 py-0.5 text-xs'
+                onClick={() => setShowAllChannels((v) => !v)}
+              >
+                {showAllChannels ? t('Collapse') : `+${hiddenCount} ${t('More')}`}
+              </Button>
+            )}
           </div>
         </div>
-        <Button
-          type='button'
-          variant='ghost'
-          size='sm'
-          className='shrink-0'
-          aria-label={t('Edit channel')}
-          onClick={() => {
-            setCurrentRow(channel)
-            setOpen('update-channel')
-          }}
-        >
-          <Pencil className='size-3.5' aria-hidden='true' />
-        </Button>
+        {!isGrouped && (
+          <Button
+            type='button'
+            variant='ghost'
+            size='sm'
+            className='shrink-0'
+            aria-label={t('Edit channel')}
+            onClick={() => openEdit(channel)}
+          >
+            <Pencil className='size-3.5' aria-hidden='true' />
+          </Button>
+        )}
       </div>
 
-      <div aria-busy={quotaQuery.isFetching}>{quotaArea}</div>
+      {/* 中间余量区 flex-1 撑开、底部固定对齐(订阅卡片同款布局),不同套餐窗口
+          数量不同也不会高高低低;上下各用一条分隔线与顶栏/底栏隔开。 */}
+      <div className='flex-1 px-4 py-3' aria-busy={quotaQuery.isFetching}>
+        {quotaArea}
+      </div>
 
-      <div className='flex items-center gap-1'>
+      {/* 底部:等级标签(如 lite)+ 刷新,固定对齐 */}
+      <div className='flex items-center gap-2 border-t px-4 py-2.5'>
+        {quotaQuery.data?.level ? (
+          <span className='bg-muted/60 text-muted-foreground rounded-md px-1.5 py-0.5 text-[11px] font-medium'>
+            {quotaQuery.data.level}
+          </span>
+        ) : null}
         <Button
           type='button'
           variant='ghost'
           size='sm'
+          className='ml-auto'
           onClick={() => void quotaQuery.refetch()}
           disabled={quotaQuery.isFetching}
         >
@@ -231,8 +286,9 @@ function ChannelQuotaCard({ channel }: { channel: Channel }) {
 }
 
 /**
- * Coding-plan quota tab: lists every channel with coding-plan quota monitoring
- * enabled and shows each one's remaining quota.
+ * Coding-plan quota tab: lists coding-plan quota monitoring groups. Channels
+ * sharing the same provider + key are merged into a single card (quota is
+ * account-level), each card queries the upstream once.
  */
 export function CodingPlanQuotaTab() {
   const { t } = useTranslation()
@@ -251,6 +307,22 @@ export function CodingPlanQuotaTab() {
   })
 
   const channels = (channelsQuery.data ?? []).filter(isQuotaEnabled)
+
+  // 按 key 合并:同一"厂商 + 密钥指纹"的渠道并成一组,只查/只展示一份账号级余量。
+  // 指纹缺失时(如列表接口未下发)各自独立成组。
+  const groups = useMemo(() => {
+    const map = new Map<string, Channel[]>()
+    for (const ch of channels) {
+      const groupId = ch.coding_plan_quota_group || `ch:${ch.id}`
+      const arr = map.get(groupId)
+      if (arr) {
+        arr.push(ch)
+      } else {
+        map.set(groupId, [ch])
+      }
+    }
+    return [...map.values()]
+  }, [channels])
 
   const refreshAll = () => {
     void queryClient.invalidateQueries({
@@ -294,8 +366,8 @@ export function CodingPlanQuotaTab() {
   } else {
     content = (
       <div className='grid gap-3 sm:grid-cols-2'>
-        {channels.map((channel) => (
-          <ChannelQuotaCard key={channel.id} channel={channel} />
+        {groups.map((group) => (
+          <ChannelQuotaCard key={group[0].id} channels={group} />
         ))}
       </div>
     )

@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"strconv"
@@ -36,6 +37,21 @@ func resolveChannelCodingPlanProvider(channel *model.Channel) (service.CodingPla
 		return detected, nil
 	}
 	return "", errors.New("coding plan quota is not enabled for this channel (set coding_plan_provider)")
+}
+
+// codingPlanQuotaGroupID 派生渠道编码套餐余量的分组指纹。生效 key 与查询一致
+// (CodingPlanKey 优先,空则用渠道自身 key),sha256 截断成不可逆指纹并拼上厂商,
+// 同 key 多渠道得到同一值,前端据此合并成一张余量卡。厂商无法解析或 key 为空返回空串。
+func codingPlanQuotaGroupID(channel *model.Channel, effectiveKey string) string {
+	if effectiveKey == "" {
+		return ""
+	}
+	provider, err := resolveChannelCodingPlanProvider(channel)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(effectiveKey))
+	return fmt.Sprintf("%s:%x", provider, sum[:8])
 }
 
 // ChannelCodingPlanQuota 查询渠道的编码套餐余量。
