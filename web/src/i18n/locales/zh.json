@@ -5708,6 +5708,8 @@
     "Fetched upstream ratios": "拉取上游倍率",
     "Deleted stale system instances": "删除过期的系统实例",
     "Deleted system instance {{node_name}}": "删除系统实例 {{node_name}}",
-    "Fetched custom OAuth discovery": "拉取自定义 OAuth 发现信息"
+    "Fetched custom OAuth discovery": "拉取自定义 OAuth 发现信息",
+    "Latest version": "最新版本",
+    "Update from the official registry.": "可从官方镜像源获取更新。"
   }
 }

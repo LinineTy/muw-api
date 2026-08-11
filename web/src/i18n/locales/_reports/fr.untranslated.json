@@ -104,5 +104,6 @@
   "Failed to load channels": "Failed to load channels",
   "Only needed when the provider cannot be auto-detected (e.g. behind an aggregator proxy).": "Only needed when the provider cannot be auto-detected (e.g. behind an aggregator proxy).",
   "A coding-plan key is stored. Leave empty to keep it, or clear it to fall back to the channel key.": "A coding-plan key is stored. Leave empty to keep it, or clear it to fall back to the channel key.",
-  "Choose the standard API endpoint, or the coding-plan endpoint for plan subscribers. Manual lets you enter a custom URL.": "Choose the standard API endpoint, or the coding-plan endpoint for plan subscribers. Manual lets you enter a custom URL."
+  "Choose the standard API endpoint, or the coding-plan endpoint for plan subscribers. Manual lets you enter a custom URL.": "Choose the standard API endpoint, or the coding-plan endpoint for plan subscribers. Manual lets you enter a custom URL.",
+  "Update from the official registry.": "Update from the official registry."
 }
