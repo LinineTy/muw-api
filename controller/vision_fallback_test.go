@@ -186,3 +186,36 @@ func TestWriteVisionFallbackSSEError(t *testing.T) {
 	assert.Contains(t, body, "vision model blew up")
 }
 
+func TestVisionDescriptionCacheKeyDeterminism(t *testing.T) {
+	// 同一张图(同一 URL)同一视觉模型必须映射到同一个 key,去重才成立;
+	// 换视觉模型或换图都不能共用 key,否则会串用错误的描述。
+	url := "data:image/png;base64,AAAA"
+	key := visionDescriptionCacheKey("glm-4v", url)
+	assert.Equal(t, key, visionDescriptionCacheKey("glm-4v", url), "same image + model must map to the same key")
+	assert.NotEqual(t, key, visionDescriptionCacheKey("other-vision", url), "different vision model must not share a key")
+	assert.NotEqual(t, key, visionDescriptionCacheKey("glm-4v", "data:image/png;base64,BBBB"), "different image must not share a key")
+}
+
+func TestVisionDescriptionCacheReuse(t *testing.T) {
+	cache := getVisionDescriptionCache()
+	imageURL := "data:image/png;base64,AAAA"
+	key := visionDescriptionCacheKey("glm-4v", imageURL)
+
+	// 首次出现:缓存未命中。
+	_, found, err := cache.Get(key)
+	require.NoError(t, err)
+	assert.False(t, found)
+
+	// 识别成功后写入缓存;后续轮次再次出现同一张图时命中,直接复用。
+	require.NoError(t, cache.SetWithTTL(key, "a red circle", time.Minute))
+	got, found, err := cache.Get(key)
+	require.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, "a red circle", got)
+
+	// 另一张图仍是未命中。
+	_, found, err = cache.Get(visionDescriptionCacheKey("glm-4v", "data:image/png;base64,BBBB"))
+	require.NoError(t, err)
+	assert.False(t, found)
+}
+
