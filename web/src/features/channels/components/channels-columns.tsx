@@ -59,6 +59,7 @@ import { truncateText } from '@/lib/utils'
 import { getCodexUsage } from '../api'
 import {
   CHANNEL_STATUS_CONFIG,
+  CODING_PLAN_PROVIDER_DISABLED,
   CODING_PLAN_PROVIDER_OPTIONS,
   detectCodingPlanProvider,
   MODEL_FETCHABLE_TYPES,
@@ -158,12 +159,18 @@ function UpstreamUpdateTags({ channel }: { channel: Channel }) {
 }
 
 /**
- * Coding-plan quota badge: shown next to the channel name when the channel has
- * coding-plan quota monitoring enabled (base_url is a coding-plan symbol key /
- * dedicated endpoint, or coding_plan_provider is set manually).
+ * Coding-plan quota badge: a compact amber indicator next to the channel name
+ * when the channel has coding-plan quota monitoring enabled. Provider name is
+ * shown in the tooltip, keeping the card row clean (same style as the
+ * pass-through / param-override icons).
  */
 function CodingPlanLinkedBadge({ channel }: { channel: Channel }) {
   const { t } = useTranslation()
+
+  // 显式关闭监控(手动/自定义渠道):即使 base_url 是套餐端点也不再显示琥珀标签。
+  if (channel.coding_plan_provider === CODING_PLAN_PROVIDER_DISABLED) {
+    return null
+  }
 
   const provider =
     channel.coding_plan_provider ||
@@ -182,14 +189,13 @@ function CodingPlanLinkedBadge({ channel }: { channel: Channel }) {
       <Tooltip>
         <TooltipTrigger
           render={
-            <span className='text-warning bg-warning/10 inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px]'>
-              <Gauge className='size-3.5' aria-hidden='true' />
-              <span className='max-w-[9rem] truncate'>{t(option.label)}</span>
-            </span>
+            <Gauge className='text-warning h-3.5 w-3.5 flex-shrink-0' />
           }
         />
         <TooltipContent side='top'>
-          {t('Coding-plan quota monitoring is enabled.')}
+          {t('Coding-plan quota monitoring is enabled ({{provider}}).', {
+            provider: t(option.label),
+          })}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
