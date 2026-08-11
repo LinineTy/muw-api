@@ -374,3 +374,37 @@ func TestTestAllChannelsRejectsExistingActiveTask(t *testing.T) {
 	require.Contains(t, recorder.Body.String(), existing.TaskID)
 	require.Contains(t, recorder.Body.String(), "已有通道测试任务正在运行或等待中")
 }
+
+func TestIsCodingPlanEndpoint(t *testing.T) {
+	// 符号键与套餐专用真实地址应识别为套餐端点;普通厂商 host 不应误判。
+	planEndpoints := []string{
+		"glm-coding-plan",
+		"glm-coding-plan-international",
+		"kimi-coding-plan",
+		"minimax-coding-plan",
+		"minimax-coding-plan-international",
+		"doubao-coding-plan",
+		"https://open.bigmodel.cn/api/anthropic/v1/messages",
+		"https://api.z.ai/api/anthropic/v1/messages",
+		"https://api.kimi.com/coding/v1/messages",
+		"https://api.minimaxi.com/anthropic/v1/messages",
+		"https://api.minimax.io/anthropic/v1/messages",
+		"https://ark.cn-beijing.volces.com/api/coding/v1/messages",
+	}
+	for _, baseURL := range planEndpoints {
+		assert.Truef(t, isCodingPlanEndpoint(baseURL), "expected %q to be a coding-plan endpoint", baseURL)
+	}
+
+	plainEndpoints := []string{
+		"https://open.bigmodel.cn",
+		"https://api.moonshot.cn",
+		"https://api.minimax.chat",
+		"https://api.anthropic.com",
+		"https://openai.example.com",
+		"https://myproxy.example.com",
+		"",
+	}
+	for _, baseURL := range plainEndpoints {
+		assert.Falsef(t, isCodingPlanEndpoint(baseURL), "expected %q not to be a coding-plan endpoint", baseURL)
+	}
+}
