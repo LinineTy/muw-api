@@ -39,7 +39,7 @@ func (SchemaMigration) TableName() string { return "schema_migrations" }
 // CurrentSchemaVersion 是当前代码期望的 schema 版本。修改任何 model 结构时
 // 必须递增该值；如需数据转换/特殊适配，同时新增对应的 Migration 条目。
 // 兜底：DEBUG=true 启动时即使已最新也强制 AutoMigrate 校验结构。
-const CurrentSchemaVersion = 3
+const CurrentSchemaVersion = 4
 
 // Migration 是一个可单独应用、记录版本戳的迁移步骤。Up 按版本升序执行，
 // 用于 AutoMigrate 补不了的结构改造（换类型、删列）与数据迁移/特殊适配。

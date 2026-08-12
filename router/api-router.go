@@ -208,6 +208,16 @@ func SetApiRouter(router *gin.Engine) {
 			homePageThemeRoute.DELETE("/:id", controller.DeleteHomePageTheme)
 		}
 
+		// Image library (image host, root only): upload / list / delete images
+		// whose files live under <UploadDir>/images and are served by /uploads/.
+		imageRoute := apiRouter.Group("/images")
+		imageRoute.Use(middleware.RootAuth())
+		{
+			imageRoute.GET("/", controller.ListImages)
+			imageRoute.POST("/", controller.UploadImage)
+			imageRoute.DELETE("/:id", controller.DeleteImage)
+		}
+
 		// Custom OAuth provider management (root only)
 		customOAuthRoute := apiRouter.Group("/custom-oauth-provider")
 		customOAuthRoute.Use(middleware.RootAuth())
