@@ -310,6 +310,7 @@ func autoMigrateAll() error {
 		&Model{},
 		&Vendor{},
 		&PrefillGroup{},
+		&ImageAsset{},
 		&Setup{},
 		&TwoFA{},
 		&TwoFABackupCode{},

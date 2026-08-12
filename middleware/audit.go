@@ -102,6 +102,10 @@ var auditRouteActions = map[string]string{
 	"DELETE /api/system-info/stale-instances":      "system_info.delete_stale_instances",
 	"DELETE /api/system-info/instances/:node_name": "system_info.delete_instance",
 
+	// 图床图片（root）
+	"POST /api/images/":    "image.upload",
+	"DELETE /api/images/:id": "image.delete",
+
 	// 日志
 	"POST /api/system-task/log-cleanup": "log.cleanup_start",
 
