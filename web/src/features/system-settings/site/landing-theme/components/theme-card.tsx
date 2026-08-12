@@ -16,120 +16,170 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Check, Eye, Trash2 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { Check, Eye, Pencil } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import dayjs from '@/lib/dayjs'
 
-import { useDeleteLandingTheme } from '../hooks/use-landing-themes'
-import type { LandingThemeSummary } from '../types'
+import { getLandingTheme } from '../api'
+import { DeleteThemeDialog } from './delete-theme-dialog'
+import { ThemePreviewDialog } from './theme-preview-dialog'
+import { ThemeThumbnail } from './theme-thumbnail'
+
+const PAGE_SLUG_LABELS: Record<string, string> = {
+  home: 'Home',
+  about: 'About',
+  user_agreement: 'User Agreement',
+  privacy_policy: 'Privacy Policy',
+}
 
 type ThemeCardProps = {
-  theme: LandingThemeSummary
+  name: string
   selected: boolean
+  /** 缩略图 data URI(来自 zip 内 preview 图);缺省走实时渲染或占位。 */
+  preview?: string
+  pages?: string[]
+  /** 版本描述(来自 zip 内 version.txt),右下角纯文本展示。 */
+  version?: string
+  /** 导入主题的 id,用于预览/删除;缺省(Default/手动)不显示。 */
+  previewId?: string
   onSelect: () => void
-  onPreview: () => void
+  onEdit?: () => void
 }
 
 export function ThemeCard({
-  theme,
+  name,
   selected,
+  preview,
+  pages = [],
+  version,
+  previewId,
   onSelect,
-  onPreview,
+  onEdit,
 }: ThemeCardProps) {
   const { t } = useTranslation()
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-  const deleteTheme = useDeleteLandingTheme()
+  const [showPreview, setShowPreview] = useState(false)
 
-  const handleDelete = () => {
-    setShowDeleteDialog(false)
-    deleteTheme.mutate(theme.id)
-  }
+  // 无静态缩略图的导入主题:拉取首页内容做实时迷你渲染(自动缩略图)。
+  // 与预览弹窗共用同一个 detail 缓存,打开预览时不再重复请求。
+  const themeDetail = useQuery({
+    queryKey: ['landing-theme', 'detail', previewId],
+    queryFn: async () => {
+      if (!previewId) return undefined
+      const res = await getLandingTheme(previewId)
+      if (!res.success || !res.data) {
+        throw new Error(res.message || t('Failed to load theme'))
+      }
+      return res.data
+    },
+    enabled: Boolean(previewId) && !preview,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  })
 
   return (
     <>
-      <Card
-        className={cn(
-          'transition-colors',
-          selected && 'border-primary/60 ring-primary/20 ring-1'
-        )}
-      >
-        <CardContent className='flex flex-col gap-3 p-4'>
-          <div className='flex items-start justify-between gap-2'>
-            <div className='min-w-0'>
-              <p className='truncate text-sm font-medium'>{theme.name}</p>
-              <p className='text-muted-foreground text-xs tabular-nums'>
-                {dayjs(theme.created_at * 1000).format('YYYY-MM-DD HH:mm')}
-              </p>
+      <Card size='sm' className={cn(selected && 'ring-primary/20')}>
+        <CardContent className='flex items-stretch gap-3'>
+          <ThemeThumbnail
+            name={name}
+            preview={preview}
+            content={themeDetail.data?.content}
+            contentLoading={themeDetail.isLoading}
+            className='h-28 w-44'
+          />
+
+          <div className='flex min-w-0 flex-1 flex-col'>
+            {/* 第一排:名称 + 已启用 | 图标按钮 */}
+            <div className='flex items-center justify-between gap-2'>
+              <div className='flex min-w-0 items-center gap-1.5'>
+                <p className='truncate text-sm font-medium'>{name}</p>
+                {selected && <Badge>{t('Enabled')}</Badge>}
+              </div>
+              <div className='flex shrink-0 items-center gap-0.5'>
+                {!selected && (
+                  <Button
+                    type='button'
+                    variant='ghost'
+                    size='icon-sm'
+                    onClick={onSelect}
+                    aria-label={t('Enable theme')}
+                  >
+                    <Check className='size-4' aria-hidden='true' />
+                  </Button>
+                )}
+                {onEdit && (
+                  <Button
+                    type='button'
+                    variant='ghost'
+                    size='icon-sm'
+                    onClick={onEdit}
+                    aria-label={t('Edit')}
+                  >
+                    <Pencil className='size-4' aria-hidden='true' />
+                  </Button>
+                )}
+                {previewId && (
+                  <Button
+                    type='button'
+                    variant='ghost'
+                    size='icon-sm'
+                    onClick={() => setShowPreview(true)}
+                    aria-label={t('Preview')}
+                  >
+                    <Eye className='size-4' aria-hidden='true' />
+                  </Button>
+                )}
+                {previewId && (
+                  <DeleteThemeDialog themeId={previewId} name={name} />
+                )}
+              </div>
             </div>
-            {selected && <Badge>{t('Active')}</Badge>}
-          </div>
-          <div className='flex flex-wrap items-center gap-1.5'>
-            <Button
-              variant={selected ? 'secondary' : 'outline'}
-              size='sm'
-              onClick={onSelect}
-              disabled={selected}
-            >
-              {selected ? (
-                <Check data-icon='inline-start' className='size-3.5' aria-hidden='true' />
-              ) : null}
-              {selected ? t('Selected') : t('Select')}
-            </Button>
-            <Button variant='ghost' size='sm' onClick={onPreview}>
-              <Eye data-icon='inline-start' className='size-3.5' aria-hidden='true' />
-              {t('Preview')}
-            </Button>
-            <Button
-              variant='ghost'
-              size='sm'
-              className='text-destructive hover:text-destructive ml-auto'
-              onClick={() => setShowDeleteDialog(true)}
-            >
-              <Trash2 data-icon='inline-start' className='size-3.5' aria-hidden='true' />
-              {t('Delete')}
-            </Button>
+
+            {/* 第二排:覆盖页面 + 页面标签 */}
+            {pages.length > 0 && (
+              <div className='mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1'>
+                <span className='text-muted-foreground text-xs'>
+                  {t('Covered Pages')}
+                </span>
+                <div className='flex flex-wrap gap-1'>
+                  {pages.map((slug) => (
+                    <Badge
+                      key={slug}
+                      variant='secondary'
+                      className='text-[10px]'
+                    >
+                      {t(PAGE_SLUG_LABELS[slug] ?? slug)}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 底部:版本,右下角纯文本 */}
+            {version && (
+              <div className='mt-auto flex justify-end'>
+                <span className='text-muted-foreground text-xs'>{version}</span>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('Delete Theme')}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t(
-                'Are you sure you want to delete this theme? If it is currently active, the landing page will revert to the Default Theme.'
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              variant='destructive'
-              onClick={handleDelete}
-              disabled={deleteTheme.isPending}
-            >
-              {t('Delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {previewId && (
+        <ThemePreviewDialog
+          themeId={previewId}
+          onOpenChange={(open) => {
+            if (!open) setShowPreview(false)
+          }}
+          open={showPreview}
+        />
+      )}
     </>
   )
 }

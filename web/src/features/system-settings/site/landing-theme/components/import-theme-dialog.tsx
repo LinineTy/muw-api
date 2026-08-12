@@ -16,10 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import JSZip from 'jszip'
 import { FileText, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -35,9 +35,19 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 import { useImportLandingTheme } from '../hooks/use-landing-themes'
+import type { LandingManual } from '../types'
 
-const MAX_THEME_CONTENT_BYTES = 500 * 1024
+const MAX_PAGE_BYTES = 500 * 1024
+const MAX_ZIP_BYTES = 2 * 1024 * 1024
 const MAX_THEME_NAME_RUNES = 100
+
+// zip 内部固定页名(规范):zip 文件名 = 主题名。
+const PAGE_FILE_MAP: Record<string, keyof LandingManual> = {
+  'home.html': 'home',
+  'about.html': 'about',
+  'agreement.html': 'user_agreement',
+  'privacy.html': 'privacy_policy',
+}
 
 type ImportThemeDialogProps = {
   open: boolean
@@ -45,7 +55,7 @@ type ImportThemeDialogProps = {
 }
 
 function baseNameFromFile(fileName: string): string {
-  return fileName.replace(/\.html?$/i, '')
+  return fileName.replace(/\.(zip|html?)$/i, '')
 }
 
 export function ImportThemeDialog({
@@ -57,60 +67,105 @@ export function ImportThemeDialog({
   const importTheme = useImportLandingTheme()
 
   const [name, setName] = useState('')
-  const [content, setContent] = useState('')
   const [fileName, setFileName] = useState('')
-
-  const handlePickFile = () => {
-    fileInputRef.current?.click()
-  }
-
-  const handleFileChange = async (file: File | undefined) => {
-    if (!file) return
-    if (!/\.html?$/i.test(file.name)) {
-      toast.error(t('File must be an HTML file'))
-      return
-    }
-    if (file.size > MAX_THEME_CONTENT_BYTES) {
-      toast.error(t('File must be 500KB or smaller'))
-      return
-    }
-    try {
-      const text = await file.text()
-      setContent(text)
-      setFileName(file.name)
-      if (!name) {
-        setName(baseNameFromFile(file.name))
-      }
-    } catch {
-      toast.error(t('Failed to read file'))
-    }
-  }
+  const [error, setError] = useState('')
+  // 选中文件后的前端校验结果:非空表示可导入
+  const [file, setFile] = useState<File | null>(null)
 
   const reset = () => {
     setName('')
-    setContent('')
     setFileName('')
+    setError('')
+    setFile(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
+    }
+  }
+
+  const validateAndStage = async (selected: File | undefined) => {
+    setError('')
+    setFile(null)
+    if (!selected) return
+
+    const isZip = /\.zip$/i.test(selected.name)
+    const isHtml = /\.html?$/i.test(selected.name)
+    if (!isZip && !isHtml) {
+      setError(t('File must be an HTML or ZIP file'))
+      return
+    }
+    if (selected.size > MAX_ZIP_BYTES) {
+      setError(t('File must be 2MB or smaller'))
+      return
+    }
+
+    if (isZip) {
+      try {
+        const zip = await JSZip.loadAsync(selected)
+        const manual: LandingManual = {
+          home: '',
+          about: '',
+          user_agreement: '',
+          privacy_policy: '',
+        }
+        for (const rawPath of Object.keys(zip.files)) {
+          const cleanPath = rawPath.split('/').filter(Boolean).join('/')
+          const base = cleanPath.split('/').pop() ?? ''
+          if (base === '.DS_Store' || cleanPath.startsWith('__MACOSX')) continue
+          const slug = PAGE_FILE_MAP[base.toLowerCase()]
+          if (!slug) continue
+          const entry = zip.files[rawPath]
+          if (entry.dir) continue
+          const content = await entry.async('string')
+          if (content.length > MAX_PAGE_BYTES) {
+            setError(t('File must be 500KB or smaller'))
+            return
+          }
+          manual[slug] = content
+        }
+        if (!manual.home) {
+          setError(t('The zip must contain a home.html file'))
+          return
+        }
+      } catch {
+        setError(t('Invalid ZIP file'))
+        return
+      }
+    } else {
+      try {
+        const content = await selected.text()
+        if (content.length > MAX_PAGE_BYTES) {
+          setError(t('File must be 500KB or smaller'))
+          return
+        }
+      } catch {
+        setError(t('Failed to read file'))
+        return
+      }
+    }
+
+    setFileName(selected.name)
+    setFile(selected)
+    if (!name) {
+      setName(baseNameFromFile(selected.name))
     }
   }
 
   const handleImport = () => {
     const trimmedName = name.trim()
     if (!trimmedName) {
-      toast.error(t('Name is required'))
+      setError(t('Name is required'))
       return
     }
     if ([...trimmedName].length > MAX_THEME_NAME_RUNES) {
-      toast.error(t('Name must be 100 characters or fewer'))
+      setError(t('Name must be 100 characters or fewer'))
       return
     }
-    if (!content) {
-      toast.error(t('Select an .html file to import'))
+    if (!file) {
+      setError(t('Select a .zip or .html file to import'))
       return
     }
     importTheme.mutate(
-      { name: trimmedName, content },
+      { name: trimmedName, file },
       {
         onSuccess: (res) => {
           if (res.success) {
@@ -137,7 +192,7 @@ export function ImportThemeDialog({
           <DialogTitle>{t('Import Theme')}</DialogTitle>
           <DialogDescription>
             {t(
-              'Select an .html file to import. The theme will be applied immediately after import.'
+              'Upload a .html or .zip theme. The ZIP file name becomes the theme name.'
             )}
           </DialogDescription>
         </DialogHeader>
@@ -145,16 +200,16 @@ export function ImportThemeDialog({
         <div className='space-y-3'>
           <div className='space-y-1.5'>
             <Label htmlFor='landing-theme-file' className='text-xs'>
-              {t('HTML file')}
+              {t('Theme file')}
             </Label>
             <input
               ref={fileInputRef}
               id='landing-theme-file'
               type='file'
-              accept='.html,.htm'
+              accept='.html,.htm,.zip'
               className='hidden'
               onChange={(event) => {
-                void handleFileChange(event.target.files?.[0])
+                void validateAndStage(event.target.files?.[0])
               }}
             />
             <Button
@@ -162,10 +217,14 @@ export function ImportThemeDialog({
               variant='outline'
               size='sm'
               className='w-full'
-              onClick={handlePickFile}
+              onClick={() => fileInputRef.current?.click()}
             >
-              <FileText data-icon='inline-start' className='size-4' aria-hidden='true' />
-              {fileName || t('Choose HTML file')}
+              <FileText
+                data-icon='inline-start'
+                className='size-4'
+                aria-hidden='true'
+              />
+              {fileName || t('Choose file')}
             </Button>
           </div>
 
@@ -180,6 +239,8 @@ export function ImportThemeDialog({
               onChange={(event) => setName(event.target.value)}
             />
           </div>
+
+          {error && <p className='text-destructive text-xs'>{error}</p>}
         </div>
 
         <DialogFooter>
@@ -189,9 +250,13 @@ export function ImportThemeDialog({
           <Button
             type='button'
             onClick={handleImport}
-            disabled={importTheme.isPending}
+            disabled={importTheme.isPending || !file}
           >
-            <Upload data-icon='inline-start' className='size-4' aria-hidden='true' />
+            <Upload
+              data-icon='inline-start'
+              className='size-4'
+              aria-hidden='true'
+            />
             {t('Import')}
           </Button>
         </DialogFooter>
