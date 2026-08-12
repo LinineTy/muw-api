@@ -10,10 +10,13 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/model"
 
 	"github.com/gin-gonic/gin"
+	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 func TestImportHomePageThemeRejectsNoFile(t *testing.T) {
@@ -248,4 +251,65 @@ func TestFindHomePageTheme(t *testing.T) {
 
 	_, ok = findHomePageTheme(themes, "missing")
 	assert.False(t, ok)
+}
+
+// 改版前旧主题放在 HomePageContent/About/legal.* 四个 option 里。迁移应在
+// HomePageManual 未初始化时把它们恢复进手动预设并自动选中 manual。
+//
+// 回归点:InitOptionMap 会把 HomePageManual 默认成 "{}"(非空),若迁移的幂等
+// 判断只看 `rawManual != ""` 就会永远提前返回,旧主题从不被恢复。
+func TestEnsureHomePageManualMigrationRecoversLegacyContent(t *testing.T) {
+	previousDB := model.DB
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.Option{}))
+	model.DB = db
+	t.Cleanup(func() { model.DB = previousDB })
+
+	if common.OptionMap == nil {
+		common.OptionMap = make(map[string]string)
+	}
+	keys := []string{
+		homePageManualOptionKey,
+		homePageThemeSelectedKey,
+		homePageContentOptionKey,
+		aboutOptionKey,
+		legalUserAgreementOptionKey,
+		legalPrivacyPolicyOptionKey,
+	}
+	previous := make(map[string]string, len(keys))
+	common.OptionMapRWMutex.Lock()
+	for _, k := range keys {
+		previous[k] = common.OptionMap[k]
+	}
+	// 模拟 InitOptionMap 默认值 + 改版前的旧内容。
+	common.OptionMap[homePageManualOptionKey] = "{}"
+	common.OptionMap[homePageThemeSelectedKey] = defaultHomePageThemeID
+	common.OptionMap[homePageContentOptionKey] = "<html>old home</html>"
+	common.OptionMap[aboutOptionKey] = "old about"
+	common.OptionMap[legalUserAgreementOptionKey] = "old agreement"
+	common.OptionMap[legalPrivacyPolicyOptionKey] = "old privacy"
+	common.OptionMapRWMutex.Unlock()
+	t.Cleanup(func() {
+		common.OptionMapRWMutex.Lock()
+		for _, k := range keys {
+			common.OptionMap[k] = previous[k]
+		}
+		common.OptionMapRWMutex.Unlock()
+	})
+
+	manual, err := ensureHomePageManualMigration()
+	require.NoError(t, err)
+	// 旧内容应被恢复进手动预设。
+	assert.Equal(t, "<html>old home</html>", manual.Home)
+	assert.Equal(t, "old about", manual.About)
+	assert.Equal(t, "old agreement", manual.UserAgreement)
+	assert.Equal(t, "old privacy", manual.PrivacyPolicy)
+
+	common.OptionMapRWMutex.RLock()
+	defer common.OptionMapRWMutex.RUnlock()
+	// 手动预设落库后不再是 "{}" 默认,且自动选中 manual。
+	assert.NotEqual(t, "{}", common.OptionMap[homePageManualOptionKey])
+	assert.Contains(t, common.OptionMap[homePageManualOptionKey], "old home")
+	assert.Equal(t, manualHomePageThemeID, common.OptionMap[homePageThemeSelectedKey])
 }
