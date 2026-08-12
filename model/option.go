@@ -75,6 +75,7 @@ func InitOptionMap() {
 	common.OptionMap["HomePageContent"] = ""
 	common.OptionMap["HomePageThemes"] = "[]"
 	common.OptionMap["HomePageTheme"] = "default"
+	common.OptionMap["HomePageManual"] = "{}"
 	common.OptionMap["Footer"] = common.Footer
 	common.OptionMap["SystemName"] = common.SystemName
 	common.OptionMap["Logo"] = common.Logo

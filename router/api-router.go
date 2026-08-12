@@ -204,6 +204,7 @@ func SetApiRouter(router *gin.Engine) {
 			homePageThemeRoute.GET("/:id", controller.GetHomePageTheme)
 			homePageThemeRoute.POST("/", controller.ImportHomePageTheme)
 			homePageThemeRoute.POST("/select", controller.SelectHomePageTheme)
+			homePageThemeRoute.PUT("/manual", controller.UpdateHomePageManual)
 			homePageThemeRoute.DELETE("/:id", controller.DeleteHomePageTheme)
 		}
 
