@@ -96,6 +96,51 @@ func testPNGBytes(t *testing.T) []byte {
 	return buf.Bytes()
 }
 
+// 最小 ftyp 容器:size + "ftyp" + major brand。
+func testMP4Bytes(brand string) []byte {
+	b := make([]byte, 16)
+	copy(b[4:8], "ftyp")
+	copy(b[8:12], brand)
+	return b
+}
+
+// 最小 EBML 容器:魔数 + DocType 字符串。
+func testWebMBytes() []byte {
+	b := make([]byte, 32)
+	copy(b[0:4], []byte{0x1A, 0x45, 0xDF, 0xA3})
+	copy(b[8:12], "webm")
+	return b
+}
+
+// TestDetectVideoExt 按内容魔数识别视频容器与扩展名。
+func TestDetectVideoExt(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+		want string
+		ok   bool
+	}{
+		{name: "mp4 default brand", data: testMP4Bytes("mp42"), want: "mp4", ok: true},
+		{name: "quicktime brand", data: testMP4Bytes("qt  "), want: "mov", ok: true},
+		{name: "m4v brand", data: testMP4Bytes("M4V "), want: "m4v", ok: true},
+		{name: "webm doc type", data: testWebMBytes(), want: "webm", ok: true},
+		{name: "matroska doc type", data: append(testWebMBytes(), []byte("matroska")...), want: "mkv", ok: true},
+		{name: "ebml without doc type defaults webm", data: []byte{0x1A, 0x45, 0xDF, 0xA3, 0x01, 0x02, 0x03}, want: "webm", ok: true},
+		{name: "not a video", data: []byte("<svg onload=alert(1)>x</svg>"), ok: false},
+		{name: "empty", data: nil, ok: false},
+		{name: "short ftyp slice", data: []byte{0x00, 0x00, 0x00, 0x18, 'f', 't', 'y'}, ok: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := detectVideoExt(tt.data)
+			assert.Equal(t, tt.ok, ok)
+			if ok {
+				assert.Equal(t, tt.want, got)
+			}
+		})
+	}
+}
+
 // TestUploadImageRejectsNonImage 上传非图片内容必须被拒绝（保护磁盘目录只存真图片）。
 func TestUploadImageRejectsNonImage(t *testing.T) {
 	setupImageTestDB(t)
@@ -223,4 +268,84 @@ func TestDeleteImageNotFound(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env))
 	assert.False(t, env.Success)
 	assert.Contains(t, env.Message, "不存在")
+}
+
+// TestUploadVideoAcceptsMp4 真 mp4(ftyp)上传成功:落盘、入库、返回可访问 url。
+func TestUploadVideoAcceptsMp4(t *testing.T) {
+	setupImageTestDB(t)
+	router := newImageTestEngine()
+
+	rec := uploadTestImage(t, router, "hero.mp4", testMP4Bytes("mp42"))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var env apiEnvelope
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env))
+	require.True(t, env.Success)
+	var data struct {
+		Id  int    `json:"id"`
+		Url string `json:"url"`
+	}
+	require.NoError(t, json.Unmarshal(env.Data, &data))
+	assert.Equal(t, "/uploads/images/1.mp4", data.Url)
+
+	diskPath := filepath.Join(common.UploadDir, "images", "1.mp4")
+	stored, err := os.ReadFile(diskPath)
+	require.NoError(t, err)
+	assert.Equal(t, testMP4Bytes("mp42"), stored)
+
+	asset, err := model.GetImageAssetById(data.Id)
+	require.NoError(t, err)
+	assert.Equal(t, "hero.mp4", asset.Name)
+	assert.Equal(t, "mp4", asset.Ext)
+	assert.Equal(t, int64(len(testMP4Bytes("mp42"))), asset.Size)
+	assert.Equal(t, 100, asset.UploaderId)
+}
+
+// TestUploadVideoAcceptsWebm 真 webm(EBML + DocType)上传成功。
+func TestUploadVideoAcceptsWebm(t *testing.T) {
+	setupImageTestDB(t)
+	router := newImageTestEngine()
+
+	rec := uploadTestImage(t, router, "hero.webm", testWebMBytes())
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var env apiEnvelope
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env))
+	require.True(t, env.Success)
+	var data struct {
+		Id  int    `json:"id"`
+		Url string `json:"url"`
+	}
+	require.NoError(t, json.Unmarshal(env.Data, &data))
+	assert.Equal(t, "/uploads/images/1.webm", data.Url)
+
+	asset, err := model.GetImageAssetById(data.Id)
+	require.NoError(t, err)
+	assert.Equal(t, "webm", asset.Ext)
+}
+
+// TestUploadVideoRejectsOversized 超过 100MB 的视频必须被拒绝。
+func TestUploadVideoRejectsOversized(t *testing.T) {
+	setupImageTestDB(t)
+	router := newImageTestEngine()
+
+	rec := uploadTestImage(t, router, "big.mp4", bytes.Repeat([]byte{0x00}, maxVideoSize+1))
+
+	var env apiEnvelope
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env))
+	assert.False(t, env.Success)
+	assert.Contains(t, env.Message, "100MB")
+}
+
+// TestUploadVideoRejectsFake 伪造扩展名但内容不是视频必须被拒绝。
+func TestUploadVideoRejectsFake(t *testing.T) {
+	setupImageTestDB(t)
+	router := newImageTestEngine()
+
+	rec := uploadTestImage(t, router, "fake.mp4", []byte("this is definitely not a video"))
+
+	var env apiEnvelope
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &env))
+	assert.False(t, env.Success)
+	assert.Contains(t, env.Message, "仅支持")
 }

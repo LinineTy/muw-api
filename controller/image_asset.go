@@ -19,7 +19,10 @@ import (
 	_ "golang.org/x/image/webp" // register WebP decoder for format detection
 )
 
-const maxImageSize = 5 << 20 // 5MB
+const (
+	maxImageSize = 5 << 20   // 5MB
+	maxVideoSize = 100 << 20 // 100MB
+)
 
 // imageExtByFormat maps image.Decode's format name to a stable file extension.
 var imageExtByFormat = map[string]string{
@@ -29,13 +32,60 @@ var imageExtByFormat = map[string]string{
 	"webp": "webp",
 }
 
-// imageURL 生成图片对外访问的相对路径（由现有 /uploads/ 静态路由服务）。
+// detectVideoExt 按内容魔数识别视频容器并返回扩展名;识别失败返回 false。
+// 扩展名一律由内容推导,不信任客户端文件名:
+//   - ftyp(ISOBMFF):mp4/m4v/mov,按 major brand 细分;
+//   - EBML(Matroska):webm/mkv,按 DocType 细分(缺省按 webm 处理)。
+func detectVideoExt(data []byte) (string, bool) {
+	if len(data) >= 12 && string(data[4:8]) == "ftyp" {
+		switch string(data[8:12]) {
+		case "qt  ":
+			return "mov", true
+		case "M4V ":
+			return "m4v", true
+		default:
+			return "mp4", true
+		}
+	}
+	if len(data) >= 4 && bytes.Equal(data[:4], []byte{0x1A, 0x45, 0xDF, 0xA3}) {
+		scanLen := len(data)
+		if scanLen > 4096 {
+			scanLen = 4096
+		}
+		if bytes.Contains(data[:scanLen], []byte("matroska")) {
+			return "mkv", true
+		}
+		return "webm", true
+	}
+	return "", false
+}
+
+// imageURL 生成媒体对外访问的相对路径（由现有 /uploads/ 静态路由服务）。
 func imageURL(asset *model.ImageAsset) string {
 	return fmt.Sprintf("/uploads/images/%d.%s", asset.Id, asset.Ext)
 }
 
-// UploadImage 接收 multipart 图片（字段 "file"），校验后落盘到
-// <UploadDir>/images/<id>.<ext> 并写入元数据行。仅 root 可调用（路由层鉴权）。
+// persistImageAsset 入库元数据行并落盘到 <UploadDir>/images/<id>.<ext>。
+// 任一步失败都回滚已写的 DB 行,避免孤儿记录。
+func persistImageAsset(asset *model.ImageAsset, data []byte) error {
+	if err := model.InsertImageAsset(asset); err != nil {
+		return err
+	}
+	imageDir := filepath.Join(common.UploadDir, "images")
+	if err := os.MkdirAll(imageDir, 0o755); err != nil {
+		_ = model.DeleteImageAssetById(asset.Id)
+		return err
+	}
+	filename := fmt.Sprintf("%d.%s", asset.Id, asset.Ext)
+	if err := os.WriteFile(filepath.Join(imageDir, filename), data, 0o644); err != nil {
+		_ = model.DeleteImageAssetById(asset.Id)
+		return err
+	}
+	return nil
+}
+
+// UploadImage 接收 multipart 媒体文件（字段 "file"）,按内容校验为图片或视频后
+// 落盘到 <UploadDir>/images/<id>.<ext> 并写入元数据行。仅 root 可调用（路由层鉴权）。
 func UploadImage(c *gin.Context) {
 	uploaderID := c.GetInt("id")
 	if uploaderID <= 0 {
@@ -48,10 +98,6 @@ func UploadImage(c *gin.Context) {
 		common.ApiErrorMsg(c, "缺少文件字段")
 		return
 	}
-	if fileHeader.Size > maxImageSize {
-		common.ApiErrorMsg(c, "图片文件不能超过 5MB")
-		return
-	}
 
 	src, err := fileHeader.Open()
 	if err != nil {
@@ -60,25 +106,13 @@ func UploadImage(c *gin.Context) {
 	}
 	defer src.Close()
 
-	data, err := io.ReadAll(io.LimitReader(src, maxImageSize+1))
+	data, err := io.ReadAll(io.LimitReader(src, maxVideoSize+1))
 	if err != nil {
 		common.ApiErrorMsg(c, "无法读取上传文件")
 		return
 	}
-	if len(data) > maxImageSize {
-		common.ApiErrorMsg(c, "图片文件不能超过 5MB")
-		return
-	}
-
-	// 解码校验真图片并取格式，拒绝 SVG 等可执行内容。
-	_, format, err := image.Decode(bytes.NewReader(data))
-	if err != nil {
-		common.ApiErrorMsg(c, "仅支持 PNG/JPEG/GIF/WebP 图片")
-		return
-	}
-	ext, ok := imageExtByFormat[format]
-	if !ok {
-		common.ApiErrorMsg(c, "仅支持 PNG/JPEG/GIF/WebP 图片")
+	if len(data) > maxVideoSize {
+		common.ApiErrorMsg(c, "文件不能超过 100MB")
 		return
 	}
 
@@ -88,37 +122,54 @@ func UploadImage(c *gin.Context) {
 		name = string(runes[:255])
 	}
 
+	// 先按魔数判视频（图片内容不会命中）；否则走图片解码校验。
+	if ext, ok := detectVideoExt(data); ok {
+		asset := &model.ImageAsset{
+			Name:       name,
+			Ext:        ext,
+			Size:       int64(len(data)),
+			UploaderId: uploaderID,
+		}
+		if err := persistImageAsset(asset, data); err != nil {
+			common.SysError("failed to save video file: " + err.Error())
+			common.ApiErrorMsg(c, "文件保存失败")
+			return
+		}
+		common.ApiSuccess(c, gin.H{"id": asset.Id, "url": imageURL(asset)})
+		return
+	}
+
+	// 图片:解码校验真图片并取格式,拒绝 SVG 等可执行内容。
+	if len(data) > maxImageSize {
+		common.ApiErrorMsg(c, "图片文件不能超过 5MB")
+		return
+	}
+	_, format, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		common.ApiErrorMsg(c, "仅支持 PNG/JPEG/GIF/WebP 图片或 MP4/WebM 视频")
+		return
+	}
+	ext, ok := imageExtByFormat[format]
+	if !ok {
+		common.ApiErrorMsg(c, "仅支持 PNG/JPEG/GIF/WebP 图片或 MP4/WebM 视频")
+		return
+	}
+
 	asset := &model.ImageAsset{
 		Name:       name,
 		Ext:        ext,
 		Size:       int64(len(data)),
 		UploaderId: uploaderID,
 	}
-	if err := model.InsertImageAsset(asset); err != nil {
-		common.ApiError(c, err)
+	if err := persistImageAsset(asset, data); err != nil {
+		common.SysError("failed to save image file: " + err.Error())
+		common.ApiErrorMsg(c, "文件保存失败")
 		return
 	}
-
-	imageDir := filepath.Join(common.UploadDir, "images")
-	if err := os.MkdirAll(imageDir, 0o755); err != nil {
-		_ = model.DeleteImageAssetById(asset.Id) // 回滚元数据行
-		common.SysError(fmt.Sprintf("failed to create image dir: %s", err.Error()))
-		common.ApiErrorMsg(c, "存储目录不可写")
-		return
-	}
-
-	filename := fmt.Sprintf("%d.%s", asset.Id, ext)
-	if err := os.WriteFile(filepath.Join(imageDir, filename), data, 0o644); err != nil {
-		_ = model.DeleteImageAssetById(asset.Id)
-		common.SysError(fmt.Sprintf("failed to write image file: %s", err.Error()))
-		common.ApiErrorMsg(c, "图片保存失败")
-		return
-	}
-
 	common.ApiSuccess(c, gin.H{"id": asset.Id, "url": imageURL(asset)})
 }
 
-// ListImages 返回全部图床图片（最新在前）。
+// ListImages 返回全部图床媒体（最新在前）。
 func ListImages(c *gin.Context) {
 	assets, err := model.GetAllImageAssets()
 	if err != nil {
@@ -128,6 +179,7 @@ func ListImages(c *gin.Context) {
 	type imageItem struct {
 		Id          int    `json:"id"`
 		Name        string `json:"name"`
+		Ext         string `json:"ext"`
 		Url         string `json:"url"`
 		Size        int64  `json:"size"`
 		UploaderId  int    `json:"uploader_id"`
@@ -138,6 +190,7 @@ func ListImages(c *gin.Context) {
 		items = append(items, imageItem{
 			Id:          asset.Id,
 			Name:        asset.Name,
+			Ext:         asset.Ext,
 			Url:         imageURL(asset),
 			Size:        asset.Size,
 			UploaderId:  asset.UploaderId,
