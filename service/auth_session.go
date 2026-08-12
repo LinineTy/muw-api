@@ -40,6 +40,9 @@ type AuthBundle struct {
 	AccessExpiresAt int64            `json:"access_expires_at"`
 	Session         LoginSessionView `json:"session"`
 	RefreshToken    string           `json:"-"`
+	// EvictedSessions 本次登录为新会话腾位而淘汰的最老活跃会话数（内部使用，
+	// 供登录审计记录；不进 API）。
+	EvictedSessions int `json:"-"`
 }
 
 func CreateLoginSession(userID int, loginMethod, ip, userAgent string) (*AuthBundle, error) {
@@ -65,13 +68,6 @@ func createLoginSession(userID int, expectedAuthVersion int64, loginMethod, ip, 
 		return nil, ErrLoginSessionRevoked
 	}
 	now := time.Now().Unix()
-	activeCount, err := model.CountActiveUserSessions(userID, now)
-	if err != nil {
-		return nil, err
-	}
-	if activeCount >= int64(common.UserSessionActiveLimit) {
-		return nil, model.ErrUserSessionLimit
-	}
 	issuanceCount, err := model.CountUserSessionsCreatedSince(userID, now-common.UserSessionIssuanceWindowSeconds)
 	if err != nil {
 		return nil, err
@@ -103,11 +99,21 @@ func createLoginSession(userID int, expectedAuthVersion int64, loginMethod, ip, 
 	if err := model.CreateUserSession(session); err != nil {
 		return nil, err
 	}
+	// 自动清理：活跃会话达到上限时淘汰最老的活跃会话为新会话腾位，避免
+	// AUTH_SESSION_LIMIT 硬拦截导致登录死锁（会话已建成，淘汰失败只记日志，
+	// 超限由下一次登录收敛）。
+	evicted, err := model.RevokeOldestActiveUserSessions(
+		userID, int64(common.UserSessionActiveLimit), now, "active_limit_evicted",
+	)
+	if err != nil {
+		common.SysError(fmt.Sprintf("failed to evict oldest user sessions for user %d: %s", userID, err.Error()))
+	}
 	bundle, err := issueAuthBundle(session, session.SID+"."+refreshSecret, true)
 	if err != nil {
 		_, _ = model.RevokeUserSession(userID, session.SID, "token_issue_failed")
 		return nil, err
 	}
+	bundle.EvictedSessions = int(evicted)
 	return bundle, nil
 }
 

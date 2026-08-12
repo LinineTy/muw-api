@@ -107,7 +107,9 @@ func TestWriteAuthSessionErrorMapsSessionGrowthLimits(t *testing.T) {
 	}
 }
 
-func TestSessionLimitDoesNotRecordRejectedLoginAsSuccessful(t *testing.T) {
+// 被拒绝的登录不得更新 LastLoginAt。会话活跃上限已改为"淘汰最老会话"而非拒绝,
+// 但签发限流(24h 内超限)仍是硬拒绝,继续保护同一契约。
+func TestIssuanceLimitDoesNotRecordRejectedLoginAsSuccessful(t *testing.T) {
 	previousDB := model.DB
 	previousRedis := common.RedisEnabled
 	previousActiveLimit := common.UserSessionActiveLimit
@@ -118,8 +120,8 @@ func TestSessionLimitDoesNotRecordRejectedLoginAsSuccessful(t *testing.T) {
 	require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSession{}))
 	model.DB = db
 	common.RedisEnabled = false
-	common.UserSessionActiveLimit = 1
-	common.UserSessionIssuanceLimit = 100
+	common.UserSessionActiveLimit = 10
+	common.UserSessionIssuanceLimit = 1
 	common.UserSessionIssuanceWindowSeconds = int64(common.DefaultUserSessionIssuanceWindowSeconds)
 	t.Cleanup(func() {
 		model.DB = previousDB
@@ -148,7 +150,7 @@ func TestSessionLimitDoesNotRecordRejectedLoginAsSuccessful(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/user/login", nil)
 	setupLogin(user, c)
 
-	assert.Equal(t, http.StatusConflict, recorder.Code)
+	assert.Equal(t, http.StatusTooManyRequests, recorder.Code)
 	var stored model.User
 	require.NoError(t, db.First(&stored, user.Id).Error)
 	assert.Equal(t, previousLastLoginAt, stored.LastLoginAt)

@@ -136,7 +136,8 @@ func loginMethodFromContext(c *gin.Context) string {
 }
 
 // recordLoginAudit 记录登录成功审计日志（对所有用户启用，仅记录成功，不记录失败）。
-func recordLoginAudit(user *model.User, c *gin.Context) {
+// 若本次登录为新会话腾位淘汰了最老活跃会话，追加一条 login.session_evicted 日志说明。
+func recordLoginAudit(user *model.User, bundle *service.AuthBundle, c *gin.Context) {
 	method := loginMethodFromContext(c)
 	ip := c.ClientIP()
 	extra := map[string]interface{}{
@@ -147,6 +148,16 @@ func recordLoginAudit(user *model.User, c *gin.Context) {
 	model.RecordLoginLog(user.Id, user.Username, content, ip, "login", map[string]interface{}{
 		"method": method,
 	}, extra)
+	if bundle != nil && bundle.EvictedSessions > 0 {
+		model.RecordLoginLog(
+			user.Id, user.Username,
+			fmt.Sprintf("Evicted %d stale session(s) to make room for a new login", bundle.EvictedSessions),
+			ip,
+			"login.session_evicted",
+			map[string]interface{}{"count": bundle.EvictedSessions},
+			extra,
+		)
+	}
 }
 
 // setupLogin creates a server-controlled login Session and returns the shared
@@ -189,7 +200,7 @@ func setupLoginAtAuthVersion(user *model.User, expectedAuthVersion int64, c *gin
 	model.UpdateUserLastLoginAt(user.Id)
 	service.WriteRefreshCookie(c, bundle.RefreshToken)
 	setAuthNoStore(c)
-	recordLoginAudit(user, c)
+	recordLoginAudit(user, bundle, c)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "",
 		"success": true,

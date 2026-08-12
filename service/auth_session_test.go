@@ -125,11 +125,25 @@ func TestCreateLoginSessionEnforcesActiveLimitAcrossAuthVersions(t *testing.T) {
 	_, err := CreateLoginSession(user.Id, "password", "127.0.0.1", "test-agent")
 	require.NoError(t, err, "49 active sessions must allow creation of the 50th")
 
+	// At the active limit the next login evicts the oldest session to make
+	// room instead of being blocked, so a full session table can never lock
+	// the user out.
 	_, err = CreateLoginSession(user.Id, "password", "127.0.0.1", "test-agent")
-	assert.ErrorIs(t, err, model.ErrUserSessionLimit)
-	var count int64
-	require.NoError(t, model.DB.Model(&model.UserSession{}).Count(&count).Error)
-	assert.Equal(t, int64(50), count)
+	require.NoError(t, err, "at the active limit the oldest session is evicted to make room")
+
+	var oldest model.UserSession
+	require.NoError(t, model.DB.Where("sid = ?", "active-limit-48").First(&oldest).Error)
+	assert.Equal(t, model.UserSessionStatusRevoked, oldest.Status)
+
+	// 第 51 次登录新建一行,故总行数 51(被淘汰的行保留为 revoked,由定时清理回收);
+	// 关键不变式是活跃会话数回到上限 50。
+	var activeCount int64
+	require.NoError(t, model.DB.Model(&model.UserSession{}).
+		Where("status = ?", model.UserSessionStatusActive).Count(&activeCount).Error)
+	assert.Equal(t, int64(50), activeCount)
+	var total int64
+	require.NoError(t, model.DB.Model(&model.UserSession{}).Count(&total).Error)
+	assert.Equal(t, int64(51), total)
 }
 
 func TestCreateLoginSessionEnforcesIssuanceLimitAcrossAllStatuses(t *testing.T) {
