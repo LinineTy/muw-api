@@ -17,9 +17,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import type { UseFormReturn } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
   FormControl,
   FormDescription,
@@ -28,8 +30,6 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -148,9 +148,13 @@ export function CodingPlanBaseUrlField({
                   field.onChange(value)
                   const preset = presets.find((item) => item.value === value)
                   // 选中预设:同步厂商,传统端点(无 provider)清空 = 不启用余量监控。
-                  form.setValue('coding_plan_provider', preset?.provider ?? '', {
-                    shouldDirty: true,
-                  })
+                  form.setValue(
+                    'coding_plan_provider',
+                    preset?.provider ?? '',
+                    {
+                      shouldDirty: true,
+                    }
+                  )
                 }
               }}
               value={displayValue}
@@ -228,11 +232,7 @@ function ManualCodingPlanConfig({
           <FormItem>
             <FormLabel>{t('Base URL')}</FormLabel>
             <FormControl>
-              <Input
-                placeholder='https://...'
-                autoComplete='off'
-                {...field}
-              />
+              <Input placeholder='https://...' autoComplete='off' {...field} />
             </FormControl>
             <FormMessage />
           </FormItem>
@@ -247,6 +247,17 @@ function ManualCodingPlanConfig({
             <FormLabel>{t('Coding plan provider')}</FormLabel>
             <FormControl>
               <Select
+                items={[
+                  {
+                    value: CODING_PLAN_PROVIDER_DISABLED,
+                    label: t('Disable quota monitoring'),
+                  },
+                  { value: 'auto', label: t('Auto detect') },
+                  ...providerOptions.map((option) => ({
+                    value: option.value,
+                    label: t(option.label),
+                  })),
+                ]}
                 value={field.value || 'auto'}
                 onValueChange={(value) =>
                   field.onChange(value === 'auto' ? '' : value)
@@ -255,7 +266,7 @@ function ManualCodingPlanConfig({
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent alignItemWithTrigger={false}>
                   <SelectItem value={CODING_PLAN_PROVIDER_DISABLED}>
                     {t('Disable quota monitoring')}
                   </SelectItem>
