@@ -66,7 +66,7 @@ func GetOptions(c *gin.Context) {
 	optionValues := make(map[string]string)
 	common.OptionMapRWMutex.Lock()
 	for k, v := range common.OptionMap {
-		if k == "theme.frontend" {
+		if k == "theme.frontend" || k == "HomePageThemes" || k == "HomePageTheme" {
 			continue
 		}
 		value := common.Interface2String(v)

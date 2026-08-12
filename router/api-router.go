@@ -196,6 +196,17 @@ func SetApiRouter(router *gin.Engine) {
 			optionRoute.POST("/rest_model_ratio", controller.ResetModelRatio)
 		}
 
+		// Landing-page theme management (root only)
+		homePageThemeRoute := apiRouter.Group("/home-page-theme")
+		homePageThemeRoute.Use(middleware.RootAuth())
+		{
+			homePageThemeRoute.GET("/", controller.GetHomePageThemes)
+			homePageThemeRoute.GET("/:id", controller.GetHomePageTheme)
+			homePageThemeRoute.POST("/", controller.ImportHomePageTheme)
+			homePageThemeRoute.POST("/select", controller.SelectHomePageTheme)
+			homePageThemeRoute.DELETE("/:id", controller.DeleteHomePageTheme)
+		}
+
 		// Custom OAuth provider management (root only)
 		customOAuthRoute := apiRouter.Group("/custom-oauth-provider")
 		customOAuthRoute.Use(middleware.RootAuth())
