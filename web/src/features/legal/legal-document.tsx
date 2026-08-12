@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 import { FileWarning } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { PublicLayout } from '@/components/layout'
@@ -25,7 +26,8 @@ import { RichContent } from '@/components/rich-content'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { isHttpUrl, isLikelyHtml } from '@/lib/content-format'
+import { ThemeSrcdocFrame } from '@/components/theme-srcdoc-frame'
+import { isFullHtmlDocument, isHttpUrl, isLikelyHtml } from '@/lib/content-format'
 
 import type { LegalDocumentResponse } from './types'
 
@@ -52,8 +54,10 @@ export function LegalDocument({
   const rawContent = data?.data?.trim() ?? ''
   const hasContent = rawContent.length > 0
   const isUrl = hasContent && isHttpUrl(rawContent)
+  const isFullDocument = hasContent && isFullHtmlDocument(rawContent)
   const contentIsHtml = hasContent && isLikelyHtml(rawContent)
   const success = data?.success ?? false
+  const [themeScrolled, setThemeScrolled] = useState(false)
 
   if (isLoading) {
     return (
@@ -118,6 +122,18 @@ export function LegalDocument({
             </CardContent>
           </Card>
         </div>
+      </PublicLayout>
+    )
+  }
+
+  if (isFullDocument) {
+    return (
+      <PublicLayout showMainContainer={false} headerScrolled={themeScrolled}>
+        <ThemeSrcdocFrame
+          content={rawContent}
+          title={title}
+          onScrolledChange={setThemeScrolled}
+        />
       </PublicLayout>
     )
   }

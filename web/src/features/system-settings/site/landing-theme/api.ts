@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { api } from '@/lib/api'
 
 import type {
+  LandingManual,
   LandingThemeDetailResponse,
   LandingThemeListResponse,
   SimpleResponse,
@@ -36,16 +37,28 @@ export async function getLandingTheme(
   return res.data
 }
 
+// 导入主题:multipart 上传 .zip 或 .html(FormData 字段 name + file)。
 export async function importLandingTheme(body: {
   name: string
-  content: string
+  file: File
 }): Promise<SimpleResponse> {
-  const res = await api.post('/api/home-page-theme/', body)
+  const formData = new FormData()
+  formData.append('name', body.name)
+  formData.append('file', body.file)
+  const res = await api.post('/api/home-page-theme/', formData)
   return res.data
 }
 
 export async function selectLandingTheme(id: string): Promise<SimpleResponse> {
   const res = await api.post('/api/home-page-theme/select', { id })
+  return res.data
+}
+
+// 保存手动预设并生效(切到手动模式)。
+export async function updateManualTheme(
+  body: LandingManual
+): Promise<SimpleResponse> {
+  const res = await api.put('/api/home-page-theme/manual', body)
   return res.data
 }
 

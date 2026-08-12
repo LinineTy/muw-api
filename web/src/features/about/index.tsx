@@ -18,12 +18,14 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 import { Construction } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { PublicLayout } from '@/components/layout'
 import { RichContent } from '@/components/rich-content'
 import { Skeleton } from '@/components/ui/skeleton'
-import { isHttpUrl, isLikelyHtml } from '@/lib/content-format'
+import { ThemeSrcdocFrame } from '@/components/theme-srcdoc-frame'
+import { isFullHtmlDocument, isHttpUrl, isLikelyHtml } from '@/lib/content-format'
 
 import { getAboutContent } from './api'
 
@@ -122,7 +124,9 @@ export function About() {
   const rawContent = data?.data?.trim() ?? ''
   const hasContent = rawContent.length > 0
   const isUrl = hasContent && isHttpUrl(rawContent)
+  const isFullDocument = hasContent && isFullHtmlDocument(rawContent)
   const contentIsHtml = hasContent && isLikelyHtml(rawContent)
+  const [themeScrolled, setThemeScrolled] = useState(false)
 
   if (isLoading) {
     return (
@@ -153,6 +157,18 @@ export function About() {
           className='h-[calc(100vh-3.5rem)] w-full border-0'
           title={t('About')}
           sandbox='allow-forms allow-popups allow-popups-to-escape-sandbox allow-scripts'
+        />
+      </PublicLayout>
+    )
+  }
+
+  if (isFullDocument) {
+    return (
+      <PublicLayout showMainContainer={false} headerScrolled={themeScrolled}>
+        <ThemeSrcdocFrame
+          content={rawContent}
+          title={t('About')}
+          onScrolledChange={setThemeScrolled}
         />
       </PublicLayout>
     )

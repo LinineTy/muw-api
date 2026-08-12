@@ -25,19 +25,24 @@ import {
   getLandingThemes,
   importLandingTheme,
   selectLandingTheme,
+  updateManualTheme,
 } from '../api'
-import type { LandingThemeListData } from '../types'
+import type { LandingManual, LandingThemeListData } from '../types'
 
 export const landingThemesQueryKey = ['landing-themes']
 
-// 主题切换会改写 HomePageContent,同步失效系统设置表单缓存,让"系统信息"
-// 区的 HomePageContent 文本域与当前生效内容保持一致。
+// 主题切换会改写 HomePageContent/About/legal,同步失效系统设置表单缓存,让
+// "系统信息"区的文本域(若有)与当前生效内容保持一致。协议/隐私页查询
+// staleTime 10min,不主动失效会继续用旧缓存;About/营销页挂载即重拉,一并失效保证一致。
 function useInvalidateOnSuccess() {
   const queryClient = useQueryClient()
   return {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: landingThemesQueryKey })
       queryClient.invalidateQueries({ queryKey: ['system-options'] })
+      queryClient.invalidateQueries({ queryKey: ['about-content'] })
+      queryClient.invalidateQueries({ queryKey: ['user-agreement'] })
+      queryClient.invalidateQueries({ queryKey: ['privacy-policy'] })
     },
   }
 }
@@ -59,7 +64,7 @@ export function useImportLandingTheme() {
   const invalidate = useInvalidateOnSuccess()
 
   return useMutation({
-    mutationFn: (body: { name: string; content: string }) =>
+    mutationFn: (body: { name: string; file: File }) =>
       importLandingTheme(body),
     onSuccess: (res) => {
       if (res.success) {
@@ -86,6 +91,23 @@ export function useSelectLandingTheme() {
     },
     onError: (error: Error) => {
       toast.error(error.message || i18next.t('Failed to select theme'))
+    },
+  })
+}
+
+export function useUpdateManualTheme() {
+  const invalidate = useInvalidateOnSuccess()
+
+  return useMutation({
+    mutationFn: (body: LandingManual) => updateManualTheme(body),
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success(i18next.t('Manual theme saved'))
+        invalidate.onSuccess()
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || i18next.t('Failed to save manual theme'))
     },
   })
 }

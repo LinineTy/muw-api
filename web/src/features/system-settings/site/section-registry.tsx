@@ -40,13 +40,7 @@ const SITE_SECTIONS = [
           SystemName: settings.SystemName,
           Logo: settings.Logo,
           Footer: settings.Footer,
-          About: settings.About,
-          HomePageContent: settings.HomePageContent,
           ServerAddress: settings.ServerAddress,
-          legal: {
-            user_agreement: settings['legal.user_agreement'],
-            privacy_policy: settings['legal.privacy_policy'],
-          },
         }}
       />
     ),
@@ -96,7 +90,7 @@ const SITE_SECTIONS = [
   },
   {
     id: 'landing-theme',
-    titleKey: 'Landing Page Theme',
+    titleKey: 'Theme Configuration',
     build: () => <LandingPageThemeSection />,
   },
 ] as const
