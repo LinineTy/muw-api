@@ -67,6 +67,10 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
     system_info: true,
     setting: true,
   },
+  addon: {
+    enabled: true,
+    image_host: true,
+  },
 }
 
 const mergeWithDefaultSidebarModules = (
@@ -121,6 +125,7 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/system-settings': { section: 'admin', module: 'setting' },
   '/system-settings/site': { section: 'admin', module: 'setting' },
   '/system-info': { section: 'admin', module: 'system_info' },
+  '/addon': { section: 'addon', module: 'image_host' },
 }
 
 /**

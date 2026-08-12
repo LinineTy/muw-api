@@ -84,6 +84,10 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     system_info: true,
     setting: true,
   },
+  addon: {
+    enabled: true,
+    image_host: true,
+  },
 }
 
 const toBoolean = (value: unknown, fallback: boolean): boolean => {

@@ -28,6 +28,7 @@ import {
   LayoutDashboard,
   ListTodo,
   MessageSquare,
+  ImageUp,
   Radio,
   ServerCog,
   Settings,
@@ -167,6 +168,18 @@ export function useSidebarData(): SidebarData {
             url: '/system-settings/site',
             activeUrls: ['/system-settings'],
             icon: Settings,
+          },
+        ],
+      },
+      {
+        id: 'addon',
+        title: t('Add-ons'),
+        items: [
+          {
+            title: t('Image Host'),
+            url: '/addon',
+            icon: ImageUp,
+            requiredRole: ROLE.SUPER_ADMIN,
           },
         ],
       },
