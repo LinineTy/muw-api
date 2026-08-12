@@ -26,6 +26,7 @@ import {
 import { HeaderNavigationSection } from '../maintenance/header-navigation-section'
 import { NoticeSection } from '../maintenance/notice-section'
 import { SidebarModulesSection } from '../maintenance/sidebar-modules-section'
+import { LandingPageThemeSection } from './landing-theme/landing-theme-section'
 import type { SiteSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
 
@@ -92,6 +93,11 @@ const SITE_SECTIONS = [
         />
       )
     },
+  },
+  {
+    id: 'landing-theme',
+    titleKey: 'Landing Page Theme',
+    build: () => <LandingPageThemeSection />,
   },
 ] as const
 

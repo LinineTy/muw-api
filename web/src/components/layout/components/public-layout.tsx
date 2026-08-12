@@ -30,6 +30,8 @@ type PublicLayoutProps = {
   showNotifications?: boolean
   logo?: React.ReactNode
   siteName?: string
+  /** 滚动状态外部覆盖(如 iframe 主题模式),透传给 PublicHeader 的 scrolledOverride。 */
+  headerScrolled?: boolean
 }
 
 export function PublicLayout(props: PublicLayoutProps) {
@@ -43,6 +45,7 @@ export function PublicLayout(props: PublicLayoutProps) {
         showNotifications={props.showNotifications}
         logo={props.logo}
         siteName={props.siteName}
+        scrolledOverride={props.headerScrolled}
         {...props.headerProps}
       />
 

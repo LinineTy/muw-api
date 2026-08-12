@@ -16,23 +16,36 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-export function isHttpUrl(value: string): boolean {
-  try {
-    const url = new URL(value)
-    return url.protocol === 'http:' || url.protocol === 'https:'
-  } catch {
-    return false
-  }
+
+// 营销页主题 = 一份完整的 HTML 文档字符串,渲染走 iframe srcdoc(见 features/home)。
+export type LandingThemeSummary = {
+  id: string
+  name: string
+  created_at: number
 }
 
-export function isLikelyHtml(value: string): boolean {
-  return /<!doctype html|<html[\s>]|<head[\s>]|<body[\s>]|<style[\s>]|<script[\s>]|<\/?[a-z][\s\S]*>/i.test(
-    value
-  )
+export type LandingTheme = LandingThemeSummary & {
+  content: string
 }
 
-// 判断是否为完整 HTML 文档(含 <!doctype html> / <html> / <head>),而不是一个 HTML 片段。
-// 完整文档需要独立文档上下文渲染(iframe srcdoc),片段则嵌入父文档(Shadow DOM)即可。
-export function isFullHtmlDocument(value: string): boolean {
-  return /<!doctype html|<\s*html[\s>]|<head[\s>]/i.test(value)
+export type LandingThemeListData = {
+  themes: LandingThemeSummary[]
+  selected: string
+}
+
+export type LandingThemeListResponse = {
+  success: boolean
+  message?: string
+  data?: LandingThemeListData
+}
+
+export type LandingThemeDetailResponse = {
+  success: boolean
+  message?: string
+  data?: LandingTheme
+}
+
+export type SimpleResponse = {
+  success: boolean
+  message?: string
 }
