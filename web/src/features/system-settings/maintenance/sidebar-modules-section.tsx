@@ -81,6 +81,10 @@ export function SidebarModulesSection({
       title: t('Admin area'),
       description: t('Global configuration and administrative tools.'),
     },
+    addon: {
+      title: t('Add-ons'),
+      description: t('Additional tools and utilities.'),
+    },
   }
 
   const moduleMeta: Record<
@@ -165,6 +169,12 @@ export function SidebarModulesSection({
       system_info: {
         title: t('System Info'),
         description: t('Monitor system instances and background tasks.'),
+      },
+    },
+    addon: {
+      image_host: {
+        title: t('Image Host'),
+        description: t('Upload and manage images used by themes.'),
       },
     },
   }
