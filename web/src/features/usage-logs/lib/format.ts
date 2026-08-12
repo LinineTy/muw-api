@@ -371,6 +371,8 @@ export function formatDuration(
  */
 const AUDIT_TEMPLATES: Record<string, string> = {
   login: 'Logged in successfully via {{method}}',
+  'login.session_evicted':
+    'Evicted {{count}} stale session(s) to make room for a new login',
   // User management
   'user.create': 'Created user {{username}} (role {{role}})',
   'user.update': 'Updated user {{username}} (ID: {{id}})',
@@ -424,10 +426,8 @@ const AUDIT_TEMPLATES: Record<string, string> = {
     'Started upstream model update detection (task {{task_id}})',
   'channel.fix_abilities': 'Fixed channel abilities',
   'channel.fetch_models': 'Fetched upstream models',
-  'channel.codex_refresh':
-    'Refreshed Codex credential (channel ID: {{id}})',
-  'channel.codex_reset_usage':
-    'Reset Codex usage (channel ID: {{id}})',
+  'channel.codex_refresh': 'Refreshed Codex credential (channel ID: {{id}})',
+  'channel.codex_reset_usage': 'Reset Codex usage (channel ID: {{id}})',
   'channel.ollama_pull': 'Pulled Ollama model',
   'channel.ollama_pull_stream': 'Pulled Ollama model (streaming)',
   'channel.ollama_delete': 'Deleted Ollama model',
@@ -458,8 +458,7 @@ const AUDIT_TEMPLATES: Record<string, string> = {
     'Updated subscription plan status (ID: {{id}})',
   'subscription.plan_delete': 'Deleted subscription plan (ID: {{id}})',
   'subscription.bind': 'Bound a subscription',
-  'subscription.plan_reset':
-    'Reset active subscriptions for plan {{plan_id}}',
+  'subscription.plan_reset': 'Reset active subscriptions for plan {{plan_id}}',
   'subscription.user_plan_reset':
     'Reset active plan {{plan_id}} subscriptions for user {{target_user_id}}',
   'subscription.user_subscription_create':
@@ -479,6 +478,9 @@ const AUDIT_TEMPLATES: Record<string, string> = {
   // Logs
   'log.clear': 'Cleared historical logs',
   'log.cleanup_start': 'Log cleanup task started.',
+  // Image host (图床)
+  'image.upload': 'Uploaded an image to the image library',
+  'image.delete': 'Deleted image (ID: {{id}})',
   // Generic middleware fallback
   generic: '{{method}} {{route}}',
 }
