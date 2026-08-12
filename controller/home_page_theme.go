@@ -143,7 +143,9 @@ func ensureHomePageManualMigration() (HomePageManual, error) {
 	selected := common.OptionMap[homePageThemeSelectedKey]
 	common.OptionMapRWMutex.RUnlock()
 
-	if rawManual != "" {
+	// 已初始化判定:空串或 InitOptionMap 的默认值 "{}" 都代表"从未写入手动预设",
+	// 此时应执行迁移。只判断非空会被 "{}" 挡死——旧主题永远恢复不进来。
+	if rawManual != "" && rawManual != "{}" {
 		var manual HomePageManual
 		if err := common.UnmarshalJsonStr(rawManual, &manual); err != nil {
 			return HomePageManual{}, err
