@@ -31,7 +31,7 @@ export function useImages() {
     queryFn: async () => {
       const res = await getImages()
       if (!res.success || !res.data) {
-        throw new Error(res.message || i18next.t('Failed to load images'))
+        throw new Error(res.message || i18next.t('Failed to load files'))
       }
       return res.data
     },
@@ -54,12 +54,12 @@ export function useUploadImage() {
     mutationFn: (file: File) => uploadImage(file),
     onSuccess: (res) => {
       if (res.success) {
-        toast.success(i18next.t('Image uploaded'))
+        toast.success(i18next.t('File uploaded'))
         invalidate.onSuccess()
       }
     },
     onError: (error: Error) => {
-      toast.error(error.message || i18next.t('Failed to upload image'))
+      toast.error(error.message || i18next.t('Failed to upload file'))
     },
   })
 }
@@ -71,12 +71,12 @@ export function useDeleteImage() {
     mutationFn: (id: number) => deleteImage(id),
     onSuccess: (res) => {
       if (res.success) {
-        toast.success(i18next.t('Image deleted'))
+        toast.success(i18next.t('File deleted'))
         invalidate.onSuccess()
       }
     },
     onError: (error: Error) => {
-      toast.error(error.message || i18next.t('Failed to delete image'))
+      toast.error(error.message || i18next.t('Failed to delete file'))
     },
   })
 }

@@ -32,12 +32,29 @@ import {
 } from '@/components/ui/dialog'
 
 import { useUploadImage } from '../hooks/use-images'
+import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS } from '../lib/media'
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+const MAX_VIDEO_BYTES = 100 * 1024 * 1024
 
 type UploadImageDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+}
+
+function extOf(name: string): string {
+  const dot = name.lastIndexOf('.')
+  return dot >= 0 ? name.slice(dot + 1).toLowerCase() : ''
+}
+
+// 按 MIME + 扩展名判定媒体类型;不认识的返回 null。
+function classifyFile(file: File): 'image' | 'video' | null {
+  const ext = extOf(file.name)
+  if (file.type.startsWith('image/') || IMAGE_EXTENSIONS.has(ext))
+    return 'image'
+  if (file.type.startsWith('video/') || VIDEO_EXTENSIONS.has(ext))
+    return 'video'
+  return null
 }
 
 export function UploadImageDialog({
@@ -71,21 +88,24 @@ export function UploadImageDialog({
   const handleSelect = (selected: File | undefined) => {
     setError('')
     if (!selected) return
-    // type 为空(罕见)时按扩展名兜底判断。
-    const isImage =
-      selected.type.startsWith('image/') ||
-      /\.(png|jpe?g|gif|webp)$/i.test(selected.name)
-    if (!isImage) {
-      setError(t('Select an image file'))
+    const kind = classifyFile(selected)
+    if (kind === null) {
+      setError(t('Select an image or video file'))
       return
     }
-    if (selected.size > MAX_IMAGE_BYTES) {
+    if (kind === 'image' && selected.size > MAX_IMAGE_BYTES) {
       setError(t('Image must be 5MB or smaller'))
+      return
+    }
+    if (kind === 'video' && selected.size > MAX_VIDEO_BYTES) {
+      setError(t('Video must be 100MB or smaller'))
       return
     }
     setFile(selected)
     setPreviewUrl(URL.createObjectURL(selected))
   }
+
+  const isVideo = file !== null && classifyFile(file) === 'video'
 
   const handleUpload = () => {
     if (!file) return
@@ -111,10 +131,10 @@ export function UploadImageDialog({
     >
       <DialogContent className='sm:max-w-md'>
         <DialogHeader>
-          <DialogTitle>{t('Upload Image')}</DialogTitle>
+          <DialogTitle>{t('Upload Media')}</DialogTitle>
           <DialogDescription>
             {t(
-              'PNG, JPEG, GIF or WebP, up to 5MB. The image is stored on this server and served from /uploads/.'
+              'PNG, JPEG, GIF or WebP images up to 5MB, or MP4/WebM/MOV videos up to 100MB. The file is stored on this server and served from /uploads/.'
             )}
           </DialogDescription>
         </DialogHeader>
@@ -123,7 +143,7 @@ export function UploadImageDialog({
           <input
             ref={fileInputRef}
             type='file'
-            accept='image/*'
+            accept='image/*,video/*'
             className='hidden'
             onChange={(event) => {
               void handleSelect(event.target.files?.[0])
@@ -131,11 +151,20 @@ export function UploadImageDialog({
           />
           {previewUrl ? (
             <div className='bg-muted/30 flex items-center justify-center rounded-lg border p-2'>
-              <img
-                src={previewUrl}
-                alt={file?.name ?? ''}
-                className='max-h-40 max-w-full rounded object-contain'
-              />
+              {isVideo ? (
+                <video
+                  src={previewUrl}
+                  controls
+                  muted
+                  className='max-h-40 max-w-full rounded object-contain'
+                />
+              ) : (
+                <img
+                  src={previewUrl}
+                  alt={file?.name ?? ''}
+                  className='max-h-40 max-w-full rounded object-contain'
+                />
+              )}
             </div>
           ) : (
             <Button
@@ -150,7 +179,7 @@ export function UploadImageDialog({
                 className='size-4'
                 aria-hidden='true'
               />
-              {t('Choose image')}
+              {t('Choose file')}
             </Button>
           )}
           {previewUrl && file && (

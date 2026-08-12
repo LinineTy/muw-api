@@ -16,33 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+// 图床支持的媒体类型判定,供上传对话框与画廊卡片共用。
+// 后端按内容魔数校验并决定扩展名,前端据此区分图片/视频渲染。
 
-// 图床媒体记录(与后端 model.ImageAsset 对应)。ext 决定前端按图片或视频渲染。
-export type ImageAsset = {
-  id: number
-  name: string
-  /** 文件扩展名,如 png/mp4/webm */
-  ext: string
-  /** 相对路径,如 /uploads/images/1.png */
-  url: string
-  size: number
-  uploader_id: number
-  created_time: number
-}
+export const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp'])
 
-export type ImageListResponse = {
-  success: boolean
-  message?: string
-  data?: ImageAsset[]
-}
+export const VIDEO_EXTENSIONS = new Set(['mp4', 'm4v', 'mov', 'webm', 'mkv'])
 
-export type UploadImageResponse = {
-  success: boolean
-  message?: string
-  data?: { id: number; url: string }
-}
-
-export type SimpleResponse = {
-  success: boolean
-  message?: string
+/** 按扩展名判断是否为视频（画廊卡片用，ext 来自后端存储）。 */
+export function isVideoExt(ext: string): boolean {
+  return VIDEO_EXTENSIONS.has(ext.toLowerCase())
 }

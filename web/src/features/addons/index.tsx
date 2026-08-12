@@ -48,7 +48,7 @@ function ImageLibrary() {
   }
 
   if (!images || images.length === 0) {
-    return <p className='text-muted-foreground text-xs'>{t('No images yet')}</p>
+    return <p className='text-muted-foreground text-xs'>{t('No media yet')}</p>
   }
 
   return (
@@ -81,14 +81,14 @@ export function AddonsPage() {
             className='size-4'
             aria-hidden='true'
           />
-          {t('Upload Image')}
+          {t('Upload')}
         </Button>
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
         <div className='space-y-4'>
           <p className='text-muted-foreground text-xs'>
             {t(
-              'Upload images to reference them in themes. Copy the absolute URL and paste it into your theme HTML.'
+              'Upload images or videos to reference them in themes. Copy the absolute URL and paste it into your theme HTML.'
             )}
           </p>
           <ImageLibrary />

@@ -479,7 +479,7 @@ const AUDIT_TEMPLATES: Record<string, string> = {
   'log.clear': 'Cleared historical logs',
   'log.cleanup_start': 'Log cleanup task started.',
   // Image host (图床)
-  'image.upload': 'Uploaded an image to the image library',
+  'image.upload': 'Uploaded a file to the media library',
   'image.delete': 'Deleted image (ID: {{id}})',
   // Generic middleware fallback
   generic: '{{method}} {{route}}',
