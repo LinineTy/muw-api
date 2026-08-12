@@ -22,8 +22,10 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
 import { formatPercent } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -37,6 +39,9 @@ import type { Channel, CodingPlanTier } from '../types'
 import { useChannels } from './channels-provider'
 
 const QUOTA_REFRESH_MS = 5 * 60 * 1000
+
+// 自动刷新开关的本地持久化键:默认开启,关闭后余量仅在手动刷新时更新。
+const AUTO_REFRESH_STORAGE_KEY = 'coding-plan-auto-refresh'
 
 // 同 key 渠道标签的默认可见数量,超出折叠成 +N(展开/收起),避免卡片被撑高。
 const MAX_CHANNEL_TAGS = 3
@@ -124,7 +129,13 @@ function QuotaTierRow({ tier }: { tier: CodingPlanTier }) {
   )
 }
 
-function ChannelQuotaCard({ channels }: { channels: Channel[] }) {
+function ChannelQuotaCard({
+  channels,
+  autoRefresh,
+}: {
+  channels: Channel[]
+  autoRefresh: boolean
+}) {
   const { t } = useTranslation()
   const { setOpen, setCurrentRow } = useChannels()
   // 同 key 多渠道合并成一张卡:余量是账号级数据,取组内任一渠道查询即可。
@@ -148,7 +159,9 @@ function ChannelQuotaCard({ channels }: { channels: Channel[] }) {
       return res.data
     },
     retry: false,
-    refetchInterval: QUOTA_REFRESH_MS,
+    // 关闭自动刷新后不再轮询,也不在窗口聚焦时重新拉取,只有手动刷新才更新。
+    refetchInterval: autoRefresh ? QUOTA_REFRESH_MS : false,
+    refetchOnWindowFocus: autoRefresh,
     staleTime: 60 * 1000,
   })
 
@@ -301,6 +314,15 @@ export function CodingPlanQuotaTab() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
+  const [autoRefresh, setAutoRefresh] = useState(() => {
+    return localStorage.getItem(AUTO_REFRESH_STORAGE_KEY) !== 'false'
+  })
+
+  const handleAutoRefreshToggle = (checked: boolean) => {
+    localStorage.setItem(AUTO_REFRESH_STORAGE_KEY, String(checked))
+    setAutoRefresh(checked)
+  }
+
   const channelsQuery = useQuery({
     queryKey: ['channels', 'list', 'coding-plan-enabled'],
     queryFn: async () => {
@@ -343,8 +365,8 @@ export function CodingPlanQuotaTab() {
   let content
   if (channelsQuery.isLoading) {
     content = (
-      <div className='grid gap-3 sm:grid-cols-2'>
-        {[0, 1].map((index) => (
+      <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3 min-[1600px]:grid-cols-4'>
+        {[0, 1, 2, 3].map((index) => (
           <Skeleton key={index} className='h-40 w-full rounded-lg' />
         ))}
       </div>
@@ -372,9 +394,13 @@ export function CodingPlanQuotaTab() {
     )
   } else {
     content = (
-      <div className='grid gap-3 sm:grid-cols-2'>
+      <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3 min-[1600px]:grid-cols-4'>
         {groups.map((group) => (
-          <ChannelQuotaCard key={group[0].id} channels={group} />
+          <ChannelQuotaCard
+            key={group[0].id}
+            channels={group}
+            autoRefresh={autoRefresh}
+          />
         ))}
       </div>
     )
@@ -386,21 +412,37 @@ export function CodingPlanQuotaTab() {
         <p className='text-muted-foreground text-xs'>
           {t('Channels with coding-plan quota monitoring enabled.')}
         </p>
-        <Button
-          type='button'
-          variant='outline'
-          size='sm'
-          onClick={refreshAll}
-          disabled={channels.length === 0}
-          aria-label={t('Refresh All')}
-        >
-          <RefreshCw
-            data-icon='inline-start'
-            className='size-3.5'
-            aria-hidden='true'
-          />
-          {t('Refresh All')}
-        </Button>
+        <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
+          <div className='flex items-center gap-1.5'>
+            <Label
+              htmlFor='coding-plan-auto-refresh'
+              className='text-muted-foreground cursor-pointer text-xs'
+            >
+              {t('Auto refresh')}
+            </Label>
+            <Switch
+              id='coding-plan-auto-refresh'
+              size='sm'
+              checked={autoRefresh}
+              onCheckedChange={handleAutoRefreshToggle}
+            />
+          </div>
+          <Button
+            type='button'
+            variant='outline'
+            size='sm'
+            onClick={refreshAll}
+            disabled={channels.length === 0}
+            aria-label={t('Refresh All')}
+          >
+            <RefreshCw
+              data-icon='inline-start'
+              className='size-3.5'
+              aria-hidden='true'
+            />
+            {t('Refresh All')}
+          </Button>
+        </div>
       </div>
       {content}
     </div>
