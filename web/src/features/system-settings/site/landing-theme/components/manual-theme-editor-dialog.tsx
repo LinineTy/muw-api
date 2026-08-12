@@ -19,15 +19,9 @@ For commercial licensing, please contact support@quantumnous.com
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { DialogClose } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 
@@ -75,45 +69,15 @@ export function ManualThemeEditorDialog({
   return (
     <Dialog
       open={open}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen) {
-          onOpenChange(false)
-        }
-      }}
-    >
-      <DialogContent className='sm:max-w-2xl'>
-        <DialogHeader>
-          <DialogTitle>{t('Edit Manual Configuration')}</DialogTitle>
-        </DialogHeader>
-
-        <p className='text-muted-foreground text-xs'>
-          {t(
-            'Each page accepts a URL, HTML, or Markdown. Empty pages fall back to the built-in view.'
-          )}
-        </p>
-
-        <div className='space-y-3'>
-          {PAGE_FIELDS.map((field) => (
-            <div key={field.key} className='space-y-1.5'>
-              <Label htmlFor={`manual-${field.key}`} className='text-xs'>
-                {t(field.labelKey)}
-              </Label>
-              <Textarea
-                id={`manual-${field.key}`}
-                rows={5}
-                value={draft[field.key]}
-                onChange={(event) =>
-                  setDraft((prev) => ({
-                    ...prev,
-                    [field.key]: event.target.value,
-                  }))
-                }
-              />
-            </div>
-          ))}
-        </div>
-
-        <DialogFooter>
+      onOpenChange={onOpenChange}
+      title={t('Edit Manual Configuration')}
+      description={t(
+        'Each page accepts a URL, HTML, or Markdown. Empty pages fall back to the built-in view.'
+      )}
+      contentClassName='sm:max-w-2xl'
+      contentHeight='auto'
+      footer={
+        <>
           <DialogClose render={<Button variant='outline' />}>
             {t('Cancel')}
           </DialogClose>
@@ -124,8 +88,31 @@ export function ManualThemeEditorDialog({
           >
             {t('Save')}
           </Button>
-        </DialogFooter>
-      </DialogContent>
+        </>
+      }
+    >
+      <div className='space-y-3'>
+        {PAGE_FIELDS.map((field) => (
+          <div key={field.key} className='space-y-1.5'>
+            <Label htmlFor={`manual-${field.key}`} className='text-xs'>
+              {t(field.labelKey)}
+            </Label>
+            <Textarea
+              id={`manual-${field.key}`}
+              rows={5}
+              value={draft[field.key]}
+              onChange={(event) =>
+                setDraft((prev) => ({
+                  ...prev,
+                  [field.key]: event.target.value,
+                }))
+              }
+              // 长 HTML(整行 URL/压缩样式)强制折行,避免横向溢出
+              className='[overflow-wrap:anywhere]'
+            />
+          </div>
+        ))}
+      </div>
     </Dialog>
   )
 }
