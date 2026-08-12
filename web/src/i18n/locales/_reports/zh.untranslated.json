@@ -1,4 +1,7 @@
 {
   "Kimi For Coding": "Kimi For Coding",
-  "ZenMux": "ZenMux"
+  "ZenMux": "ZenMux",
+  "Uploaded an image to the image library": "Uploaded an image to the image library",
+  "Deleted image (ID: {{id}})": "Deleted image (ID: {{id}})",
+  "Evicted {{count}} stale session(s) to make room for a new login": "Evicted {{count}} stale session(s) to make room for a new login"
 }
