@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/relay/channel"
 	"github.com/QuantumNous/new-api/relay/channel/openai"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -32,6 +33,10 @@ func (a *Adaptor) ConvertAudioRequest(c *gin.Context, info *relaycommon.RelayInf
 }
 
 func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.ImageRequest) (any, error) {
+	// 渠道开关：开启后强制携带 watermark=false 去水印（公测期间免费），关闭则透传客户端参数
+	if info != nil && info.ChannelMeta != nil && info.ChannelOtherSettings.SensenovaRemoveWatermark {
+		request.Watermark = common.GetPointer(false)
+	}
 	return request, nil
 }
 
