@@ -118,6 +118,7 @@ type User struct {
 	CreatedAt             int64                      `json:"created_at" gorm:"autoCreateTime;column:created_at"`
 	LastLoginAt           int64                      `json:"last_login_at" gorm:"default:0;column:last_login_at"`
 	AuthVersion           int64                      `json:"-" gorm:"type:bigint;not null;default:1;column:auth_version"`
+	PlaygroundImageDisabled bool                     `json:"playground_image_disabled" gorm:"column:playground_image_disabled"` // 管理员封禁该用户的图床（游乐场图片上传），不影响其余功能
 	AdminPermissions      map[string]map[string]bool `json:"admin_permissions,omitempty" gorm:"-:all"`
 }
 
@@ -908,10 +909,11 @@ func (user *User) EditWithTx(tx *gorm.DB, updatePassword bool) error {
 
 	newUser := *user
 	updates := map[string]interface{}{
-		"username":     newUser.Username,
-		"display_name": newUser.DisplayName,
-		"group":        newUser.Group,
-		"remark":       newUser.Remark,
+		"username":                   newUser.Username,
+		"display_name":               newUser.DisplayName,
+		"group":                      newUser.Group,
+		"remark":                     newUser.Remark,
+		"playground_image_disabled":  newUser.PlaygroundImageDisabled,
 	}
 	if updatePassword {
 		updates["password"] = newUser.Password

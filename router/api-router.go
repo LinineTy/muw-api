@@ -218,6 +218,19 @@ func SetApiRouter(router *gin.Engine) {
 			imageRoute.DELETE("/:id", controller.DeleteImage)
 		}
 
+		// Playground image uploads (any authenticated user): files live under
+		// <PrivateUploadDir>/playground-images (NOT under /uploads/), served only
+		// through the ownership-checked GET below. TTL GC + quotas in
+		// service/playground_image_cleanup.go and setting/playground_setting.go.
+		playgroundUploadRoute := apiRouter.Group("/playground")
+		playgroundUploadRoute.Use(middleware.UserAuth())
+		{
+			playgroundUploadRoute.POST("/images", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.UploadPlaygroundImage)
+			playgroundUploadRoute.GET("/images", middleware.DisableCache(), controller.ListPlaygroundImages)
+			playgroundUploadRoute.GET("/images/:id", middleware.DisableCache(), controller.GetPlaygroundImage)
+			playgroundUploadRoute.DELETE("/images/:id", controller.DeletePlaygroundImage)
+		}
+
 		// Custom OAuth provider management (root only)
 		customOAuthRoute := apiRouter.Group("/custom-oauth-provider")
 		customOAuthRoute.Use(middleware.RootAuth())
