@@ -52,6 +52,11 @@ export async function resolveImageDataUrl(url: string): Promise<string | null> {
       if (!(blob instanceof Blob) || blob.size === 0) {
         return null
       }
+      // 文件缺失/已 GC 时接口会返回 {success:false} 的 JSON 错误体，被包装成
+      // application/json blob；拒绝非图片类型，避免 data:application/json 破图。
+      if (!blob.type.startsWith('image/')) {
+        return null
+      }
       const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader()
         reader.addEventListener('load', () => resolve(reader.result as string))

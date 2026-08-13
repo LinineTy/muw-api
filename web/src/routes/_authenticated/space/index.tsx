@@ -18,7 +18,6 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
-import { Main } from '@/components/layout'
 import { Space } from '@/features/space'
 import { isSidebarModuleEnabled } from '@/lib/nav-modules'
 
@@ -32,9 +31,5 @@ export const Route = createFileRoute('/_authenticated/space/')({
 })
 
 function SpacePage() {
-  return (
-    <Main>
-      <Space />
-    </Main>
-  )
+  return <Space />
 }
