@@ -2359,6 +2359,34 @@ export function ChannelMutateDrawer({
                               />
                             )}
 
+                            {/* SenseNova (type 61) */}
+                            {currentType === 61 && (
+                              <FormField
+                                control={form.control}
+                                name='sensenova_remove_watermark'
+                                render={({ field }) => (
+                                  <FormItem className='flex items-center justify-between'>
+                                    <div className='space-y-0.5'>
+                                      <FormLabel>
+                                        {t('Remove SenseNova watermark')}
+                                      </FormLabel>
+                                      <FormDescription>
+                                        {t(
+                                          'Forces watermark=false on SenseNova U1 image generation'
+                                        )}
+                                      </FormDescription>
+                                    </div>
+                                    <FormControl>
+                                      <Switch
+                                        checked={field.value}
+                                        onCheckedChange={field.onChange}
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                            )}
+
                             {/* AWS (type 33) */}
                             {currentType === 33 && (
                               <FormField
