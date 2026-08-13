@@ -56,13 +56,14 @@ type ChatMessageRenderState = {
 
 export function appendUserMessagePair(
   messages: Message[],
-  content: string
+  content: string,
+  attachments?: string[]
 ): Message[] {
   const submittedAt = Date.now()
 
   return [
     ...messages,
-    createUserMessage(content, submittedAt),
+    createUserMessage(content, submittedAt, attachments),
     createLoadingAssistantMessage(submittedAt),
   ]
 }

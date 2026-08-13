@@ -202,17 +202,18 @@ export function useChatHandler({
 
   // Handle stream complete
   const handleStreamComplete = useCallback(
-    (generation: number) => {
+    (generation: number, usage?: Message['usage']) => {
       if (generation !== requestGenerationRef.current) return
       flushStreamUpdates(generation)
       setIsRequesting(false)
       onMessageUpdate((prev) => {
         if (generation !== requestGenerationRef.current) return prev
-        return updateLastAssistantMessage(prev, (message) =>
-          isAssistantMessageFinal(message)
+        return updateLastAssistantMessage(prev, (message) => {
+          const finalized = isAssistantMessageFinal(message)
             ? message
             : completeAssistantMessage(message)
-        )
+          return usage ? { ...finalized, usage } : finalized
+        })
       })
     },
     [flushStreamUpdates, onMessageUpdate]
@@ -242,14 +243,14 @@ export function useChatHandler({
 
   // Send streaming chat request
   const sendStreamingChat = useCallback(
-    (messages: Message[]) => {
+    async (messages: Message[]) => {
       const generation = requestGenerationRef.current + 1
       requestGenerationRef.current = generation
       abortControllerRef.current?.abort()
       abortControllerRef.current = null
       discardPendingStreamUpdates(generation)
       setIsRequesting(true)
-      const payload = buildChatCompletionPayload(
+      const payload = await buildChatCompletionPayload(
         messages,
         config,
         parameterEnabled
@@ -257,7 +258,7 @@ export function useChatHandler({
       void sendStreamRequest(
         payload,
         (type, chunk) => handleStreamUpdate(generation, type, chunk),
-        () => handleStreamComplete(generation),
+        (usage) => handleStreamComplete(generation, usage),
         (error, errorCode) => handleStreamError(generation, error, errorCode)
       )
     },
@@ -275,7 +276,7 @@ export function useChatHandler({
   // Send non-streaming chat request
   const sendNonStreamingChat = useCallback(
     async (messages: Message[]) => {
-      const payload = buildChatCompletionPayload(
+      const payload = await buildChatCompletionPayload(
         messages,
         config,
         parameterEnabled

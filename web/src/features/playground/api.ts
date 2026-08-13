@@ -22,6 +22,8 @@ import { API_ENDPOINTS } from './constants'
 import type {
   ChatCompletionRequest,
   ChatCompletionResponse,
+  ImageGenerationRequest,
+  ImageGenerationResponse,
   ModelOption,
   GroupOption,
 } from './types'
@@ -34,6 +36,77 @@ export async function sendChatCompletion(
   signal?: AbortSignal
 ): Promise<ChatCompletionResponse> {
   const res = await api.post(API_ENDPOINTS.CHAT_COMPLETIONS, payload, {
+    signal,
+    skipErrorHandler: true,
+  } as Record<string, unknown>)
+  return res.data
+}
+
+/**
+ * Upload an image to the user's private playground storage.
+ * permanent=true saves it to the user's permanent collection (never GC'd).
+ */
+export async function uploadPlaygroundImage(
+  file: File,
+  permanent = false
+): Promise<{ id: number; url: string }> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const query = permanent ? '?permanent=true' : ''
+  const res = await api.post(
+    `${API_ENDPOINTS.PLAYGROUND_IMAGE_UPLOAD}${query}`,
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      skipErrorHandler: true,
+    }
+  )
+  return res.data.data
+}
+
+/**
+ * List the current user's playground images; permanent=true (default) filters
+ * to the permanent collection used by the "my images" gallery.
+ */
+export async function listPlaygroundImages(permanent = true): Promise<
+  Array<{
+    id: number
+    name: string
+    ext: string
+    url: string
+    size: number
+    permanent: boolean
+    created_time: number
+  }>
+> {
+  const res = await api.get(API_ENDPOINTS.PLAYGROUND_IMAGE_UPLOAD, {
+    params: { permanent },
+    skipErrorHandler: true,
+  } as Record<string, unknown>)
+  const { data } = res
+  if (!data.success || !Array.isArray(data.data)) {
+    return []
+  }
+  return data.data
+}
+
+/**
+ * Delete one of the current user's playground images.
+ */
+export async function deletePlaygroundImage(id: number): Promise<void> {
+  await api.delete(`${API_ENDPOINTS.PLAYGROUND_IMAGE_UPLOAD}/${id}`, {
+    skipErrorHandler: true,
+  } as Record<string, unknown>)
+}
+
+/**
+ * Generate images via the playground image relay.
+ */
+export async function generatePlaygroundImage(
+  payload: ImageGenerationRequest,
+  signal?: AbortSignal
+): Promise<ImageGenerationResponse> {
+  const res = await api.post(API_ENDPOINTS.IMAGE_GENERATIONS, payload, {
     signal,
     skipErrorHandler: true,
   } as Record<string, unknown>)

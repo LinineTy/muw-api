@@ -49,6 +49,7 @@ import {
 } from '../../lib'
 import { getMessageContentStyles } from '../../lib/message/message-styles'
 import type { Message } from '../../types'
+import { MessageAttachments } from './message-attachments'
 import { MessageError } from './message-error'
 import { MessageMetadata } from './message-metadata'
 
@@ -83,6 +84,8 @@ export function PlaygroundMessageContent({
   const isMessageFinal =
     message.status !== MESSAGE_STATUS.LOADING &&
     message.status !== MESSAGE_STATUS.STREAMING
+  const hasAttachments =
+    message.attachments !== undefined && message.attachments.length > 0
 
   return (
     <div
@@ -126,6 +129,15 @@ export function PlaygroundMessageContent({
         </div>
       )}
 
+      {/* Attachments render outside the showMessageContent guard so image-only
+          messages (empty versionContent) still show them. User images above the
+          text; assistant ones below. */}
+      {!isError && hasAttachments && message.from === 'user' && (
+        <div className='mb-2'>
+          <MessageAttachments attachments={message.attachments ?? []} />
+        </div>
+      )}
+
       {isError && (
         <>
           <MessageError message={message} className='mb-2' />
@@ -157,6 +169,11 @@ export function PlaygroundMessageContent({
             >
               <Response final={isMessageFinal}>{displayContent}</Response>
             </MessageContent>
+          )}
+          {!isError && hasAttachments && message.from !== 'user' && (
+            <div className='mt-2'>
+              <MessageAttachments attachments={message.attachments ?? []} />
+            </div>
           )}
           <MessageMetadata alignment={alignment} message={message} />
           {actions}

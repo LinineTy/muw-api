@@ -37,6 +37,13 @@ export interface Message {
   completedAt?: number
   durationMs?: number
   sources?: { href: string; title: string }[]
+  /** 图片附件：私有访问 URL（/api/playground/images/<id>），发送时转 base64 data URI */
+  attachments?: string[]
+  usage?: {
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+  }
   reasoning?: {
     content: string
     duration: number
@@ -148,4 +155,39 @@ export interface GroupOption {
   value: string
   ratio: number
   desc?: string
+}
+
+// Conversation types (multi-conversation)
+export interface Conversation {
+  id: string
+  title: string
+  messages: Message[]
+  createdAt: number
+  updatedAt: number
+}
+
+export interface SystemPreset {
+  id: string
+  name: string
+  content: string
+}
+
+// Image generation (绘图)
+export type PlaygroundMode = 'chat' | 'image'
+
+export interface ImageGenerationRequest {
+  model: string
+  prompt: string
+  group?: string
+  n?: number
+  size?: string
+}
+
+export interface ImageGenerationItem {
+  url?: string
+  b64_json?: string
+}
+
+export interface ImageGenerationResponse {
+  data: ImageGenerationItem[]
 }

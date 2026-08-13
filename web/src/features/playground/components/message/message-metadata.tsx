@@ -60,10 +60,13 @@ export function MessageMetadata(props: MessageMetadataProps) {
   const { t } = useTranslation()
   const messageTime = formatMessageTime(props.message.createdAt)
   const duration = formatDuration(props.message.durationMs, t)
+  const usage = props.message.usage
 
-  if (!messageTime && !duration) {
+  if (!messageTime && !duration && !usage) {
     return null
   }
+
+  const hasLeadingItem = Boolean(messageTime || duration)
 
   return (
     <div
@@ -77,6 +80,18 @@ export function MessageMetadata(props: MessageMetadataProps) {
         <>
           {messageTime && <span aria-hidden='true'>·</span>}
           <span>{t('Response time: {{duration}}', { duration })}</span>
+        </>
+      )}
+      {usage && (
+        <>
+          {hasLeadingItem && <span aria-hidden='true'>·</span>}
+          <span>
+            {t('{{prompt}} prompt · {{completion}} completion · {{total}} total', {
+              prompt: usage.promptTokens,
+              completion: usage.completionTokens,
+              total: usage.totalTokens,
+            })}
+          </span>
         </>
       )}
     </div>

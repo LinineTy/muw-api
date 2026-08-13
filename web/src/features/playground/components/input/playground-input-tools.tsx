@@ -24,6 +24,7 @@ import { toast } from 'sonner'
 import {
   PromptInputButton,
   PromptInputTools,
+  usePromptInputAttachments,
 } from '@/components/ai-elements/prompt-input'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import {
@@ -38,11 +39,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 
-import {
-  ATTACHMENT_ACTIONS,
-  getAttachmentActionNotice,
-  getSearchActionNotice,
-} from '../../lib'
+import { ATTACHMENT_ACTIONS, getSearchActionNotice } from '../../lib'
 import type { ParameterEnabled, PlaygroundConfig } from '../../types'
 import { PlaygroundParameterPanel } from './playground-parameter-panel'
 
@@ -73,13 +70,7 @@ export function PlaygroundInputTools({
 }: PlaygroundInputToolsProps) {
   const { t } = useTranslation()
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
-
-  const handleFileAction = (action: string) => {
-    const notice = getAttachmentActionNotice(action)
-    toast.info(t(notice.title), {
-      description: notice.description,
-    })
-  }
+  const attachments = usePromptInputAttachments()
 
   const handleSearchAction = () => {
     const notice = getSearchActionNotice()
@@ -120,7 +111,7 @@ export function PlaygroundInputTools({
               {ATTACHMENT_ACTIONS.map(({ action, icon: Icon, label }) => (
                 <DropdownMenuItem
                   key={action}
-                  onClick={() => handleFileAction(action)}
+                  onClick={() => attachments.openFileDialog()}
                 >
                   <Icon className='mr-2' size={16} />
                   {t(label)}

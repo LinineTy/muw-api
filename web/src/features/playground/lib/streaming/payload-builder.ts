@@ -25,17 +25,19 @@ import type {
 import { formatMessageForAPI, isValidMessage } from '../message/message-utils'
 
 /**
- * Build API request payload from messages and config
+ * Build API request payload from messages and config.
+ * Async because image attachments must be resolved to base64 data URIs.
  */
-export function buildChatCompletionPayload(
+export async function buildChatCompletionPayload(
   messages: Message[],
   config: PlaygroundConfig,
   parameterEnabled: ParameterEnabled
-): ChatCompletionRequest {
+): Promise<ChatCompletionRequest> {
   // Filter and format valid messages
-  const processedMessages = messages
-    .filter(isValidMessage)
-    .map(formatMessageForAPI)
+  const validMessages = messages.filter(isValidMessage)
+  const processedMessages = await Promise.all(
+    validMessages.map(formatMessageForAPI)
+  )
 
   const payload: ChatCompletionRequest = {
     model: config.model,
