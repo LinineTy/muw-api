@@ -55,6 +55,8 @@ import type {
 } from '../types'
 
 const CONVERSATIONS_SAVE_DEBOUNCE_MS = 500
+// 推送失败退避的最大连续重试次数；超过后停止自动重试，等下次本地改动/聚焦再触发。
+const MAX_PUSH_RETRY_COUNT = 5
 
 /**
  * Main state management hook for playground.
@@ -94,6 +96,14 @@ export function usePlaygroundState() {
   const pushInFlightRef = useRef(false)
   const lastPushedUpdatedAtRef = useRef<Map<string, number>>(new Map())
   const flushPushRef = useRef<() => Promise<void>>(async () => {})
+  const pushRetryCountRef = useRef(0)
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const [models, setModels] = useState<ModelOption[]>([])
   const [groups, setGroups] = useState<GroupOption[]>([])
@@ -104,15 +114,15 @@ export function usePlaygroundState() {
     ) ?? null
   const messages = activeConversation?.messages ?? []
 
-  // 调度一次防抖推送（已有定时器则合并）。
-  const schedulePush = useCallback(() => {
+  // 调度一次防抖推送（已有定时器则合并）。失败重试可传入更长延迟做退避。
+  const schedulePush = useCallback((delayMs = CONVERSATIONS_SAVE_DEBOUNCE_MS) => {
     if (pushTimerRef.current !== null) {
       return
     }
     pushTimerRef.current = window.setTimeout(() => {
       pushTimerRef.current = null
       void flushPushRef.current()
-    }, CONVERSATIONS_SAVE_DEBOUNCE_MS)
+    }, delayMs)
   }, [])
 
   // 推送脏会话；成功记录已推送 updatedAt，失败保留脏标记待下轮重试。
@@ -140,11 +150,18 @@ export function usePlaygroundState() {
         dirty.delete(conversation.id)
       }
     } catch {
-      // 网络/服务端失败：保留脏标记，下轮重试。
+      // 网络/服务端失败：保留脏标记，按退避重试。
     } finally {
       pushInFlightRef.current = false
       if (dirtyClientIdsRef.current.size > 0) {
-        schedulePush()
+        // 退避：连续失败次数 × 基础延迟；超上限后停止自动重试，等下一次本地
+        // 改动或页面聚焦再触发，避免服务端不可达时 500ms 高频打接口。
+        pushRetryCountRef.current += 1
+        if (pushRetryCountRef.current <= MAX_PUSH_RETRY_COUNT) {
+          schedulePush(pushRetryCountRef.current * CONVERSATIONS_SAVE_DEBOUNCE_MS)
+        }
+      } else {
+        pushRetryCountRef.current = 0
       }
     }
   }, [schedulePush])
@@ -156,7 +173,12 @@ export function usePlaygroundState() {
   // 拉取服务端会话并按 updatedAt 合并到本地。本地独有会话标记脏待推送。
   const pullAndMerge = useCallback(async () => {
     const remote = await pullServerConversations()
-    if (remote === null || !hasLoadedConversationsRef.current) {
+    // mountedRef 防卸载后 setState（聚焦/visibilitychange 触发的拉取可能在卸载后返回）。
+    if (
+      remote === null ||
+      !hasLoadedConversationsRef.current ||
+      !mountedRef.current
+    ) {
       return
     }
     const local = latestConversationsRef.current

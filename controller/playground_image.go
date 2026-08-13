@@ -29,18 +29,36 @@ func playgroundImageFilepath(id int, ext string) string {
 	return filepath.Join(common.PrivateUploadDir, "playground-images", fmt.Sprintf("%d.%s", id, ext))
 }
 
-// validatePlaygroundImageData 解码校验真图片并映射扩展名；拒绝 SVG/可执行内容。
-// 游乐场附件仅支持图片（不做视频）。复用 image_asset.go 的白名单与大小上限。
-func validatePlaygroundImageData(data []byte) (string, bool) {
+// maxPlaygroundImageDimension / maxPlaygroundImagePixels 是单边与总像素上限，
+// 防止超大画布（解压炸弹）在 image.Decode 全量解码时分配巨量内存拖垮进程。
+const (
+	maxPlaygroundImageDimension = 8192
+	maxPlaygroundImagePixels    = 8192 * 8192
+)
+
+// validatePlaygroundImageData 解码校验真图片并映射扩展名；拒绝 SVG/可执行内容与
+// 超大画布。返回 (扩展名, 错误消息)，错误消息为空串表示通过。
+func validatePlaygroundImageData(data []byte) (string, string) {
 	if len(data) > maxImageSize {
-		return "", false
+		return "", "图片文件不能超过 5MB"
 	}
-	_, format, err := image.Decode(bytes.NewReader(data))
+	// 先用 DecodeConfig 读格式与宽高（不解码全部像素），再校验像素上限，
+	// 避免超大画布在后续 image.Decode 时分配巨量内存。
+	config, format, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
-		return "", false
+		return "", "仅支持 PNG/JPEG/GIF/WebP 图片"
+	}
+	if config.Width > maxPlaygroundImageDimension || config.Height > maxPlaygroundImageDimension {
+		return "", "图片尺寸过大"
+	}
+	if int64(config.Width)*int64(config.Height) > maxPlaygroundImagePixels {
+		return "", "图片尺寸过大"
 	}
 	ext, ok := imageExtByFormat[format]
-	return ext, ok
+	if !ok {
+		return "", "仅支持 PNG/JPEG/GIF/WebP 图片"
+	}
+	return ext, ""
 }
 
 // persistPlaygroundImage 入库元数据行并落盘到私有目录。任一步失败都硬删已写的
@@ -105,9 +123,9 @@ func UploadPlaygroundImage(c *gin.Context) {
 		return
 	}
 
-	ext, ok := validatePlaygroundImageData(data)
-	if !ok {
-		common.ApiErrorMsg(c, "仅支持 PNG/JPEG/GIF/WebP 图片")
+	ext, errMsg := validatePlaygroundImageData(data)
+	if errMsg != "" {
+		common.ApiErrorMsg(c, errMsg)
 		return
 	}
 
@@ -347,6 +365,9 @@ func AdminCleanupPlaygroundImages(c *gin.Context) {
 		ttlDays := setting.PlaygroundImageTTLDays
 		if ttlDays < 1 {
 			ttlDays = 1
+		}
+		if ttlDays > setting.MaxPlaygroundImageTTLDays {
+			ttlDays = setting.MaxPlaygroundImageTTLDays
 		}
 		cutoff = time.Now().Add(-time.Duration(ttlDays) * 24 * time.Hour).Unix()
 	}

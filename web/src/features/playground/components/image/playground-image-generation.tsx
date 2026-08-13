@@ -31,6 +31,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Button } from '@/components/ui/button'
 import { ComboboxInput } from '@/components/ui/combobox-input'
 import { Input } from '@/components/ui/input'
@@ -124,6 +125,7 @@ export function PlaygroundImageGeneration({
   const [history, setHistory] = useState<HistoryItem[]>([])
   const [gallery, setGallery] = useState<GalleryItem[]>([])
   const [galleryLoading, setGalleryLoading] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<GalleryItem | null>(null)
 
   const abortRef = useRef<AbortController | null>(null)
 
@@ -464,13 +466,31 @@ export function PlaygroundImageGeneration({
               <GalleryImage
                 item={item}
                 key={item.id}
-                onDelete={() => void deleteGalleryItem(item.id)}
+                onDelete={() => setDeleteTarget(item)}
                 onDownload={() => void downloadGalleryItem(item)}
               />
             ))}
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null)
+        }}
+        title={t('Delete image?')}
+        desc={t(
+          'This image will be removed from your cloud space. This cannot be undone.'
+        )}
+        confirmText={t('Delete')}
+        handleConfirm={() => {
+          const target = deleteTarget
+          setDeleteTarget(null)
+          if (target) {
+            void deleteGalleryItem(target.id)
+          }
+        }}
+      />
     </div>
   )
 }

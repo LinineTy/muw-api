@@ -15,9 +15,9 @@ type PlaygroundImage struct {
 	Name        string         `json:"name" gorm:"size:255"` // 原始文件名（仅展示用）
 	Ext         string         `json:"ext" gorm:"size:8"`
 	Size        int64          `json:"size" gorm:"bigint"`
-	UserId      int            `json:"user_id"`
-	Permanent   bool           `json:"permanent"` // Go 零值 false，不加 gorm default 标签（跨库迁移安全）
-	CreatedTime int64          `json:"created_time" gorm:"bigint"`
+	UserId      int            `json:"user_id" gorm:"index:idx_uid_permanent,priority:1"` // 覆盖按用户统计/列表
+	Permanent   bool           `json:"permanent" gorm:"index:idx_uid_permanent,priority:2"` // Go 零值 false，不加 gorm default 标签（跨库迁移安全）
+	CreatedTime int64          `json:"created_time" gorm:"bigint;index"`                  // 覆盖 TTL 过期清理
 	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
 }
 

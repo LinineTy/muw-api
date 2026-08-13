@@ -25,15 +25,22 @@ func (PlaygroundConversation) TableName() string { return "playground_conversati
 
 // UpsertPlaygroundConversation 按 (user_id, client_id) upsert。三库通用
 // （SQLite ON CONFLICT / MySQL ON DUPLICATE / PostgreSQL ON CONFLICT）。
-// 冲突时更新 title/messages/updated_time，不新建行。
+// 冲突时更新 title/messages/updated_time 并清空 deleted_at，复活被软删的
+// 同 client_id 会话——否则软删行仍占唯一索引，重发同 client_id 会写入软删行
+// 而列表（默认排除软删）查不到，导致会话「消失且不可恢复」。
 func UpsertPlaygroundConversation(conv *PlaygroundConversation) error {
 	conv.UpdatedTime = common.GetTimestamp()
 	if conv.CreatedTime == 0 {
 		conv.CreatedTime = conv.UpdatedTime
 	}
 	err := DB.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "user_id"}, {Name: "client_id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"title", "messages", "updated_time"}),
+		Columns: []clause.Column{{Name: "user_id"}, {Name: "client_id"}},
+		DoUpdates: clause.Assignments(map[string]interface{}{
+			"title":        conv.Title,
+			"messages":     conv.Messages,
+			"updated_time": conv.UpdatedTime,
+			"deleted_at":   gorm.Expr("NULL"),
+		}),
 	}).Create(conv).Error
 	return err
 }

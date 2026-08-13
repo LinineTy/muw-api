@@ -96,7 +96,7 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
   const percent =
     space && space.capacity_bytes > 0
       ? Math.min(100, Math.round((space.used_bytes / space.capacity_bytes) * 100))
-      : 100
+      : 0 // capacity<=0（root 无限 / 尚未加载）时不显示满格，避免误导
   const usedLabel = space ? formatBytes(space.used_bytes) : '—'
   let totalLabel = '—'
   if (space !== null) {
@@ -122,7 +122,8 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
     try {
       const result = await purchaseSpace(mb)
       if (!result) {
-        toast.error(t('Insufficient balance'))
+        // 业务失败：拦截器已弹出后端 message（余额不足等），这里不重复提示，
+        // 也避免把「购买比例配置错误」等非余额失败误标成 Insufficient balance。
         return
       }
       toast.success(t('Storage capacity purchased'))
@@ -172,6 +173,7 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
           <Button
             size='sm'
             variant='outline'
+            disabled={!space}
             onClick={() => setBuyOpen(true)}
           >
             <Plus className='mr-1 size-3.5' />
@@ -193,6 +195,7 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
               <Input
                 aria-label={t('Buy storage')}
                 inputMode='numeric'
+                max={maxMB}
                 min={1}
                 placeholder={t('MB')}
                 type='number'
@@ -201,8 +204,10 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
               />
               {cost > 0 && (
                 <p className='text-muted-foreground text-xs'>
-                  = {formatQuota(cost)}（{t('Purchase ratio')}: {perMBLabel}
-                  /MB）
+                  {t('Cost: {{cost}} ({{perMB}}/MB)', {
+                    cost: formatQuota(cost),
+                    perMB: perMBLabel,
+                  })}
                 </p>
               )}
             </div>

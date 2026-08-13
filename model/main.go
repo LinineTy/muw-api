@@ -281,6 +281,14 @@ func migrateDB() error {
 	if err := autoMigrateAll(); err != nil {
 		return err
 	}
+	// MySQL 的 TEXT 列上限 64KB，装不下对话消息（消息体上限 2MB）；SQLite/PostgreSQL
+	// 的 text 无此限制。把 messages 列升级为 LONGTEXT（幂等，AutoMigrate 不会改已存在
+	// 列类型）。表由上方 autoMigrateAll 刚建或已存在。
+	if common.UsingMainDatabase(common.DatabaseTypeMySQL) {
+		if err := DB.Exec("ALTER TABLE playground_conversations MODIFY COLUMN messages LONGTEXT").Error; err != nil {
+			return err
+		}
+	}
 	if err := applyPendingMigrations(DB, applied, migrations); err != nil {
 		return err
 	}

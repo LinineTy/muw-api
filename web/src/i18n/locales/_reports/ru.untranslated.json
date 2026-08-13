@@ -238,6 +238,8 @@
   "Renew with Balance": "Renew with Balance",
   "Resize column": "Resize column",
   "Restricted to specific groups": "Restricted to specific groups",
+  "Save cloud space settings": "Save cloud space settings",
+  "Save cleanup settings": "Save cleanup settings",
   "Save quota pool settings": "Save quota pool settings",
   "Search model or channel": "Search model or channel",
   "Sensitive operations: login, session refresh, OAuth and purchases": "Sensitive operations: login, session refresh, OAuth and purchases",
@@ -583,6 +585,7 @@
   "Space capacity (MB)": "Space capacity (MB)",
   "0 uses the global initial capacity. Root is unlimited.": "0 uses the global initial capacity. Root is unlimited.",
   "Buy 1 to {{max}} MB at a time": "Buy 1 to {{max}} MB at a time",
+  "Cost: {{cost}} ({{perMB}}/MB)": "Cost: {{cost}} ({{perMB}}/MB)",
   "Max per order": "Max per order",
   "Confirm purchase?": "Confirm purchase?",
   "Buy {{mb}} MB of storage for {{cost}} quota. Your balance is {{balance}}.": "Buy {{mb}} MB of storage for {{cost}} quota. Your balance is {{balance}}.",
@@ -593,5 +596,6 @@
   "Manual cleanup": "Manual cleanup",
   "Usage is shown in the cloud space page. Here you can clean up temporary images for all users.": "Usage is shown in the cloud space page. Here you can clean up temporary images for all users.",
   "Temporary image cleanup": "Temporary image cleanup",
-  "Price per MB in the display currency; converted to quota when buying.": "Price per MB in the display currency; converted to quota when buying."
+  "Price per MB in the display currency; converted to quota when buying.": "Price per MB in the display currency; converted to quota when buying.",
+  "When the display currency is tokens, this value is the token price per MB directly.": "When the display currency is tokens, this value is the token price per MB directly."
 }

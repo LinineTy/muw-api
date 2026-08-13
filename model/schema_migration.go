@@ -61,6 +61,11 @@ var migrations = []Migration{
 	// 执行），此条目只打版本戳，避免每次启动 SQLite 整表重建。空 Up 表明无需数据
 	// 转换：旧用户无 token，下次 LinuxDO 登录时写入。
 	{Version: 3, Name: "linuxdo-token-columns", Up: func(db *gorm.DB) error { return nil }},
+	// v4（图床表）/v5（users.space_capacity + playground 表/列）同理只打版本戳：
+	// 表/列由 AutoMigrate 创建，无需数据转换；把版本推进到 CurrentSchemaVersion
+	// 让 shouldSkipMigration 生效，避免每次启动重复全量 AutoMigrate（SQLite 整表重建风险）。
+	{Version: 4, Name: "image-asset-table-noop", Up: func(db *gorm.DB) error { return nil }},
+	{Version: 5, Name: "playground-space-noop", Up: func(db *gorm.DB) error { return nil }},
 }
 
 // ensureSchemaMigrationsTable 用纯 SQL 建版本表，避免对版本表自身跑 AutoMigrate。

@@ -108,7 +108,7 @@ export function transformFormDataToPayload(
     payload.group = data.group
     payload.group_auto = data.group_auto ?? false
     payload.playground_image_disabled = data.playground_image_disabled ?? false
-    payload.space_capacity = (data.space_capacity_mb ?? 0) << 20 // MB → 字节
+    payload.space_capacity = (data.space_capacity_mb ?? 0) * 1024 * 1024 // MB → 字节（勿用 <<20：JS 按 32 位截断，≥2048MB 会溢出成负/0）
     payload.remark = data.remark || undefined
     payload.id = userId
   }

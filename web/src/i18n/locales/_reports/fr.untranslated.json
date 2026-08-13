@@ -171,5 +171,6 @@
   "Buy more storage with your quota.": "Buy more storage with your quota.",
   "Manage your cloud storage and synced conversations.": "Manage your cloud storage and synced conversations.",
   "Usage is shown in the cloud space page. Here you can clean up temporary images for all users.": "Usage is shown in the cloud space page. Here you can clean up temporary images for all users.",
-  "Price per MB in the display currency; converted to quota when buying.": "Price per MB in the display currency; converted to quota when buying."
+  "Price per MB in the display currency; converted to quota when buying.": "Price per MB in the display currency; converted to quota when buying.",
+  "When the display currency is tokens, this value is the token price per MB directly.": "When the display currency is tokens, this value is the token price per MB directly."
 }
