@@ -134,12 +134,9 @@ const CONTENT_SECTIONS = [
       <PlaygroundSettingsSection
         defaultValues={{
           PlaygroundImageTTLDays: settings.PlaygroundImageTTLDays,
-          PlaygroundImageMaxCountPerUser:
-            settings.PlaygroundImageMaxCountPerUser,
-          PlaygroundImageMaxTotalMBPerUser:
-            settings.PlaygroundImageMaxTotalMBPerUser,
-          PlaygroundImageMaxPermanentPerUser:
-            settings.PlaygroundImageMaxPermanentPerUser,
+          UserSpaceInitialMB: settings.UserSpaceInitialMB,
+          UserSpacePurchaseRatio: settings.UserSpacePurchaseRatio,
+          UserSpaceGlobalMaxMB: settings.UserSpaceGlobalMaxMB,
         }}
       />
     ),

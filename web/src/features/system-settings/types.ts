@@ -183,9 +183,9 @@ export type ContentSettings = {
   MjModeClearEnabled: boolean
   MjActionCheckSuccessEnabled: boolean
   PlaygroundImageTTLDays: number
-  PlaygroundImageMaxCountPerUser: number
-  PlaygroundImageMaxTotalMBPerUser: number
-  PlaygroundImageMaxPermanentPerUser: number
+  UserSpaceInitialMB: number
+  UserSpacePurchaseRatio: number
+  UserSpaceGlobalMaxMB: number
 }
 
 export type ModelSettings = {

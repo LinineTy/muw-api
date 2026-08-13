@@ -42,6 +42,7 @@ export const userFormSchema = z.object({
   group: z.string().optional(),
   group_auto: z.boolean().optional(),
   playground_image_disabled: z.boolean().optional(),
+  space_capacity_mb: z.number().int().min(0).optional(),
   remark: z.string().optional(),
   admin_permissions: z
     .record(z.string(), z.record(z.string(), z.boolean()))
@@ -63,6 +64,7 @@ export const USER_FORM_DEFAULT_VALUES: UserFormValues = {
   group: DEFAULT_GROUP,
   group_auto: false,
   playground_image_disabled: false,
+  space_capacity_mb: 0,
   remark: '',
   // Filled against the backend catalog at render time; see UsersMutateDrawer.
   admin_permissions: {},
@@ -106,6 +108,7 @@ export function transformFormDataToPayload(
     payload.group = data.group
     payload.group_auto = data.group_auto ?? false
     payload.playground_image_disabled = data.playground_image_disabled ?? false
+    payload.space_capacity = (data.space_capacity_mb ?? 0) << 20 // MB → 字节
     payload.remark = data.remark || undefined
     payload.id = userId
   }
@@ -128,6 +131,7 @@ export function transformUserToFormDefaults(user: User): UserFormValues {
     group: user.group || DEFAULT_GROUP,
     group_auto: user.group_auto ?? false,
     playground_image_disabled: user.playground_image_disabled ?? false,
+    space_capacity_mb: Math.floor((user.space_capacity ?? 0) / (1024 * 1024)),
     remark: user.remark || '',
     admin_permissions: user.admin_permissions ?? {},
   }

@@ -45,9 +45,9 @@ const defaultContentSettings: ContentSettings = {
   MjModeClearEnabled: false,
   MjActionCheckSuccessEnabled: false,
   PlaygroundImageTTLDays: 3,
-  PlaygroundImageMaxCountPerUser: 50,
-  PlaygroundImageMaxTotalMBPerUser: 50,
-  PlaygroundImageMaxPermanentPerUser: 100,
+  UserSpaceInitialMB: 20,
+  UserSpacePurchaseRatio: 100,
+  UserSpaceGlobalMaxMB: 20480,
 }
 
 function resolveContentSettings(

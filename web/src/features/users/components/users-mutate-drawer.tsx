@@ -458,6 +458,32 @@ export function UsersMutateDrawer({
 
                   <FormField
                     control={form.control}
+                    name='space_capacity_mb'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Space capacity (MB)')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            min={0}
+                            type='number'
+                            value={field.value ?? 0}
+                            onChange={(event) =>
+                              field.onChange(Number(event.target.value))
+                            }
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            '0 uses the global initial capacity. Root is unlimited.'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
                     name='quota_dollars'
                     render={({ field }) => (
                       <FormItem>

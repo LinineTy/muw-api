@@ -55,6 +55,7 @@ export const userSchema = z.object({
   linux_do_trust_level: z.number().optional(),
   group_auto: z.boolean().optional(),
   playground_image_disabled: z.boolean().optional(),
+  space_capacity: z.number().optional(),
   status: userStatusSchema,
   role: userRoleSchema,
   created_at: z.number().optional(),
@@ -130,6 +131,7 @@ export interface UserFormData {
   group_auto?: boolean // Only used when updating user
   remark?: string // Only used when updating user
   playground_image_disabled?: boolean // Only used when updating user
+  space_capacity?: number // 云空间容量（字节）；0/缺省 = 用全局初始，仅更新时
   admin_permissions?: AdminPermissionMatrix
 }
 
