@@ -4,6 +4,7 @@
 .history
 upload
 uploads/
+uploads-private/
 *.exe
 *.db
 build
