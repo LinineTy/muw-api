@@ -47,9 +47,10 @@ export function useAuthRedirect() {
       await i18n.changeLanguage(savedLang)
     }
 
-    const targetPath =
-      sanitizeAuthRedirect(redirectTo, window.location.origin) ?? '/dashboard'
-    navigate({ href: targetPath, replace: true })
+    // 先经过登录结果中间态页展示账户状态，再自动跳转目标。
+    const redirect =
+      sanitizeAuthRedirect(redirectTo, window.location.origin) ?? undefined
+    navigate({ to: '/login-result', search: { redirect }, replace: true })
   }
 
   /**

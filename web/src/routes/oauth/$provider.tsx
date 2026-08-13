@@ -34,6 +34,10 @@ import {
 } from '@/features/auth/constants'
 import { sanitizeAuthRedirect } from '@/features/auth/lib/auth-redirect'
 import {
+  buildLoginDeniedSearch,
+  getLoginDeniedInfo,
+} from '@/features/auth/lib/login-denied'
+import {
   parseTelegramBindCallback,
   postTelegramBindResult,
   startOAuthBindResponseDeadline,
@@ -207,8 +211,28 @@ function OAuthCallback() {
         const response = await api.get(`/api/oauth/${provider}`, config)
         if (response.data?.success && isAuthBundle(response.data?.data)) {
           applyAuthBundle(response.data.data)
-          safeNavigate(search.redirect)
-          toast.success(i18next.t('Signed in successfully!'))
+          const target =
+            sanitizeAuthRedirect(search.redirect, window.location.origin) ??
+            undefined
+          navigate({
+            to: '/login-result',
+            search: { redirect: target },
+            replace: true,
+          })
+          return
+        }
+        const denied = getLoginDeniedInfo(response.data)
+        if (denied) {
+          navigate({
+            to: '/login-result',
+            search: buildLoginDeniedSearch(
+              denied,
+              response.data?.message,
+              sanitizeAuthRedirect(search.redirect, window.location.origin) ??
+                undefined
+            ),
+            replace: true,
+          })
           return
         }
         const messageKey = getServerErrorMessageKey(response.data)

@@ -70,6 +70,8 @@ export const OTP_REGEX = /^\d{6}$/
 
 export const EMAIL_VERIFICATION_COUNTDOWN = 30 // seconds
 export const PASSWORD_RESET_COUNTDOWN = 30 // seconds
+// 登录结果页自动跳转倒计时（秒）：开发环境拉长便于观察，生产 3 秒。
+export const LOGIN_RESULT_REDIRECT_SECONDS = import.meta.env.DEV ? 12 : 3 // seconds
 
 // ============================================================================
 // OAuth Constants

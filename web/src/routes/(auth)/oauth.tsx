@@ -23,6 +23,10 @@ import { toast } from 'sonner'
 
 import { wechatLoginByCode } from '@/features/auth/api'
 import { sanitizeAuthRedirect } from '@/features/auth/lib/auth-redirect'
+import {
+  buildLoginDeniedSearch,
+  getLoginDeniedInfo,
+} from '@/features/auth/lib/login-denied'
 import { applyAuthBundle, isAuthBundle } from '@/lib/api'
 import { getServerErrorMessageKey } from '@/lib/server-error-message'
 
@@ -44,8 +48,26 @@ function OAuthComponent() {
             applyAuthBundle(res.data)
             const target =
               sanitizeAuthRedirect(search?.redirect, window.location.origin) ??
-              '/dashboard'
-            navigate({ href: target, replace: true })
+              undefined
+            navigate({
+              to: '/login-result',
+              search: { redirect: target },
+              replace: true,
+            })
+            return
+          }
+          const denied = getLoginDeniedInfo(res)
+          if (denied) {
+            navigate({
+              to: '/login-result',
+              search: buildLoginDeniedSearch(
+                denied,
+                res?.message,
+                sanitizeAuthRedirect(search?.redirect, window.location.origin) ??
+                  undefined
+              ),
+              replace: true,
+            })
             return
           }
           if (getServerErrorMessageKey(res)) {

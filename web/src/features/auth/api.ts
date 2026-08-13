@@ -49,7 +49,7 @@ export async function login(payload: LoginPayload) {
       username: payload.username,
       password: payload.password,
     },
-    { skipAuthRefresh: true }
+    { skipAuthRefresh: true, skipBusinessError: true }
   )
   return res.data
 }
@@ -58,6 +58,7 @@ export async function login(payload: LoginPayload) {
 export async function login2fa(payload: TwoFAPayload) {
   const res = await api.post<Login2FAResponse>('/api/user/login/2fa', payload, {
     skipAuthRefresh: true,
+    skipBusinessError: true,
   })
   return res.data
 }
@@ -159,7 +160,10 @@ export async function createOAuthFlow(
 
 // WeChat login by authorization code
 export async function wechatLoginByCode(code: string): Promise<ApiResponse> {
-  const res = await api.get('/api/oauth/wechat', { params: { code } })
+  const res = await api.get('/api/oauth/wechat', {
+    params: { code },
+    skipBusinessError: true,
+  })
   return res.data
 }
 
@@ -184,6 +188,7 @@ export async function telegramLogin(
 export async function register(payload: RegisterPayload): Promise<ApiResponse> {
   const res = await api.post(`/api/user/register`, payload, {
     params: { turnstile: payload.turnstile ?? '' },
+    skipBusinessError: true,
   })
   return res.data
 }

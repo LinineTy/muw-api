@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import axios from 'axios'
 import { Loader2, LogIn, KeyRound } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -46,6 +46,11 @@ import { OAuthProviders } from '@/features/auth/components/oauth-providers'
 import { loginFormSchema } from '@/features/auth/constants'
 import { useAuthRedirect } from '@/features/auth/hooks/use-auth-redirect'
 import { useTurnstile } from '@/features/auth/hooks/use-turnstile'
+import { sanitizeAuthRedirect } from '@/features/auth/lib/auth-redirect'
+import {
+  buildLoginDeniedSearch,
+  getLoginDeniedInfo,
+} from '@/features/auth/lib/login-denied'
 import { beginPasskeyLogin, finishPasskeyLogin } from '@/features/auth/passkey'
 import type { AuthFormProps } from '@/features/auth/types'
 import { useStatus } from '@/hooks/use-status'
@@ -65,6 +70,7 @@ export function UserAuthForm({
   ...props
 }: AuthFormProps) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [isLoading, setIsLoading] = useState(false)
   const [wechatCode, setWeChatCode] = useState('')
   const [agreedToLegal, setAgreedToLegal] = useState(false)
@@ -91,6 +97,9 @@ export function UserAuthForm({
     validateTurnstile,
   } = useTurnstile()
   const { handleLoginSuccess, redirectTo2FA } = useAuthRedirect()
+  const redirectHref = redirectTo
+    ? (sanitizeAuthRedirect(redirectTo, window.location.origin) ?? undefined)
+    : undefined
   const setPending2FAFlowToken = useAuthStore(
     (state) => state.auth.setPending2FAFlowToken
   )
@@ -180,8 +189,19 @@ export function UserAuthForm({
           throw new Error(t('Login failed'))
         }
         await handleLoginSuccess(res.data, redirectTo)
-        toast.success(t('Welcome back!'))
+        return
       }
+
+      const denied = getLoginDeniedInfo(res)
+      if (denied) {
+        navigate({
+          to: '/login-result',
+          search: buildLoginDeniedSearch(denied, res.message, redirectHref),
+          replace: true,
+        })
+        return
+      }
+      toast.error(res.message || loginFailedMessage)
     } catch (error: unknown) {
       if (axios.isAxiosError(error)) return
       toast.error(error instanceof Error ? error.message : loginFailedMessage)
@@ -218,12 +238,20 @@ export function UserAuthForm({
       const res = await wechatLoginByCode(wechatCode)
       if (res?.success && isAuthBundle(res.data)) {
         await handleLoginSuccess(res.data, redirectTo)
-        toast.success(t('Signed in via WeChat'))
         handleWeChatDialogChange(false)
-      } else {
-        if (getServerErrorMessageKey(res)) return
-        toast.error(res?.message || loginFailedMessage)
+        return
       }
+      const denied = getLoginDeniedInfo(res)
+      if (denied) {
+        navigate({
+          to: '/login-result',
+          search: buildLoginDeniedSearch(denied, res?.message, redirectHref),
+          replace: true,
+        })
+        return
+      }
+      if (getServerErrorMessageKey(res)) return
+      toast.error(res?.message || loginFailedMessage)
     } catch (error: unknown) {
       if (getServerErrorMessageKey(error)) return
       toast.error(loginFailedMessage)
@@ -280,6 +308,15 @@ export function UserAuthForm({
 
       const finish = await finishPasskeyLogin(flowToken, assertion)
       if (!finish.success) {
+        const denied = getLoginDeniedInfo(finish)
+        if (denied) {
+          navigate({
+            to: '/login-result',
+            search: buildLoginDeniedSearch(denied, finish.message, redirectHref),
+            replace: true,
+          })
+          return
+        }
         if (getServerErrorMessageKey(finish)) return
         throw new Error(finish.message || t('Failed to complete Passkey login'))
       }
@@ -289,7 +326,6 @@ export function UserAuthForm({
       }
 
       await handleLoginSuccess(finish.data, redirectTo)
-      toast.success(t('Signed in with Passkey'))
     } catch (error: unknown) {
       if (getServerErrorMessageKey(error)) return
       if (error instanceof DOMException && error.name === 'NotAllowedError') {

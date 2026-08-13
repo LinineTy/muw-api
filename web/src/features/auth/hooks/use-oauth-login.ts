@@ -17,12 +17,18 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useState, useRef, useEffect } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { clearAuthentication, isAuthBundle } from '@/lib/api'
 
 import { createOAuthFlow, logout, telegramLogin } from '../api'
+import { sanitizeAuthRedirect } from '../lib/auth-redirect'
+import {
+  buildLoginDeniedSearch,
+  getLoginDeniedInfo,
+} from '../lib/login-denied'
 import {
   buildGitHubOAuthUrl,
   buildDiscordOAuthUrl,
@@ -41,7 +47,11 @@ export function useOAuthLogin(
   redirectTo?: string
 ) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const { handleLoginSuccess } = useAuthRedirect()
+  const redirectHref = redirectTo
+    ? (sanitizeAuthRedirect(redirectTo, window.location.origin) ?? undefined)
+    : undefined
   const [isLoading, setIsLoading] = useState(false)
   const [isTelegramDialogOpen, setIsTelegramDialogOpen] = useState(false)
   const [isTelegramPending, setIsTelegramPending] = useState(false)
@@ -189,13 +199,21 @@ export function useOAuthLogin(
     try {
       const response = await telegramLogin(authorization)
       if (!response.success || !isAuthBundle(response.data)) {
+        const denied = getLoginDeniedInfo(response)
+        if (denied) {
+          navigate({
+            to: '/login-result',
+            search: buildLoginDeniedSearch(denied, response.message, redirectHref),
+            replace: true,
+          })
+          return
+        }
         toast.error(t('Login failed'))
         return
       }
 
       setIsTelegramDialogOpen(false)
       await handleLoginSuccess(response.data, redirectTo)
-      toast.success(t('Welcome back!'))
     } catch {
       toast.error(t('Login failed'))
     } finally {
