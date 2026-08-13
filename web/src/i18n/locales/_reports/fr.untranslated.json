@@ -152,5 +152,11 @@
   "Upload and manage images used by themes.": "Upload and manage images used by themes.",
   "Additional tools and utilities.": "Additional tools and utilities.",
   "Uploaded an image to the image library": "Uploaded an image to the image library",
-  "Evicted {{count}} stale session(s) to make room for a new login": "Evicted {{count}} stale session(s) to make room for a new login"
+  "Evicted {{count}} stale session(s) to make room for a new login": "Evicted {{count}} stale session(s) to make room for a new login",
+  "Some images failed to upload": "Some images failed to upload",
+  "Nothing to export yet": "Nothing to export yet",
+  "Describe the image you want...": "Describe the image you want...",
+  "No images yet. Enter a prompt to get started.": "No images yet. Enter a prompt to get started.",
+  "Save to my images": "Save to my images",
+  "Disabled users cannot upload images to the playground. Existing images stay readable and are cleaned up normally.": "Disabled users cannot upload images to the playground. Existing images stay readable and are cleaned up normally."
 }
