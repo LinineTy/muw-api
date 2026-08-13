@@ -30,7 +30,12 @@ import {
   usePlaygroundOptions,
   usePlaygroundState,
 } from './hooks'
-import { buildConversationExport, getMessageContent } from './lib'
+import {
+  buildConversationExport,
+  createUserMessage,
+  deriveConversationTitle,
+  getMessageContent,
+} from './lib'
 import type { ConversationExportFormat } from './lib/export/conversation-export'
 import type { PlaygroundMode } from './types'
 import { PlaygroundChat } from './components/chat/playground-chat'
@@ -93,6 +98,27 @@ export function Playground() {
     handleEditOpenChange(false)
     clearMessages()
   }
+
+  // 新会话发出第一条用户消息时自动用该消息生成标题（手动改名后不再覆盖）。
+  const handleSendMessageWithTitle = useCallback(
+    (text: string, attachments?: string[]) => {
+      const hasUserContent = (activeConversation?.messages ?? []).some(
+        (message) =>
+          message.from === 'user' && getMessageContent(message).trim() !== ''
+      )
+      if (activeConversation && !hasUserContent) {
+        const title = deriveConversationTitle(
+          [createUserMessage(text)],
+          t('New chat')
+        )
+        if (title) {
+          renameConversation(activeConversation.id, title)
+        }
+      }
+      handleSendMessage(text, attachments)
+    },
+    [activeConversation, handleSendMessage, renameConversation, t]
+  )
 
   const { isLoadingModels } = usePlaygroundOptions({
     currentGroup: config.group,
@@ -187,7 +213,7 @@ export function Playground() {
               onRegenerateMessage={handleRegenerateMessage}
               onEditMessage={handleEditMessage}
               onDeleteMessage={handleDeleteMessage}
-              onSelectPrompt={handleSendMessage}
+              onSelectPrompt={handleSendMessageWithTitle}
               isGenerating={isGenerating}
               editingKey={editingMessageKey}
               onCancelEdit={handleEditOpenChange}
@@ -213,7 +239,7 @@ export function Playground() {
               onModelChange={(value) => updateConfig('model', value)}
               onParameterEnabledChange={updateParameterEnabled}
               onStop={stopGeneration}
-              onSubmit={handleSendMessage}
+              onSubmit={handleSendMessageWithTitle}
               onUploadFiles={onUploadFiles}
               parameterEnabled={parameterEnabled}
               hasMessages={messages.length > 0}
@@ -221,7 +247,7 @@ export function Playground() {
           </div>
         </>
       ) : (
-        <PlaygroundImageGeneration group={config.group} />
+        <PlaygroundImageGeneration group={config.group} models={models} />
       )}
 
       <PlaygroundSystemPromptDialog

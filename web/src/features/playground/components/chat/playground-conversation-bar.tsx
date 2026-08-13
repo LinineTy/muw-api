@@ -134,111 +134,119 @@ export function PlaygroundConversationBar({
       </div>
 
       {/* Conversation switcher */}
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              className='max-w-48 text-muted-foreground hover:text-foreground'
-              disabled={disabled}
-              size='sm'
-              variant='ghost'
-            >
-              <span className='truncate'>{activeTitle}</span>
-              <ChevronDown />
-            </Button>
-          }
-        />
-        <DropdownMenuContent align='start' className='min-w-56'>
-          {conversations.map((conversation) => (
-            <DropdownMenuItem
-              key={conversation.id}
-              onClick={() => onSwitch(conversation.id)}
-            >
-              <span className='min-w-0 flex-1 truncate'>
-                {conversation.title}
-              </span>
-              <Button
-                aria-label={t('Delete conversation')}
-                className='size-5 shrink-0'
-                onClick={(event) => {
-                  event.stopPropagation()
-                  setDeleteTarget(conversation.id)
-                }}
-                size='icon-xs'
-                variant='ghost'
-              >
-                <Trash2 className='text-destructive' />
-              </Button>
-            </DropdownMenuItem>
-          ))}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem inset onClick={openRename}>
-            <Pencil />
-            {t('Rename')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {mode === 'chat' && (
+        <>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  className='max-w-48 text-muted-foreground hover:text-foreground'
+                  disabled={disabled}
+                  size='sm'
+                  variant='ghost'
+                >
+                  <span className='truncate'>{activeTitle}</span>
+                  <ChevronDown />
+                </Button>
+              }
+            />
+            <DropdownMenuContent align='start' className='min-w-56'>
+              {conversations.map((conversation) => (
+                <DropdownMenuItem
+                  key={conversation.id}
+                  onClick={() => onSwitch(conversation.id)}
+                >
+                  <span className='min-w-0 flex-1 truncate'>
+                    {conversation.title}
+                  </span>
+                  <Button
+                    aria-label={t('Delete conversation')}
+                    className='size-5 shrink-0'
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setDeleteTarget(conversation.id)
+                    }}
+                    size='icon-xs'
+                    variant='ghost'
+                  >
+                    <Trash2 className='text-destructive' />
+                  </Button>
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem inset onClick={openRename}>
+                <Pencil />
+                {t('Rename')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-      <Button
-        aria-label={t('New chat')}
-        disabled={disabled}
-        onClick={onCreate}
-        size='sm'
-        variant='ghost'
-      >
-        <Plus />
-      </Button>
+          <Button
+            aria-label={t('New chat')}
+            disabled={disabled}
+            onClick={onCreate}
+            size='sm'
+            variant='ghost'
+          >
+            <Plus />
+          </Button>
+        </>
+      )}
 
       <div className='flex-1' />
 
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              aria-label={t('System prompt')}
-              disabled={disabled}
-              onClick={onOpenSystemPrompt}
-              size='sm'
-              variant='ghost'
+      {mode === 'chat' && (
+        <>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  aria-label={t('System prompt')}
+                  disabled={disabled}
+                  onClick={onOpenSystemPrompt}
+                  size='sm'
+                  variant='ghost'
+                >
+                  <Pencil />
+                  <span className='hidden md:inline'>{t('System prompt')}</span>
+                </Button>
+              }
             >
-              <Pencil />
-              <span className='hidden md:inline'>{t('System prompt')}</span>
-            </Button>
-          }
-        >
-          {t('System prompt')}
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>{t('System prompt')}</p>
-        </TooltipContent>
-      </Tooltip>
+              {t('System prompt')}
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{t('System prompt')}</p>
+            </TooltipContent>
+          </Tooltip>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              aria-label={t('Export')}
-              disabled={disabled || conversations.length === 0}
-              size='sm'
-              variant='ghost'
-            >
-              <Download />
-              <span className='hidden md:inline'>{t('Export')}</span>
-            </Button>
-          }
-        />
-        <DropdownMenuContent align='end'>
-          <DropdownMenuItem onClick={() => onExport('markdown')}>
-            {t('Markdown')}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onExport('json')}>
-            {t('JSON')}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onExport('text')}>
-            {t('Plain text')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  aria-label={t('Export')}
+                  disabled={disabled || conversations.length === 0}
+                  size='sm'
+                  variant='ghost'
+                >
+                  <Download />
+                  <span className='hidden md:inline'>{t('Export')}</span>
+                </Button>
+              }
+            />
+            <DropdownMenuContent align='end'>
+              <DropdownMenuItem onClick={() => onExport('markdown')}>
+                {t('Markdown')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onExport('json')}>
+                {t('JSON')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onExport('text')}>
+                {t('Plain text')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
+      )}
 
       <ConfirmDialog
         destructive
