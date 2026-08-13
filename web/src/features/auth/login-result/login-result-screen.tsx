@@ -23,8 +23,6 @@ import { CheckCircle2, CircleAlert, Globe, ShieldCheck } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { GroupBadge } from '@/components/group-badge'
-import { StatusBadge } from '@/components/status-badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Avatar,
@@ -35,7 +33,6 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
 import dayjs from '@/lib/dayjs'
-import { getRoleLabel } from '@/lib/roles'
 import {
   loginMethodLabel,
   sessionDevice,
@@ -97,7 +94,6 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
   }, [])
 
   const displayName = user?.display_name || user?.username
-  const roleLabel = user ? getRoleLabel(user.role) : ''
   const ldLevel = user?.linux_do_trust_level
   const avatarName = user?.username || user?.display_name || 'U'
 
@@ -204,35 +200,13 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
                   </AvatarFallback>
                 </Avatar>
                 <div className='min-w-0 flex-1'>
-                  <div className='flex flex-wrap items-center justify-between gap-x-2 gap-y-1'>
-                    <p className='min-w-0 truncate text-base leading-snug font-semibold'>
-                      {displayName}
-                    </p>
-                    {/* 徽章：角色 / 分组(悬停注释) / LD 等级(仅绑定)，填满名字右侧空白 */}
-                    <div className='flex flex-wrap items-center justify-end gap-1.5'>
-                      <StatusBadge
-                        label={roleLabel}
-                        variant='neutral'
-                        copyable={false}
-                      />
-                      {user.group ? (
-                        <GroupBadge
-                          group={user.group}
-                          title={t('User Group')}
-                        />
-                      ) : null}
-                      {user.linux_do_id ? (
-                        <StatusBadge
-                          label={`L${ldLevel ?? 0}`}
-                          variant='info'
-                          copyable={false}
-                          title={t('LinuxDO trust level')}
-                        />
-                      ) : null}
-                    </div>
-                  </div>
+                  <p className='min-w-0 truncate text-base leading-snug font-semibold'>
+                    {displayName}
+                  </p>
+                  {/* 有 LD 绑定时在 @用户名 后用 · 跟 L 等级；无绑定则只显示 @用户名 */}
                   <p className='text-muted-foreground text-xs'>
                     @{user.username}
+                    {user.linux_do_id ? ` · L${ldLevel ?? 0}` : null}
                   </p>
                 </div>
               </div>
