@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { MESSAGE_STATUS, STORAGE_KEYS } from '../../constants'
+import { useAuthStore } from '@/stores/auth-store'
 import type { Conversation, PlaygroundConfig, ParameterEnabled, Message } from '../../types'
 import {
   finalizeMessage,
@@ -48,19 +49,39 @@ const MIN_PREFIX_COLLAPSE_LENGTH = 2000
 const MIN_REPEATED_SECTION_COUNT = 3
 const SECTION_HEADING_LINE_PATTERN = /^#{2,6}\s+\d+\.\s+.+$/gm
 
+// 旧版（未按用户分区）的键，仅用于一次性迁移后清除，避免跨账号泄漏。
+const LEGACY_STORAGE_KEYS = [
+  'playground_messages',
+  'playground_config',
+  'playground_parameter_enabled',
+  'playground_conversations',
+  'playground_active_conversation',
+  'playground_system_presets',
+  'playground_image_model',
+] as const
+
+/**
+ * localStorage 是按浏览器（域名）共享、不按账号隔离的。游乐场状态按当前登录
+ * 用户 id 加后缀分区，避免 admin/root 等不同账号互相看到对话与配置。
+ */
+export function userScopedKey(key: string): string {
+  const userId = useAuthStore.getState().auth.user?.id
+  return typeof userId === 'number' && userId > 0 ? `${key}_${userId}` : key
+}
+
 function readStoredValue(key: string): unknown | null {
-  const saved = localStorage.getItem(key)
+  const saved = localStorage.getItem(userScopedKey(key))
   if (!saved) return null
 
   return JSON.parse(saved) as unknown
 }
 
 function readStoredMessagesValue(): unknown | null {
-  const saved = localStorage.getItem(STORAGE_KEYS.MESSAGES)
+  const saved = localStorage.getItem(userScopedKey(STORAGE_KEYS.MESSAGES))
   if (!saved) return null
 
   if (saved.length > MAX_STORED_MESSAGES_BYTES) {
-    localStorage.removeItem(STORAGE_KEYS.MESSAGES)
+    localStorage.removeItem(userScopedKey(STORAGE_KEYS.MESSAGES))
     return null
   }
 
@@ -85,7 +106,7 @@ function writeStoredValue<T>(key: string, data: T): void {
     data,
   }
 
-  localStorage.setItem(key, JSON.stringify(payload))
+  localStorage.setItem(userScopedKey(key), JSON.stringify(payload))
 }
 
 function trimMessages(messages: Message[]): Message[] {
@@ -422,7 +443,9 @@ export function saveConversations(conversations: Conversation[]): void {
  */
 export function loadActiveConversationId(): string | null {
   try {
-    const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_CONVERSATION)
+    const saved = localStorage.getItem(
+      userScopedKey(STORAGE_KEYS.ACTIVE_CONVERSATION)
+    )
     return saved ? (JSON.parse(saved) as string) : null
   } catch (error) {
     // eslint-disable-next-line no-console
@@ -436,13 +459,11 @@ export function loadActiveConversationId(): string | null {
  */
 export function saveActiveConversationId(id: string | null): void {
   try {
+    const key = userScopedKey(STORAGE_KEYS.ACTIVE_CONVERSATION)
     if (id === null) {
-      localStorage.removeItem(STORAGE_KEYS.ACTIVE_CONVERSATION)
+      localStorage.removeItem(key)
     } else {
-      localStorage.setItem(
-        STORAGE_KEYS.ACTIVE_CONVERSATION,
-        JSON.stringify(id)
-      )
+      localStorage.setItem(key, JSON.stringify(id))
     }
   } catch (error) {
     // eslint-disable-next-line no-console
@@ -451,8 +472,9 @@ export function saveActiveConversationId(id: string | null): void {
 }
 
 /**
- * Load conversations, migrating the legacy single-session playground_messages
- * key into the first conversation when no conversation store exists yet.
+ * Load conversations, migrating the legacy (user-unscopped) single-session
+ * playground_messages into the current user's scoped store on first use, then
+ * clearing the legacy keys so other accounts never inherit them.
  */
 export function loadOrCreateConversations(): {
   conversations: Conversation[]
@@ -469,28 +491,110 @@ export function loadOrCreateConversations(): {
     }
   }
 
-  const legacy = loadMessages() ?? []
-  const seeded = createConversationWithMessages(
-    deriveConversationTitle(legacy, 'New chat'),
-    legacy
-  )
+  const migrated = migrateLegacyPlaygroundData()
+  if (migrated) {
+    saveConversations(migrated.conversations)
+    saveActiveConversationId(migrated.activeId)
+    return migrated
+  }
+
+  const seeded = createConversationWithMessages('New chat', [])
   saveConversations([seeded])
   saveActiveConversationId(seeded.id)
   return { conversations: [seeded], activeId: seeded.id }
 }
 
 /**
- * Clear all playground data
+ * One-time migration from legacy user-unscopped storage into the current user's
+ * scoped store. Prefers the multi-conversation store, then falls back to the
+ * older single-session messages. Legacy keys are cleared so a different account
+ * on the same browser starts fresh.
+ */
+function migrateLegacyPlaygroundData(): {
+  conversations: Conversation[]
+  activeId: string
+} | null {
+  // 1) 旧多会话存储（multi-conversation era）。
+  const rawConversations = localStorage.getItem('playground_conversations')
+  if (rawConversations) {
+    try {
+      const parsed = conversationsSchema.parse(
+        unwrapStoredValue(JSON.parse(rawConversations))
+      ) as Conversation[]
+      if (parsed.length > 0) {
+        let legacyActiveId: string | null = null
+        const rawActive = localStorage.getItem('playground_active_conversation')
+        try {
+          legacyActiveId = rawActive ? (JSON.parse(rawActive) as string) : null
+        } catch {
+          // 忽略损坏的 active id
+        }
+        const validActive =
+          legacyActiveId !== null &&
+          parsed.some((conversation) => conversation.id === legacyActiveId)
+        clearLegacyPlaygroundKeys()
+        return {
+          conversations: parsed,
+          activeId:
+            validActive && legacyActiveId !== null
+              ? legacyActiveId
+              : parsed[0].id,
+        }
+      }
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to migrate legacy playground conversations:', error)
+    }
+  }
+
+  // 2) 旧单会话消息（single-session era）。
+  const rawMessages = localStorage.getItem('playground_messages')
+  clearLegacyPlaygroundKeys()
+  if (!rawMessages) {
+    return null
+  }
+  try {
+    const parsed = messagesSchema.parse(
+      unwrapStoredValue(JSON.parse(rawMessages))
+    ) as Message[]
+    const legacy = parsed.map(normalizeStoredMessageForLoad)
+    if (legacy.length === 0) {
+      return null
+    }
+    const seeded = createConversationWithMessages(
+      deriveConversationTitle(legacy, 'New chat'),
+      legacy
+    )
+    return { conversations: [seeded], activeId: seeded.id }
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('Failed to migrate legacy playground messages:', error)
+    return null
+  }
+}
+
+function clearLegacyPlaygroundKeys(): void {
+  for (const key of LEGACY_STORAGE_KEYS) {
+    try {
+      localStorage.removeItem(key)
+    } catch {
+      // 忽略
+    }
+  }
+}
+
+/**
+ * Clear all playground data for the current user.
  */
 export function clearPlaygroundData(): void {
   try {
-    localStorage.removeItem(STORAGE_KEYS.CONFIG)
-    localStorage.removeItem(STORAGE_KEYS.PARAMETER_ENABLED)
-    localStorage.removeItem(STORAGE_KEYS.MESSAGES)
-    localStorage.removeItem(STORAGE_KEYS.CONVERSATIONS)
-    localStorage.removeItem(STORAGE_KEYS.ACTIVE_CONVERSATION)
-    localStorage.removeItem(STORAGE_KEYS.SYSTEM_PRESETS)
-    localStorage.removeItem(STORAGE_KEYS.IMAGE_MODEL)
+    localStorage.removeItem(userScopedKey(STORAGE_KEYS.CONFIG))
+    localStorage.removeItem(userScopedKey(STORAGE_KEYS.PARAMETER_ENABLED))
+    localStorage.removeItem(userScopedKey(STORAGE_KEYS.MESSAGES))
+    localStorage.removeItem(userScopedKey(STORAGE_KEYS.CONVERSATIONS))
+    localStorage.removeItem(userScopedKey(STORAGE_KEYS.ACTIVE_CONVERSATION))
+    localStorage.removeItem(userScopedKey(STORAGE_KEYS.SYSTEM_PRESETS))
+    localStorage.removeItem(userScopedKey(STORAGE_KEYS.IMAGE_MODEL))
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Failed to clear playground data:', error)

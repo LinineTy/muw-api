@@ -21,13 +21,16 @@ import { nanoid } from 'nanoid'
 import { STORAGE_KEYS } from '../../constants'
 import type { SystemPreset } from '../../types'
 import { systemPresetsSchema } from './storage-schema'
+import { userScopedKey } from './storage'
 
 /**
  * Load saved system-prompt presets from localStorage.
  */
 export function loadSystemPresets(): SystemPreset[] {
   try {
-    const saved = localStorage.getItem(STORAGE_KEYS.SYSTEM_PRESETS)
+    const saved = localStorage.getItem(
+      userScopedKey(STORAGE_KEYS.SYSTEM_PRESETS)
+    )
     if (!saved) return []
     const parsed = JSON.parse(saved) as unknown
     return systemPresetsSchema.parse(parsed)
@@ -70,7 +73,10 @@ export function deleteSystemPreset(
 
 function persistSystemPresets(presets: SystemPreset[]): void {
   try {
-    localStorage.setItem(STORAGE_KEYS.SYSTEM_PRESETS, JSON.stringify(presets))
+    localStorage.setItem(
+      userScopedKey(STORAGE_KEYS.SYSTEM_PRESETS),
+      JSON.stringify(presets)
+    )
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Failed to save system presets:', error)
