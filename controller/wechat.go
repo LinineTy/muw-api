@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 
 	"github.com/gin-gonic/gin"
@@ -97,10 +98,7 @@ func WeChatAuth(c *gin.Context) {
 
 			if err := user.Insert(0); err != nil {
 				if errors.Is(err, model.ErrUserLimitReached) {
-					c.JSON(http.StatusOK, gin.H{
-						"success": false,
-						"message": "站点用户数量已达上限",
-					})
+					common.ApiErrorLoginDenied(c, common.LoginStatusUserLimitReached, i18n.MsgUserLimitReached, "")
 					return
 				}
 				c.JSON(http.StatusOK, gin.H{
@@ -110,19 +108,13 @@ func WeChatAuth(c *gin.Context) {
 				return
 			}
 		} else {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": "管理员关闭了新用户注册",
-			})
+			common.ApiErrorLoginDenied(c, common.LoginStatusRegistrationDisabled, i18n.MsgUserRegisterDisabled, "")
 			return
 		}
 	}
 
 	if user.Status != common.UserStatusEnabled {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "用户已被封禁",
-			"success": false,
-		})
+		common.ApiErrorLoginDenied(c, common.LoginStatusUserDisabled, i18n.MsgAuthUserBanned, user.Remark)
 		return
 	}
 	setupLogin(&user, c)

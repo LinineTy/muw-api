@@ -210,9 +210,9 @@ func HandleOAuth(c *gin.Context) {
 		}
 		switch err.(type) {
 		case *OAuthUserDeletedError:
-			common.ApiErrorI18n(c, i18n.MsgOAuthUserDeleted)
+			common.ApiErrorLoginDenied(c, common.LoginStatusUserDeleted, i18n.MsgOAuthUserDeleted, "")
 		case *OAuthRegistrationDisabledError:
-			common.ApiErrorI18n(c, i18n.MsgUserRegisterDisabled)
+			common.ApiErrorLoginDenied(c, common.LoginStatusRegistrationDisabled, i18n.MsgUserRegisterDisabled, "")
 		case *OAuthEmailAlreadyTakenError:
 			common.ApiErrorI18n(c, i18n.MsgUserEmailAlreadyTaken)
 		default:
@@ -223,7 +223,7 @@ func HandleOAuth(c *gin.Context) {
 
 	// 8. Check user status
 	if user.Status != common.UserStatusEnabled {
-		common.ApiErrorI18n(c, i18n.MsgOAuthUserBanned)
+		common.ApiErrorLoginDenied(c, common.LoginStatusUserDisabled, i18n.MsgOAuthUserBanned, user.Remark)
 		return
 	}
 
@@ -674,10 +674,10 @@ func handleOAuthError(c *gin.Context, err error) {
 	case *oauth.TrustLevelError:
 		common.ApiErrorI18n(c, i18n.MsgOAuthTrustLevelLow)
 	case *oauth.LinuxDOBlacklistedError:
-		common.ApiErrorI18n(c, i18n.MsgOAuthLinuxDOBlacklisted)
+		common.ApiErrorLoginDenied(c, common.LoginStatusLinuxDOBlacklisted, i18n.MsgOAuthLinuxDOBlacklisted, "")
 	default:
 		if errors.Is(err, model.ErrUserLimitReached) {
-			common.ApiErrorI18n(c, i18n.MsgUserLimitReached)
+			common.ApiErrorLoginDenied(c, common.LoginStatusUserLimitReached, i18n.MsgUserLimitReached, "")
 			return
 		}
 		common.ApiError(c, err)

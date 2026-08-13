@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
@@ -452,10 +453,7 @@ func Verify2FALogin(c *gin.Context) {
 		return
 	}
 	if user.Status != common.UserStatusEnabled {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "用户已被禁用",
-		})
+		common.ApiErrorLoginDenied(c, common.LoginStatusUserDisabled, i18n.MsgAuthUserBanned, user.Remark)
 		return
 	}
 	var flowPayload twoFALoginFlowPayload
