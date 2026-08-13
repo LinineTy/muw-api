@@ -85,6 +85,14 @@ func newPlaygroundImageTestEngine(userId int) *gin.Engine {
 		c.Set("id", userId)
 		DeletePlaygroundImage(c)
 	})
+	router.GET("/admin/stats", func(c *gin.Context) {
+		c.Set("id", userId)
+		AdminPlaygroundImageStats(c)
+	})
+	router.POST("/admin/cleanup", func(c *gin.Context) {
+		c.Set("id", userId)
+		AdminCleanupPlaygroundImages(c)
+	})
 	return router
 }
 
@@ -375,4 +383,107 @@ func TestDeletePlaygroundImageOwnership(t *testing.T) {
 	assert.True(t, os.IsNotExist(err))
 	_, err = model.GetPlaygroundImageById(1)
 	assert.Error(t, err) // 软删后查不到
+}
+
+// TestAdminPlaygroundImageStats 管理员统计返回临时/永久数量与字节。
+func TestAdminPlaygroundImageStats(t *testing.T) {
+	setupPlaygroundImageTestDB(t)
+	require.NoError(t, model.InsertPlaygroundImage(&model.PlaygroundImage{
+		Id: 1, Name: "a", Ext: "png", Size: 10, UserId: 100, Permanent: false,
+	}))
+	require.NoError(t, model.InsertPlaygroundImage(&model.PlaygroundImage{
+		Id: 2, Name: "b", Ext: "png", Size: 20, UserId: 100, Permanent: false,
+	}))
+	require.NoError(t, model.InsertPlaygroundImage(&model.PlaygroundImage{
+		Id: 3, Name: "c", Ext: "png", Size: 30, UserId: 101, Permanent: true,
+	}))
+
+	router := newPlaygroundImageTestEngine(100)
+	req := httptest.NewRequest(http.MethodGet, "/admin/stats", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	env := playgroundDecodeEnvelope(t, rec)
+	require.True(t, env.Success)
+	raw := map[string]any{}
+	require.NoError(t, json.Unmarshal(env.Data, &raw))
+	transient := raw["transient"].(map[string]any)
+	permanent := raw["permanent"].(map[string]any)
+	assert.Equal(t, float64(2), transient["count"])
+	assert.Equal(t, float64(30), transient["total_bytes"])
+	assert.Equal(t, float64(1), permanent["count"])
+	assert.Equal(t, float64(30), permanent["total_bytes"])
+}
+
+// TestAdminPlaygroundImageStatsEmpty 无图片时 stats 必须返回空数组而非 null，
+// 避免前端 top_users.length 崩溃。
+func TestAdminPlaygroundImageStatsEmpty(t *testing.T) {
+	setupPlaygroundImageTestDB(t)
+
+	router := newPlaygroundImageTestEngine(100)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin/stats", nil))
+
+	env := playgroundDecodeEnvelope(t, rec)
+	require.True(t, env.Success)
+	raw := map[string]any{}
+	require.NoError(t, json.Unmarshal(env.Data, &raw))
+	assert.Equal(t, []any{}, raw["top_users"])
+	assert.Equal(t, float64(0), raw["transient"].(map[string]any)["count"])
+	assert.Equal(t, float64(0), raw["permanent"].(map[string]any)["count"])
+}
+
+// TestAdminCleanupPlaygroundImages 只清过期临时图；all=true 清所有临时图；永久不动。
+func TestAdminCleanupPlaygroundImages(t *testing.T) {
+	setupPlaygroundImageTestDB(t)
+	now := common.GetTimestamp()
+	old := now - int64(4*24*3600)    // 4 天前 > 默认 3 天 TTL
+	recent := now - int64(3600)      // 1 小时前：TTL 内保留，但 all=true 时必删（避免秒边界抖动）
+	// 过期临时行（落文件）。
+	require.NoError(t, model.DB.Create(&model.PlaygroundImage{
+		Id: 1, Name: "old", Ext: "png", Size: 1, UserId: 100, Permanent: false, CreatedTime: old,
+	}).Error)
+	require.NoError(t, os.MkdirAll(filepath.Join(common.PrivateUploadDir, "playground-images"), 0o755))
+	require.NoError(t, os.WriteFile(playgroundPrivateFilePath(1, "png"), []byte("x"), 0o644))
+	// 近期临时行（落文件）。
+	require.NoError(t, model.DB.Create(&model.PlaygroundImage{
+		Id: 2, Name: "recent", Ext: "png", Size: 1, UserId: 100, Permanent: false, CreatedTime: recent,
+	}).Error)
+	require.NoError(t, os.WriteFile(playgroundPrivateFilePath(2, "png"), []byte("x"), 0o644))
+	// 永久行。
+	require.NoError(t, model.DB.Create(&model.PlaygroundImage{
+		Id: 3, Name: "perm", Ext: "png", Size: 1, UserId: 100, Permanent: true, CreatedTime: old,
+	}).Error)
+
+	router := newPlaygroundImageTestEngine(100)
+
+	// 只清过期。
+	body := bytes.NewBufferString(`{}`)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/admin/cleanup", body))
+	env := playgroundDecodeEnvelope(t, rec)
+	require.True(t, env.Success)
+	raw := map[string]any{}
+	require.NoError(t, json.Unmarshal(env.Data, &raw))
+	assert.Equal(t, float64(1), raw["deleted"])
+	_, err := model.GetPlaygroundImageById(1)
+	assert.Error(t, err)
+	_, err = model.GetPlaygroundImageById(2) // 近期临时仍在
+	assert.NoError(t, err)
+	_, err = model.GetPlaygroundImageById(3) // 永久仍在
+	assert.NoError(t, err)
+
+	// all=true 清所有临时。
+	body = bytes.NewBufferString(`{"all":true}`)
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/admin/cleanup", body))
+	env = playgroundDecodeEnvelope(t, rec)
+	require.True(t, env.Success)
+	raw = map[string]any{}
+	require.NoError(t, json.Unmarshal(env.Data, &raw))
+	assert.Equal(t, float64(1), raw["deleted"])
+	_, err = model.GetPlaygroundImageById(2)
+	assert.Error(t, err)
+	_, err = model.GetPlaygroundImageById(3) // 永久仍保留
+	assert.NoError(t, err)
 }

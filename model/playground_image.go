@@ -64,6 +64,48 @@ func ListPlaygroundImagesByUser(userId int, permanentOnly bool, limit int) ([]*P
 	return assets, nil
 }
 
+// PlaygroundImageUserUsage 单用户用量汇总（管理员统计用）。
+type PlaygroundImageUserUsage struct {
+	UserId     int   `json:"user_id"`
+	Count      int64 `json:"count"`
+	TotalBytes int64 `json:"total_bytes"`
+}
+
+// CountPlaygroundImagesGlobal 全局统计指定类型图片总数（软删自动排除）。
+func CountPlaygroundImagesGlobal(permanent bool) (int64, error) {
+	var count int64
+	err := DB.Model(&PlaygroundImage{}).
+		Where("permanent = ?", permanent).
+		Count(&count).Error
+	return count, err
+}
+
+// SumPlaygroundImageSizesGlobal 全局统计指定类型图片总字节数。
+func SumPlaygroundImageSizesGlobal(permanent bool) (int64, error) {
+	var sum int64
+	err := DB.Model(&PlaygroundImage{}).
+		Where("permanent = ?", permanent).
+		Select("COALESCE(SUM(size), 0)").
+		Scan(&sum).Error
+	return sum, err
+}
+
+// GroupPlaygroundImageUsageByUser 按用户汇总（不分永久/临时），按字节降序取前 limit。
+func GroupPlaygroundImageUsageByUser(limit int) ([]PlaygroundImageUserUsage, error) {
+	var usages []PlaygroundImageUserUsage
+	query := DB.Model(&PlaygroundImage{}).
+		Select("user_id, COUNT(*) AS count, COALESCE(SUM(size), 0) AS total_bytes").
+		Group("user_id").
+		Order("total_bytes DESC")
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+	if err := query.Scan(&usages).Error; err != nil {
+		return nil, err
+	}
+	return usages, nil
+}
+
 // GetPlaygroundImageById 按 Id 查询图片记录（不含软删行）。
 func GetPlaygroundImageById(id int) (*PlaygroundImage, error) {
 	var asset PlaygroundImage

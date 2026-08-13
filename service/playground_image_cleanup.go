@@ -33,24 +33,31 @@ func StartPlaygroundImageCleanup() {
 	}()
 }
 
-// cleanupPlaygroundImages hard-deletes expired rows and best-effort removes their
-// files. Batched to bound lock/memory; stops on the first DB error and retries
-// on the next tick. Files are removed first so a surviving orphan file is harmless.
+// cleanupPlaygroundImages runs the scheduled TTL cleanup. Failures are logged;
+// the next tick retries.
 func cleanupPlaygroundImages() {
 	ttlDays := setting.PlaygroundImageTTLDays
 	if ttlDays < 1 {
 		ttlDays = 1
 	}
 	cutoff := time.Now().Add(-time.Duration(ttlDays) * 24 * time.Hour).Unix()
+	if _, err := RunPlaygroundImageCleanup(cutoff); err != nil {
+		common.SysError("playground image cleanup failed: " + err.Error())
+	}
+}
 
+// RunPlaygroundImageCleanup hard-deletes transient playground images older than
+// cutoff and best-effort removes their files, in batches. Returns the number of
+// rows deleted. Used by the scheduled ticker and the admin cleanup endpoint.
+func RunPlaygroundImageCleanup(cutoff int64) (int64, error) {
+	var total int64
 	for {
 		rows, err := model.ListExpiredPlaygroundImages(cutoff, playgroundImageCleanupBatchSize)
 		if err != nil {
-			common.SysError("failed to list expired playground images: " + err.Error())
-			return
+			return total, err
 		}
 		if len(rows) == 0 {
-			return
+			return total, nil
 		}
 
 		ids := make([]int, 0, len(rows))
@@ -62,12 +69,13 @@ func cleanupPlaygroundImages() {
 			}
 		}
 
-		if _, err := model.HardDeletePlaygroundImagesByIds(ids); err != nil {
-			common.SysError("failed to hard-delete expired playground images: " + err.Error())
-			return
+		affected, err := model.HardDeletePlaygroundImagesByIds(ids)
+		if err != nil {
+			return total, err
 		}
+		total += affected
 		if len(rows) < playgroundImageCleanupBatchSize {
-			return
+			return total, nil
 		}
 	}
 }
