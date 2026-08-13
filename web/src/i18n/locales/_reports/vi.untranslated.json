@@ -158,5 +158,13 @@
   "Describe the image you want...": "Describe the image you want...",
   "No images yet. Enter a prompt to get started.": "No images yet. Enter a prompt to get started.",
   "Save to my images": "Save to my images",
-  "Disabled users cannot upload images to the playground. Existing images stay readable and are cleaned up normally.": "Disabled users cannot upload images to the playground. Existing images stay readable and are cleaned up normally."
+  "Every user starts with this capacity; they can buy more with quota.": "Every user starts with this capacity; they can buy more with quota.",
+  "Disabled users cannot upload images to the playground. Existing images stay readable and are cleaned up normally.": "Disabled users cannot upload images to the playground. Existing images stay readable and are cleaned up normally.",
+  "Storage of your playground files and synced conversations.": "Storage of your playground files and synced conversations.",
+  "Buy 1 to 1024 MB at a time": "Buy 1 to 1024 MB at a time",
+  "No images yet. Generate one in the playground.": "No images yet. Generate one in the playground.",
+  "Chat attachments auto-expire. Only count and size are shown.": "Chat attachments auto-expire. Only count and size are shown.",
+  "Synced conversations. Download to keep a copy.": "Synced conversations. Download to keep a copy.",
+  "This synced conversation will be removed from the server.": "This synced conversation will be removed from the server.",
+  "0 uses the global initial capacity. Root is unlimited.": "0 uses the global initial capacity. Root is unlimited."
 }
