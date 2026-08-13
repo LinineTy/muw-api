@@ -113,34 +113,36 @@ func UploadPlaygroundImage(c *gin.Context) {
 
 	permanent, _ := strconv.ParseBool(c.Query("permanent"))
 
-	// 落库前配额检查（软删自动排除已删行）。
-	if permanent {
-		count, err := model.CountPlaygroundImagesByUser(userId, true)
+	// 落库前容量检查（软删自动排除已删行）。root 无限制：容量与云空间总分配量都跳过。
+	// 云空间统一容量模型：临时+永久合并计一个总空间。
+	if c.GetInt("role") != common.RoleRootUser {
+		capacity := int64(setting.UserSpaceInitialMB) << 20
+		if user.SpaceCapacity > 0 {
+			capacity = user.SpaceCapacity
+		}
+		used, err := model.SumPlaygroundImageSizesByUserAll(userId)
 		if err != nil {
 			common.ApiError(c, err)
 			return
 		}
-		if count >= int64(setting.PlaygroundImageMaxPermanentPerUser) {
-			common.ApiErrorMsg(c, "永久图片数量已达上限")
+		if used+int64(len(data)) > capacity {
+			common.ApiErrorMsg(c, "存储空间不足")
 			return
 		}
-	} else {
-		count, err := model.CountPlaygroundImagesByUser(userId, false)
+		// 云空间总分配量（红线）：固定分配，非磁盘剩余空间；只拦普通用户。
+		// 云空间全部用户临时+永久文件合计数；图床（image_assets）不计入。
+		globalTransient, err := model.SumPlaygroundImageSizesGlobal(false)
 		if err != nil {
 			common.ApiError(c, err)
 			return
 		}
-		if count >= int64(setting.PlaygroundImageMaxCountPerUser) {
-			common.ApiErrorMsg(c, "图片数量已达上限")
-			return
-		}
-		total, err := model.SumPlaygroundImageSizesByUser(userId, false)
+		globalPermanent, err := model.SumPlaygroundImageSizesGlobal(true)
 		if err != nil {
 			common.ApiError(c, err)
 			return
 		}
-		if total+int64(len(data)) > int64(setting.PlaygroundImageMaxTotalBytesPerUser) {
-			common.ApiErrorMsg(c, "图片存储空间不足")
+		if globalTransient+globalPermanent+int64(len(data)) > int64(setting.UserSpaceGlobalMaxMB)<<20 {
+			common.ApiErrorMsg(c, "云空间容量已满")
 			return
 		}
 	}
@@ -350,6 +352,40 @@ func AdminCleanupPlaygroundImages(c *gin.Context) {
 	}
 
 	deleted, err := service.RunPlaygroundImageCleanup(cutoff)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"deleted": deleted})
+}
+
+// ClearUserTransientPlaygroundImages 清空当前用户的全部临时图片（不含永久收藏）。
+// 真删释放容量；云空间页临时区不展示明细，只提供此批量清理。
+func ClearUserTransientPlaygroundImages(c *gin.Context) {
+	userId := c.GetInt("id")
+	if userId <= 0 {
+		common.ApiErrorMsg(c, "无效的用户")
+		return
+	}
+
+	assets, err := model.ListTransientPlaygroundImagesByUser(userId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if len(assets) == 0 {
+		common.ApiSuccess(c, gin.H{"deleted": 0})
+		return
+	}
+
+	ids := make([]int, 0, len(assets))
+	for _, asset := range assets {
+		ids = append(ids, asset.Id)
+		if err := os.Remove(playgroundImageFilepath(asset.Id, asset.Ext)); err != nil && !os.IsNotExist(err) {
+			common.SysError(fmt.Sprintf("failed to remove playground image file %d: %s", asset.Id, err.Error()))
+		}
+	}
+	deleted, err := model.HardDeletePlaygroundImagesByIds(ids)
 	if err != nil {
 		common.ApiError(c, err)
 		return

@@ -48,6 +48,17 @@ func SumPlaygroundImageSizesByUser(userId int, permanent bool) (int64, error) {
 	return sum, err
 }
 
+// SumPlaygroundImageSizesByUserAll 统计某用户临时+永久合并的总字节数（软删排除）。
+// 云空间统一容量模型按此计算已占用空间。
+func SumPlaygroundImageSizesByUserAll(userId int) (int64, error) {
+	var sum int64
+	err := DB.Model(&PlaygroundImage{}).
+		Where("user_id = ?", userId).
+		Select("COALESCE(SUM(size), 0)").
+		Scan(&sum).Error
+	return sum, err
+}
+
 // ListPlaygroundImagesByUser 返回某用户图片记录（最新在前）；permanentOnly 时只看永久收藏。
 func ListPlaygroundImagesByUser(userId int, permanentOnly bool, limit int) ([]*PlaygroundImage, error) {
 	var assets []*PlaygroundImage
@@ -62,6 +73,15 @@ func ListPlaygroundImagesByUser(userId int, permanentOnly bool, limit int) ([]*P
 		return nil, err
 	}
 	return assets, nil
+}
+
+// ListTransientPlaygroundImagesByUser 返回某用户全部临时（非永久）图片，供用户级「清空临时」。
+func ListTransientPlaygroundImagesByUser(userId int) ([]*PlaygroundImage, error) {
+	var assets []*PlaygroundImage
+	err := DB.Where("user_id = ? AND permanent = ?", userId, false).
+		Order("id DESC").
+		Find(&assets).Error
+	return assets, err
 }
 
 // PlaygroundImageUserUsage 单用户用量汇总（管理员统计用）。

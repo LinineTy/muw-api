@@ -119,6 +119,9 @@ type User struct {
 	LastLoginAt           int64                      `json:"last_login_at" gorm:"default:0;column:last_login_at"`
 	AuthVersion           int64                      `json:"-" gorm:"type:bigint;not null;default:1;column:auth_version"`
 	PlaygroundImageDisabled bool                     `json:"playground_image_disabled" gorm:"column:playground_image_disabled"` // 管理员封禁该用户的图床（游乐场图片上传），不影响其余功能
+	// SpaceCapacity 用户云空间总容量（字节）。0 表示未初始化，按全局初始容量
+	// （setting.UserSpaceInitialMB）计；购买容量会累加写入；root 无限制。
+	SpaceCapacity         int64                      `json:"space_capacity" gorm:"bigint;column:space_capacity"` // 不加 gorm default 标签（跨库迁移安全）
 	AdminPermissions      map[string]map[string]bool `json:"admin_permissions,omitempty" gorm:"-:all"`
 }
 
@@ -914,6 +917,7 @@ func (user *User) EditWithTx(tx *gorm.DB, updatePassword bool) error {
 		"group":                      newUser.Group,
 		"remark":                     newUser.Remark,
 		"playground_image_disabled":  newUser.PlaygroundImageDisabled,
+		"space_capacity":             newUser.SpaceCapacity,
 	}
 	if updatePassword {
 		updates["password"] = newUser.Password
@@ -1413,6 +1417,26 @@ func decreaseUserQuota(id int, quota int) (err error) {
 		return err
 	}
 	return err
+}
+
+// PurchaseUserSpaceCapacity 用余额购买云空间容量：单条原子条件更新，只有
+// quota >= cost 才同时扣 quota 并把容量写为 newCapacity（绝对写入）。
+// 返回 ok=false 表示余额不足（更新未生效）。单行 UPDATE 在三种数据库上
+// 都是原子的，防并发购买导致负余额/白嫖容量。
+func PurchaseUserSpaceCapacity(id int, cost int, newCapacity int64) (ok bool, err error) {
+	if cost <= 0 {
+		return false, errors.New("cost 必须为正")
+	}
+	result := DB.Model(&User{}).
+		Where("id = ? AND quota >= ?", id, cost).
+		Updates(map[string]interface{}{
+			"quota":          gorm.Expr("quota - ?", cost),
+			"space_capacity": newCapacity,
+		})
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
 }
 
 func DeltaUpdateUserQuota(id int, delta int) (err error) {
