@@ -22,6 +22,8 @@ import { toast } from 'sonner'
 
 import {
   PromptInput,
+  PromptInputAttachment,
+  PromptInputAttachments,
   PromptInputFooter,
   PromptInputTextarea,
   type PromptInputMessage,
@@ -117,6 +119,7 @@ export function PlaygroundInput({
       <PromptInput
         accept='image/*'
         className='relative'
+        globalDrop
         groupClassName='bg-background/95 dark:bg-background/80 border-border/70 shadow-[0_18px_60px_-32px_rgba(0,0,0,0.65)] ring-1 ring-foreground/5 rounded-xl overflow-hidden transition-all duration-200 focus-within:border-primary/45 focus-within:ring-primary/15 focus-within:shadow-[0_22px_70px_-34px_rgba(0,0,0,0.75)]'
         maxFileSize={MAX_IMAGE_UPLOAD_BYTES}
         maxFiles={MAX_IMAGES_PER_MESSAGE}
@@ -133,8 +136,14 @@ export function PlaygroundInput({
           disabled={disabled}
           onChange={(event) => setText(event.target.value)}
           placeholder={t('Ask anything')}
-          value={text}
         />
+
+        {/* 附件缩略图托盘：选中/拖入图片后在此显示，可逐个移除 */}
+        <PromptInputAttachments>
+          {(attachment) => (
+            <PromptInputAttachment data={attachment} key={attachment.id} />
+          )}
+        </PromptInputAttachments>
 
         <PromptInputFooter className='border-border/60 bg-muted/20 dark:bg-muted/10 border-t px-3 py-2.5 backdrop-blur'>
           <PlaygroundInputControls

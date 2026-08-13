@@ -32,15 +32,9 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { ComboboxInput } from '@/components/ui/combobox-input'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 
 import {
@@ -51,14 +45,17 @@ import {
 } from '../../api'
 import {
   DEFAULT_IMAGE_GENERATION_MODEL,
+  ERROR_MESSAGES,
   IMAGE_GENERATION_SIZES,
   STORAGE_KEYS,
 } from '../../constants'
-import { resolveImageDataUrl } from '../../lib'
+import { parseRequestErrorDetails, resolveImageDataUrl, userScopedKey } from '../../lib'
 import { downloadBlobObject } from '@/lib/download'
+import type { ImageGenerationRequest, ModelOption } from '../../types'
 
 type PlaygroundImageGenerationProps = {
   group: string
+  models: ModelOption[]
 }
 
 type GeneratedImage = {
@@ -112,16 +109,17 @@ function isAbortError(error: unknown): boolean {
  */
 export function PlaygroundImageGeneration({
   group,
+  models,
 }: PlaygroundImageGenerationProps) {
   const { t } = useTranslation()
 
   const [prompt, setPrompt] = useState('')
   const [model, setModel] = useState(() => {
-    const stored = localStorage.getItem(STORAGE_KEYS.IMAGE_MODEL)
+    const stored = localStorage.getItem(userScopedKey(STORAGE_KEYS.IMAGE_MODEL))
     return stored || DEFAULT_IMAGE_GENERATION_MODEL
   })
   const [n, setN] = useState('1')
-  const [size, setSize] = useState('1024x1024')
+  const [size, setSize] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
   const [history, setHistory] = useState<HistoryItem[]>([])
   const [gallery, setGallery] = useState<GalleryItem[]>([])
@@ -131,7 +129,7 @@ export function PlaygroundImageGeneration({
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEYS.IMAGE_MODEL, model)
+      localStorage.setItem(userScopedKey(STORAGE_KEYS.IMAGE_MODEL), model)
     } catch {
       // ignore storage quota errors
     }
@@ -169,16 +167,17 @@ export function PlaygroundImageGeneration({
 
     try {
       const parsedN = Math.min(4, Math.max(1, Number(n) || 1))
-      const response = await generatePlaygroundImage(
-        {
-          model: model.trim() || DEFAULT_IMAGE_GENERATION_MODEL,
-          prompt: trimmedPrompt,
-          group,
-          n: parsedN,
-          size,
-        },
-        controller.signal
-      )
+      const payload: ImageGenerationRequest = {
+        model: model.trim() || DEFAULT_IMAGE_GENERATION_MODEL,
+        prompt: trimmedPrompt,
+        group,
+        n: parsedN,
+      }
+      // 自动尺寸：不传 size，让上游用自己的默认（避免渠道尺寸校验 400）。
+      if (size.trim()) {
+        payload.size = size.trim()
+      }
+      const response = await generatePlaygroundImage(payload, controller.signal)
 
       const items = response.data ?? []
       if (items.length === 0) {
@@ -213,7 +212,12 @@ export function PlaygroundImageGeneration({
       setPrompt('')
     } catch (error: unknown) {
       if (isAbortError(error)) return
-      toast.error(t('Image generation failed'))
+      const { errorMessage } = parseRequestErrorDetails(error)
+      toast.error(
+        errorMessage === ERROR_MESSAGES.API_REQUEST_ERROR
+          ? t('Image generation failed')
+          : errorMessage
+      )
     } finally {
       setIsGenerating(false)
       abortRef.current = null
@@ -314,17 +318,22 @@ export function PlaygroundImageGeneration({
         />
 
         <div className='flex flex-wrap items-end gap-3'>
-          <div className='min-w-40 flex-1 space-y-1'>
+          <div className='min-w-52 flex-1 space-y-1'>
             <Label htmlFor='image-model'>{t('Image model')}</Label>
-            <Input
+            <ComboboxInput
+              allowCustomValue
               id='image-model'
-              onChange={(event) => setModel(event.target.value)}
+              onValueChange={setModel}
+              options={models.map((option) => ({
+                value: option.value,
+                label: option.label,
+              }))}
               placeholder={DEFAULT_IMAGE_GENERATION_MODEL}
               value={model}
             />
           </div>
 
-          <div className='w-24 space-y-1'>
+          <div className='w-28 space-y-1'>
             <Label htmlFor='image-count'>{t('Number of images')}</Label>
             <Input
               id='image-count'
@@ -336,25 +345,22 @@ export function PlaygroundImageGeneration({
             />
           </div>
 
-          <div className='w-36 space-y-1'>
-            <Label>{t('Size')}</Label>
-            <Select
-              onValueChange={(value) => {
-                if (value) setSize(value)
-              }}
+          <div className='w-40 space-y-1'>
+            <Label htmlFor='image-size'>{t('Size')}</Label>
+            <ComboboxInput
+              allowCustomValue
+              id='image-size'
+              onValueChange={setSize}
+              options={[
+                { value: '', label: t('Auto') },
+                ...IMAGE_GENERATION_SIZES.map((item) => ({
+                  value: item,
+                  label: item,
+                })),
+              ]}
+              placeholder={t('Auto')}
               value={size}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {IMAGE_GENERATION_SIZES.map((item) => (
-                  <SelectItem key={item} value={item}>
-                    {item}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </div>
 
           {isGenerating ? (

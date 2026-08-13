@@ -120,15 +120,13 @@ export function getInputControlState({
   hasStopHandler,
   isGenerating,
   isModelLoading,
-  models,
   text,
   hasFiles = false,
 }: InputControlStateOptions): InputControlState {
-  const hasModels = models.length > 0
-
   return {
+    // 不依赖 hasModels：模型列表为空时按钮也应能亮，让用户可发送并在后端得到明确报错。
     canSubmit:
-      !disabled && hasModels && (text.trim().length > 0 || hasFiles),
+      !disabled && (text.trim().length > 0 || hasFiles),
     isSelectorDisabled: disabled || isModelLoading || groups.length === 0,
     shouldShowStop: Boolean(isGenerating && hasStopHandler),
   }
