@@ -1,0 +1,243 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+import { Download, ImageOff, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
+
+import { ConfirmDialog } from '@/components/confirm-dialog'
+import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
+import { downloadBlobObject } from '@/lib/download'
+import {
+  deletePlaygroundImage,
+  listPlaygroundImages,
+} from '@/features/playground/api'
+import { resolveImageDataUrl } from '@/features/playground/lib/image/image-data-url'
+
+type PermanentImageItem = Awaited<ReturnType<typeof listPlaygroundImages>>[number]
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [meta, base64] = dataUrl.split(',')
+  const mime = meta.match(/data:(.*?);/)?.[1] ?? 'application/octet-stream'
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return new Blob([bytes], { type: mime })
+}
+
+/**
+ * 云空间「永久图」区：可预览、下载、删除。
+ */
+export function SpacePermanentSection() {
+  const { t } = useTranslation()
+  const [images, setImages] = useState<PermanentImageItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [deleteTarget, setDeleteTarget] = useState<PermanentImageItem | null>(
+    null
+  )
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      setImages(await listPlaygroundImages(true))
+    } catch {
+      setImages([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const handleDelete = async () => {
+    if (!deleteTarget) {
+      return
+    }
+    try {
+      await deletePlaygroundImage(deleteTarget.id)
+      toast.success(t('Image deleted'))
+      setDeleteTarget(null)
+      await load()
+    } catch {
+      toast.error(t('Delete failed'))
+    }
+  }
+
+  const handleDownload = async (item: PermanentImageItem) => {
+    const dataUrl = await resolveImageDataUrl(item.url)
+    if (!dataUrl) {
+      toast.error(t('Image unavailable'))
+      return
+    }
+    const name = item.name || `image-${item.id}`
+    const ext = item.ext || 'png'
+    downloadBlobObject(dataUrlToBlob(dataUrl), `${name}.${ext}`)
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('Permanent images')}</CardTitle>
+        <CardDescription>
+          {t('Saved generated images. They never expire.')}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className='grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4'>
+            {Array.from({ length: 4 }, (_, i) => (
+              <Skeleton className='aspect-square w-full rounded-lg' key={i} />
+            ))}
+          </div>
+        ) : (
+          <PermanentGrid images={images} onDelete={setDeleteTarget} onDownload={handleDownload} emptyLabel={t('No images yet. Generate one in the playground.')} />
+        )}
+      </CardContent>
+
+      <ConfirmDialog
+        destructive
+        desc={t(
+          'This image will be removed from your cloud space. This cannot be undone.'
+        )}
+        confirmText={t('Delete')}
+        handleConfirm={() => void handleDelete()}
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTarget(null)
+          }
+        }}
+        title={t('Delete image?')}
+      />
+    </Card>
+  )
+}
+
+function PermanentGrid({
+  images,
+  onDelete,
+  onDownload,
+  emptyLabel,
+}: {
+  images: PermanentImageItem[]
+  onDelete: (item: PermanentImageItem) => void
+  onDownload: (item: PermanentImageItem) => void
+  emptyLabel: string
+}) {
+  if (images.length === 0) {
+    return <p className='text-muted-foreground text-sm'>{emptyLabel}</p>
+  }
+  return (
+    <div className='grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4'>
+      {images.map((item) => (
+        <PermanentImageCard
+          item={item}
+          key={item.id}
+          onDelete={() => onDelete(item)}
+          onDownload={() => onDownload(item)}
+        />
+      ))}
+    </div>
+  )
+}
+
+function PermanentImageCard({
+  item,
+  onDelete,
+  onDownload,
+}: {
+  item: PermanentImageItem
+  onDelete: () => void
+  onDownload: () => void
+}) {
+  const { t } = useTranslation()
+  const [dataUrl, setDataUrl] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    void resolveImageDataUrl(item.url).then((url) => {
+      if (cancelled) {
+        return
+      }
+      if (url) {
+        setDataUrl(url)
+      } else {
+        setFailed(true)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [item.url])
+
+  let body = <Skeleton className='h-full w-full' />
+  if (dataUrl) {
+    body = (
+      // eslint-disable-next-line jsx-a11y/alt-text
+      <img
+        alt={item.name}
+        className='h-full w-full object-cover'
+        src={dataUrl}
+      />
+    )
+  } else if (failed) {
+    body = <ImageOff className='text-muted-foreground size-6' />
+  }
+
+  return (
+    <div className='border-border/60 group relative overflow-hidden rounded-lg border'>
+      <div className='bg-muted flex aspect-square items-center justify-center'>
+        {body}
+      </div>
+      <div className='absolute inset-x-0 bottom-0 flex justify-end gap-1 bg-gradient-to-t from-black/60 to-transparent p-1.5 opacity-0 transition-opacity group-hover:opacity-100'>
+        <Button
+          aria-label={t('Download')}
+          className='size-7 bg-white/20 hover:bg-white/30'
+          onClick={onDownload}
+          size='icon'
+          variant='ghost'
+        >
+          <Download className='size-3.5' />
+        </Button>
+        <Button
+          aria-label={t('Delete')}
+          className='size-7 bg-white/20 hover:bg-red-500/60'
+          onClick={onDelete}
+          size='icon'
+          variant='ghost'
+        >
+          <Trash2 className='size-3.5' />
+        </Button>
+      </div>
+    </div>
+  )
+}
