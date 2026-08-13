@@ -59,6 +59,32 @@ func SumPlaygroundImageSizesByUserAll(userId int) (int64, error) {
 	return sum, err
 }
 
+// SumPlaygroundImageSizesByUserIds 批量统计一批用户的云空间占用（临时+永久合并），
+// 供用户管理列表展示每用户用量。
+func SumPlaygroundImageSizesByUserIds(userIds []int) (map[int]int64, error) {
+	if len(userIds) == 0 {
+		return map[int]int64{}, nil
+	}
+	type usageRow struct {
+		UserId int   `gorm:"column:user_id"`
+		Total  int64 `gorm:"column:total"`
+	}
+	var rows []usageRow
+	err := DB.Model(&PlaygroundImage{}).
+		Where("user_id IN ?", userIds).
+		Select("user_id, COALESCE(SUM(size), 0) AS total").
+		Group("user_id").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	usage := make(map[int]int64, len(rows))
+	for _, row := range rows {
+		usage[row.UserId] = row.Total
+	}
+	return usage, nil
+}
+
 // ListPlaygroundImagesByUser 返回某用户图片记录（最新在前）；permanentOnly 时只看永久收藏。
 func ListPlaygroundImagesByUser(userId int, permanentOnly bool, limit int) ([]*PlaygroundImage, error) {
 	var assets []*PlaygroundImage

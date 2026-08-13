@@ -46,7 +46,8 @@ const defaultContentSettings: ContentSettings = {
   MjActionCheckSuccessEnabled: false,
   PlaygroundImageTTLDays: 3,
   UserSpaceInitialMB: 20,
-  UserSpacePurchaseRatio: 100,
+  UserSpacePurchaseRatio: 0.0002,
+  UserSpaceMaxPurchaseMB: 1024,
   UserSpaceGlobalMaxMB: 20480,
 }
 

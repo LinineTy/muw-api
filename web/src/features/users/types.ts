@@ -56,6 +56,7 @@ export const userSchema = z.object({
   group_auto: z.boolean().optional(),
   playground_image_disabled: z.boolean().optional(),
   space_capacity: z.number().optional(),
+  space_used_bytes: z.number().optional(),
   status: userStatusSchema,
   role: userRoleSchema,
   created_at: z.number().optional(),

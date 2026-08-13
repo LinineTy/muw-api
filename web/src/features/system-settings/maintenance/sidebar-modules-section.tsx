@@ -140,6 +140,10 @@ export function SidebarModulesSection({
         title: t('My Subscriptions'),
         description: t('Manage your own subscription plans and billing.'),
       },
+      space: {
+        title: t('Cloud Space'),
+        description: t('Manage your cloud storage and synced conversations.'),
+      },
     },
     admin: {
       channel: {

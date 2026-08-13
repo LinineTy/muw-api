@@ -360,10 +360,40 @@ func GetAllUsers(c *gin.Context) {
 	}
 
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(users)
+	pageInfo.SetItems(attachPlaygroundSpaceUsage(users))
 
 	common.ApiSuccess(c, pageInfo)
 	return
+}
+
+// userWithSpaceUsage 用户列表项附带云空间用量（不污染 User 模型）。
+type userWithSpaceUsage struct {
+	model.User
+	SpaceUsedBytes int64 `json:"space_used_bytes"`
+}
+
+// attachPlaygroundSpaceUsage 为一批用户批量统计云空间已用字节并附加到响应项。
+func attachPlaygroundSpaceUsage(users []*model.User) []userWithSpaceUsage {
+	items := make([]userWithSpaceUsage, 0, len(users))
+	if len(users) == 0 {
+		return items
+	}
+	ids := make([]int, 0, len(users))
+	for _, user := range users {
+		ids = append(ids, user.Id)
+	}
+	usage, err := model.SumPlaygroundImageSizesByUserIds(ids)
+	if err != nil {
+		usage = nil
+	}
+	for _, user := range users {
+		item := userWithSpaceUsage{User: *user}
+		if usage != nil {
+			item.SpaceUsedBytes = usage[user.Id]
+		}
+		items = append(items, item)
+	}
+	return items
 }
 
 func SearchUsers(c *gin.Context) {
@@ -390,7 +420,7 @@ func SearchUsers(c *gin.Context) {
 	}
 
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(users)
+	pageInfo.SetItems(attachPlaygroundSpaceUsage(users))
 	common.ApiSuccess(c, pageInfo)
 	return
 }

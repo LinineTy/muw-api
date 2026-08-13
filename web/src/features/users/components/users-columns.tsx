@@ -42,6 +42,14 @@ import type { User } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
 import { UserQuotaCell } from './user-quota-cell'
 
+function formatBytes(bytes: number): string {
+  const mb = bytes / (1024 * 1024)
+  if (mb >= 1024) {
+    return `${(mb / 1024).toFixed(mb >= 10240 ? 0 : 1)} GB`
+  }
+  return `${mb.toFixed(mb >= 10 ? 0 : 1)} MB`
+}
+
 export function useUsersColumns(): ColumnDef<User>[] {
   const { t } = useTranslation()
   return [
@@ -171,6 +179,26 @@ export function useUsersColumns(): ColumnDef<User>[] {
       size: 300,
       minSize: 260,
       meta: { mobileOrder: 40 },
+    },
+    {
+      id: 'cloud_space',
+      header: t('Cloud Space'),
+      cell: ({ row }) => {
+        const user = row.original
+        const used = user.space_used_bytes || 0
+        const capacity = user.space_capacity || 0
+        return (
+          <span className='text-muted-foreground text-sm'>
+            {formatBytes(used)}
+            {capacity > 0 && (
+              <span className='text-foreground'> / {formatBytes(capacity)}</span>
+            )}
+          </span>
+        )
+      },
+      enableSorting: false,
+      size: 140,
+      meta: { mobileHidden: true },
     },
     {
       accessorKey: 'group',

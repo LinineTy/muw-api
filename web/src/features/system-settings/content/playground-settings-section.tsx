@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -36,46 +36,57 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 
-import {
-  cleanupPlaygroundImages,
-  getPlaygroundImageAdminStats,
-  type PlaygroundImageAdminStats,
-} from '@/features/playground/api'
+import { cleanupPlaygroundImages } from '@/features/playground/api'
 import { SettingsForm } from '../components/settings-form-layout'
 import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
 import { safeNumberFieldProps } from '../utils/numeric-field'
 
-const playgroundSchema = z.object({
-  PlaygroundImageTTLDays: z.number().int().min(1),
+// 云空间容量设置：初始容量 / 展示货币价格 / 单次上限 / 总分配量
+const spaceSchema = z.object({
   UserSpaceInitialMB: z.number().int().min(1),
-  UserSpacePurchaseRatio: z.number().int().min(1),
+  UserSpacePurchaseRatio: z.number().positive(),
+  UserSpaceMaxPurchaseMB: z.number().int().min(1),
   UserSpaceGlobalMaxMB: z.number().int().min(1),
 })
 
-type PlaygroundSettingsValues = z.infer<typeof playgroundSchema>
+// 临时图片清理：TTL + 手动清理
+const cleanupSchema = z.object({
+  PlaygroundImageTTLDays: z.number().int().min(1),
+})
+
+type SpaceSettingsValues = z.infer<typeof spaceSchema>
+type CleanupSettingsValues = z.infer<typeof cleanupSchema>
 
 type PlaygroundSettingsSectionProps = {
-  defaultValues: PlaygroundSettingsValues
+  defaultValues: SpaceSettingsValues & CleanupSettingsValues
 }
 
-const FIELD_KEYS: Array<keyof PlaygroundSettingsValues> = [
-  'PlaygroundImageTTLDays',
+const SPACE_FIELD_KEYS: Array<keyof SpaceSettingsValues> = [
   'UserSpaceInitialMB',
   'UserSpacePurchaseRatio',
+  'UserSpaceMaxPurchaseMB',
   'UserSpaceGlobalMaxMB',
 ]
+const CLEANUP_FIELD_KEYS: Array<keyof CleanupSettingsValues> = [
+  'PlaygroundImageTTLDays',
+]
 
-function formatBytes(bytes: number): string {
-  const mb = bytes / (1024 * 1024)
-  return `${mb.toFixed(mb >= 10 ? 0 : 2)} MB`
+function pick<T extends object, K extends keyof T>(
+  source: T,
+  keys: K[]
+): Pick<T, K> {
+  const result = {} as Pick<T, K>
+  for (const key of keys) {
+    result[key] = source[key]
+  }
+  return result
 }
 
 /**
- * Playground storage settings: transient TTL + user cloud space capacity model
- * (initial capacity, purchase ratio, global allocation). Hot-applies via the
- * option store.
+ * 云空间设置：分两张卡片——「用户云空间」（容量/价格/上限/总分配量）与
+ * 「临时图片清理」（TTL + 手动清理），热生效。
  */
 export function PlaygroundSettingsSection({
   defaultValues,
@@ -83,35 +94,41 @@ export function PlaygroundSettingsSection({
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
 
-  const form = useForm<PlaygroundSettingsValues>({
-    resolver: zodResolver(playgroundSchema),
+  const spaceForm = useForm<SpaceSettingsValues>({
+    resolver: zodResolver(spaceSchema),
     mode: 'onChange',
-    defaultValues,
+    defaultValues: pick(defaultValues, SPACE_FIELD_KEYS),
   })
+  const spaceInitialRef = useRef<SpaceSettingsValues>(
+    pick(defaultValues, SPACE_FIELD_KEYS)
+  )
 
-  const initialValuesRef = useRef<PlaygroundSettingsValues>(defaultValues)
+  const cleanupForm = useForm<CleanupSettingsValues>({
+    resolver: zodResolver(cleanupSchema),
+    mode: 'onChange',
+    defaultValues: pick(defaultValues, CLEANUP_FIELD_KEYS),
+  })
+  const cleanupInitialRef = useRef<CleanupSettingsValues>(
+    pick(defaultValues, CLEANUP_FIELD_KEYS)
+  )
 
-  const [stats, setStats] = useState<PlaygroundImageAdminStats | null>(null)
   const [busy, setBusy] = useState(false)
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
 
-  const loadStats = useCallback(async () => {
-    const next = await getPlaygroundImageAdminStats()
-    setStats(next)
-  }, [])
+  const onSubmitSpace = async (values: SpaceSettingsValues) => {
+    const initial = spaceInitialRef.current
+    for (const key of SPACE_FIELD_KEYS) {
+      if (values[key] === initial[key]) continue
+      await updateOption.mutateAsync({
+        key,
+        value: String(values[key]),
+      })
+    }
+  }
 
-  useEffect(() => {
-    void loadStats()
-  }, [loadStats])
-
-  useEffect(() => {
-    form.reset(defaultValues)
-    initialValuesRef.current = defaultValues
-  }, [defaultValues, form])
-
-  const onSubmit = async (values: PlaygroundSettingsValues) => {
-    const initial = initialValuesRef.current
-    for (const key of FIELD_KEYS) {
+  const onSubmitCleanup = async (values: CleanupSettingsValues) => {
+    const initial = cleanupInitialRef.current
+    for (const key of CLEANUP_FIELD_KEYS) {
       if (values[key] === initial[key]) continue
       await updateOption.mutateAsync({
         key,
@@ -131,7 +148,6 @@ export function PlaygroundSettingsSection({
               count: deleted,
             })
       )
-      await loadStats()
     } catch {
       toast.error(t('Cleanup failed'))
     } finally {
@@ -141,24 +157,141 @@ export function PlaygroundSettingsSection({
   }
 
   return (
-    <SettingsSection title={t('User cloud space')}>
-      <Form {...form}>
-        <SettingsForm onSubmit={form.handleSubmit(onSubmit)}>
-          <SettingsPageFormActions
-            isSaving={updateOption.isPending}
-            onSave={form.handleSubmit(onSubmit)}
-            saveLabel='Save playground settings'
-          />
+    <>
+      <SettingsSection title={t('User cloud space')}>
+        <Form {...spaceForm}>
+          <SettingsForm onSubmit={spaceForm.handleSubmit(onSubmitSpace)}>
+            <SettingsPageFormActions
+              isSaving={updateOption.isPending}
+              onSave={spaceForm.handleSubmit(onSubmitSpace)}
+              saveLabel='Save cloud space settings'
+            />
 
-          <div className='grid gap-4 sm:grid-cols-2'>
+            <div className='grid gap-4 sm:grid-cols-2'>
+              <FormField
+                control={spaceForm.control}
+                name='UserSpaceInitialMB'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      {t('Initial storage per user (MB)')}
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        min={1}
+                        type='number'
+                        {...safeNumberFieldProps(field)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Every user starts with this capacity; they can buy more with quota.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={spaceForm.control}
+                name='UserSpacePurchaseRatio'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      {t('Purchase ratio (quota per MB)')}
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        min={0}
+                        step='0.0001'
+                        type='number'
+                        {...safeNumberFieldProps(field)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Price per MB in the display currency; converted to quota when buying.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={spaceForm.control}
+                name='UserSpaceMaxPurchaseMB'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      {t('Max purchase per order (MB)')}
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        min={1}
+                        type='number'
+                        {...safeNumberFieldProps(field)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t('The most a user can buy in a single purchase.')}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={spaceForm.control}
+                name='UserSpaceGlobalMaxMB'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      {t('Cloud space total allocation (MB)')}
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        min={1}
+                        type='number'
+                        {...safeNumberFieldProps(field)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Fixed allocation for all users’ cloud space (e.g. 20GB of a 50GB disk). Regular users are refused when it is full.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </SettingsForm>
+        </Form>
+      </SettingsSection>
+
+      <SettingsSection title={t('Temporary image cleanup')}>
+        <Form {...cleanupForm}>
+          <SettingsForm onSubmit={cleanupForm.handleSubmit(onSubmitCleanup)}>
+            <SettingsPageFormActions
+              isSaving={updateOption.isPending}
+              onSave={cleanupForm.handleSubmit(onSubmitCleanup)}
+              saveLabel='Save cleanup settings'
+            />
+
             <FormField
-              control={form.control}
+              control={cleanupForm.control}
               name='PlaygroundImageTTLDays'
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t('Temporary image TTL (days)')}</FormLabel>
                   <FormControl>
-                    <Input min={1} type='number' {...safeNumberFieldProps(field)} />
+                    <Input
+                      min={1}
+                      type='number'
+                      {...safeNumberFieldProps(field)}
+                    />
                   </FormControl>
                   <FormDescription>
                     {t('Expire temporary chat attachments after this many days.')}
@@ -167,140 +300,36 @@ export function PlaygroundSettingsSection({
                 </FormItem>
               )}
             />
+          </SettingsForm>
+        </Form>
 
-            <FormField
-              control={form.control}
-              name='UserSpaceInitialMB'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>
-                    {t('Initial storage per user (MB)')}
-                  </FormLabel>
-                  <FormControl>
-                    <Input min={1} type='number' {...safeNumberFieldProps(field)} />
-                  </FormControl>
-                  <FormDescription>
-                    {t(
-                      'Every user starts with this capacity; they can buy more with quota.'
-                    )}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name='UserSpacePurchaseRatio'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>
-                    {t('Purchase ratio (quota per MB)')}
-                  </FormLabel>
-                  <FormControl>
-                    <Input min={1} type='number' {...safeNumberFieldProps(field)} />
-                  </FormControl>
-                  <FormDescription>
-                    {t('How much quota one MB of extra storage costs.')}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name='UserSpaceGlobalMaxMB'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>
-                    {t('Cloud space total allocation (MB)')}
-                  </FormLabel>
-                  <FormControl>
-                    <Input min={1} type='number' {...safeNumberFieldProps(field)} />
-                  </FormControl>
-                  <FormDescription>
-                    {t(
-                      'Fixed allocation for all users’ cloud space (e.g. 20GB of a 50GB disk). Regular users are refused when it is full.'
-                    )}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+        <div className='border-border/60 mt-6 border-t pt-4'>
+          <h4 className='text-sm font-semibold'>{t('Manual cleanup')}</h4>
+          <p className='text-muted-foreground mt-1 text-sm'>
+            {t(
+              'Usage is shown in the cloud space page. Here you can clean up temporary images for all users.'
+            )}
+          </p>
+          <div className='mt-3 flex flex-wrap gap-2'>
+            <Button
+              disabled={busy}
+              onClick={() => void handleCleanup(false)}
+              size='sm'
+              variant='outline'
+            >
+              {t('Clean up expired temporary images')}
+            </Button>
+            <Button
+              disabled={busy}
+              onClick={() => setClearConfirmOpen(true)}
+              size='sm'
+              variant='destructive'
+            >
+              {t('Clear all temporary images')}
+            </Button>
           </div>
-        </SettingsForm>
-      </Form>
-
-      {/* Usage stats + manual cleanup */}
-      <div className='border-border/60 mt-6 border-t pt-4'>
-        <h4 className='text-sm font-semibold'>{t('Usage')}</h4>
-        {stats ? (
-          <dl className='text-muted-foreground mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4'>
-            <div>
-              <dt className='text-xs'>{t('Temporary images')}</dt>
-              <dd className='text-foreground font-medium'>
-                {stats.transient.count}
-              </dd>
-            </div>
-            <div>
-              <dt className='text-xs'>{t('Temporary size')}</dt>
-              <dd className='text-foreground font-medium'>
-                {formatBytes(stats.transient.total_bytes)}
-              </dd>
-            </div>
-            <div>
-              <dt className='text-xs'>{t('Permanent images')}</dt>
-              <dd className='text-foreground font-medium'>
-                {stats.permanent.count}
-              </dd>
-            </div>
-            <div>
-              <dt className='text-xs'>{t('Permanent size')}</dt>
-              <dd className='text-foreground font-medium'>
-                {formatBytes(stats.permanent.total_bytes)}
-              </dd>
-            </div>
-          </dl>
-        ) : (
-          <p className='text-muted-foreground mt-3 text-sm'>{t('Loading...')}</p>
-        )}
-
-        {stats && (stats.top_users?.length ?? 0) > 0 && (
-          <div className='mt-3'>
-            <p className='text-muted-foreground text-xs'>
-              {t('Top users by storage')}
-            </p>
-            <ul className='text-muted-foreground mt-1 space-y-0.5 text-xs'>
-              {stats.top_users?.map((user) => (
-                <li key={user.user_id}>
-                  #{user.user_id} · {user.count} {t('images')} ·{' '}
-                  {formatBytes(user.total_bytes)}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        <div className='mt-4 flex flex-wrap gap-2'>
-          <Button
-            disabled={busy}
-            onClick={() => void handleCleanup(false)}
-            size='sm'
-            variant='outline'
-          >
-            {t('Clean up expired temporary images')}
-          </Button>
-          <Button
-            disabled={busy}
-            onClick={() => setClearConfirmOpen(true)}
-            size='sm'
-            variant='destructive'
-          >
-            {t('Clear all temporary images')}
-          </Button>
         </div>
-      </div>
+      </SettingsSection>
 
       <ConfirmDialog
         destructive
@@ -313,6 +342,6 @@ export function PlaygroundSettingsSection({
         onOpenChange={setClearConfirmOpen}
         title={t('Clear all temporary images?')}
       />
-    </SettingsSection>
+    </>
   )
 }

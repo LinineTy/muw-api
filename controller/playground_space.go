@@ -6,12 +6,39 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/gin-gonic/gin"
 )
 
-// maxPurchaseSpaceMB 单次购买容量的上限（MB）。有界防止 cost=mb*ratio 溢出。
+// maxPurchaseSpaceMB 单次购买容量上限由设置控制（setting.UserSpaceMaxPurchaseMB），
+// 有界防止 cost 换算溢出。此常量仅作兜底下限。
 const maxPurchaseSpaceMB = 1024
+
+// userSpacePurchaseRawQuota 把「展示货币价格 × MB」换算成原始额度。
+// 与前端 quotaUnitsToDollars 互为逆运算（USD/CNY/CUSTOM: display = raw/QuotaPerUnit × rate；
+// TOKENS: display = raw），保证显示与扣减一致。
+func userSpacePurchaseRawQuota(mb int, pricePerMB float64) int64 {
+	amount := pricePerMB * float64(mb)
+	switch operation_setting.GetQuotaDisplayType() {
+	case operation_setting.QuotaDisplayTypeTokens:
+		return int64(common.QuotaRound(amount))
+	case operation_setting.QuotaDisplayTypeCNY:
+		rate := operation_setting.USDExchangeRate
+		if rate <= 0 {
+			rate = 1
+		}
+		return int64(common.QuotaRound(amount / rate * common.QuotaPerUnit))
+	case operation_setting.QuotaDisplayTypeCustom:
+		rate := operation_setting.GetGeneralSetting().CustomCurrencyExchangeRate
+		if rate <= 0 {
+			rate = 1
+		}
+		return int64(common.QuotaRound(amount / rate * common.QuotaPerUnit))
+	default: // USD
+		return int64(common.QuotaRound(amount * common.QuotaPerUnit))
+	}
+}
 
 // GetUserPlaygroundSpace 返回当前用户的云空间用量与购买信息。
 // capacity_bytes 对 root 为 -1（无限制）；普通用户为 SpaceCapacity>0 ? 之 : 全局初始。
@@ -74,6 +101,7 @@ func GetUserPlaygroundSpace(c *gin.Context) {
 		"capacity_bytes":    capacityBytes,
 		"used_bytes":        used,
 		"purchase_ratio":    setting.UserSpacePurchaseRatio,
+		"max_purchase_mb":   setting.UserSpaceMaxPurchaseMB,
 		"global_used_bytes": globalTransient + globalPermanent,
 		"global_max_bytes":  int64(setting.UserSpaceGlobalMaxMB) << 20,
 		"transient_count":   transientCount,
@@ -100,12 +128,17 @@ func PurchasePlaygroundSpace(c *gin.Context) {
 		common.ApiErrorMsg(c, "参数错误")
 		return
 	}
-	if request.Mb < 1 || request.Mb > maxPurchaseSpaceMB {
-		common.ApiErrorMsg(c, "购买容量需在 1~1024 MB 之间")
+	// 单次购买上限：管理员可调（默认 1024 MB），同时硬性兜底防溢出。
+	maxMB := setting.UserSpaceMaxPurchaseMB
+	if maxMB < 1 {
+		maxMB = maxPurchaseSpaceMB
+	}
+	if request.Mb < 1 || request.Mb > maxMB {
+		common.ApiErrorMsg(c, "购买容量需在 1~上限之间")
 		return
 	}
 
-	cost := int64(request.Mb) * int64(setting.UserSpacePurchaseRatio)
+	cost := userSpacePurchaseRawQuota(request.Mb, setting.UserSpacePurchaseRatio)
 	if cost > math.MaxInt32 {
 		common.ApiErrorMsg(c, "购买容量超出范围")
 		return

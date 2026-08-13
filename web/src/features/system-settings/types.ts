@@ -185,6 +185,7 @@ export type ContentSettings = {
   PlaygroundImageTTLDays: number
   UserSpaceInitialMB: number
   UserSpacePurchaseRatio: number
+  UserSpaceMaxPurchaseMB: number
   UserSpaceGlobalMaxMB: number
 }
 

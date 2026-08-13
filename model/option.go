@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -155,7 +156,8 @@ func InitOptionMap() {
 	common.OptionMap["PlaygroundImageMaxTotalMBPerUser"] = strconv.Itoa(setting.PlaygroundImageMaxTotalBytesPerUser >> 20)
 	common.OptionMap["PlaygroundImageMaxPermanentPerUser"] = strconv.Itoa(setting.PlaygroundImageMaxPermanentPerUser)
 	common.OptionMap["UserSpaceInitialMB"] = strconv.Itoa(setting.UserSpaceInitialMB)
-	common.OptionMap["UserSpacePurchaseRatio"] = strconv.Itoa(setting.UserSpacePurchaseRatio)
+	common.OptionMap["UserSpacePurchaseRatio"] = strconv.FormatFloat(setting.UserSpacePurchaseRatio, 'f', -1, 64)
+	common.OptionMap["UserSpaceMaxPurchaseMB"] = strconv.Itoa(setting.UserSpaceMaxPurchaseMB)
 	common.OptionMap["UserSpaceGlobalMaxMB"] = strconv.Itoa(setting.UserSpaceGlobalMaxMB)
 	common.OptionMap["AutomaticDisableKeywords"] = operation_setting.AutomaticDisableKeywordsToString()
 	common.OptionMap["AutomaticDisableStatusCodes"] = operation_setting.AutomaticDisableStatusCodesToString()
@@ -215,10 +217,15 @@ func validateOptionValue(key string, value string) error {
 	}
 	switch key {
 	case "PlaygroundImageTTLDays", "PlaygroundImageMaxCountPerUser", "PlaygroundImageMaxTotalMBPerUser", "PlaygroundImageMaxPermanentPerUser",
-		"UserSpaceInitialMB", "UserSpacePurchaseRatio", "UserSpaceGlobalMaxMB":
+		"UserSpaceInitialMB", "UserSpaceMaxPurchaseMB", "UserSpaceGlobalMaxMB":
 		n, err := strconv.Atoi(value)
 		if err != nil || n <= 0 {
 			return fmt.Errorf("must be a positive integer, got %q", value)
+		}
+	case "UserSpacePurchaseRatio":
+		f, err := strconv.ParseFloat(value, 64)
+		if err != nil || f <= 0 || math.IsNaN(f) || math.IsInf(f, 0) {
+			return fmt.Errorf("must be a positive number, got %q", value)
 		}
 	}
 	return nil
@@ -616,11 +623,17 @@ func updateOptionMap(key string, value string) (err error) {
 		}
 		setting.UserSpaceInitialMB = mb
 	case "UserSpacePurchaseRatio":
-		n, _ := strconv.Atoi(value)
-		if n < 1 {
-			n = setting.DefaultUserSpacePurchaseRatio
+		f, _ := strconv.ParseFloat(value, 64)
+		if f <= 0 {
+			f = setting.DefaultUserSpacePurchaseRatio
 		}
-		setting.UserSpacePurchaseRatio = n
+		setting.UserSpacePurchaseRatio = f
+	case "UserSpaceMaxPurchaseMB":
+		mb, _ := strconv.Atoi(value)
+		if mb < 1 {
+			mb = setting.DefaultUserSpaceMaxPurchaseMB
+		}
+		setting.UserSpaceMaxPurchaseMB = mb
 	case "UserSpaceGlobalMaxMB":
 		mb, _ := strconv.Atoi(value)
 		if mb < 1 {

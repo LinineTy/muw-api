@@ -40,6 +40,8 @@ import { resolveImageDataUrl } from '@/features/playground/lib/image/image-data-
 
 type PermanentImageItem = Awaited<ReturnType<typeof listPlaygroundImages>>[number]
 
+const PERMANENT_PAGE_SIZE = 12
+
 function dataUrlToBlob(dataUrl: string): Blob {
   const [meta, base64] = dataUrl.split(',')
   const mime = meta.match(/data:(.*?);/)?.[1] ?? 'application/octet-stream'
@@ -61,6 +63,18 @@ export function SpacePermanentSection() {
   const [deleteTarget, setDeleteTarget] = useState<PermanentImageItem | null>(
     null
   )
+  const [page, setPage] = useState(0)
+
+  const totalPages = Math.max(1, Math.ceil(images.length / PERMANENT_PAGE_SIZE))
+  const pagedImages = images.slice(
+    page * PERMANENT_PAGE_SIZE,
+    (page + 1) * PERMANENT_PAGE_SIZE
+  )
+
+  // 删除/刷新后页码回落到有效范围。
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages - 1))
+  }, [totalPages])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -118,7 +132,39 @@ export function SpacePermanentSection() {
             ))}
           </div>
         ) : (
-          <PermanentGrid images={images} onDelete={setDeleteTarget} onDownload={handleDownload} emptyLabel={t('No images yet. Generate one in the playground.')} />
+          <>
+            <PermanentGrid
+              images={pagedImages}
+              onDelete={setDeleteTarget}
+              onDownload={handleDownload}
+              emptyLabel={t('No images yet. Generate one in the playground.')}
+            />
+            {totalPages > 1 && (
+              <div className='mt-4 flex items-center justify-center gap-2'>
+                <Button
+                  disabled={page <= 0}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  size='sm'
+                  variant='outline'
+                >
+                  ‹
+                </Button>
+                <span className='text-muted-foreground text-xs'>
+                  {page + 1} / {totalPages}
+                </span>
+                <Button
+                  disabled={page >= totalPages - 1}
+                  onClick={() =>
+                    setPage((p) => Math.min(totalPages - 1, p + 1))
+                  }
+                  size='sm'
+                  variant='outline'
+                >
+                  ›
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </CardContent>
 
@@ -199,25 +245,29 @@ function PermanentImageCard({
     }
   }, [item.url])
 
-  let body = <Skeleton className='h-full w-full' />
+  let body = (
+    <div className='bg-muted/40 aspect-square w-full animate-pulse' />
+  )
   if (dataUrl) {
     body = (
       // eslint-disable-next-line jsx-a11y/alt-text
       <img
         alt={item.name}
-        className='h-full w-full object-cover'
+        className='aspect-square w-full object-cover'
         src={dataUrl}
       />
     )
   } else if (failed) {
-    body = <ImageOff className='text-muted-foreground size-6' />
+    body = (
+      <div className='text-muted-foreground flex aspect-square w-full items-center justify-center'>
+        <ImageOff className='size-5' />
+      </div>
+    )
   }
 
   return (
-    <div className='border-border/60 group relative overflow-hidden rounded-lg border'>
-      <div className='bg-muted flex aspect-square items-center justify-center'>
-        {body}
-      </div>
+    <div className='group relative overflow-hidden rounded-lg border border-border/60'>
+      {body}
       <div className='absolute inset-x-0 bottom-0 flex justify-end gap-1 bg-gradient-to-t from-black/60 to-transparent p-1.5 opacity-0 transition-opacity group-hover:opacity-100'>
         <Button
           aria-label={t('Download')}

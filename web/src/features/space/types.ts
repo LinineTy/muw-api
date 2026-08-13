@@ -26,6 +26,7 @@ export interface SpaceInfo {
   capacity_bytes: number
   used_bytes: number
   purchase_ratio: number
+  max_purchase_mb: number
   global_used_bytes: number
   global_max_bytes: number
   transient_count: number

@@ -129,13 +129,14 @@ const CONTENT_SECTIONS = [
   },
   {
     id: 'playground',
-    titleKey: 'Playground',
+    titleKey: 'User cloud space',
     build: (settings: ContentSettings) => (
       <PlaygroundSettingsSection
         defaultValues={{
           PlaygroundImageTTLDays: settings.PlaygroundImageTTLDays,
           UserSpaceInitialMB: settings.UserSpaceInitialMB,
           UserSpacePurchaseRatio: settings.UserSpacePurchaseRatio,
+          UserSpaceMaxPurchaseMB: settings.UserSpaceMaxPurchaseMB,
           UserSpaceGlobalMaxMB: settings.UserSpaceGlobalMaxMB,
         }}
       />
