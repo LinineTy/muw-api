@@ -54,6 +54,7 @@ export const userSchema = z.object({
   linux_do_id: z.string().optional(),
   linux_do_trust_level: z.number().optional(),
   group_auto: z.boolean().optional(),
+  playground_image_disabled: z.boolean().optional(),
   status: userStatusSchema,
   role: userRoleSchema,
   created_at: z.number().optional(),
@@ -128,6 +129,7 @@ export interface UserFormData {
   group?: string // Only used when updating user
   group_auto?: boolean // Only used when updating user
   remark?: string // Only used when updating user
+  playground_image_disabled?: boolean // Only used when updating user
   admin_permissions?: AdminPermissionMatrix
 }
 

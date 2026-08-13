@@ -24,6 +24,7 @@ import { ChatSettingsSection } from './chat-settings-section'
 import { DashboardSection } from './dashboard-section'
 import { DrawingSettingsSection } from './drawing-settings-section'
 import { FAQSection } from './faq-section'
+import { PlaygroundSettingsSection } from './playground-settings-section'
 import { SystemLoadSection } from './system-load-section'
 import { UptimeKumaSection } from './uptime-kuma-section'
 
@@ -122,6 +123,23 @@ const CONTENT_SECTIONS = [
           MjForwardUrlEnabled: settings.MjForwardUrlEnabled,
           MjModeClearEnabled: settings.MjModeClearEnabled,
           MjActionCheckSuccessEnabled: settings.MjActionCheckSuccessEnabled,
+        }}
+      />
+    ),
+  },
+  {
+    id: 'playground',
+    titleKey: 'Playground',
+    build: (settings: ContentSettings) => (
+      <PlaygroundSettingsSection
+        defaultValues={{
+          PlaygroundImageTTLDays: settings.PlaygroundImageTTLDays,
+          PlaygroundImageMaxCountPerUser:
+            settings.PlaygroundImageMaxCountPerUser,
+          PlaygroundImageMaxTotalMBPerUser:
+            settings.PlaygroundImageMaxTotalMBPerUser,
+          PlaygroundImageMaxPermanentPerUser:
+            settings.PlaygroundImageMaxPermanentPerUser,
         }}
       />
     ),

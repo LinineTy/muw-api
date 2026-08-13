@@ -44,6 +44,10 @@ const defaultContentSettings: ContentSettings = {
   MjForwardUrlEnabled: false,
   MjModeClearEnabled: false,
   MjActionCheckSuccessEnabled: false,
+  PlaygroundImageTTLDays: 3,
+  PlaygroundImageMaxCountPerUser: 50,
+  PlaygroundImageMaxTotalMBPerUser: 50,
+  PlaygroundImageMaxPermanentPerUser: 100,
 }
 
 function resolveContentSettings(
