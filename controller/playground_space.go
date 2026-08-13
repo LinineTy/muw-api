@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"math"
+	"fmt"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
@@ -139,28 +139,16 @@ func PurchasePlaygroundSpace(c *gin.Context) {
 	}
 
 	cost := userSpacePurchaseRawQuota(request.Mb, setting.UserSpacePurchaseRatio)
-	if cost > math.MaxInt32 {
-		common.ApiErrorMsg(c, "购买容量超出范围")
-		return
-	}
+	// 注意：userSpacePurchaseRawQuota 全部走 common.QuotaRound（已饱和到 int32 且
+	// 非正即被下方拦截），极端配置下 cost 会被饱和为 MaxInt32 而非回绕。
 	if cost <= 0 {
 		common.ApiErrorMsg(c, "购买比例配置错误")
 		return
 	}
 
-	user, err := model.GetUserById(userId, false)
-	if err != nil {
-		common.ApiErrorMsg(c, "无效的用户")
-		return
-	}
-	// 有效容量 = 已配置容量，否则全局初始。
-	effective := int64(setting.UserSpaceInitialMB) << 20
-	if user.SpaceCapacity > 0 {
-		effective = user.SpaceCapacity
-	}
-	newCapacity := effective + int64(request.Mb)<<20
-
-	ok, err := model.PurchaseUserSpaceCapacity(userId, int(cost), newCapacity)
+	// 原子条件扣费 + 容量增量（并发购买不会互相覆盖，先买者容量不丢）。
+	ok, err := model.PurchaseUserSpaceCapacity(
+		userId, int(cost), int64(request.Mb)<<20, int64(setting.UserSpaceInitialMB)<<20)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -171,6 +159,14 @@ func PurchasePlaygroundSpace(c *gin.Context) {
 	}
 	// 同步 Redis 缓存中的 quota，避免后续按旧余额读取。
 	_, _ = model.GetUserQuota(userId, true)
+
+	// 重新读取真实容量（并发购买下以 DB 原子增量结果为准）供响应与审计。
+	newCapacity := int64(setting.UserSpaceInitialMB) << 20
+	if freshUser, err := model.GetUserById(userId, false); err == nil {
+		newCapacity = freshUser.SpaceCapacity
+	}
+	common.SysLog(fmt.Sprintf("user %d purchased %d MB playground space (cost %d quota, capacity now %d bytes)",
+		userId, request.Mb, cost, newCapacity))
 
 	common.ApiSuccess(c, gin.H{
 		"cost":           cost,

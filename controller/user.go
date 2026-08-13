@@ -3,6 +3,7 @@ package controller
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -720,10 +721,23 @@ func GetUserModels(c *gin.Context) {
 
 func UpdateUser(c *gin.Context) {
 	var updatedUser model.User
-	err := common.DecodeJson(c.Request.Body, &updatedUser)
-	if err != nil || updatedUser.Id == 0 {
+	bodyBytes, err := io.ReadAll(c.Request.Body)
+	if err != nil {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
+	}
+	if err := common.Unmarshal(bodyBytes, &updatedUser); err != nil || updatedUser.Id == 0 {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	// 云空间容量/禁图仅当请求体显式携带该字段才更新（缺失保持原值）。否则旧前端
+	// 缓存或第三方脚本更新用户时缺字段，会把已购容量静默清零、或悄悄解除管理员封禁。
+	var presentFields map[string]interface{}
+	spaceCapacityPresent := false
+	playgroundImageDisabledPresent := false
+	if err := common.Unmarshal(bodyBytes, &presentFields); err == nil {
+		_, spaceCapacityPresent = presentFields["space_capacity"]
+		_, playgroundImageDisabledPresent = presentFields["playground_image_disabled"]
 	}
 	updatedUser.Username = strings.TrimSpace(updatedUser.Username)
 	if updatedUser.Username == "" {
@@ -741,6 +755,12 @@ func UpdateUser(c *gin.Context) {
 	if err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	if !spaceCapacityPresent {
+		updatedUser.SpaceCapacity = originUser.SpaceCapacity
+	}
+	if !playgroundImageDisabledPresent {
+		updatedUser.PlaygroundImageDisabled = originUser.PlaygroundImageDisabled
 	}
 	if updatedUser.Role != common.RoleGuestUser && updatedUser.Role != originUser.Role {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)

@@ -1420,18 +1420,22 @@ func decreaseUserQuota(id int, quota int) (err error) {
 }
 
 // PurchaseUserSpaceCapacity 用余额购买云空间容量：单条原子条件更新，只有
-// quota >= cost 才同时扣 quota 并把容量写为 newCapacity（绝对写入）。
-// 返回 ok=false 表示余额不足（更新未生效）。单行 UPDATE 在三种数据库上
-// 都是原子的，防并发购买导致负余额/白嫖容量。
-func PurchaseUserSpaceCapacity(id int, cost int, newCapacity int64) (ok bool, err error) {
+// quota >= cost 才同时扣 quota 并把容量原子增量写入。space_capacity=0（未初始化）
+// 时按全局初始容量加本次增量，>0 时直接叠加——避免两笔并发购买基于同一陈旧读
+// 各自算绝对值、后写覆盖先写导致「扣两次钱只涨一次容量」。
+// 返回 ok=false 表示余额不足（更新未生效）。单行 UPDATE 在三种数据库上都是原子的。
+func PurchaseUserSpaceCapacity(id int, cost int, deltaBytes int64, initialBytes int64) (ok bool, err error) {
 	if cost <= 0 {
 		return false, errors.New("cost 必须为正")
 	}
 	result := DB.Model(&User{}).
 		Where("id = ? AND quota >= ?", id, cost).
 		Updates(map[string]interface{}{
-			"quota":          gorm.Expr("quota - ?", cost),
-			"space_capacity": newCapacity,
+			"quota": gorm.Expr("quota - ?", cost),
+			"space_capacity": gorm.Expr(
+				"CASE WHEN space_capacity > 0 THEN space_capacity + ? ELSE ? + ? END",
+				deltaBytes, initialBytes, deltaBytes,
+			),
 		})
 	if result.Error != nil {
 		return false, result.Error

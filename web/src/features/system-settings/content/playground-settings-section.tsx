@@ -214,6 +214,11 @@ export function PlaygroundSettingsSection({
                         'Price per MB in the display currency; converted to quota when buying.'
                       )}
                     </FormDescription>
+                    <FormDescription>
+                      {t(
+                        'When the display currency is tokens, this value is the token price per MB directly.'
+                      )}
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

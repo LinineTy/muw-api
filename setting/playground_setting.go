@@ -19,6 +19,15 @@ const (
 	DefaultUserSpacePurchaseRatio = 0.0002 // 每 MB 展示货币价格（默认 $0.0002/MB，≈旧 100 quota/MB）
 	DefaultUserSpaceMaxPurchaseMB = 1024   // 单次购买容量上限（MB）
 	DefaultUserSpaceGlobalMaxMB   = 20480  // 云空间总分配量（红线）：固定分配，如服务器 50G 给云空间划 20G
+
+	// 设置上界：防止 time.Duration 溢出与 MB<<20 字节换算溢出（validateOptionValue 校验用）。
+	MaxPlaygroundImageTTLDays      = 3650   // TTL 天数上限（10 年），防 Duration 溢出把全部临时图误清
+	MaxPlaygroundImageMaxCount     = 100000 // 兼容存量 option 行的宽松上界
+	MaxPlaygroundImageMaxTotalMB   = 1 << 20
+	MaxPlaygroundImageMaxPermanent = 100000
+	MaxUserSpaceInitialMB          = 1 << 20
+	MaxUserSpaceMaxPurchaseMB      = 1 << 20
+	MaxUserSpaceGlobalMaxMB        = 1 << 20
 )
 
 var (

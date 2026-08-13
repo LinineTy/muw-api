@@ -216,11 +216,40 @@ func validateOptionValue(key string, value string) error {
 		return setting.ValidateMaxTokenAutoGroups(value)
 	}
 	switch key {
-	case "PlaygroundImageTTLDays", "PlaygroundImageMaxCountPerUser", "PlaygroundImageMaxTotalMBPerUser", "PlaygroundImageMaxPermanentPerUser",
-		"UserSpaceInitialMB", "UserSpaceMaxPurchaseMB", "UserSpaceGlobalMaxMB":
+	case "PlaygroundImageTTLDays":
 		n, err := strconv.Atoi(value)
-		if err != nil || n <= 0 {
-			return fmt.Errorf("must be a positive integer, got %q", value)
+		if err != nil || n <= 0 || n > setting.MaxPlaygroundImageTTLDays {
+			return fmt.Errorf("must be an integer in (0, %d], got %q", setting.MaxPlaygroundImageTTLDays, value)
+		}
+	case "PlaygroundImageMaxCountPerUser":
+		n, err := strconv.Atoi(value)
+		if err != nil || n <= 0 || n > setting.MaxPlaygroundImageMaxCount {
+			return fmt.Errorf("must be an integer in (0, %d], got %q", setting.MaxPlaygroundImageMaxCount, value)
+		}
+	case "PlaygroundImageMaxTotalMBPerUser":
+		n, err := strconv.Atoi(value)
+		if err != nil || n <= 0 || n > setting.MaxPlaygroundImageMaxTotalMB {
+			return fmt.Errorf("must be an integer in (0, %d], got %q", setting.MaxPlaygroundImageMaxTotalMB, value)
+		}
+	case "PlaygroundImageMaxPermanentPerUser":
+		n, err := strconv.Atoi(value)
+		if err != nil || n <= 0 || n > setting.MaxPlaygroundImageMaxPermanent {
+			return fmt.Errorf("must be an integer in (0, %d], got %q", setting.MaxPlaygroundImageMaxPermanent, value)
+		}
+	case "UserSpaceInitialMB":
+		n, err := strconv.Atoi(value)
+		if err != nil || n <= 0 || n > setting.MaxUserSpaceInitialMB {
+			return fmt.Errorf("must be an integer in (0, %d], got %q", setting.MaxUserSpaceInitialMB, value)
+		}
+	case "UserSpaceMaxPurchaseMB":
+		n, err := strconv.Atoi(value)
+		if err != nil || n <= 0 || n > setting.MaxUserSpaceMaxPurchaseMB {
+			return fmt.Errorf("must be an integer in (0, %d], got %q", setting.MaxUserSpaceMaxPurchaseMB, value)
+		}
+	case "UserSpaceGlobalMaxMB":
+		n, err := strconv.Atoi(value)
+		if err != nil || n <= 0 || n > setting.MaxUserSpaceGlobalMaxMB {
+			return fmt.Errorf("must be an integer in (0, %d], got %q", setting.MaxUserSpaceGlobalMaxMB, value)
 		}
 	case "UserSpacePurchaseRatio":
 		f, err := strconv.ParseFloat(value, 64)

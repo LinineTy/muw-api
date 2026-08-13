@@ -40,6 +40,9 @@ func cleanupPlaygroundImages() {
 	if ttlDays < 1 {
 		ttlDays = 1
 	}
+	if ttlDays > setting.MaxPlaygroundImageTTLDays {
+		ttlDays = setting.MaxPlaygroundImageTTLDays
+	}
 	cutoff := time.Now().Add(-time.Duration(ttlDays) * 24 * time.Hour).Unix()
 	if _, err := RunPlaygroundImageCleanup(cutoff); err != nil {
 		common.SysError("playground image cleanup failed: " + err.Error())

@@ -4031,6 +4031,8 @@
     "Save chat settings": "保存聊天设置",
     "Save check-in settings": "保存签到设置",
     "Save drawing settings": "保存绘图设置",
+    "Save cloud space settings": "保存云空间设置",
+    "Save cleanup settings": "保存清理设置",
     "Save failed": "保存失败",
     "Save failed, please retry": "保存失败，请重试",
     "Save general settings": "保存通用设置",
@@ -5889,7 +5891,6 @@
     "Your balance": "你的余额",
     "Storage capacity purchased": "存储容量已购买",
     "Purchase failed": "购买失败",
-    "Buy 1 to 1024 MB at a time": "单次购买 1~1024 MB",
     "Saved generated images. They never expire.": "已保存的生成图片，永不过期。",
     "No images yet. Generate one in the playground.": "还没有图片，去游乐场生成一张吧。",
     "Delete image?": "删除这张图片？",
@@ -5911,6 +5912,7 @@
     "Space capacity (MB)": "云空间容量 (MB)",
     "0 uses the global initial capacity. Root is unlimited.": "0 表示使用全局初始容量，root 无限制。",
     "Buy 1 to {{max}} MB at a time": "单次购买 1~{{max}} MB",
+    "Cost: {{cost}} ({{perMB}}/MB)": "成本:{{cost}}({{perMB}}/MB)",
     "Max per order": "单次上限",
     "quota": "额度",
     "Confirm purchase?": "确认购买？",
@@ -5922,6 +5924,7 @@
     "Manual cleanup": "手动清理",
     "Usage is shown in the cloud space page. Here you can clean up temporary images for all users.": "用量统计已移至云空间页展示，这里可清理所有用户的临时图片。",
     "Temporary image cleanup": "临时图片清理",
-    "Price per MB in the display currency; converted to quota when buying.": "按展示货币填每 MB 价格，购买时自动换算为额度扣减。"
+    "Price per MB in the display currency; converted to quota when buying.": "按展示货币填每 MB 价格，购买时自动换算为额度扣减。",
+    "When the display currency is tokens, this value is the token price per MB directly.": "当展示货币为 tokens 时，该值直接作为每 MB 的 token 价格。"
   }
 }
