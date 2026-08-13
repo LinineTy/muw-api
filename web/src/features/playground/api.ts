@@ -99,6 +99,56 @@ export async function deletePlaygroundImage(id: number): Promise<void> {
   } as Record<string, unknown>)
 }
 
+export type PlaygroundImageAdminStats = {
+  transient: {
+    count: number
+    total_bytes: number
+    ttl_days: number
+  }
+  permanent: {
+    count: number
+    total_bytes: number
+  }
+  top_users: Array<{
+    user_id: number
+    count: number
+    total_bytes: number
+  }>
+}
+
+/**
+ * Admin: global playground image usage stats.
+ */
+export async function getPlaygroundImageAdminStats(): Promise<PlaygroundImageAdminStats | null> {
+  const res = await api.get('/api/playground/admin/images/stats', {
+    skipErrorHandler: true,
+  } as Record<string, unknown>)
+  const { data } = res
+  if (!data.success || !data.data) {
+    return null
+  }
+  return data.data
+}
+
+/**
+ * Admin: manually clean up temporary playground images. all=true clears every
+ * temporary image; false only clears those past the TTL.
+ */
+export async function cleanupPlaygroundImages(
+  all: boolean
+): Promise<number> {
+  const res = await api.post(
+    '/api/playground/admin/images/cleanup',
+    { all },
+    { skipErrorHandler: true } as Record<string, unknown>
+  )
+  const { data } = res
+  if (!data.success || !data.data) {
+    return 0
+  }
+  return data.data.deleted
+}
+
 /**
  * Generate images via the playground image relay.
  */

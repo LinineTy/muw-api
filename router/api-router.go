@@ -231,6 +231,14 @@ func SetApiRouter(router *gin.Engine) {
 			playgroundUploadRoute.DELETE("/images/:id", controller.DeletePlaygroundImage)
 		}
 
+		// Playground image admin: global usage stats + manual cleanup (admin only).
+		playgroundAdminRoute := apiRouter.Group("/playground/admin")
+		playgroundAdminRoute.Use(middleware.AdminAuth())
+		{
+			playgroundAdminRoute.GET("/images/stats", middleware.DisableCache(), controller.AdminPlaygroundImageStats)
+			playgroundAdminRoute.POST("/images/cleanup", middleware.DisableCache(), controller.AdminCleanupPlaygroundImages)
+		}
+
 		// Custom OAuth provider management (root only)
 		customOAuthRoute := apiRouter.Group("/custom-oauth-provider")
 		customOAuthRoute.Use(middleware.RootAuth())

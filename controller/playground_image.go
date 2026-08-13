@@ -12,9 +12,11 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
 
 	"github.com/gin-gonic/gin"
@@ -280,4 +282,77 @@ func DeletePlaygroundImage(c *gin.Context) {
 		common.SysError(fmt.Sprintf("failed to remove playground image file %d: %s", id, err.Error()))
 	}
 	common.ApiSuccess(c, nil)
+}
+
+// AdminPlaygroundImageStats 管理员查看全局游乐场图片用量（临时 vs 永久 + 按用户 Top）。
+func AdminPlaygroundImageStats(c *gin.Context) {
+	transientCount, err := model.CountPlaygroundImagesGlobal(false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	transientBytes, err := model.SumPlaygroundImageSizesGlobal(false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	permanentCount, err := model.CountPlaygroundImagesGlobal(true)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	permanentBytes, err := model.SumPlaygroundImageSizesGlobal(true)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	topUsers, err := model.GroupPlaygroundImageUsageByUser(10)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if topUsers == nil {
+		topUsers = []model.PlaygroundImageUserUsage{}
+	}
+
+	common.ApiSuccess(c, gin.H{
+		"transient": gin.H{
+			"count":       transientCount,
+			"total_bytes": transientBytes,
+			"ttl_days":    setting.PlaygroundImageTTLDays,
+		},
+		"permanent": gin.H{
+			"count":       permanentCount,
+			"total_bytes": permanentBytes,
+		},
+		"top_users": topUsers,
+	})
+}
+
+// AdminCleanupPlaygroundImages 管理员手动清理临时图片。
+// 请求体 {"all": true} 清空所有临时图片；缺省/为 false 只清过期的。
+func AdminCleanupPlaygroundImages(c *gin.Context) {
+	var request struct {
+		All bool `json:"all"`
+	}
+	// 无 body（或解析失败）时按「只清过期」处理。
+	_ = common.DecodeJson(c.Request.Body, &request)
+
+	var cutoff int64
+	if request.All {
+		cutoff = time.Now().Unix() // 早于现在 = 全部临时图片
+	} else {
+		ttlDays := setting.PlaygroundImageTTLDays
+		if ttlDays < 1 {
+			ttlDays = 1
+		}
+		cutoff = time.Now().Add(-time.Duration(ttlDays) * 24 * time.Hour).Unix()
+	}
+
+	deleted, err := service.RunPlaygroundImageCleanup(cutoff)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"deleted": deleted})
 }
