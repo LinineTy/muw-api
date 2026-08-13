@@ -49,9 +49,9 @@ import { safeNumberFieldProps } from '../utils/numeric-field'
 
 const playgroundSchema = z.object({
   PlaygroundImageTTLDays: z.number().int().min(1),
-  PlaygroundImageMaxCountPerUser: z.number().int().min(1),
-  PlaygroundImageMaxTotalMBPerUser: z.number().int().min(1),
-  PlaygroundImageMaxPermanentPerUser: z.number().int().min(1),
+  UserSpaceInitialMB: z.number().int().min(1),
+  UserSpacePurchaseRatio: z.number().int().min(1),
+  UserSpaceGlobalMaxMB: z.number().int().min(1),
 })
 
 type PlaygroundSettingsValues = z.infer<typeof playgroundSchema>
@@ -62,9 +62,9 @@ type PlaygroundSettingsSectionProps = {
 
 const FIELD_KEYS: Array<keyof PlaygroundSettingsValues> = [
   'PlaygroundImageTTLDays',
-  'PlaygroundImageMaxCountPerUser',
-  'PlaygroundImageMaxTotalMBPerUser',
-  'PlaygroundImageMaxPermanentPerUser',
+  'UserSpaceInitialMB',
+  'UserSpacePurchaseRatio',
+  'UserSpaceGlobalMaxMB',
 ]
 
 function formatBytes(bytes: number): string {
@@ -73,8 +73,9 @@ function formatBytes(bytes: number): string {
 }
 
 /**
- * Playground image storage settings: transient TTL and per-user quotas.
- * Hot-applies via the option store.
+ * Playground storage settings: transient TTL + user cloud space capacity model
+ * (initial capacity, purchase ratio, global allocation). Hot-applies via the
+ * option store.
  */
 export function PlaygroundSettingsSection({
   defaultValues,
@@ -140,7 +141,7 @@ export function PlaygroundSettingsSection({
   }
 
   return (
-    <SettingsSection title={t('Playground image storage')}>
+    <SettingsSection title={t('User cloud space')}>
       <Form {...form}>
         <SettingsForm onSubmit={form.handleSubmit(onSubmit)}>
           <SettingsPageFormActions
@@ -169,49 +170,59 @@ export function PlaygroundSettingsSection({
 
             <FormField
               control={form.control}
-              name='PlaygroundImageMaxCountPerUser'
+              name='UserSpaceInitialMB'
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>
-                    {t('Max temporary images per user')}
-                  </FormLabel>
-                  <FormControl>
-                    <Input min={1} type='number' {...safeNumberFieldProps(field)} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name='PlaygroundImageMaxTotalMBPerUser'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>
-                    {t('Max temporary image storage (MB)')}
-                  </FormLabel>
-                  <FormControl>
-                    <Input min={1} type='number' {...safeNumberFieldProps(field)} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name='PlaygroundImageMaxPermanentPerUser'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>
-                    {t('Max permanent images per user')}
+                    {t('Initial storage per user (MB)')}
                   </FormLabel>
                   <FormControl>
                     <Input min={1} type='number' {...safeNumberFieldProps(field)} />
                   </FormControl>
                   <FormDescription>
-                    {t('Saved generated images never expire.')}
+                    {t(
+                      'Every user starts with this capacity; they can buy more with quota.'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='UserSpacePurchaseRatio'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    {t('Purchase ratio (quota per MB)')}
+                  </FormLabel>
+                  <FormControl>
+                    <Input min={1} type='number' {...safeNumberFieldProps(field)} />
+                  </FormControl>
+                  <FormDescription>
+                    {t('How much quota one MB of extra storage costs.')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='UserSpaceGlobalMaxMB'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    {t('Cloud space total allocation (MB)')}
+                  </FormLabel>
+                  <FormControl>
+                    <Input min={1} type='number' {...safeNumberFieldProps(field)} />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'Fixed allocation for all users’ cloud space (e.g. 20GB of a 50GB disk). Regular users are refused when it is full.'
+                    )}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
