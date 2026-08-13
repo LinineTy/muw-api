@@ -229,6 +229,13 @@ func SetApiRouter(router *gin.Engine) {
 			playgroundUploadRoute.GET("/images", middleware.DisableCache(), controller.ListPlaygroundImages)
 			playgroundUploadRoute.GET("/images/:id", middleware.DisableCache(), controller.GetPlaygroundImage)
 			playgroundUploadRoute.DELETE("/images/:id", controller.DeletePlaygroundImage)
+			playgroundUploadRoute.POST("/images/clear-transient", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.ClearUserTransientPlaygroundImages)
+			// 用户云空间：用量/购买 + 对话同步
+			playgroundUploadRoute.GET("/space", middleware.DisableCache(), controller.GetUserPlaygroundSpace)
+			playgroundUploadRoute.POST("/space/purchase", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.PurchasePlaygroundSpace)
+			playgroundUploadRoute.GET("/conversations", middleware.DisableCache(), controller.ListPlaygroundConversations)
+			playgroundUploadRoute.PUT("/conversations/:clientId", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.SavePlaygroundConversation)
+			playgroundUploadRoute.DELETE("/conversations/:clientId", controller.DeletePlaygroundConversation)
 		}
 
 		// Playground image admin: global usage stats + manual cleanup (admin only).

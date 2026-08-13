@@ -244,30 +244,13 @@ func TestUploadPlaygroundImageRejectsDisabledUser(t *testing.T) {
 	assert.Contains(t, env.Message, "禁止")
 }
 
-// TestUploadPlaygroundImageRejectsWhenCountQuota 临时图片数量达上限后拒绝。
-func TestUploadPlaygroundImageRejectsWhenCountQuota(t *testing.T) {
-	setupPlaygroundImageTestDB(t)
-	insertTestUser(t, 100, false)
-	for i := 0; i < setting.PlaygroundImageMaxCountPerUser; i++ {
-		require.NoError(t, model.InsertPlaygroundImage(&model.PlaygroundImage{
-			Name: "x", Ext: "png", Size: 1, UserId: 100, Permanent: false,
-		}))
-	}
-	router := newPlaygroundImageTestEngine(100)
-
-	rec := uploadTestImageAs(t, router, "photo.png", playgroundTestPNGBytes(t), "")
-
-	env := playgroundDecodeEnvelope(t, rec)
-	assert.False(t, env.Success)
-	assert.Contains(t, env.Message, "已达上限")
-}
-
-// TestUploadPlaygroundImageRejectsWhenByteQuota 临时图片总容量达上限后拒绝。
-func TestUploadPlaygroundImageRejectsWhenByteQuota(t *testing.T) {
+// TestUploadPlaygroundImageRejectsWhenCapacityFull 统一容量模型：临时+永久合并计数，
+// 已占用达到初始容量（SpaceCapacity=0 → 全局初始）后拒绝上传。
+func TestUploadPlaygroundImageRejectsWhenCapacityFull(t *testing.T) {
 	setupPlaygroundImageTestDB(t)
 	insertTestUser(t, 100, false)
 	require.NoError(t, model.InsertPlaygroundImage(&model.PlaygroundImage{
-		Name: "x", Ext: "png", Size: int64(setting.PlaygroundImageMaxTotalBytesPerUser), UserId: 100, Permanent: false,
+		Name: "x", Ext: "png", Size: int64(setting.UserSpaceInitialMB) << 20, UserId: 100, Permanent: false,
 	}))
 	router := newPlaygroundImageTestEngine(100)
 
@@ -278,22 +261,22 @@ func TestUploadPlaygroundImageRejectsWhenByteQuota(t *testing.T) {
 	assert.Contains(t, env.Message, "存储空间不足")
 }
 
-// TestUploadPlaygroundImageRejectsPermanentQuota 永久收藏数量达上限后拒绝。
-func TestUploadPlaygroundImageRejectsPermanentQuota(t *testing.T) {
+// TestUploadPlaygroundImageCapacityCountsTempAndPermanent 临时+永久合并：永久占满
+// 也会拒绝临时上传。
+func TestUploadPlaygroundImageCapacityCountsTempAndPermanent(t *testing.T) {
 	setupPlaygroundImageTestDB(t)
 	insertTestUser(t, 100, false)
-	for i := 0; i < setting.PlaygroundImageMaxPermanentPerUser; i++ {
-		require.NoError(t, model.InsertPlaygroundImage(&model.PlaygroundImage{
-			Name: "x", Ext: "png", Size: 1, UserId: 100, Permanent: true,
-		}))
-	}
+	// 永久图已占满初始容量，临时上传同样被拒（合并计数）。
+	require.NoError(t, model.InsertPlaygroundImage(&model.PlaygroundImage{
+		Name: "x", Ext: "png", Size: int64(setting.UserSpaceInitialMB) << 20, UserId: 100, Permanent: true,
+	}))
 	router := newPlaygroundImageTestEngine(100)
 
-	rec := uploadTestImageAs(t, router, "photo.png", playgroundTestPNGBytes(t), "permanent=true")
+	rec := uploadTestImageAs(t, router, "photo.png", playgroundTestPNGBytes(t), "")
 
 	env := playgroundDecodeEnvelope(t, rec)
 	assert.False(t, env.Success)
-	assert.Contains(t, env.Message, "已达上限")
+	assert.Contains(t, env.Message, "存储空间不足")
 }
 
 // TestGetPlaygroundImageOwnership 本人可读图片字节；他人 403；不存在报错。

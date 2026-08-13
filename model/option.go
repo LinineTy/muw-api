@@ -154,6 +154,9 @@ func InitOptionMap() {
 	common.OptionMap["PlaygroundImageMaxCountPerUser"] = strconv.Itoa(setting.PlaygroundImageMaxCountPerUser)
 	common.OptionMap["PlaygroundImageMaxTotalMBPerUser"] = strconv.Itoa(setting.PlaygroundImageMaxTotalBytesPerUser >> 20)
 	common.OptionMap["PlaygroundImageMaxPermanentPerUser"] = strconv.Itoa(setting.PlaygroundImageMaxPermanentPerUser)
+	common.OptionMap["UserSpaceInitialMB"] = strconv.Itoa(setting.UserSpaceInitialMB)
+	common.OptionMap["UserSpacePurchaseRatio"] = strconv.Itoa(setting.UserSpacePurchaseRatio)
+	common.OptionMap["UserSpaceGlobalMaxMB"] = strconv.Itoa(setting.UserSpaceGlobalMaxMB)
 	common.OptionMap["AutomaticDisableKeywords"] = operation_setting.AutomaticDisableKeywordsToString()
 	common.OptionMap["AutomaticDisableStatusCodes"] = operation_setting.AutomaticDisableStatusCodesToString()
 	common.OptionMap["AutomaticRetryStatusCodes"] = operation_setting.AutomaticRetryStatusCodesToString()
@@ -211,7 +214,8 @@ func validateOptionValue(key string, value string) error {
 		return setting.ValidateMaxTokenAutoGroups(value)
 	}
 	switch key {
-	case "PlaygroundImageTTLDays", "PlaygroundImageMaxCountPerUser", "PlaygroundImageMaxTotalMBPerUser", "PlaygroundImageMaxPermanentPerUser":
+	case "PlaygroundImageTTLDays", "PlaygroundImageMaxCountPerUser", "PlaygroundImageMaxTotalMBPerUser", "PlaygroundImageMaxPermanentPerUser",
+		"UserSpaceInitialMB", "UserSpacePurchaseRatio", "UserSpaceGlobalMaxMB":
 		n, err := strconv.Atoi(value)
 		if err != nil || n <= 0 {
 			return fmt.Errorf("must be a positive integer, got %q", value)
@@ -605,6 +609,24 @@ func updateOptionMap(key string, value string) (err error) {
 			n = setting.DefaultPlaygroundImageMaxPermanentPerUser
 		}
 		setting.PlaygroundImageMaxPermanentPerUser = n
+	case "UserSpaceInitialMB":
+		mb, _ := strconv.Atoi(value)
+		if mb < 1 {
+			mb = setting.DefaultUserSpaceInitialMB
+		}
+		setting.UserSpaceInitialMB = mb
+	case "UserSpacePurchaseRatio":
+		n, _ := strconv.Atoi(value)
+		if n < 1 {
+			n = setting.DefaultUserSpacePurchaseRatio
+		}
+		setting.UserSpacePurchaseRatio = n
+	case "UserSpaceGlobalMaxMB":
+		mb, _ := strconv.Atoi(value)
+		if mb < 1 {
+			mb = setting.DefaultUserSpaceGlobalMaxMB
+		}
+		setting.UserSpaceGlobalMaxMB = mb
 	case "PayMethods":
 		err = operation_setting.UpdatePayMethodsByJsonString(value)
 	}

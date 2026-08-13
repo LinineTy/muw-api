@@ -112,3 +112,44 @@ func TestPlaygroundImageUserDisabledField(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, user2.PlaygroundImageDisabled)
 }
+
+// TestPlaygroundImageSumAllCombinesTempAndPermanent 统一容量求和 = 临时+永久合并，软删排除。
+func TestPlaygroundImageSumAllCombinesTempAndPermanent(t *testing.T) {
+	openPlaygroundImageTestDB(t)
+
+	require.NoError(t, InsertPlaygroundImage(&PlaygroundImage{
+		Id: 1, Name: "a", Ext: "png", Size: 10, UserId: 100, Permanent: false,
+	}))
+	require.NoError(t, InsertPlaygroundImage(&PlaygroundImage{
+		Id: 2, Name: "b", Ext: "png", Size: 20, UserId: 100, Permanent: true,
+	}))
+	require.NoError(t, InsertPlaygroundImage(&PlaygroundImage{
+		Id: 3, Name: "c", Ext: "png", Size: 40, UserId: 101, Permanent: false,
+	}))
+
+	sum, err := SumPlaygroundImageSizesByUserAll(100)
+	require.NoError(t, err)
+	assert.Equal(t, int64(30), sum) // 临时+永久合并
+
+	// 软删后排除。
+	require.NoError(t, DeletePlaygroundImageById(1))
+	sum, err = SumPlaygroundImageSizesByUserAll(100)
+	require.NoError(t, err)
+	assert.Equal(t, int64(20), sum)
+}
+
+// TestPlaygroundImageSpaceCapacityField 验证用户云空间容量字段读写（管理员可设、可读回）。
+func TestPlaygroundImageSpaceCapacityField(t *testing.T) {
+	openPlaygroundImageTestDB(t)
+	require.NoError(t, DB.AutoMigrate(&User{}))
+
+	require.NoError(t, DB.Create(&User{Id: 100, Username: "u"}).Error)
+	user, err := GetUserById(100, false)
+	require.NoError(t, err)
+	user.SpaceCapacity = int64(30) << 20
+	require.NoError(t, user.EditWithTx(DB, false))
+
+	user2, err := GetUserById(100, false)
+	require.NoError(t, err)
+	assert.Equal(t, int64(30)<<20, user2.SpaceCapacity)
+}
