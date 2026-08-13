@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
@@ -33,6 +34,15 @@ type passkeyFinishRequest struct {
 
 type passkeyVerifyBeginRequest struct {
 	Scope string `json:"scope"`
+}
+
+// passkeyUserBannedError 携带禁用原因（管理员备注），供登录回调映射为结构化拒绝响应。
+type passkeyUserBannedError struct {
+	Reason string
+}
+
+func (e *passkeyUserBannedError) Error() string {
+	return "passkey user banned"
 }
 
 func parsePasskeyFinishRequest(c *gin.Context) (*passkeyFinishRequest, error) {
@@ -388,7 +398,7 @@ func PasskeyLoginFinish(c *gin.Context) {
 		}
 
 		if user.Status != common.UserStatusEnabled {
-			return nil, errors.New("该用户已被禁用")
+			return nil, &passkeyUserBannedError{Reason: user.Remark}
 		}
 
 		if len(userHandle) > 0 {
@@ -406,6 +416,11 @@ func PasskeyLoginFinish(c *gin.Context) {
 
 	waUser, credential, err := wa.ValidatePasskeyLogin(handler, *sessionData, parsedCredential)
 	if err != nil {
+		var banned *passkeyUserBannedError
+		if errors.As(err, &banned) {
+			common.ApiErrorLoginDenied(c, common.LoginStatusUserDisabled, i18n.MsgAuthUserBanned, banned.Reason)
+			return
+		}
 		common.ApiError(c, err)
 		return
 	}
@@ -423,7 +438,8 @@ func PasskeyLoginFinish(c *gin.Context) {
 	}
 
 	if modelUser.Status != common.UserStatusEnabled {
-		common.ApiErrorMsg(c, "该用户已被禁用")
+		// TOCTOU 防御：状态在验证瞬间被改的兜底检查。
+		common.ApiErrorLoginDenied(c, common.LoginStatusUserDisabled, i18n.MsgAuthUserBanned, modelUser.Remark)
 		return
 	}
 

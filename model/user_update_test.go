@@ -239,6 +239,28 @@ func TestValidateAndFillRejectsPasswordlessUser(t *testing.T) {
 	assert.Empty(t, stored.Password)
 }
 
+func TestValidateAndFillReturnsErrUserBannedForDisabledUser(t *testing.T) {
+	setupUserUpdateTestState(t)
+
+	hashed, err := common.Password2Hash("CorrectPassword123")
+	require.NoError(t, err)
+	require.NoError(t, DB.Create(&User{
+		Username: "banned-user",
+		Password: hashed,
+		Status:   common.UserStatusDisabled,
+		Remark:   "violated terms",
+	}).Error)
+
+	loginUser := User{
+		Username: "banned-user",
+		Password: "CorrectPassword123",
+	}
+	err = loginUser.ValidateAndFill()
+	require.ErrorIs(t, err, ErrUserBanned)
+	// 禁用用户仍应被识别为禁用而非密码错误，且 Remark 随记录载入可供展示。
+	assert.Equal(t, "violated terms", loginUser.Remark)
+}
+
 func TestResetUserPasswordByEmailRequiresSingleActiveMatch(t *testing.T) {
 	setupUserUpdateTestState(t)
 

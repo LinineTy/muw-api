@@ -20,6 +20,17 @@ import (
 const KeyRequestBody = "key_request_body"
 const KeyBodyStorage = "key_body_storage"
 
+// 登录拒绝响应的机器可读状态码与 login_status 取值，供前端中间态页分派。
+const CodeLoginDenied = "AUTH_LOGIN_DENIED"
+
+const (
+	LoginStatusUserDisabled           = "user_disabled"           // 账号被禁用
+	LoginStatusLinuxDOBlacklisted     = "linuxdo_blacklisted"     // LinuxDO 黑名单
+	LoginStatusUserLimitReached       = "user_limit_reached"      // 站点满员，建号被拒
+	LoginStatusRegistrationDisabled   = "registration_disabled"   // 注册关闭，建号被拒
+	LoginStatusUserDeleted            = "user_deleted"            // 账号已注销
+)
+
 var ErrRequestBodyTooLarge = errors.New("request body too large")
 
 func IsRequestBodyTooLargeError(err error) bool {
@@ -225,6 +236,23 @@ func ApiErrorI18n(c *gin.Context, key string, args ...map[string]any) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": false,
 		"message": msg,
+	})
+}
+
+// ApiErrorLoginDenied 返回带机器可读 login_status 的登录/建号被拒响应，前端据此渲染
+// 中间态页而非一闪而过的 toast。status 取 LoginStatus* 常量；msgKey 为 i18n 消息键；
+// reason 为禁用原因（管理员备注，无则空串）。
+func ApiErrorLoginDenied(c *gin.Context, status, msgKey, reason string, args ...map[string]any) {
+	c.JSON(http.StatusOK, gin.H{
+		"success": false,
+		"code":    CodeLoginDenied,
+		"message": TranslateMessage(c, msgKey, args...),
+		"data": gin.H{
+			"login_status": gin.H{
+				"status": status,
+				"reason": reason,
+			},
+		},
 	})
 }
 

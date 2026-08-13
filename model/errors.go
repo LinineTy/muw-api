@@ -15,6 +15,7 @@ var (
 	ErrEmailNotFound        = errors.New("email not found")
 	ErrEmailAmbiguous       = errors.New("email matches multiple users")
 	ErrUserLimitReached     = errors.New("user limit reached")
+	ErrUserBanned           = errors.New("user banned")
 )
 
 // Token auth errors

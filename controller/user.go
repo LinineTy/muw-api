@@ -66,6 +66,8 @@ func Login(c *gin.Context) {
 			common.ApiErrorI18n(c, i18n.MsgDatabaseError)
 		case errors.Is(err, model.ErrUserEmptyCredentials):
 			common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		case errors.Is(err, model.ErrUserBanned):
+			common.ApiErrorLoginDenied(c, common.LoginStatusUserDisabled, i18n.MsgAuthUserBanned, user.Remark)
 		default:
 			common.ApiErrorI18n(c, i18n.MsgUserUsernameOrPasswordError)
 		}
@@ -168,7 +170,13 @@ func setupLogin(user *model.User, c *gin.Context) {
 
 func setupLoginAtAuthVersion(user *model.User, expectedAuthVersion int64, c *gin.Context) {
 	if user == nil || user.Id <= 0 || user.Status != common.UserStatusEnabled {
-		common.ApiErrorI18n(c, i18n.MsgAuthUserBanned)
+		reason := ""
+		if user != nil && user.Id > 0 {
+			if fullUser, err := model.GetUserById(user.Id, false); err == nil {
+				reason = fullUser.Remark
+			}
+		}
+		common.ApiErrorLoginDenied(c, common.LoginStatusUserDisabled, i18n.MsgAuthUserBanned, reason)
 		return
 	}
 	currentUser, err := model.GetUserById(user.Id, false)

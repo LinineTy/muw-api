@@ -1082,8 +1082,12 @@ func (user *User) ValidateAndFill() (err error) {
 		return ErrInvalidCredentials
 	}
 	okay := common.ValidatePasswordAndHash(password, user.Password)
-	if !okay || user.Status != common.UserStatusEnabled {
+	if !okay {
 		return ErrInvalidCredentials
+	}
+	if user.Status != common.UserStatusEnabled {
+		// 与 ErrInvalidCredentials 分开，登录入口据此区分"密码错误"与"账号被禁用"。
+		return ErrUserBanned
 	}
 	return nil
 }
