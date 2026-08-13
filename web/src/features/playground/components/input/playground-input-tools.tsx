@@ -78,6 +78,10 @@ export function PlaygroundInputTools({
   }
 
   const handleClearMessages = () => {
+    if (!hasMessages) {
+      setClearConfirmOpen(false)
+      return
+    }
     onClearMessages?.()
     setClearConfirmOpen(false)
     toast.success(t('Conversation cleared'))
@@ -154,8 +158,13 @@ export function PlaygroundInputTools({
               <PromptInputButton
                 aria-label={t('Clear chat history')}
                 className='text-muted-foreground hover:text-destructive hover:bg-destructive/10 font-medium'
-                disabled={disabled || !hasMessages || !onClearMessages}
-                onClick={() => setClearConfirmOpen(true)}
+                // 不能因 !hasMessages 而 disabled：基座 InputGroup 的
+                // has-disabled:opacity-50 会让整框 50% 透明，空对话时打字
+                // 也会一直"发灰"。改为点击时空对话直接忽略。
+                disabled={disabled || !onClearMessages}
+                onClick={() => {
+                  if (hasMessages) setClearConfirmOpen(true)
+                }}
                 variant='ghost'
               >
                 <Trash2Icon size={16} />
