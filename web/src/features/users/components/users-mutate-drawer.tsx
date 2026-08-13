@@ -429,6 +429,35 @@ export function UsersMutateDrawer({
 
                   <FormField
                     control={form.control}
+                    name='playground_image_disabled'
+                    render={({ field }) => (
+                      <FormItem className='flex flex-col gap-1.5'>
+                        <div className='flex items-center justify-between gap-2'>
+                          <div>
+                            <FormLabel>{t('Disable image upload')}</FormLabel>
+                            <FormDescription>
+                              {t(
+                                'Disabled users cannot upload images to the playground. Existing images stay readable and are cleaned up normally.'
+                              )}
+                            </FormDescription>
+                          </div>
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value === true}
+                              onCheckedChange={(checked) =>
+                                field.onChange(checked === true)
+                              }
+                              aria-label={t('Disable image upload')}
+                            />
+                          </FormControl>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
                     name='quota_dollars'
                     render={({ field }) => (
                       <FormItem>

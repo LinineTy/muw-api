@@ -182,6 +182,10 @@ export type ContentSettings = {
   MjForwardUrlEnabled: boolean
   MjModeClearEnabled: boolean
   MjActionCheckSuccessEnabled: boolean
+  PlaygroundImageTTLDays: number
+  PlaygroundImageMaxCountPerUser: number
+  PlaygroundImageMaxTotalMBPerUser: number
+  PlaygroundImageMaxPermanentPerUser: number
 }
 
 export type ModelSettings = {
