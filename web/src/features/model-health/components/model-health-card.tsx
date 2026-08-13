@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -65,6 +65,11 @@ export function ModelHealthCard({
   const userRole = useAuthStore((s) => s.auth.user?.role)
   const isAdmin = Boolean(userRole && userRole >= ROLE.ADMIN)
 
+  // Memoized so the strip doesn't get a fresh array on every re-render (e.g. the
+  // admin Detail button appearing when auth hydrates) — a stable reference keeps
+  // HealthBlocks' measurements in sync instead of churning its observer.
+  const trend = useMemo(() => mergeTrend(rows), [rows])
+
   const totalTests = rows.reduce((sum, row) => sum + row.test_count, 0)
   const totalSuccess = rows.reduce((sum, row) => sum + row.success_count, 0)
   const totalUserTraffic = rows.reduce(
@@ -92,7 +97,7 @@ export function ModelHealthCard({
       </div>
 
       <div className='flex items-center gap-2 px-3 pb-1.5 sm:px-4'>
-        <HealthBlocks trend={mergeTrend(rows)} />
+        <HealthBlocks trend={trend} />
         {isAdmin ? (
           <Button
             variant='ghost'
