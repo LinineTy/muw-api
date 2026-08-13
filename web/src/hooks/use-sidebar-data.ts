@@ -21,6 +21,7 @@ import {
   Box,
   CreditCard,
   Crown,
+  Database,
   FileText,
   FlaskConical,
   HeartPulse,
@@ -115,6 +116,11 @@ export function useSidebarData(): SidebarData {
             title: t('Wallet'),
             url: '/wallet',
             icon: Wallet,
+          },
+          {
+            title: t('Cloud Space'),
+            url: '/space',
+            icon: Database,
           },
           {
             title: t('My Subscriptions'),

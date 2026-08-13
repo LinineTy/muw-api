@@ -56,6 +56,7 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
     topup: true,
     personal: true,
     my_subscriptions: true,
+    space: true,
   },
   admin: {
     enabled: true,
@@ -114,6 +115,7 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/usage-logs/task': { section: 'console', module: 'task' },
   '/wallet': { section: 'personal', module: 'topup' },
   '/my-subscriptions': { section: 'personal', module: 'my_subscriptions' },
+  '/space': { section: 'personal', module: 'space' },
   '/profile': { section: 'personal', module: 'personal' },
   '/channels': { section: 'admin', module: 'channel' },
   '/models': { section: 'admin', module: 'models' },
