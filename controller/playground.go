@@ -13,6 +13,17 @@ import (
 )
 
 func Playground(c *gin.Context) {
+	PlaygroundRelay(c, types.RelayFormatOpenAI)
+}
+
+// PlaygroundImage 游乐场图片生成入口，走 OpenAI 图片格式（/v1/images/generations）。
+func PlaygroundImage(c *gin.Context) {
+	PlaygroundRelay(c, types.RelayFormatOpenAIImage)
+}
+
+// PlaygroundRelay 是游乐场中转的公共实现：拒绝 access token、按用户会话建临时 token 后
+// 走正常中转+计费链路。relayFormat 决定上游协议格式（聊天 vs 图片等）。
+func PlaygroundRelay(c *gin.Context, relayFormat types.RelayFormat) {
 	var newAPIError *types.NewAPIError
 
 	defer func() {
@@ -29,7 +40,7 @@ func Playground(c *gin.Context) {
 		return
 	}
 
-	relayInfo, err := relaycommon.GenRelayInfo(c, types.RelayFormatOpenAI, nil, nil)
+	relayInfo, err := relaycommon.GenRelayInfo(c, relayFormat, nil, nil)
 	if err != nil {
 		newAPIError = types.NewError(err, types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
 		return
@@ -52,5 +63,5 @@ func Playground(c *gin.Context) {
 	}
 	_ = middleware.SetupContextForToken(c, tempToken)
 
-	Relay(c, types.RelayFormatOpenAI)
+	Relay(c, relayFormat)
 }
