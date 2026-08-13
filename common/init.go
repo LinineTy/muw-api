@@ -23,6 +23,11 @@ var (
 	// UploadDir is the root directory for user-uploaded files (avatars etc.).
 	// It is overridable via the UPLOAD_DIR environment variable.
 	UploadDir = "uploads"
+	// PrivateUploadDir holds user-scoped uploads that must NOT be reachable via
+	// the public /uploads/ static route (e.g. playground images, which could
+	// contain unlawful content). Files here are served only through authenticated
+	// endpoints with ownership checks. Overridable via PRIVATE_UPLOAD_DIR.
+	PrivateUploadDir = "uploads-private"
 )
 
 func printHelp() {
@@ -74,6 +79,9 @@ func InitEnv() {
 	}
 	if envUploadDir := os.Getenv("UPLOAD_DIR"); envUploadDir != "" {
 		UploadDir = envUploadDir
+	}
+	if envPrivateUploadDir := os.Getenv("PRIVATE_UPLOAD_DIR"); envPrivateUploadDir != "" {
+		PrivateUploadDir = envPrivateUploadDir
 	}
 	avatarDir := filepath.Join(UploadDir, "avatar")
 	if _, err := os.Stat(avatarDir); os.IsNotExist(err) {

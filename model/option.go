@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -149,6 +150,10 @@ func InitOptionMap() {
 	common.OptionMap["StopOnSensitiveEnabled"] = strconv.FormatBool(setting.StopOnSensitiveEnabled)
 	common.OptionMap["SensitiveWords"] = setting.SensitiveWordsToString()
 	common.OptionMap["StreamCacheQueueLength"] = strconv.Itoa(setting.StreamCacheQueueLength)
+	common.OptionMap["PlaygroundImageTTLDays"] = strconv.Itoa(setting.PlaygroundImageTTLDays)
+	common.OptionMap["PlaygroundImageMaxCountPerUser"] = strconv.Itoa(setting.PlaygroundImageMaxCountPerUser)
+	common.OptionMap["PlaygroundImageMaxTotalMBPerUser"] = strconv.Itoa(setting.PlaygroundImageMaxTotalBytesPerUser >> 20)
+	common.OptionMap["PlaygroundImageMaxPermanentPerUser"] = strconv.Itoa(setting.PlaygroundImageMaxPermanentPerUser)
 	common.OptionMap["AutomaticDisableKeywords"] = operation_setting.AutomaticDisableKeywordsToString()
 	common.OptionMap["AutomaticDisableStatusCodes"] = operation_setting.AutomaticDisableStatusCodesToString()
 	common.OptionMap["AutomaticRetryStatusCodes"] = operation_setting.AutomaticRetryStatusCodesToString()
@@ -204,6 +209,13 @@ func validateOptionValue(key string, value string) error {
 	}
 	if key == "MaxTokenAutoGroups" {
 		return setting.ValidateMaxTokenAutoGroups(value)
+	}
+	switch key {
+	case "PlaygroundImageTTLDays", "PlaygroundImageMaxCountPerUser", "PlaygroundImageMaxTotalMBPerUser", "PlaygroundImageMaxPermanentPerUser":
+		n, err := strconv.Atoi(value)
+		if err != nil || n <= 0 {
+			return fmt.Errorf("must be a positive integer, got %q", value)
+		}
 	}
 	return nil
 }
@@ -569,6 +581,30 @@ func updateOptionMap(key string, value string) (err error) {
 		err = operation_setting.AutomaticRetryStatusCodesFromString(value)
 	case "StreamCacheQueueLength":
 		setting.StreamCacheQueueLength, _ = strconv.Atoi(value)
+	case "PlaygroundImageTTLDays":
+		day, _ := strconv.Atoi(value)
+		if day < 1 {
+			day = setting.DefaultPlaygroundImageTTLDays
+		}
+		setting.PlaygroundImageTTLDays = day
+	case "PlaygroundImageMaxCountPerUser":
+		n, _ := strconv.Atoi(value)
+		if n < 1 {
+			n = setting.DefaultPlaygroundImageMaxCountPerUser
+		}
+		setting.PlaygroundImageMaxCountPerUser = n
+	case "PlaygroundImageMaxTotalMBPerUser":
+		mb, _ := strconv.Atoi(value)
+		if mb < 1 {
+			mb = setting.DefaultPlaygroundImageMaxTotalMBPerUser
+		}
+		setting.PlaygroundImageMaxTotalBytesPerUser = mb << 20
+	case "PlaygroundImageMaxPermanentPerUser":
+		n, _ := strconv.Atoi(value)
+		if n < 1 {
+			n = setting.DefaultPlaygroundImageMaxPermanentPerUser
+		}
+		setting.PlaygroundImageMaxPermanentPerUser = n
 	case "PayMethods":
 		err = operation_setting.UpdatePayMethodsByJsonString(value)
 	}

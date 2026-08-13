@@ -311,6 +311,7 @@ func autoMigrateAll() error {
 		&Vendor{},
 		&PrefillGroup{},
 		&ImageAsset{},
+		&PlaygroundImage{},
 		&Setup{},
 		&TwoFA{},
 		&TwoFABackupCode{},
