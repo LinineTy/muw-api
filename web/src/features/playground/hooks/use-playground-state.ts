@@ -17,32 +17,49 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { DEFAULT_CONFIG, DEFAULT_PARAMETER_ENABLED } from '../constants'
 import {
   saveConfig,
   saveParameterEnabled,
-  saveMessages,
-  applyMessageStateUpdate,
   getInitialParameterEnabled,
   getInitialPlaygroundConfig,
-  loadMessages,
+  loadOrCreateConversations,
+  saveConversations,
+  saveActiveConversationId,
   type MessageStateUpdater,
 } from '../lib'
+import {
+  createConversation,
+  removeConversationById,
+  renameConversationById,
+  updateActiveConversationMessages,
+} from '../lib/conversation/conversation-utils'
+import {
+  createSystemMessage,
+  updateCurrentVersionContent,
+} from '../lib/message/message-utils'
 import type {
-  Message,
+  Conversation,
   PlaygroundConfig,
   ParameterEnabled,
   ModelOption,
   GroupOption,
 } from '../types'
 
-const MESSAGE_SAVE_DEBOUNCE_MS = 500
+const CONVERSATIONS_SAVE_DEBOUNCE_MS = 500
 
 /**
- * Main state management hook for playground
+ * Main state management hook for playground.
+ *
+ * Holds a list of named conversations (persisted to localStorage) plus the
+ * currently active one; the public `messages` value is derived from the active
+ * conversation so the rest of the UI keeps working unchanged.
  */
 export function usePlaygroundState() {
+  const { t } = useTranslation()
+
   // Load initial state from localStorage
   const [config, setConfig] = useState<PlaygroundConfig>(
     getInitialPlaygroundConfig
@@ -52,44 +69,57 @@ export function usePlaygroundState() {
     getInitialParameterEnabled
   )
 
-  const [messages, setMessages] = useState<Message[]>([])
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(
+    null
+  )
   const [isLoadingMessages, setIsLoadingMessages] = useState(true)
-  const messagesSaveTimerRef = useRef<number | null>(null)
-  const latestMessagesRef = useRef<Message[]>(messages)
-  const hasLoadedMessagesRef = useRef(false)
+  const conversationsSaveTimerRef = useRef<number | null>(null)
+  const latestConversationsRef = useRef<Conversation[]>(conversations)
+  const hasLoadedConversationsRef = useRef(false)
 
   const [models, setModels] = useState<ModelOption[]>([])
   const [groups, setGroups] = useState<GroupOption[]>([])
 
-  const persistMessages = useCallback((messagesToSave: Message[]) => {
-    latestMessagesRef.current = messagesToSave
+  const activeConversation =
+    conversations.find(
+      (conversation) => conversation.id === activeConversationId
+    ) ?? null
+  const messages = activeConversation?.messages ?? []
 
-    if (!hasLoadedMessagesRef.current) {
-      return
-    }
+  const persistConversations = useCallback(
+    (conversationsToSave: Conversation[]) => {
+      latestConversationsRef.current = conversationsToSave
 
-    if (messagesSaveTimerRef.current !== null) {
-      window.clearTimeout(messagesSaveTimerRef.current)
-    }
+      if (!hasLoadedConversationsRef.current) {
+        return
+      }
 
-    messagesSaveTimerRef.current = window.setTimeout(() => {
-      messagesSaveTimerRef.current = null
-      saveMessages(latestMessagesRef.current)
-    }, MESSAGE_SAVE_DEBOUNCE_MS)
-  }, [])
+      if (conversationsSaveTimerRef.current !== null) {
+        window.clearTimeout(conversationsSaveTimerRef.current)
+      }
+
+      conversationsSaveTimerRef.current = window.setTimeout(() => {
+        conversationsSaveTimerRef.current = null
+        saveConversations(latestConversationsRef.current)
+      }, CONVERSATIONS_SAVE_DEBOUNCE_MS)
+    },
+    []
+  )
 
   useEffect(() => {
     let cancelled = false
 
     window.setTimeout(() => {
-      const loadedMessages = loadMessages() ?? []
+      const loaded = loadOrCreateConversations()
       if (cancelled) {
         return
       }
 
-      latestMessagesRef.current = loadedMessages
-      hasLoadedMessagesRef.current = true
-      setMessages(loadedMessages)
+      latestConversationsRef.current = loaded.conversations
+      hasLoadedConversationsRef.current = true
+      setConversations(loaded.conversations)
+      setActiveConversationId(loaded.activeId)
       setIsLoadingMessages(false)
     }, 0)
 
@@ -100,9 +130,9 @@ export function usePlaygroundState() {
 
   useEffect(
     () => () => {
-      if (messagesSaveTimerRef.current !== null) {
-        window.clearTimeout(messagesSaveTimerRef.current)
-        saveMessages(latestMessagesRef.current)
+      if (conversationsSaveTimerRef.current !== null) {
+        window.clearTimeout(conversationsSaveTimerRef.current)
+        saveConversations(latestConversationsRef.current)
       }
     },
     []
@@ -132,21 +162,105 @@ export function usePlaygroundState() {
     []
   )
 
-  // Update messages with automatic save
+  // Update active conversation messages with automatic save
   const updateMessages = useCallback(
     (updater: MessageStateUpdater) => {
-      setMessages((prev) => {
-        const newMessages = applyMessageStateUpdate(prev, updater)
-        persistMessages(newMessages)
-        return newMessages
+      setConversations((prev) => {
+        const next = updateActiveConversationMessages(
+          prev,
+          activeConversationId,
+          updater
+        )
+        persistConversations(next)
+        return next
       })
     },
-    [persistMessages]
+    [activeConversationId, persistConversations]
   )
 
-  // Clear all messages
+  // Clear all messages in the active conversation
   const clearMessages = useCallback(() => {
     updateMessages([])
+  }, [updateMessages])
+
+  // Create a new empty conversation and switch to it
+  const createNewConversation = useCallback(() => {
+    const conversation = createConversation(t('New chat'))
+    const next = [...conversations, conversation]
+    setConversations(next)
+    setActiveConversationId(conversation.id)
+    saveActiveConversationId(conversation.id)
+    persistConversations(next)
+  }, [conversations, persistConversations, t])
+
+  // Switch the active conversation
+  const switchConversation = useCallback((id: string) => {
+    setActiveConversationId(id)
+    saveActiveConversationId(id)
+  }, [])
+
+  // Rename a conversation by id
+  const renameConversation = useCallback(
+    (id: string, title: string) => {
+      const trimmed = title.trim()
+      if (!trimmed) return
+      setConversations((prev) => {
+        const next = renameConversationById(prev, id, trimmed)
+        persistConversations(next)
+        return next
+      })
+    },
+    [persistConversations]
+  )
+
+  // Delete a conversation; when it was active, fall back to the first remaining
+  // one, or create a fresh empty conversation when none is left.
+  const deleteConversation = useCallback(
+    (id: string) => {
+      let next = removeConversationById(conversations, id)
+      let newActiveId = activeConversationId
+      if (activeConversationId === id) {
+        if (next.length > 0) {
+          newActiveId = next[0].id
+        } else {
+          next = [...next, createConversation(t('New chat'))]
+          newActiveId = next.at(-1)?.id ?? newActiveId
+        }
+        setActiveConversationId(newActiveId)
+        saveActiveConversationId(newActiveId)
+      }
+      setConversations(next)
+      persistConversations(next)
+    },
+    [activeConversationId, conversations, persistConversations, t]
+  )
+
+  // Apply a system prompt: replace the first system message, or insert it at the
+  // front (system messages must lead the payload).
+  const applySystemMessage = useCallback(
+    (content: string) => {
+      const trimmed = content.trim()
+      if (!trimmed) return
+      updateMessages((prev) => {
+        const systemIndex = prev.findIndex(
+          (message) => message.from === 'system'
+        )
+        if (systemIndex >= 0) {
+          return prev.map((message, index) =>
+            index === systemIndex
+              ? updateCurrentVersionContent(message, trimmed)
+              : message
+          )
+        }
+        return [createSystemMessage(trimmed), ...prev]
+      })
+    },
+    [updateMessages]
+  )
+
+  // Remove all system messages from the active conversation
+  const clearSystemMessage = useCallback(() => {
+    updateMessages((prev) => prev.filter((message) => message.from !== 'system'))
   }, [updateMessages])
 
   // Reset config to defaults
@@ -165,6 +279,17 @@ export function usePlaygroundState() {
     isLoadingMessages,
     models,
     groups,
+
+    // Conversations
+    conversations,
+    activeConversationId,
+    activeConversation,
+    createConversation: createNewConversation,
+    switchConversation,
+    renameConversation,
+    deleteConversation,
+    applySystemMessage,
+    clearSystemMessage,
 
     // Setters
     setModels,

@@ -37,7 +37,19 @@ export const API_ENDPOINTS = {
   CHAT_COMPLETIONS: '/pg/chat/completions',
   USER_MODELS: '/api/user/models',
   USER_GROUPS: '/api/user/self/groups',
+  PLAYGROUND_IMAGE_UPLOAD: '/api/playground/images',
+  IMAGE_GENERATIONS: '/pg/images/generations',
 } as const
+
+// Max images that can be attached to a single message
+export const MAX_IMAGES_PER_MESSAGE = 4
+
+// Max size for a single playground image upload (mirrors backend maxImageSize)
+export const MAX_IMAGE_UPLOAD_BYTES = 5 * 1024 * 1024
+
+// Image generation defaults (image-gen models are not in the chat model list)
+export const DEFAULT_IMAGE_GENERATION_MODEL = 'dall-e-3'
+export const IMAGE_GENERATION_SIZES = ['1024x1024', '768x768', '512x512']
 
 // Default group — uses 'default' as the safe fallback; auto-group is
 // only selected when the backend confirms it is available for the user.
@@ -70,6 +82,10 @@ export const STORAGE_KEYS = {
   CONFIG: 'playground_config',
   MESSAGES: 'playground_messages',
   PARAMETER_ENABLED: 'playground_parameter_enabled',
+  CONVERSATIONS: 'playground_conversations',
+  ACTIVE_CONVERSATION: 'playground_active_conversation',
+  SYSTEM_PRESETS: 'playground_system_presets',
+  IMAGE_MODEL: 'playground_image_model',
 } as const
 
 // Error messages

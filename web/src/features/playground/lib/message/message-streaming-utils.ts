@@ -197,6 +197,31 @@ export function applyChatCompletionChoice(
   })
 }
 
+/**
+ * Map OpenAI-style snake_case usage to the camelCase message field, guarding
+ * against missing/non-finite values.
+ */
+export function mapResponseUsage(
+  usage: ChatCompletionResponse['usage']
+): Message['usage'] | undefined {
+  if (!usage) {
+    return undefined
+  }
+  const { prompt_tokens, completion_tokens, total_tokens } = usage
+  if (
+    !Number.isFinite(prompt_tokens) ||
+    !Number.isFinite(completion_tokens) ||
+    !Number.isFinite(total_tokens)
+  ) {
+    return undefined
+  }
+  return {
+    promptTokens: prompt_tokens,
+    completionTokens: completion_tokens,
+    totalTokens: total_tokens,
+  }
+}
+
 export function applyChatCompletionResponse(
   message: Message,
   response: ChatCompletionResponse
@@ -207,7 +232,9 @@ export function applyChatCompletionResponse(
     return null
   }
 
-  return applyChatCompletionChoice(message, choice)
+  const applied = applyChatCompletionChoice(message, choice)
+  const usage = mapResponseUsage(response.usage)
+  return usage ? { ...applied, usage } : applied
 }
 
 /**

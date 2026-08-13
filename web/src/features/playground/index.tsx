@@ -16,16 +16,31 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { PlaygroundChat } from './components/chat/playground-chat'
-import { PlaygroundInput } from './components/input/playground-input'
+import { useCallback, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
+
+import { downloadBlob } from '@/lib/download'
+
+import { uploadPlaygroundImage } from './api'
+import { MAX_IMAGE_UPLOAD_BYTES } from './constants'
 import {
   useChatHandler,
   usePlaygroundConversation,
   usePlaygroundOptions,
   usePlaygroundState,
 } from './hooks'
+import { buildConversationExport, getMessageContent } from './lib'
+import type { ConversationExportFormat } from './lib/export/conversation-export'
+import type { PlaygroundMode } from './types'
+import { PlaygroundChat } from './components/chat/playground-chat'
+import { PlaygroundConversationBar } from './components/chat/playground-conversation-bar'
+import { PlaygroundSystemPromptDialog } from './components/chat/playground-system-prompt-dialog'
+import { PlaygroundImageGeneration } from './components/image/playground-image-generation'
+import { PlaygroundInput } from './components/input/playground-input'
 
 export function Playground() {
+  const { t } = useTranslation()
   const {
     config,
     parameterEnabled,
@@ -33,13 +48,26 @@ export function Playground() {
     isLoadingMessages,
     models,
     groups,
+    conversations,
+    activeConversationId,
+    activeConversation,
     updateMessages,
     setModels,
     setGroups,
     updateConfig,
     updateParameterEnabled,
     clearMessages,
+    createConversation,
+    switchConversation,
+    renameConversation,
+    deleteConversation,
+    applySystemMessage,
+    clearSystemMessage,
   } = usePlaygroundState()
+
+  const [mode, setMode] = useState<PlaygroundMode>('chat')
+  const [systemPromptOpen, setSystemPromptOpen] = useState(false)
+  const uploadingRef = useRef(false)
 
   const { sendChat, stopGeneration, isGenerating } = useChatHandler({
     config,
@@ -74,47 +102,135 @@ export function Playground() {
     updateConfig,
   })
 
+  const onUploadFiles = useCallback(
+    async (files: File[]): Promise<string[]> => {
+      if (uploadingRef.current) {
+        return []
+      }
+      uploadingRef.current = true
+      try {
+        const urls: string[] = []
+        for (const file of files) {
+          if (!file.type.startsWith('image/')) {
+            toast.error(t('Only image files are supported'))
+            continue
+          }
+          if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+            toast.error(t('Image too large (max 5MB)'))
+            continue
+          }
+          try {
+            const { url } = await uploadPlaygroundImage(file)
+            urls.push(url)
+          } catch {
+            toast.error(t('Upload failed'))
+          }
+        }
+        return urls
+      } finally {
+        uploadingRef.current = false
+      }
+    },
+    [t]
+  )
+
+  const handleExport = useCallback(
+    (format: ConversationExportFormat) => {
+      if (!activeConversation || activeConversation.messages.length === 0) {
+        toast.info(t('Nothing to export yet'))
+        return
+      }
+      const { content, filename, mimeType } = buildConversationExport(
+        format,
+        activeConversation.title || t('New chat'),
+        activeConversation.messages,
+        config
+      )
+      downloadBlob(content, filename, mimeType)
+      toast.success(t('Conversation exported'))
+    },
+    [activeConversation, config, t]
+  )
+
+  const activeTitle = activeConversation?.title ?? t('New chat')
+  const systemPromptContent = useCallback(() => {
+    const systemMessage = (activeConversation?.messages ?? []).find(
+      (message) => message.from === 'system'
+    )
+    return systemMessage ? getMessageContent(systemMessage) : ''
+  }, [activeConversation])
+
   return (
     <div className='relative flex size-full min-h-0 flex-col overflow-hidden'>
-      {/* Full-width scroll container: scrolling works even over side whitespace */}
-      <div className='flex min-h-0 flex-1 flex-col overflow-hidden'>
-        <PlaygroundChat
-          messages={messages}
-          isLoadingMessages={isLoadingMessages}
-          onRegenerateMessage={handleRegenerateMessage}
-          onEditMessage={handleEditMessage}
-          onDeleteMessage={handleDeleteMessage}
-          onSelectPrompt={handleSendMessage}
-          isGenerating={isGenerating}
-          editingKey={editingMessageKey}
-          onCancelEdit={handleEditOpenChange}
-          onSaveEdit={(newContent) => applyEdit(newContent, false)}
-          onSaveEditAndSubmit={(newContent) => applyEdit(newContent, true)}
-        />
-      </div>
+      <PlaygroundConversationBar
+        activeConversationId={activeConversationId}
+        activeTitle={activeTitle}
+        conversations={conversations}
+        disabled={isGenerating}
+        mode={mode}
+        onCreate={createConversation}
+        onDelete={deleteConversation}
+        onExport={handleExport}
+        onModeChange={setMode}
+        onOpenSystemPrompt={() => setSystemPromptOpen(true)}
+        onRename={renameConversation}
+        onSwitch={switchConversation}
+      />
 
-      {/* Input area: center content and constrain to the same container width */}
-      <div className='mx-auto w-full max-w-4xl'>
-        <PlaygroundInput
-          config={config}
-          disabled={isGenerating}
-          groups={groups}
-          groupValue={config.group}
-          isGenerating={isGenerating}
-          isModelLoading={isLoadingModels}
-          modelValue={config.model}
-          models={models}
-          onGroupChange={(value) => updateConfig('group', value)}
-          onConfigChange={updateConfig}
-          onClearMessages={handleClearMessages}
-          onModelChange={(value) => updateConfig('model', value)}
-          onParameterEnabledChange={updateParameterEnabled}
-          onStop={stopGeneration}
-          onSubmit={handleSendMessage}
-          parameterEnabled={parameterEnabled}
-          hasMessages={messages.length > 0}
-        />
-      </div>
+      {mode === 'chat' ? (
+        <>
+          {/* Full-width scroll container: scrolling works even over side whitespace */}
+          <div className='flex min-h-0 flex-1 flex-col overflow-hidden'>
+            <PlaygroundChat
+              messages={messages}
+              isLoadingMessages={isLoadingMessages}
+              onRegenerateMessage={handleRegenerateMessage}
+              onEditMessage={handleEditMessage}
+              onDeleteMessage={handleDeleteMessage}
+              onSelectPrompt={handleSendMessage}
+              isGenerating={isGenerating}
+              editingKey={editingMessageKey}
+              onCancelEdit={handleEditOpenChange}
+              onSaveEdit={(newContent) => applyEdit(newContent, false)}
+              onSaveEditAndSubmit={(newContent) => applyEdit(newContent, true)}
+            />
+          </div>
+
+          {/* Input area: center content and constrain to the same container width */}
+          <div className='mx-auto w-full max-w-4xl'>
+            <PlaygroundInput
+              config={config}
+              disabled={isGenerating}
+              groups={groups}
+              groupValue={config.group}
+              isGenerating={isGenerating}
+              isModelLoading={isLoadingModels}
+              modelValue={config.model}
+              models={models}
+              onGroupChange={(value) => updateConfig('group', value)}
+              onConfigChange={updateConfig}
+              onClearMessages={handleClearMessages}
+              onModelChange={(value) => updateConfig('model', value)}
+              onParameterEnabledChange={updateParameterEnabled}
+              onStop={stopGeneration}
+              onSubmit={handleSendMessage}
+              onUploadFiles={onUploadFiles}
+              parameterEnabled={parameterEnabled}
+              hasMessages={messages.length > 0}
+            />
+          </div>
+        </>
+      ) : (
+        <PlaygroundImageGeneration group={config.group} />
+      )}
+
+      <PlaygroundSystemPromptDialog
+        initialContent={systemPromptContent()}
+        onApply={applySystemMessage}
+        onClear={clearSystemMessage}
+        onOpenChange={setSystemPromptOpen}
+        open={systemPromptOpen}
+      />
     </div>
   )
 }

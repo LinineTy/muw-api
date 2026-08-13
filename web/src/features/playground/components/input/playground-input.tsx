@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import {
   PromptInput,
@@ -26,7 +27,8 @@ import {
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input'
 
-import { getSubmittableInputText } from '../../lib'
+import { getSubmittableInputMessage } from '../../lib'
+import { MAX_IMAGES_PER_MESSAGE, MAX_IMAGE_UPLOAD_BYTES } from '../../constants'
 import type {
   ModelOption,
   GroupOption,
@@ -38,7 +40,8 @@ import { PlaygroundInputTools } from './playground-input-tools'
 
 interface PlaygroundInputProps {
   config: PlaygroundConfig
-  onSubmit: (text: string) => void
+  onSubmit: (text: string, attachments?: string[]) => void
+  onUploadFiles?: (files: File[]) => Promise<string[]>
   onStop?: () => void
   disabled?: boolean
   isGenerating?: boolean
@@ -65,6 +68,7 @@ interface PlaygroundInputProps {
 export function PlaygroundInput({
   config,
   onSubmit,
+  onUploadFiles,
   onStop,
   disabled,
   isGenerating,
@@ -84,19 +88,40 @@ export function PlaygroundInput({
   const { t } = useTranslation()
   const [text, setText] = useState('')
 
-  const handleSubmit = (message: PromptInputMessage) => {
-    const submittableText = getSubmittableInputText(message, disabled)
+  const handleSubmit = async (message: PromptInputMessage) => {
+    const submittable = getSubmittableInputMessage(message, disabled)
 
-    if (!submittableText) return
-    onSubmit(submittableText)
+    if (!submittable) return
+
+    let urls: string[] = []
+    if (submittable.files.length > 0) {
+      if (!onUploadFiles) return
+      urls = await onUploadFiles(submittable.files)
+
+      if (urls.length === 0) {
+        toast.warning(t('Upload failed'))
+        // 全部上传失败：抛出让 PromptInput 保留附件，便于重试。
+        throw new Error('playground image upload failed')
+      }
+      if (urls.length < submittable.files.length) {
+        toast.warning(t('Some images failed to upload'))
+      }
+    }
+
+    onSubmit(submittable.text, urls)
     setText('')
   }
 
   return (
     <div className='grid shrink-0 gap-4 px-1 md:pb-4'>
       <PromptInput
+        accept='image/*'
         className='relative'
         groupClassName='bg-background/95 dark:bg-background/80 border-border/70 shadow-[0_18px_60px_-32px_rgba(0,0,0,0.65)] ring-1 ring-foreground/5 rounded-xl overflow-hidden transition-all duration-200 focus-within:border-primary/45 focus-within:ring-primary/15 focus-within:shadow-[0_22px_70px_-34px_rgba(0,0,0,0.75)]'
+        maxFileSize={MAX_IMAGE_UPLOAD_BYTES}
+        maxFiles={MAX_IMAGES_PER_MESSAGE}
+        multiple
+        onError={(err) => toast.error(t(err.message))}
         onSubmit={handleSubmit}
       >
         <PromptInputTextarea

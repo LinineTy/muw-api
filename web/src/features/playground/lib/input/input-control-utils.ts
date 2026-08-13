@@ -26,6 +26,7 @@ type InputControlStateOptions = {
   isModelLoading?: boolean
   models: ModelOption[]
   text: string
+  hasFiles?: boolean
 }
 
 type InputControlState = {
@@ -34,19 +35,83 @@ type InputControlState = {
   shouldShowStop: boolean
 }
 
-type SubmittableInputMessage = {
-  text?: string | null
+// FileUIPart 的形状（prompt-input 的附件部件，url 在提交前已转成 data URL）。
+type InputFilePart = {
+  type?: string
+  url?: string
+  data?: string
+  mediaType?: string
+  filename?: string
+  file?: File
 }
 
-export function getSubmittableInputText(
+type SubmittableInputMessage = {
+  text?: string | null
+  files?: InputFilePart[]
+}
+
+type SubmittableInput = {
+  text: string
+  files: File[]
+}
+
+function dataUrlToFile(
+  dataUrl: string,
+  filename: string,
+  mediaType?: string
+): File {
+  const [meta, base64] = dataUrl.split(',')
+  const mime =
+    mediaType ||
+    meta?.match(/^data:([^;,]+)/)?.[1] ||
+    'application/octet-stream'
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return new File([bytes], filename, { type: mime })
+}
+
+function partToFile(part: InputFilePart): File | null {
+  if (part.file) {
+    return part.file
+  }
+  const source = part.url || part.data
+  if (!source) {
+    return null
+  }
+  try {
+    return dataUrlToFile(source, part.filename || 'image', part.mediaType)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Extract submittable text + image files from a PromptInput message. Allows
+ * image-only messages (no text). Files are converted from data URLs back to
+ * File objects so the caller can upload them.
+ */
+export function getSubmittableInputMessage(
   message: SubmittableInputMessage,
   disabled?: boolean
-): string | null {
-  if (disabled || !message.text?.trim()) {
+): SubmittableInput | null {
+  if (disabled) {
     return null
   }
 
-  return message.text
+  const text = message.text?.trim() ?? ''
+  const files = (message.files ?? [])
+    .filter((part) => part.type === 'file')
+    .map(partToFile)
+    .filter((file): file is File => file !== null)
+
+  if (!text && files.length === 0) {
+    return null
+  }
+
+  return { text, files }
 }
 
 export function getInputControlState({
@@ -57,11 +122,13 @@ export function getInputControlState({
   isModelLoading,
   models,
   text,
+  hasFiles = false,
 }: InputControlStateOptions): InputControlState {
   const hasModels = models.length > 0
 
   return {
-    canSubmit: !disabled && hasModels && text.trim().length > 0,
+    canSubmit:
+      !disabled && hasModels && (text.trim().length > 0 || hasFiles),
     isSelectorDisabled: disabled || isModelLoading || groups.length === 0,
     shouldShowStop: Boolean(isGenerating && hasStopHandler),
   }

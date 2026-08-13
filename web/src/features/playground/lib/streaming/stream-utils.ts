@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { ERROR_MESSAGES } from '../../constants'
-import type { ChatCompletionChunk } from '../../types'
+import type { ChatCompletionChunk, Message } from '../../types'
 
 const STREAM_DONE_MESSAGE = '[DONE]'
 const STREAM_CLOSED_READY_STATE = 2
@@ -87,6 +87,46 @@ export function parseStreamMessageUpdates(data: string): StreamMessageUpdate[] {
 
 export function isStreamDoneMessage(data: string): boolean {
   return data === STREAM_DONE_MESSAGE
+}
+
+type StreamUsagePayload = {
+  usage?: {
+    prompt_tokens?: number
+    completion_tokens?: number
+    total_tokens?: number
+  }
+}
+
+/**
+ * Some providers attach `usage` to the final chunk before [DONE]. Parse it
+ * defensively; returns null when absent or invalid (most streams have none, so
+ * the token row simply does not render for those).
+ */
+export function parseStreamUsage(data: string): Message['usage'] | null {
+  try {
+    const parsed = JSON.parse(data) as StreamUsagePayload
+    const usage = parsed.usage
+    if (!usage) {
+      return null
+    }
+    const { prompt_tokens, completion_tokens, total_tokens } = usage
+    const isFiniteNumber = (value: unknown): value is number =>
+      typeof value === 'number' && Number.isFinite(value)
+    if (
+      !isFiniteNumber(prompt_tokens) ||
+      !isFiniteNumber(completion_tokens) ||
+      !isFiniteNumber(total_tokens)
+    ) {
+      return null
+    }
+    return {
+      promptTokens: prompt_tokens,
+      completionTokens: completion_tokens,
+      totalTokens: total_tokens,
+    }
+  } catch {
+    return null
+  }
 }
 
 export function isStreamClosedReadyState(readyState?: number): boolean {

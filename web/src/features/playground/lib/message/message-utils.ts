@@ -25,6 +25,7 @@ import type {
   ChatCompletionMessage,
   ContentPart,
 } from '../../types'
+import { resolveAttachmentsDataUrls } from '../image/image-data-url'
 
 /**
  * Create a new message version
@@ -76,13 +77,15 @@ export function updateCurrentVersionContent(
  */
 export function createUserMessage(
   content: string,
-  createdAt: number = Date.now()
+  createdAt: number = Date.now(),
+  attachments?: string[]
 ): Message {
   return {
     key: nanoid(),
     from: MESSAGE_ROLES.USER,
     versions: [createMessageVersion(content)],
     createdAt,
+    ...(attachments && attachments.length > 0 ? { attachments } : {}),
   }
 }
 
@@ -103,6 +106,21 @@ export function createLoadingAssistantMessage(
     isContentComplete: false,
     isReasoningStreaming: false,
     status: MESSAGE_STATUS.LOADING,
+  }
+}
+
+/**
+ * Create a system message
+ */
+export function createSystemMessage(
+  content: string,
+  createdAt: number = Date.now()
+): Message {
+  return {
+    key: nanoid(),
+    from: MESSAGE_ROLES.SYSTEM,
+    versions: [createMessageVersion(content)],
+    createdAt,
   }
 }
 
@@ -150,10 +168,20 @@ export function getTextContent(content: string | ContentPart[]): string {
 }
 
 /**
- * Format message for API request
+ * Format message for API request. Private image attachments are resolved to
+ * base64 data URIs so the upstream model can read them without public URLs.
  */
-export function formatMessageForAPI(message: Message): ChatCompletionMessage {
+export async function formatMessageForAPI(
+  message: Message
+): Promise<ChatCompletionMessage> {
   const currentVersion = getCurrentVersion(message)
+  if (message.attachments && message.attachments.length > 0) {
+    const dataUrls = await resolveAttachmentsDataUrls(message.attachments)
+    return {
+      role: message.from,
+      content: buildMessageContent(currentVersion.content, dataUrls),
+    }
+  }
   return {
     role: message.from,
     content: currentVersion.content,

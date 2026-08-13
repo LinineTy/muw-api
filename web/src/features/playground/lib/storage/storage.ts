@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { MESSAGE_STATUS, STORAGE_KEYS } from '../../constants'
-import type { PlaygroundConfig, ParameterEnabled, Message } from '../../types'
+import type { Conversation, PlaygroundConfig, ParameterEnabled, Message } from '../../types'
 import {
   finalizeMessage,
   isAssistantMessagePending,
@@ -25,6 +25,7 @@ import {
 } from '../message/message-streaming-utils'
 import { completeAssistantTiming } from '../message/message-timing-utils'
 import { hasMessageContent } from '../message/message-utils'
+import { deriveConversationTitle, createConversationWithMessages } from '../conversation/conversation-utils'
 import {
   MAX_LOADED_MESSAGE_CHARS,
   MAX_LOADED_MESSAGES_CHARS,
@@ -34,6 +35,7 @@ import {
   messagesSchema,
   parameterEnabledSchema,
   playgroundConfigSchema,
+  conversationsSchema,
 } from './storage-schema'
 
 type StoredEnvelope<T> = {
@@ -384,6 +386,100 @@ export function saveMessages(messages: Message[]): void {
 }
 
 /**
+ * Load conversations from localStorage, or null when nothing was stored yet.
+ */
+export function loadConversations(): Conversation[] | null {
+  try {
+    const saved = readStoredValue(STORAGE_KEYS.CONVERSATIONS)
+    if (!saved) return null
+    return conversationsSchema.parse(unwrapStoredValue(saved)) as Conversation[]
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('Failed to load conversations:', error)
+  }
+  return null
+}
+
+/**
+ * Save conversations to localStorage (each conversation's messages trimmed).
+ */
+export function saveConversations(conversations: Conversation[]): void {
+  try {
+    const trimmed = conversations.map((conversation) => ({
+      ...conversation,
+      messages: trimMessages(conversation.messages),
+    }))
+    const parsed = conversationsSchema.parse(trimmed) as Conversation[]
+    writeStoredValue(STORAGE_KEYS.CONVERSATIONS, parsed)
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('Failed to save conversations:', error)
+  }
+}
+
+/**
+ * Load the persisted active conversation id (may point at a deleted conversation).
+ */
+export function loadActiveConversationId(): string | null {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_CONVERSATION)
+    return saved ? (JSON.parse(saved) as string) : null
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('Failed to load active conversation id:', error)
+  }
+  return null
+}
+
+/**
+ * Persist the active conversation id; null removes the key.
+ */
+export function saveActiveConversationId(id: string | null): void {
+  try {
+    if (id === null) {
+      localStorage.removeItem(STORAGE_KEYS.ACTIVE_CONVERSATION)
+    } else {
+      localStorage.setItem(
+        STORAGE_KEYS.ACTIVE_CONVERSATION,
+        JSON.stringify(id)
+      )
+    }
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('Failed to save active conversation id:', error)
+  }
+}
+
+/**
+ * Load conversations, migrating the legacy single-session playground_messages
+ * key into the first conversation when no conversation store exists yet.
+ */
+export function loadOrCreateConversations(): {
+  conversations: Conversation[]
+  activeId: string
+} {
+  const stored = loadConversations()
+  if (stored && stored.length > 0) {
+    const activeId = loadActiveConversationId()
+    const valid =
+      activeId && stored.some((conversation) => conversation.id === activeId)
+    return {
+      conversations: stored,
+      activeId: valid ? (activeId as string) : stored[0].id,
+    }
+  }
+
+  const legacy = loadMessages() ?? []
+  const seeded = createConversationWithMessages(
+    deriveConversationTitle(legacy, 'New chat'),
+    legacy
+  )
+  saveConversations([seeded])
+  saveActiveConversationId(seeded.id)
+  return { conversations: [seeded], activeId: seeded.id }
+}
+
+/**
  * Clear all playground data
  */
 export function clearPlaygroundData(): void {
@@ -391,6 +487,10 @@ export function clearPlaygroundData(): void {
     localStorage.removeItem(STORAGE_KEYS.CONFIG)
     localStorage.removeItem(STORAGE_KEYS.PARAMETER_ENABLED)
     localStorage.removeItem(STORAGE_KEYS.MESSAGES)
+    localStorage.removeItem(STORAGE_KEYS.CONVERSATIONS)
+    localStorage.removeItem(STORAGE_KEYS.ACTIVE_CONVERSATION)
+    localStorage.removeItem(STORAGE_KEYS.SYSTEM_PRESETS)
+    localStorage.removeItem(STORAGE_KEYS.IMAGE_MODEL)
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Failed to clear playground data:', error)
