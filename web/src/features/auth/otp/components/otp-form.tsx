@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useNavigate } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
@@ -49,6 +50,10 @@ import {
 } from '@/features/auth/constants'
 import { useAuthRedirect } from '@/features/auth/hooks/use-auth-redirect'
 import {
+  buildLoginDeniedSearch,
+  getLoginDeniedInfo,
+} from '@/features/auth/lib/login-denied'
+import {
   isValidOTP,
   isValidBackupCode,
   formatBackupCode,
@@ -62,6 +67,7 @@ type OtpFormProps = React.HTMLAttributes<HTMLFormElement>
 
 export function OtpForm({ className, ...props }: OtpFormProps) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [isLoading, setIsLoading] = useState(false)
   const [useBackupCode, setUseBackupCode] = useState(false)
 
@@ -106,6 +112,15 @@ export function OtpForm({ className, ...props }: OtpFormProps) {
       })
 
       if (!res.success) {
+        const denied = getLoginDeniedInfo(res)
+        if (denied) {
+          navigate({
+            to: '/login-result',
+            search: buildLoginDeniedSearch(denied, res.message),
+            replace: true,
+          })
+          return
+        }
         if (getServerErrorMessageKey(res)) return
         toast.error(res.message || t('Invalid code'))
         return
@@ -116,7 +131,6 @@ export function OtpForm({ className, ...props }: OtpFormProps) {
       }
 
       await handleLoginSuccess(res.data)
-      toast.success(t('Signed in'))
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('2FA verification error:', error)

@@ -15,6 +15,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as UserAgreementRouteImport } from './routes/user-agreement'
 import { Route as authForgotPasswordRouteImport } from './routes/(auth)/forgot-password'
+import { Route as authLoginResultRouteImport } from './routes/(auth)/login-result'
 import { Route as authOauthRouteImport } from './routes/(auth)/oauth'
 import { Route as authOtpRouteImport } from './routes/(auth)/otp'
 import { Route as authRegisterRouteImport } from './routes/(auth)/register'
@@ -97,6 +98,11 @@ const UserAgreementRoute = UserAgreementRouteImport.update({
 const authForgotPasswordRoute = authForgotPasswordRouteImport.update({
   id: '/forgot-password',
   path: '/forgot-password',
+  getParentRoute: () => authRouteRoute,
+} as any)
+const authLoginResultRoute = authLoginResultRouteImport.update({
+  id: '/login-result',
+  path: '/login-result',
   getParentRoute: () => authRouteRoute,
 } as any)
 const authOauthRoute = authOauthRouteImport.update({
@@ -413,6 +419,7 @@ export interface FileRoutesByFullPath {
   '/user-agreement': typeof UserAgreementRoute
   '/system-settings': typeof AuthenticatedSystemSettingsRouteRouteWithChildren
   '/forgot-password': typeof authForgotPasswordRoute
+  '/login-result': typeof authLoginResultRoute
   '/oauth': typeof authOauthRoute
   '/otp': typeof authOtpRoute
   '/register': typeof authRegisterRoute
@@ -473,6 +480,7 @@ export interface FileRoutesByTo {
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/user-agreement': typeof UserAgreementRoute
   '/forgot-password': typeof authForgotPasswordRoute
+  '/login-result': typeof authLoginResultRoute
   '/oauth': typeof authOauthRoute
   '/otp': typeof authOtpRoute
   '/register': typeof authRegisterRoute
@@ -537,6 +545,7 @@ export interface FileRoutesById {
   '/user-agreement': typeof UserAgreementRoute
   '/_authenticated/system-settings': typeof AuthenticatedSystemSettingsRouteRouteWithChildren
   '/(auth)/forgot-password': typeof authForgotPasswordRoute
+  '/(auth)/login-result': typeof authLoginResultRoute
   '/(auth)/oauth': typeof authOauthRoute
   '/(auth)/otp': typeof authOtpRoute
   '/(auth)/register': typeof authRegisterRoute
@@ -600,6 +609,7 @@ export interface FileRouteTypes {
     | '/user-agreement'
     | '/system-settings'
     | '/forgot-password'
+    | '/login-result'
     | '/oauth'
     | '/otp'
     | '/register'
@@ -660,6 +670,7 @@ export interface FileRouteTypes {
     | '/privacy-policy'
     | '/user-agreement'
     | '/forgot-password'
+    | '/login-result'
     | '/oauth'
     | '/otp'
     | '/register'
@@ -723,6 +734,7 @@ export interface FileRouteTypes {
     | '/user-agreement'
     | '/_authenticated/system-settings'
     | '/(auth)/forgot-password'
+    | '/(auth)/login-result'
     | '/(auth)/oauth'
     | '/(auth)/otp'
     | '/(auth)/register'
@@ -840,6 +852,13 @@ declare module '@tanstack/react-router' {
       path: '/forgot-password'
       fullPath: '/forgot-password'
       preLoaderRoute: typeof authForgotPasswordRouteImport
+      parentRoute: typeof authRouteRoute
+    }
+    '/(auth)/login-result': {
+      id: '/(auth)/login-result'
+      path: '/login-result'
+      fullPath: '/login-result'
+      preLoaderRoute: typeof authLoginResultRouteImport
       parentRoute: typeof authRouteRoute
     }
     '/(auth)/oauth': {
@@ -1232,6 +1251,7 @@ declare module '@tanstack/react-router' {
 
 interface authRouteRouteChildren {
   authForgotPasswordRoute: typeof authForgotPasswordRoute
+  authLoginResultRoute: typeof authLoginResultRoute
   authOauthRoute: typeof authOauthRoute
   authOtpRoute: typeof authOtpRoute
   authRegisterRoute: typeof authRegisterRoute
@@ -1243,6 +1263,7 @@ interface authRouteRouteChildren {
 
 const authRouteRouteChildren: authRouteRouteChildren = {
   authForgotPasswordRoute: authForgotPasswordRoute,
+  authLoginResultRoute: authLoginResultRoute,
   authOauthRoute: authOauthRoute,
   authOtpRoute: authOtpRoute,
   authRegisterRoute: authRegisterRoute,
