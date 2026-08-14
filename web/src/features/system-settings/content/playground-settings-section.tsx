@@ -43,11 +43,12 @@ import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
 import { safeNumberFieldProps } from '../utils/numeric-field'
 
-// 云空间容量设置：初始容量 / 展示货币价格 / 单次上限 / 总分配量
+// 云空间容量设置：初始容量 / 展示货币价格 / 单次上限 / 累计购买上限 / 总分配量
 const spaceSchema = z.object({
   UserSpaceInitialMB: z.number().int().min(1),
   UserSpacePurchaseRatio: z.number().positive(),
   UserSpaceMaxPurchaseMB: z.number().int().min(1),
+  UserSpaceMaxPurchasedMB: z.number().int().min(0), // 0 = 不限制累计购买
   UserSpaceGlobalMaxMB: z.number().int().min(1),
 })
 
@@ -67,6 +68,7 @@ const SPACE_FIELD_KEYS: Array<keyof SpaceSettingsValues> = [
   'UserSpaceInitialMB',
   'UserSpacePurchaseRatio',
   'UserSpaceMaxPurchaseMB',
+  'UserSpaceMaxPurchasedMB',
   'UserSpaceGlobalMaxMB',
 ]
 const CLEANUP_FIELD_KEYS: Array<keyof CleanupSettingsValues> = [
@@ -241,6 +243,31 @@ export function PlaygroundSettingsSection({
                     </FormControl>
                     <FormDescription>
                       {t('The most a user can buy in a single purchase.')}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={spaceForm.control}
+                name='UserSpaceMaxPurchasedMB'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      {t('Max purchased per user (MB)')}
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        min={0}
+                        type='number'
+                        {...safeNumberFieldProps(field)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Total capacity a user can buy across all purchases. 0 means unlimited.'
+                      )}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

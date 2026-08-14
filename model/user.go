@@ -122,6 +122,9 @@ type User struct {
 	// SpaceCapacity 用户云空间总容量（字节）。0 表示未初始化，按全局初始容量
 	// （setting.UserSpaceInitialMB）计；购买容量会累加写入；root 无限制。
 	SpaceCapacity         int64                      `json:"space_capacity" gorm:"bigint;column:space_capacity"` // 不加 gorm default 标签（跨库迁移安全）
+	// SpacePurchasedBytes 用户累计购买的云空间容量（字节），受
+	// setting.UserSpaceMaxPurchasedMB 累计上限约束；管理员赠容量不计入。
+	SpacePurchasedBytes   int64                      `json:"space_purchased_bytes" gorm:"bigint;column:space_purchased_bytes"`
 	AdminPermissions      map[string]map[string]bool `json:"admin_permissions,omitempty" gorm:"-:all"`
 }
 
@@ -1420,23 +1423,28 @@ func decreaseUserQuota(id int, quota int) (err error) {
 }
 
 // PurchaseUserSpaceCapacity 用余额购买云空间容量：单条原子条件更新，只有
-// quota >= cost 才同时扣 quota 并把容量原子增量写入。space_capacity=0（未初始化）
-// 时按全局初始容量加本次增量，>0 时直接叠加——避免两笔并发购买基于同一陈旧读
-// 各自算绝对值、后写覆盖先写导致「扣两次钱只涨一次容量」。
-// 返回 ok=false 表示余额不足（更新未生效）。单行 UPDATE 在三种数据库上都是原子的。
-func PurchaseUserSpaceCapacity(id int, cost int, deltaBytes int64, initialBytes int64) (ok bool, err error) {
+// quota >= cost 且（若配置了累计上限）累计购买量不超限时才同时扣 quota、把容量
+// 原子增量写入并累加已购量。space_capacity=0（未初始化）时按全局初始容量加本次
+// 增量，>0 时直接叠加——避免两笔并发购买基于同一陈旧读各自算绝对值、后写覆盖
+// 先写导致「扣两次钱只涨一次容量」。返回 ok=false 表示余额不足或超累计上限
+// （更新未生效）。单行 UPDATE 在三种数据库上都是原子的。
+func PurchaseUserSpaceCapacity(id int, cost int, deltaBytes int64, initialBytes int64, maxPurchasedBytes int64) (ok bool, err error) {
 	if cost <= 0 {
 		return false, errors.New("cost 必须为正")
 	}
-	result := DB.Model(&User{}).
-		Where("id = ? AND quota >= ?", id, cost).
-		Updates(map[string]interface{}{
-			"quota": gorm.Expr("quota - ?", cost),
-			"space_capacity": gorm.Expr(
-				"CASE WHEN space_capacity > 0 THEN space_capacity + ? ELSE ? + ? END",
-				deltaBytes, initialBytes, deltaBytes,
-			),
-		})
+	query := DB.Model(&User{}).Where("id = ? AND quota >= ?", id, cost)
+	// 累计购买上限（<=0 表示不限制）：并入 UPDATE 条件，防并发购买叠加超限。
+	if maxPurchasedBytes > 0 {
+		query = query.Where("space_purchased_bytes + ? <= ?", deltaBytes, maxPurchasedBytes)
+	}
+	result := query.Updates(map[string]interface{}{
+		"quota": gorm.Expr("quota - ?", cost),
+		"space_capacity": gorm.Expr(
+			"CASE WHEN space_capacity > 0 THEN space_capacity + ? ELSE ? + ? END",
+			deltaBytes, initialBytes, deltaBytes,
+		),
+		"space_purchased_bytes": gorm.Expr("space_purchased_bytes + ?", deltaBytes),
+	})
 	if result.Error != nil {
 		return false, result.Error
 	}

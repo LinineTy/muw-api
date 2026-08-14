@@ -437,7 +437,7 @@ export function UsersMutateDrawer({
                             <FormLabel>{t('Disable image upload')}</FormLabel>
                             <FormDescription>
                               {t(
-                                'Disabled users cannot upload images to the playground. Existing images stay readable and are cleaned up normally.'
+                                'Disabled users cannot upload images (playground attachments or cloud space favorites). Existing images stay readable and are cleaned up normally.'
                               )}
                             </FormDescription>
                           </div>

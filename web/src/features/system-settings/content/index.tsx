@@ -44,11 +44,12 @@ const defaultContentSettings: ContentSettings = {
   MjForwardUrlEnabled: false,
   MjModeClearEnabled: false,
   MjActionCheckSuccessEnabled: false,
-  PlaygroundImageTTLDays: 3,
+  PlaygroundImageTTLDays: 2,
   UserSpaceInitialMB: 20,
-  UserSpacePurchaseRatio: 0.0002,
-  UserSpaceMaxPurchaseMB: 1024,
-  UserSpaceGlobalMaxMB: 20480,
+  UserSpacePurchaseRatio: 100,
+  UserSpaceMaxPurchaseMB: 10,
+  UserSpaceMaxPurchasedMB: 50,
+  UserSpaceGlobalMaxMB: 2048,
 }
 
 function resolveContentSettings(

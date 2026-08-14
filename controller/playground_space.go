@@ -146,9 +146,23 @@ func PurchasePlaygroundSpace(c *gin.Context) {
 		return
 	}
 
+	// 累计购买上限预检查（原子 UPDATE 内有同名条件兜底并发，这里只为给出准确提示）。
+	if setting.UserSpaceMaxPurchasedMB > 0 {
+		user, err := model.GetUserById(userId, false)
+		if err != nil {
+			common.ApiErrorMsg(c, "无效的用户")
+			return
+		}
+		if user.SpacePurchasedBytes+int64(request.Mb)<<20 > int64(setting.UserSpaceMaxPurchasedMB)<<20 {
+			common.ApiErrorMsg(c, "购买容量超过累计上限")
+			return
+		}
+	}
+
 	// 原子条件扣费 + 容量增量（并发购买不会互相覆盖，先买者容量不丢）。
 	ok, err := model.PurchaseUserSpaceCapacity(
-		userId, int(cost), int64(request.Mb)<<20, int64(setting.UserSpaceInitialMB)<<20)
+		userId, int(cost), int64(request.Mb)<<20, int64(setting.UserSpaceInitialMB)<<20,
+		int64(setting.UserSpaceMaxPurchasedMB)<<20)
 	if err != nil {
 		common.ApiError(c, err)
 		return
