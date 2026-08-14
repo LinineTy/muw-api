@@ -5921,7 +5921,7 @@
     "Max purchased per user (MB)": "每用戶累計購買上限 (MB)",
     "Total capacity a user can buy across all purchases. 0 means unlimited.": "用戶歷次購買累計的總容量。0 表示不限制。",
     "The most a user can buy in a single purchase.": "使用者單次最多可購買的容量。",
-    "Buy more storage with your quota.": "用餘額購買更多儲存空間。",
+    "Buy more storage with your quota.": "用餘額或線上支付購買更多儲存空間。",
     "Manage your cloud storage and synced conversations.": "管理你的雲空間儲存與同步對話。",
     "Manual cleanup": "手動清理",
     "Usage is shown in the cloud space page. Here you can clean up temporary images for all users.": "用量統計已移至雲空間頁展示，這裡可清理所有使用者的臨時圖片。",

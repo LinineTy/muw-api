@@ -53,6 +53,27 @@ export async function purchaseSpace(
 }
 
 /**
+ * 在线支付购买云空间容量（易支付）。返回 message/url/params，前端以表单 POST 拉起支付。
+ */
+export async function paySpaceEpay(data: {
+  mb: number
+  payment_method: string
+}): Promise<{
+  message: string
+  data?: Record<string, string>
+  url?: string
+  money?: number
+}> {
+  const res = await api.post('/api/playground/space/epay/pay', data, {
+    skipErrorHandler: true,
+  } as Record<string, unknown>)
+  return {
+    ...res.data,
+    url: res.data.url || (res as unknown as { url?: string }).url,
+  }
+}
+
+/**
  * 清空当前用户的全部临时图片，返回删除数量。
  */
 export async function clearTransientImages(): Promise<number> {
