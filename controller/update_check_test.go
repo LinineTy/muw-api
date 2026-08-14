@@ -89,3 +89,25 @@ func TestCompareForkVersions(t *testing.T) {
 		parseForkVersion("v26.08.14.muw.1"),
 	) > 0)
 }
+
+func TestExtractChangelogSection(t *testing.T) {
+	const md = `# 更新日志
+
+## v26.08.14.muw.1 (2026-08-14)
+
+### 云空间
+- 新增购买
+
+### 游乐场
+- 修复同步
+
+## v26.08.13.muw.2 (2026-08-13)
+
+- 上一版内容
+`
+	assert.Equal(t, "### 云空间\n- 新增购买\n\n### 游乐场\n- 修复同步", extractChangelogSection(md, "v26.08.14.muw.1"))
+	assert.Equal(t, "- 上一版内容", extractChangelogSection(md, "v26.08.13.muw.2"))
+	// 不存在 / 版本号是另一版本前缀时不误匹配。
+	assert.Equal(t, "", extractChangelogSection(md, "v26.08.14.muw.10"))
+	assert.Equal(t, "", extractChangelogSection(md, "v99"))
+}
