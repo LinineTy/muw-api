@@ -74,9 +74,10 @@ export async function paySpaceEpay(data: {
 }
 
 /**
- * 清空当前用户的全部临时图片，返回删除数量。
+ * 清空当前用户的全部临时图片，返回删除数量；业务失败返回 null（供调用方区分
+ * 「本就为空」与「清理失败」，避免把失败误报成删除 0 张）。
  */
-export async function clearTransientImages(): Promise<number> {
+export async function clearTransientImages(): Promise<number | null> {
   const res = await api.post(
     '/api/playground/images/clear-transient',
     null,
@@ -84,7 +85,7 @@ export async function clearTransientImages(): Promise<number> {
   )
   const { data } = res
   if (!data.success || !data.data) {
-    return 0
+    return null
   }
   return data.data.deleted ?? 0
 }

@@ -82,11 +82,13 @@ export function SpaceConversationsSection() {
     try {
       setConversations(await listPlaygroundConversations())
     } catch {
+      // 网络失败与「无数据」空态区分：失败给明确提示，避免误导用户以为没有会话。
+      toast.error(t('Failed to load conversations'))
       setConversations([])
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void load()

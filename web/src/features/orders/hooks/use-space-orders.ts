@@ -22,7 +22,13 @@ import { toast } from 'sonner'
 
 import { useIsAdmin } from '@/hooks/use-admin'
 
-import { getAllSpaceOrders, getSpaceOrders, isApiSuccess } from '../api'
+import {
+  completeSpaceOrder,
+  getAllSpaceOrders,
+  getSpaceOrders,
+  isApiSuccess,
+  rejectSpaceOrder,
+} from '../api'
 import type { SpaceOrderRecord } from '../types'
 
 interface UseSpaceOrdersOptions {
@@ -31,7 +37,7 @@ interface UseSpaceOrdersOptions {
 }
 
 /**
- * 云空间购买订单分页查询（用户看本人，管理员看全平台）。
+ * 云空间购买订单分页查询（用户看本人，管理员看全平台）+ 管理员补单/驳回。
  */
 export function useSpaceOrders(options: UseSpaceOrdersOptions = {}) {
   const { initialPage = 1, initialPageSize = 10 } = options
@@ -43,6 +49,7 @@ export function useSpaceOrders(options: UseSpaceOrdersOptions = {}) {
   const [pageSize, setPageSize] = useState(initialPageSize)
   const [keyword, setKeyword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [completing, setCompleting] = useState<string | null>(null)
 
   const fetchOrders = useCallback(async () => {
     setLoading(true)
@@ -82,6 +89,52 @@ export function useSpaceOrders(options: UseSpaceOrdersOptions = {}) {
     setPage(1)
   }, [])
 
+  // 管理员补单：人工完成 pending 订单并扩容（epay 回调丢失/失败/卡单时的出路）。
+  const handleCompleteOrder = useCallback(
+    async (tradeNo: string): Promise<boolean> => {
+      setCompleting(tradeNo)
+      try {
+        const ok = await completeSpaceOrder(tradeNo)
+        if (ok) {
+          toast.success(i18next.t('Order completed'))
+          await fetchOrders()
+        } else {
+          toast.error(i18next.t('Failed to complete order'))
+        }
+        return ok
+      } catch {
+        toast.error(i18next.t('Failed to complete order'))
+        return false
+      } finally {
+        setCompleting(null)
+      }
+    },
+    [fetchOrders]
+  )
+
+  // 管理员驳回：关闭无法完成的 pending 订单。
+  const handleRejectOrder = useCallback(
+    async (tradeNo: string): Promise<boolean> => {
+      setCompleting(tradeNo)
+      try {
+        const ok = await rejectSpaceOrder(tradeNo)
+        if (ok) {
+          toast.success(i18next.t('Order rejected'))
+          await fetchOrders()
+        } else {
+          toast.error(i18next.t('Failed to reject order'))
+        }
+        return ok
+      } catch {
+        toast.error(i18next.t('Failed to reject order'))
+        return false
+      } finally {
+        setCompleting(null)
+      }
+    },
+    [fetchOrders]
+  )
+
   useEffect(() => {
     void fetchOrders()
   }, [fetchOrders])
@@ -94,9 +147,12 @@ export function useSpaceOrders(options: UseSpaceOrdersOptions = {}) {
     keyword,
     loading,
     isAdmin,
+    completing,
     handlePageChange,
     handlePageSizeChange,
     handleSearch,
+    handleCompleteOrder,
+    handleRejectOrder,
     refresh: fetchOrders,
   }
 }

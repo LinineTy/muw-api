@@ -60,6 +60,12 @@ export function SpaceTransientSection({
     setBusy(true)
     try {
       const deleted = await clearTransientImages()
+      if (deleted === null) {
+        // 业务失败：明确报错，不把失败误报成「删除 0 张」的成功提示。
+        toast.error(t('Cleanup failed'))
+        setConfirmOpen(false)
+        return
+      }
       toast.success(t('Deleted {{count}} temporary images', { count: deleted }))
       setConfirmOpen(false)
       onCleared()
@@ -111,6 +117,7 @@ export function SpaceTransientSection({
         desc={t('Your temporary images will be deleted immediately.')}
         confirmText={t('Clear')}
         handleConfirm={() => void handleClear()}
+        isLoading={busy}
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title={t('Clear my temporary images?')}

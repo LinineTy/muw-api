@@ -62,4 +62,28 @@ export async function getAllSpaceOrders(
   return res.data
 }
 
+/**
+ * 管理员补单（epay 回调丢失/失败/累计上限卡单时人工完成并扩容）。返回是否成功。
+ */
+export async function completeSpaceOrder(tradeNo: string): Promise<boolean> {
+  const res = await api.post(
+    '/api/playground/admin/orders/complete',
+    { trade_no: tradeNo },
+    { skipErrorHandler: true } as Record<string, unknown>
+  )
+  return isApiSuccess(res.data)
+}
+
+/**
+ * 管理员驳回/关闭待支付订单（pending → expired）。
+ */
+export async function rejectSpaceOrder(tradeNo: string): Promise<boolean> {
+  const res = await api.post(
+    '/api/playground/admin/orders/reject',
+    { trade_no: tradeNo },
+    { skipErrorHandler: true } as Record<string, unknown>
+  )
+  return isApiSuccess(res.data)
+}
+
 export { isApiSuccess }

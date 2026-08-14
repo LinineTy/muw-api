@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { SectionPageLayout } from '@/components/layout'
 import {
@@ -44,8 +45,13 @@ export function Space() {
   const [refreshKey, setRefreshKey] = useState(0)
 
   const load = useCallback(async () => {
-    setSpace(await getSpaceInfo())
-  }, [])
+    try {
+      setSpace(await getSpaceInfo())
+    } catch {
+      // 网络异常等未预期失败：明确提示而不是让页面用量条永远显示 '—'。
+      toast.error(t('Failed to load cloud space'))
+    }
+  }, [t])
 
   useEffect(() => {
     void load()

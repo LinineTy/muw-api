@@ -121,11 +121,16 @@ export function Wallet(props: WalletProps) {
 
   useEffect(() => {
     if (props.initialShowHistory) {
-      // 旧 /wallet?show_history=true 深链 → 跳订单中心。
+      // 旧 /wallet?show_history=true 深链 → 跳订单中心（跳转由 navigate 改变 URL，
+      // 无需再 replaceState）。
       navigate({ to: '/orders' })
-      window.history.replaceState({}, '', window.location.pathname)
     }
   }, [props.initialShowHistory, navigate])
+
+  // 深链跳转生效前不渲染 Wallet，避免闪一帧再跳。
+  if (props.initialShowHistory) {
+    return null
+  }
 
   // Initialize topup amount when topup info is loaded
   const topupAmountInitializedRef = useRef(false)

@@ -23,9 +23,20 @@ import {
   Copy,
   Search,
 } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { StatusBadge } from '@/components/status-badge'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -49,7 +60,7 @@ import {
 import { useSpaceOrders } from '../hooks/use-space-orders'
 
 /**
- * 云空间购买订单列表：搜索 + 卡片 + 分页。用户看本人，管理员看全平台。
+ * 云空间购买订单列表：搜索 + 卡片 + 分页。用户看本人，管理员看全平台 + 补单/驳回。
  */
 export function SpaceOrdersTab() {
   const { t } = useTranslation()
@@ -61,17 +72,23 @@ export function SpaceOrdersTab() {
     keyword,
     loading,
     isAdmin,
+    completing,
     handlePageChange,
     handlePageSizeChange,
     handleSearch,
+    handleCompleteOrder,
+    handleRejectOrder,
   } = useSpaceOrders()
 
+  const [completeTarget, setCompleteTarget] = useState<string | null>(null)
+  const [rejectTarget, setRejectTarget] = useState<string | null>(null)
   const { copyToClipboard, copiedText } = useCopyToClipboard({ notify: false })
   const totalPages = Math.ceil(total / pageSize)
 
   return (
-    <div className='space-y-3'>
-      {/* 搜索 + 每页条数 */}
+    <>
+      <div className='space-y-3'>
+        {/* 搜索 + 每页条数 */}
       <div className='flex items-center gap-2'>
         <div className='relative flex-1'>
           <Search className='text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2' />
@@ -178,7 +195,7 @@ export function SpaceOrdersTab() {
                     </div>
                   </div>
                   <StatusBadge
-                    label={statusConfig.label}
+                    label={t(statusConfig.label)}
                     variant={statusConfig.variant}
                     showDot
                     copyable={false}
@@ -209,6 +226,27 @@ export function SpaceOrdersTab() {
                     </div>
                   </div>
                 </div>
+
+                {/* Admin Actions：epay 回调丢失/失败/卡单时人工补单或驳回。 */}
+                {isAdmin && record.status === 'pending' && (
+                  <div className='mt-4 flex justify-end gap-2'>
+                    <Button
+                      size='sm'
+                      variant='outline'
+                      onClick={() => setRejectTarget(record.trade_no)}
+                      disabled={completing !== null}
+                    >
+                      {t('Reject')}
+                    </Button>
+                    <Button
+                      size='sm'
+                      onClick={() => setCompleteTarget(record.trade_no)}
+                      disabled={completing !== null}
+                    >
+                      {t('Complete Order')}
+                    </Button>
+                  </div>
+                )}
               </div>
             )
           })}
@@ -250,5 +288,78 @@ export function SpaceOrdersTab() {
         </div>
       )}
     </div>
+
+    {/* Confirm Complete Order */}
+    <AlertDialog
+      open={!!completeTarget}
+      onOpenChange={(open) => !open && setCompleteTarget(null)}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t('Complete Order')}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {t(
+              'Are you sure you want to manually complete this order? The user will be credited with the corresponding quota.'
+            )}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={completing !== null}>
+            {t('Cancel')}
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              if (completeTarget) {
+                void handleCompleteOrder(completeTarget).then((ok) => {
+                  if (ok) {
+                    setCompleteTarget(null)
+                  }
+                })
+              }
+            }}
+            disabled={completing !== null}
+          >
+            {completing !== null ? t('Processing...') : t('Confirm')}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    {/* Confirm Reject Order */}
+    <AlertDialog
+      open={!!rejectTarget}
+      onOpenChange={(open) => !open && setRejectTarget(null)}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t('Reject Order')}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {t(
+              'Are you sure you want to reject this order? The user will not be charged for it.'
+            )}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={completing !== null}>
+            {t('Cancel')}
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              if (rejectTarget) {
+                void handleRejectOrder(rejectTarget).then((ok) => {
+                  if (ok) {
+                    setRejectTarget(null)
+                  }
+                })
+              }
+            }}
+            disabled={completing !== null}
+          >
+            {completing !== null ? t('Processing...') : t('Confirm')}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  </>
   )
 }
