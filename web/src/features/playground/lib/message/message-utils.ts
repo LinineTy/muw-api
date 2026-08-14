@@ -170,21 +170,29 @@ export function getTextContent(content: string | ContentPart[]): string {
 /**
  * Format message for API request. Private image attachments are resolved to
  * base64 data URIs so the upstream model can read them without public URLs.
+ * Returns the formatted message plus how many attachments failed to resolve
+ * (caller surfaces the failures to the user — a silently dropped image in a
+ * pure-image message would send empty content upstream).
  */
 export async function formatMessageForAPI(
   message: Message
-): Promise<ChatCompletionMessage> {
+): Promise<{ message: ChatCompletionMessage; attachmentFailures: number }> {
   const currentVersion = getCurrentVersion(message)
   if (message.attachments && message.attachments.length > 0) {
-    const dataUrls = await resolveAttachmentsDataUrls(message.attachments)
+    const { urls, failed } = await resolveAttachmentsDataUrls(
+      message.attachments
+    )
     return {
-      role: message.from,
-      content: buildMessageContent(currentVersion.content, dataUrls),
+      message: {
+        role: message.from,
+        content: buildMessageContent(currentVersion.content, urls),
+      },
+      attachmentFailures: failed,
     }
   }
   return {
-    role: message.from,
-    content: currentVersion.content,
+    message: { role: message.from, content: currentVersion.content },
+    attachmentFailures: 0,
   }
 }
 

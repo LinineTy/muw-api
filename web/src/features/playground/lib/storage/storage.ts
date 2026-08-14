@@ -408,12 +408,24 @@ export function saveMessages(messages: Message[]): void {
 
 /**
  * Load conversations from localStorage, or null when nothing was stored yet.
+ * 逐条容错：单条不合法（旧/未来版本的字段形状）直接跳过，不让整表解析失败。
  */
 export function loadConversations(): Conversation[] | null {
   try {
     const saved = readStoredValue(STORAGE_KEYS.CONVERSATIONS)
     if (!saved) return null
-    return conversationsSchema.parse(unwrapStoredValue(saved)) as Conversation[]
+    const raw = unwrapStoredValue(saved)
+    const arr = Array.isArray(raw) ? raw : []
+    const valid: Conversation[] = []
+    for (const item of arr) {
+      try {
+        valid.push(conversationsSchema.parse(item) as unknown as Conversation)
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.warn('Skipped invalid conversation while loading:', (item as { id?: string } | null)?.id, error)
+      }
+    }
+    return valid
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Failed to load conversations:', error)
@@ -423,15 +435,25 @@ export function loadConversations(): Conversation[] | null {
 
 /**
  * Save conversations to localStorage (each conversation's messages trimmed).
+ * 逐条容错：单条不合法跳过，不让整表静默不落盘（否则 UI 已显示远端数据但
+ * 刷新后回到旧数据）。
  */
 export function saveConversations(conversations: Conversation[]): void {
   try {
-    const trimmed = conversations.map((conversation) => ({
-      ...conversation,
-      messages: trimMessages(conversation.messages),
-    }))
-    const parsed = conversationsSchema.parse(trimmed) as Conversation[]
-    writeStoredValue(STORAGE_KEYS.CONVERSATIONS, parsed)
+    const valid: Conversation[] = []
+    for (const conversation of conversations) {
+      try {
+        const parsed = conversationsSchema.parse({
+          ...conversation,
+          messages: trimMessages(conversation.messages),
+        }) as unknown as Conversation
+        valid.push(parsed)
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.warn('Skipped invalid conversation while saving:', conversation.id, error)
+      }
+    }
+    writeStoredValue(STORAGE_KEYS.CONVERSATIONS, valid)
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Failed to save conversations:', error)

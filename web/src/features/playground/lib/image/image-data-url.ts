@@ -25,8 +25,21 @@ import { api } from '@/lib/api'
  * cached for the session so repeated display/send does not re-fetch.
  */
 
+// dataUrlCache 会话内缓存上限：单张图最大 5MB（base64 ~6.7MB），长会话无限累积
+// 会让内存只增不减，这里按条数限制并淘汰最旧。
+const MAX_DATA_URL_CACHE_ENTRIES = 100
 const dataUrlCache = new Map<string, string>()
 const inflightCache = new Map<string, Promise<string | null>>()
+
+function cacheDataUrl(url: string, dataUrl: string): void {
+  if (dataUrlCache.size >= MAX_DATA_URL_CACHE_ENTRIES) {
+    const oldest = dataUrlCache.keys().next()
+    if (!oldest.done) {
+      dataUrlCache.delete(oldest.value)
+    }
+  }
+  dataUrlCache.set(url, dataUrl)
+}
 
 /**
  * Resolve a private playground image URL to a base64 data URL, or null on error.
@@ -65,7 +78,7 @@ export async function resolveImageDataUrl(url: string): Promise<string | null> {
         )
         reader.readAsDataURL(blob)
       })
-      dataUrlCache.set(url, dataUrl)
+      cacheDataUrl(url, dataUrl)
       return dataUrl
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -81,14 +94,20 @@ export async function resolveImageDataUrl(url: string): Promise<string | null> {
 }
 
 /**
- * Resolve a list of attachment URLs, dropping any that fail to load.
+ * Resolve a list of attachment URLs to data URLs, reporting how many failed to
+ * load. The caller decides whether to surface the failures — silently dropping a
+ * failed image (especially in a pure-image message) would mislead the user into
+ * thinking the image was sent.
  */
 export async function resolveAttachmentsDataUrls(
   urls: string[]
-): Promise<string[]> {
+): Promise<{ urls: string[]; failed: number }> {
   if (urls.length === 0) {
-    return []
+    return { urls: [], failed: 0 }
   }
   const results = await Promise.all(urls.map((url) => resolveImageDataUrl(url)))
-  return results.filter((dataUrl): dataUrl is string => dataUrl !== null)
+  const dataUrls = results.filter(
+    (dataUrl): dataUrl is string => dataUrl !== null
+  )
+  return { urls: dataUrls, failed: urls.length - dataUrls.length }
 }
