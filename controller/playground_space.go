@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -181,6 +182,8 @@ func PurchasePlaygroundSpace(c *gin.Context) {
 	}
 	common.SysLog(fmt.Sprintf("user %d purchased %d MB playground space (cost %d quota, capacity now %d bytes)",
 		userId, request.Mb, cost, newCapacity))
+	// 用户可见日志（usage-logs 页）：与充值/订阅购买一致。
+	model.RecordLog(userId, model.LogTypeTopup, fmt.Sprintf("云空间购买成功，容量: %d MB，消耗额度: %s", request.Mb, logger.LogQuota(int(cost))))
 
 	common.ApiSuccess(c, gin.H{
 		"cost":           cost,

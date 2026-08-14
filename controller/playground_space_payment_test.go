@@ -24,6 +24,21 @@ func migratePlaygroundSpaceOrder(t *testing.T) {
 	require.NoError(t, model.DB.AutoMigrate(&model.PlaygroundSpaceOrder{}))
 }
 
+// migrateLog 在共享测试库上补建日志表（RecordLog 写 LOG_DB）。
+func migrateLog(t *testing.T) {
+	t.Helper()
+	require.NoError(t, model.LOG_DB.AutoMigrate(&model.Log{}))
+}
+
+// countTopupLogs 统计某用户的 LogTypeTopup 日志条数。
+func countTopupLogs(t *testing.T, userId int) int64 {
+	t.Helper()
+	var cnt int64
+	require.NoError(t, model.LOG_DB.Model(&model.Log{}).
+		Where("user_id = ? AND type = ?", userId, model.LogTypeTopup).Count(&cnt).Error)
+	return cnt
+}
+
 func newPendingSpaceOrder(t *testing.T, userId, mb int, tradeNo string) *model.PlaygroundSpaceOrder {
 	t.Helper()
 	order := &model.PlaygroundSpaceOrder{
@@ -69,10 +84,11 @@ func newPlaygroundSpacePayTestEngine(userId int) *gin.Engine {
 	return router
 }
 
-// TestCompletePlaygroundSpaceOrder 幂等完成：首次扩容，重复回调不重复扩容。
+// TestCompletePlaygroundSpaceOrder 幂等完成：首次扩容，重复回调不重复扩容、不重复记日志。
 func TestCompletePlaygroundSpaceOrder(t *testing.T) {
 	setupPlaygroundImageTestDB(t)
 	migratePlaygroundSpaceOrder(t)
+	migrateLog(t)
 	insertTestUserWithSpace(t, 100, 0, 0)
 	initial := int64(setting.UserSpaceInitialMB) << 20
 	order := newPendingSpaceOrder(t, 100, 10, "SPCUSR100NOidem1")
@@ -92,6 +108,24 @@ func TestCompletePlaygroundSpaceOrder(t *testing.T) {
 	user = mustGetUser(t, 100)
 	assert.Equal(t, initial+10<<20, user.SpaceCapacity)
 	assert.Equal(t, int64(10)<<20, user.SpacePurchasedBytes)
+	// 用户日志只记一条（重复回调不重复记录）。
+	assert.Equal(t, int64(1), countTopupLogs(t, 100))
+}
+
+// TestPurchasePlaygroundSpaceLogs 余额购买成功后记录 LogTypeTopup 用户日志。
+func TestPurchasePlaygroundSpaceLogs(t *testing.T) {
+	setupPlaygroundImageTestDB(t)
+	migrateLog(t)
+	expectedCost := userSpacePurchaseRawQuota(10, setting.UserSpacePurchaseRatio)
+	insertTestUserWithSpace(t, 100, int(expectedCost), 0)
+	router := newPlaygroundSpaceTestEngine(100, common.RoleCommonUser)
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/purchase",
+		bytes.NewBufferString(`{"mb":10}`)))
+	env := playgroundDecodeEnvelope(t, rec)
+	require.True(t, env.Success, env.Message)
+	assert.Equal(t, int64(1), countTopupLogs(t, 100))
 }
 
 // TestCompletePlaygroundSpaceOrderCumulativeLimit 累计上限兜底：已购 45MB、上限 50MB
