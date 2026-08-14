@@ -30,7 +30,14 @@ const (
 	MaxUserSpaceMaxPurchaseMB      = 1 << 20
 	MaxUserSpaceMaxPurchasedMB     = 1 << 20
 	MaxUserSpaceGlobalMaxMB        = 1 << 20
+	// MaxUserSpacePurchaseRatio 每 MB 展示货币价格上界：防 ratio×mb 换算成 int64 溢出，
+	// 也与 quota int32 列的量级保持一致（其余 4 个容量设置项都有上界，唯独它此前缺）。
+	MaxUserSpacePurchaseRatio = 1e6
 )
+
+// PlaygroundSpacePendingOrderTTLSeconds 云空间 pending 订单的支付宽限期（秒）。
+// 超过该时长未支付的订单由后台任务置为 expired，释放下单预检占用的预留容量。
+const PlaygroundSpacePendingOrderTTLSeconds = int64(3600)
 
 var (
 	// PlaygroundImageTTLDays is the retention for transient (non-permanent)

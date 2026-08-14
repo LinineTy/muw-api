@@ -259,8 +259,8 @@ func validateOptionValue(key string, value string) error {
 		}
 	case "UserSpacePurchaseRatio":
 		f, err := strconv.ParseFloat(value, 64)
-		if err != nil || f <= 0 || math.IsNaN(f) || math.IsInf(f, 0) {
-			return fmt.Errorf("must be a positive number, got %q", value)
+		if err != nil || f <= 0 || math.IsNaN(f) || math.IsInf(f, 0) || f > setting.MaxUserSpacePurchaseRatio {
+			return fmt.Errorf("must be a positive number in (0, %g], got %q", setting.MaxUserSpacePurchaseRatio, value)
 		}
 	}
 	return nil

@@ -411,3 +411,122 @@ func TestRequestPlaygroundSpaceEpaySuccess(t *testing.T) {
 	assert.Equal(t, model.PaymentProviderEpay, orders[0].PaymentProvider)
 	assert.Equal(t, fmt.Sprintf("%.2f", 10*100*operation_setting.Price*1.0), fmt.Sprintf("%.2f", orders[0].Money))
 }
+
+// TestAdminCompletePlaygroundSpaceOrder 管理员补单：pending → success + 扩容 + 用户日志；
+// 重复补单幂等（不重复扩容/记日志）。
+func TestAdminCompletePlaygroundSpaceOrder(t *testing.T) {
+	setupPlaygroundImageTestDB(t)
+	migratePlaygroundSpaceOrder(t)
+	migrateLog(t)
+	insertTestUserWithSpace(t, 100, 0, 0)
+	initial := int64(setting.UserSpaceInitialMB) << 20
+	order := newPendingSpaceOrder(t, 100, 10, "SPCUSR100NOadmin1")
+
+	require.NoError(t, model.AdminCompletePlaygroundSpaceOrder(order.TradeNo, "127.0.0.1", initial, 0))
+
+	user := mustGetUser(t, 100)
+	assert.Equal(t, initial+10<<20, user.SpaceCapacity)
+	assert.Equal(t, int64(10)<<20, user.SpacePurchasedBytes)
+	got := model.GetPlaygroundSpaceOrderByTradeNo(order.TradeNo)
+	require.NotNil(t, got)
+	assert.Equal(t, common.TopUpStatusSuccess, got.Status)
+	assert.Equal(t, int64(1), countTopupLogs(t, 100))
+
+	// 幂等：重复补单不重复扩容/记日志。
+	require.NoError(t, model.AdminCompletePlaygroundSpaceOrder(order.TradeNo, "127.0.0.1", initial, 0))
+	user = mustGetUser(t, 100)
+	assert.Equal(t, initial+10<<20, user.SpaceCapacity)
+	assert.Equal(t, int64(1), countTopupLogs(t, 100))
+}
+
+// TestAdminRejectPlaygroundSpaceOrder 管理员驳回：pending → expired，不影响容量；重复驳回幂等。
+func TestAdminRejectPlaygroundSpaceOrder(t *testing.T) {
+	setupPlaygroundImageTestDB(t)
+	migratePlaygroundSpaceOrder(t)
+	insertTestUserWithSpace(t, 100, 0, 0)
+	order := newPendingSpaceOrder(t, 100, 10, "SPCUSR100NOrejct1")
+
+	require.NoError(t, model.RejectPlaygroundSpaceOrder(order.TradeNo, "127.0.0.1"))
+
+	got := model.GetPlaygroundSpaceOrderByTradeNo(order.TradeNo)
+	require.NotNil(t, got)
+	assert.Equal(t, common.TopUpStatusExpired, got.Status)
+	user := mustGetUser(t, 100)
+	assert.Equal(t, int64(0), user.SpacePurchasedBytes)
+	require.NoError(t, model.RejectPlaygroundSpaceOrder(order.TradeNo, "127.0.0.1"))
+}
+
+// TestExpireTimeoutPlaygroundSpaceOrders 批量过期超时 pending 订单，只影响 pending、不动新鲜订单。
+func TestExpireTimeoutPlaygroundSpaceOrders(t *testing.T) {
+	setupPlaygroundImageTestDB(t)
+	migratePlaygroundSpaceOrder(t)
+	ttl := int64(setting.PlaygroundSpacePendingOrderTTLSeconds)
+	cutoff := common.GetTimestamp() - ttl
+	oldOrder := newPendingSpaceOrder(t, 100, 5, "SPCUSR100NOexpire1")
+	require.NoError(t, model.DB.Model(&model.PlaygroundSpaceOrder{}).
+		Where("trade_no = ?", oldOrder.TradeNo).Update("create_time", cutoff-100).Error)
+	freshOrder := newPendingSpaceOrder(t, 100, 5, "SPCUSR100NOexpire2")
+
+	affected, err := model.ExpireTimeoutPlaygroundSpaceOrders(cutoff)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), affected)
+	assert.Equal(t, common.TopUpStatusExpired, model.GetPlaygroundSpaceOrderByTradeNo(oldOrder.TradeNo).Status)
+	assert.Equal(t, common.TopUpStatusPending, model.GetPlaygroundSpaceOrderByTradeNo(freshOrder.TradeNo).Status)
+}
+
+// TestSumPendingPlaygroundSpaceOrdersByUser 预留统计：只统计该用户 pending 订单。
+func TestSumPendingPlaygroundSpaceOrdersByUser(t *testing.T) {
+	setupPlaygroundImageTestDB(t)
+	migratePlaygroundSpaceOrder(t)
+	newPendingSpaceOrder(t, 100, 10, "SPCUSR100NOsum1")
+	newPendingSpaceOrder(t, 100, 20, "SPCUSR100NOsum2")
+	newPendingSpaceOrder(t, 200, 5, "SPCUSR200NOsum1")
+
+	mb, count, err := model.SumPendingPlaygroundSpaceOrdersByUser(100)
+	require.NoError(t, err)
+	assert.Equal(t, 30, mb)
+	assert.Equal(t, int64(2), count)
+}
+
+// TestRequestPlaygroundSpaceEpayPendingReservation 下单预留：已购 + pending + 本次 > 累计上限时
+// 拒单；pending 单数达到上限时拒单。
+func TestRequestPlaygroundSpaceEpayPendingReservation(t *testing.T) {
+	setupPlaygroundImageTestDB(t)
+	migratePlaygroundSpaceOrder(t)
+	restoreEpaySettings(t)
+	operation_setting.PayAddress = "https://pay.example.com"
+	operation_setting.EpayId = "epay_id"
+	operation_setting.EpayKey = "epay_key"
+	operation_setting.PayMethods = []map[string]string{{"type": "alipay", "name": "Alipay"}}
+
+	insertTestUserWithSpace(t, 100, 0, 0)
+	prevMax := setting.UserSpaceMaxPurchasedMB
+	prevMaxPurchase := setting.UserSpaceMaxPurchaseMB
+	setting.UserSpaceMaxPurchasedMB = 25
+	setting.UserSpaceMaxPurchaseMB = 20
+	t.Cleanup(func() {
+		setting.UserSpaceMaxPurchasedMB = prevMax
+		setting.UserSpaceMaxPurchaseMB = prevMaxPurchase
+	})
+
+	// 两笔 pending 占 20MB，第三笔 10MB → 0+20+10 > 25 被累计上限拦下。
+	newPendingSpaceOrder(t, 100, 10, "SPCUSR100NOres1")
+	newPendingSpaceOrder(t, 100, 10, "SPCUSR100NOres2")
+	router := newPlaygroundSpacePayTestEngine(100)
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/pay",
+		bytes.NewBufferString(`{"mb":10,"payment_method":"alipay"}`)))
+	env := playgroundDecodeEnvelope(t, rec)
+	require.NotEqual(t, "success", env.Message, string(rec.Body.Bytes()))
+
+	// 再补 3 笔（共 5 笔 pending），第 6 笔因 pending 单数上限被拒。
+	for i := 0; i < 3; i++ {
+		newPendingSpaceOrder(t, 100, 1, fmt.Sprintf("SPCUSR100NOcnt%d", i))
+	}
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/pay",
+		bytes.NewBufferString(`{"mb":1,"payment_method":"alipay"}`)))
+	env = playgroundDecodeEnvelope(t, rec)
+	require.NotEqual(t, "success", env.Message, string(rec.Body.Bytes()))
+}
