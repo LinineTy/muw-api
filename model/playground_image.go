@@ -1,6 +1,8 @@
 package model
 
 import (
+	"errors"
+
 	"github.com/QuantumNous/new-api/common"
 
 	"gorm.io/gorm"
@@ -16,7 +18,7 @@ type PlaygroundImage struct {
 	Ext         string         `json:"ext" gorm:"size:8"`
 	Size        int64          `json:"size" gorm:"bigint"`
 	UserId      int            `json:"user_id" gorm:"index:idx_uid_permanent,priority:1"` // 覆盖按用户统计/列表
-	Permanent   bool           `json:"permanent" gorm:"index:idx_uid_permanent,priority:2"` // Go 零值 false，不加 gorm default 标签（跨库迁移安全）
+	Permanent   bool           `json:"permanent" gorm:"index:idx_uid_permanent,priority:2;index:idx_playground_image_permanent"` // Go 零值 false，不加 gorm default 标签（跨库迁移安全）
 	CreatedTime int64          `json:"created_time" gorm:"bigint;index"`                  // 覆盖 TTL 过期清理
 	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
 }
@@ -27,6 +29,46 @@ func (PlaygroundImage) TableName() string { return "playground_images" }
 func InsertPlaygroundImage(asset *PlaygroundImage) error {
 	asset.CreatedTime = common.GetTimestamp()
 	return DB.Create(asset).Error
+}
+
+var (
+	// ErrPlaygroundImageSpaceInsufficient 用户云空间容量不足（原子校验返回）。
+	ErrPlaygroundImageSpaceInsufficient = errors.New("playground image space insufficient")
+	// ErrPlaygroundImageSpaceGlobalFull 云空间总分配量（全局红线）已满（原子校验返回）。
+	ErrPlaygroundImageSpaceGlobalFull = errors.New("playground image global space full")
+)
+
+// InsertPlaygroundImageWithCapacity 原子地校验并插入图片：事务内锁定用户行
+// （FOR UPDATE，SQLite 跳过但单写者天然串行），在锁内统计该用户已占用与全局
+// 占用，命中用户容量或全局红线时拒绝，否则插入。同一用户的并发上传因行锁
+// 串行化，「判断容量 → 写入」不再互相覆盖（TOCTOU）；全局红线跨用户无法靠单
+// 用户行锁串行，仍为读-写，并发超限幅度受并发数×单图上限约束，有界可接受。
+// userCapacity/globalMax 由调用方传入（model 不依赖 setting）。
+func InsertPlaygroundImageWithCapacity(asset *PlaygroundImage, userCapacity int64, globalMax int64) error {
+	asset.CreatedTime = common.GetTimestamp()
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var locked User
+		if err := lockForUpdate(tx).Where("id = ?", asset.UserId).First(&locked).Error; err != nil {
+			return err
+		}
+		var used int64
+		if err := tx.Model(&PlaygroundImage{}).Where("user_id = ?", asset.UserId).
+			Select("COALESCE(SUM(size), 0)").Scan(&used).Error; err != nil {
+			return err
+		}
+		if used+asset.Size > userCapacity {
+			return ErrPlaygroundImageSpaceInsufficient
+		}
+		var global int64
+		if err := tx.Model(&PlaygroundImage{}).
+			Select("COALESCE(SUM(size), 0)").Scan(&global).Error; err != nil {
+			return err
+		}
+		if global+asset.Size > globalMax {
+			return ErrPlaygroundImageSpaceGlobalFull
+		}
+		return tx.Create(asset).Error
+	})
 }
 
 // CountPlaygroundImagesByUser 统计某用户的活跃图片数（软删自动排除）。

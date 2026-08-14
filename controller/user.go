@@ -385,6 +385,7 @@ func attachPlaygroundSpaceUsage(users []*model.User) []userWithSpaceUsage {
 	}
 	usage, err := model.SumPlaygroundImageSizesByUserIds(ids)
 	if err != nil {
+		common.SysError(fmt.Sprintf("failed to sum playground image usage for %d users: %s", len(ids), err.Error()))
 		usage = nil
 	}
 	for _, user := range users {

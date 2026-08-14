@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"net/http"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -60,6 +61,11 @@ func SavePlaygroundConversation(c *gin.Context) {
 	}
 	clientId := c.Param("clientId")
 
+	// 请求体上限：DecodeJson 会先把整个 body 缓冲进内存，若只在解析后校验 messages
+	// 长度，超大 body 会先放大内存再被拒（与图片上传的 io.LimitReader 限流对齐）。
+	// 上限 = 消息体 2MB + 其余字段余量。
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxConversationMessagesBytes+64<<10)
+
 	var request struct {
 		Title    string          `json:"title"`
 		Messages json.RawMessage `json:"messages"`
@@ -114,12 +120,29 @@ func DeletePlaygroundConversation(c *gin.Context) {
 		return
 	}
 
+	// 区分「会话不存在」（含已软删）与「会话属他人（无权）」：只按 user_id 查询
+	// 会把两者混为不存在，越权语义丢失且无法正确提示。
+	exists, err := model.PlaygroundConversationClientIdExists(clientId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if !exists {
+		common.ApiErrorMsg(c, "会话不存在")
+		return
+	}
 	if _, err := model.GetPlaygroundConversationByClientId(userId, clientId); err != nil {
 		c.JSON(403, gin.H{"success": false, "message": "无权删除该会话"})
 		return
 	}
-	if err := model.DeletePlaygroundConversationByClientId(userId, clientId); err != nil {
+
+	affected, err := model.DeletePlaygroundConversationByClientId(userId, clientId)
+	if err != nil {
 		common.ApiError(c, err)
+		return
+	}
+	if affected == 0 {
+		common.ApiErrorMsg(c, "会话不存在")
 		return
 	}
 	common.ApiSuccess(c, nil)

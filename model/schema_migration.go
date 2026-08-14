@@ -72,9 +72,13 @@ var migrations = []Migration{
 	{Version: 6, Name: "user-space-purchased-noop", Up: func(db *gorm.DB) error { return nil }},
 	// v7：新增 playground_space_orders 表（AutoMigrate 建）+ 存量 users.space_purchased_bytes
 	// 置 0。v6 新列无默认值，存量行是 NULL，累计上限条件 NULL + x 恒假导致拒买，这里统一回填。
+	// 顺带把同属 v5 新增、同样无默认值的 space_capacity 的 NULL 一并置 0，归一化存量态。
 	// 幂等：跑过版本戳后不再执行。
 	{Version: 7, Name: "user-space-purchased-backfill", Up: func(db *gorm.DB) error {
-		return db.Model(&User{}).Where("space_purchased_bytes IS NULL").Update("space_purchased_bytes", 0).Error
+		if err := db.Model(&User{}).Where("space_purchased_bytes IS NULL").Update("space_purchased_bytes", 0).Error; err != nil {
+			return err
+		}
+		return db.Model(&User{}).Where("space_capacity IS NULL").Update("space_capacity", 0).Error
 	}},
 }
 
