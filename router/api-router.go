@@ -186,6 +186,12 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/subscription/epay/notify", controller.SubscriptionEpayNotify)
 		apiRouter.GET("/subscription/epay/return", controller.SubscriptionEpayReturn)
 		apiRouter.POST("/subscription/epay/return", anonymousRequestBodyLimit, controller.SubscriptionEpayReturn)
+
+		// Playground space payment callbacks (no auth): online purchase of cloud space
+		apiRouter.POST("/playground/space/epay/notify", anonymousRequestBodyLimit, controller.PlaygroundSpaceEpayNotify)
+		apiRouter.GET("/playground/space/epay/notify", controller.PlaygroundSpaceEpayNotify)
+		apiRouter.GET("/playground/space/epay/return", controller.PlaygroundSpaceEpayReturn)
+		apiRouter.POST("/playground/space/epay/return", anonymousRequestBodyLimit, controller.PlaygroundSpaceEpayReturn)
 		optionRoute := apiRouter.Group("/option")
 		optionRoute.Use(middleware.RootAuth())
 		{
@@ -233,6 +239,7 @@ func SetApiRouter(router *gin.Engine) {
 			// 用户云空间：用量/购买 + 对话同步
 			playgroundUploadRoute.GET("/space", middleware.DisableCache(), controller.GetUserPlaygroundSpace)
 			playgroundUploadRoute.POST("/space/purchase", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.PurchasePlaygroundSpace)
+			playgroundUploadRoute.POST("/space/epay/pay", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.RequestPlaygroundSpaceEpay)
 			playgroundUploadRoute.GET("/conversations", middleware.DisableCache(), controller.ListPlaygroundConversations)
 			playgroundUploadRoute.PUT("/conversations/:clientId", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.SavePlaygroundConversation)
 			playgroundUploadRoute.DELETE("/conversations/:clientId", controller.DeletePlaygroundConversation)

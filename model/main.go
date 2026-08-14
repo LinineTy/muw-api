@@ -321,6 +321,7 @@ func autoMigrateAll() error {
 		&ImageAsset{},
 		&PlaygroundImage{},
 		&PlaygroundConversation{},
+		&PlaygroundSpaceOrder{},
 		&Setup{},
 		&TwoFA{},
 		&TwoFABackupCode{},
