@@ -140,6 +140,145 @@ func CompletePlaygroundSpaceOrder(tradeNo string, providerPayload string, expect
 	return nil
 }
 
+// SumPendingPlaygroundSpaceOrdersByUser 返回某用户所有 pending 云空间订单的
+// mb 总和与单数。用于下单预检预留容量：epay 订单 pending 期间尚未累加
+// space_purchased_bytes，若预检只算已购量，并发多单会互相通过预检，支付后回调
+// 超限卡死（收钱不给货）。预留后把竞争窗口收窄到真正的并发边界。
+func SumPendingPlaygroundSpaceOrdersByUser(userId int) (mbSum int, count int64, err error) {
+	err = DB.Model(&PlaygroundSpaceOrder{}).
+		Where("user_id = ? AND status = ?", userId, common.TopUpStatusPending).
+		Select("COALESCE(SUM(mb), 0)").Scan(&mbSum).Error
+	if err != nil {
+		return 0, 0, err
+	}
+	err = DB.Model(&PlaygroundSpaceOrder{}).
+		Where("user_id = ? AND status = ?", userId, common.TopUpStatusPending).
+		Count(&count).Error
+	return mbSum, count, err
+}
+
+// ExpireTimeoutPlaygroundSpaceOrders 批量把超时未支付的 pending 订单置为 expired
+// （cutoff 之前的创建时间）。幂等：只影响 pending。返回受影响行数。由后台定时任务
+// 调用，防止 pending 订单无限堆积并长期占着下单预检的预留额度。
+func ExpireTimeoutPlaygroundSpaceOrders(cutoff int64) (int64, error) {
+	result := DB.Model(&PlaygroundSpaceOrder{}).
+		Where("status = ? AND create_time < ?", common.TopUpStatusPending, cutoff).
+		Updates(map[string]interface{}{
+			"status":        common.TopUpStatusExpired,
+			"complete_time": common.GetTimestamp(),
+		})
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	return result.RowsAffected, nil
+}
+
+// AdminCompletePlaygroundSpaceOrder 管理员补单：事务内行锁 + 幂等 + 原子扩容，
+// 逻辑与 CompletePlaygroundSpaceOrder 一致，但跳过跨网关校验（管理员人工确认）
+// 并以管理员身份记账。用于 epay 回调丢失/失败或累计上限卡单时的人工处置——
+// 这是「收钱不给货」场景的唯一出路。
+func AdminCompletePlaygroundSpaceOrder(tradeNo string, callerIp string, initialBytes int64, maxPurchasedBytes int64) error {
+	if tradeNo == "" {
+		return errors.New("tradeNo is empty")
+	}
+	refCol := "`trade_no`"
+	if common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
+		refCol = `"trade_no"`
+	}
+	var logUserId int
+	var logMb int
+	var logMoney float64
+	var logPaymentMethod string
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var order PlaygroundSpaceOrder
+		if err := lockForUpdate(tx).Where(refCol+" = ?", tradeNo).First(&order).Error; err != nil {
+			return ErrPlaygroundSpaceOrderNotFound
+		}
+		if order.Status == common.TopUpStatusSuccess {
+			return nil
+		}
+		if order.Status != common.TopUpStatusPending {
+			return ErrPlaygroundSpaceOrderStatusInvalid
+		}
+
+		deltaBytes := int64(order.Mb) << 20
+		query := tx.Model(&User{}).Where("id = ?", order.UserId)
+		if maxPurchasedBytes > 0 {
+			query = query.Where("COALESCE(space_purchased_bytes, 0) + ? <= ?", deltaBytes, maxPurchasedBytes)
+		}
+		result := query.Updates(map[string]interface{}{
+			"space_capacity": gorm.Expr(
+				"CASE WHEN space_capacity > 0 THEN space_capacity + ? ELSE ? + ? END",
+				deltaBytes, initialBytes, deltaBytes,
+			),
+			"space_purchased_bytes": gorm.Expr("COALESCE(space_purchased_bytes, 0) + ?", deltaBytes),
+		})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return ErrPlaygroundSpaceOrderCapacityExceed
+		}
+
+		order.Status = common.TopUpStatusSuccess
+		order.CompleteTime = common.GetTimestamp()
+		if err := tx.Save(&order).Error; err != nil {
+			return err
+		}
+		logUserId = order.UserId
+		logMb = order.Mb
+		logMoney = order.Money
+		logPaymentMethod = order.PaymentMethod
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if logUserId > 0 {
+		common.SysLog(fmt.Sprintf("admin completed playground space order %s: user %d +%d MB (money %.2f, method %s, caller_ip %s)", tradeNo, logUserId, logMb, logMoney, logPaymentMethod, callerIp))
+		RecordLog(logUserId, LogTypeTopup, fmt.Sprintf("云空间购买补单成功，容量: %d MB，支付金额: %.2f，支付方式: %s", logMb, logMoney, logPaymentMethod))
+	}
+	return nil
+}
+
+// RejectPlaygroundSpaceOrder 管理员驳回/关闭待支付订单（pending → expired）。
+// 用于人工处置无法完成的订单（如回调丢失后用户不再支付）。幂等：非 pending 早退。
+func RejectPlaygroundSpaceOrder(tradeNo string, callerIp string) error {
+	if tradeNo == "" {
+		return errors.New("tradeNo is empty")
+	}
+	refCol := "`trade_no`"
+	if common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
+		refCol = `"trade_no"`
+	}
+	var logUserId int
+	var logMb int
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var order PlaygroundSpaceOrder
+		if err := lockForUpdate(tx).Where(refCol+" = ?", tradeNo).First(&order).Error; err != nil {
+			return ErrPlaygroundSpaceOrderNotFound
+		}
+		if order.Status != common.TopUpStatusPending {
+			return nil
+		}
+		order.Status = common.TopUpStatusExpired
+		order.CompleteTime = common.GetTimestamp()
+		if err := tx.Save(&order).Error; err != nil {
+			return err
+		}
+		logUserId = order.UserId
+		logMb = order.Mb
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if logUserId > 0 {
+		common.SysLog(fmt.Sprintf("admin rejected playground space order for user %d (%d MB, caller_ip %s)", logUserId, logMb, callerIp))
+	}
+	return nil
+}
+
 // ExpirePlaygroundSpaceOrder 关闭未支付的云空间订单（拉起支付失败/超时）。幂等：
 // 只有 pending 才会置为 expired。
 func ExpirePlaygroundSpaceOrder(tradeNo string, expectedPaymentProvider string) error {

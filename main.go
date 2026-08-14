@@ -364,6 +364,7 @@ func InitResources() error {
 
 	service.StartAuthArtifactCleanup()
 	service.StartPlaygroundImageCleanup()
+	service.StartPlaygroundSpaceOrderCleanup()
 
 	return nil
 }

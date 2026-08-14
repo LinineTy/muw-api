@@ -253,6 +253,8 @@ func SetApiRouter(router *gin.Engine) {
 			playgroundAdminRoute.GET("/images/stats", middleware.DisableCache(), controller.AdminPlaygroundImageStats)
 			playgroundAdminRoute.POST("/images/cleanup", middleware.DisableCache(), controller.AdminCleanupPlaygroundImages)
 			playgroundAdminRoute.GET("/orders", middleware.DisableCache(), controller.AdminListPlaygroundSpaceOrders)
+			playgroundAdminRoute.POST("/orders/complete", middleware.DisableCache(), controller.AdminCompletePlaygroundSpaceOrder)
+			playgroundAdminRoute.POST("/orders/reject", middleware.DisableCache(), controller.AdminRejectPlaygroundSpaceOrder)
 		}
 
 		// Custom OAuth provider management (root only)

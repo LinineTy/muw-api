@@ -91,10 +91,14 @@ func GetUserPlaygroundSpace(c *gin.Context) {
 
 	isRoot := c.GetInt("role") == common.RoleRootUser
 	capacityBytes := int64(-1)
+	purchasedBytes := int64(0)
 	if !isRoot {
 		capacityBytes = int64(setting.UserSpaceInitialMB) << 20
-		if user, err := model.GetUserById(userId, false); err == nil && user.SpaceCapacity > 0 {
-			capacityBytes = user.SpaceCapacity
+		if user, err := model.GetUserById(userId, false); err == nil {
+			if user.SpaceCapacity > 0 {
+				capacityBytes = user.SpaceCapacity
+			}
+			purchasedBytes = user.SpacePurchasedBytes
 		}
 	}
 
@@ -103,6 +107,8 @@ func GetUserPlaygroundSpace(c *gin.Context) {
 		"used_bytes":        used,
 		"purchase_ratio":    setting.UserSpacePurchaseRatio,
 		"max_purchase_mb":   setting.UserSpaceMaxPurchaseMB,
+		"max_purchased_mb":  setting.UserSpaceMaxPurchasedMB,
+		"purchased_bytes":   purchasedBytes,
 		"global_used_bytes": globalTransient + globalPermanent,
 		"global_max_bytes":  int64(setting.UserSpaceGlobalMaxMB) << 20,
 		"transient_count":   transientCount,
@@ -119,6 +125,10 @@ func PurchasePlaygroundSpace(c *gin.Context) {
 	userId := c.GetInt("id")
 	if userId <= 0 {
 		common.ApiErrorMsg(c, "无效的用户")
+		return
+	}
+	if c.GetInt("role") == common.RoleRootUser {
+		common.ApiErrorMsg(c, "root 用户无需购买云空间")
 		return
 	}
 
@@ -148,13 +158,20 @@ func PurchasePlaygroundSpace(c *gin.Context) {
 	}
 
 	// 累计购买上限预检查（原子 UPDATE 内有同名条件兜底并发，这里只为给出准确提示）。
+	// 与 epay 下单一致：已购量 + 本用户 pending 订单预留 + 本次，一起对比上限，
+	// 防止「epay 订单 pending 期间又余额购买」把回调卡死在超限上。
 	if setting.UserSpaceMaxPurchasedMB > 0 {
+		pendingMb, _, err := model.SumPendingPlaygroundSpaceOrdersByUser(userId)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
 		user, err := model.GetUserById(userId, false)
 		if err != nil {
 			common.ApiErrorMsg(c, "无效的用户")
 			return
 		}
-		if user.SpacePurchasedBytes+int64(request.Mb)<<20 > int64(setting.UserSpaceMaxPurchasedMB)<<20 {
+		if user.SpacePurchasedBytes+int64(pendingMb)<<20+int64(request.Mb)<<20 > int64(setting.UserSpaceMaxPurchasedMB)<<20 {
 			common.ApiErrorMsg(c, "购买容量超过累计上限")
 			return
 		}
@@ -169,6 +186,15 @@ func PurchasePlaygroundSpace(c *gin.Context) {
 		return
 	}
 	if !ok {
+		// 区分失败原因：原子 UPDATE 不通过有两种可能（余额不足 / 超累计上限），
+		// 读一次用户行给准确提示（原子条件已保证正确性，这里只为文案准确）。
+		if setting.UserSpaceMaxPurchasedMB > 0 {
+			if user, err := model.GetUserById(userId, false); err == nil &&
+				user.SpacePurchasedBytes+int64(request.Mb)<<20 > int64(setting.UserSpaceMaxPurchasedMB)<<20 {
+				common.ApiErrorMsg(c, "购买容量超过累计上限")
+				return
+			}
+		}
 		common.ApiErrorMsg(c, "余额不足")
 		return
 	}
@@ -177,8 +203,10 @@ func PurchasePlaygroundSpace(c *gin.Context) {
 
 	// 重新读取真实容量（并发购买下以 DB 原子增量结果为准）供响应与审计。
 	newCapacity := int64(setting.UserSpaceInitialMB) << 20
+	purchasedBytes := int64(0)
 	if freshUser, err := model.GetUserById(userId, false); err == nil {
 		newCapacity = freshUser.SpaceCapacity
+		purchasedBytes = freshUser.SpacePurchasedBytes
 	}
 	common.SysLog(fmt.Sprintf("user %d purchased %d MB playground space (cost %d quota, capacity now %d bytes)",
 		userId, request.Mb, cost, newCapacity))
@@ -186,7 +214,9 @@ func PurchasePlaygroundSpace(c *gin.Context) {
 	model.RecordLog(userId, model.LogTypeTopup, fmt.Sprintf("云空间购买成功，容量: %d MB，消耗额度: %s", request.Mb, logger.LogQuota(int(cost))))
 
 	common.ApiSuccess(c, gin.H{
-		"cost":           cost,
-		"capacity_bytes": newCapacity,
+		"cost":             cost,
+		"capacity_bytes":   newCapacity,
+		"max_purchased_mb": setting.UserSpaceMaxPurchasedMB,
+		"purchased_bytes":  purchasedBytes,
 	})
 }
