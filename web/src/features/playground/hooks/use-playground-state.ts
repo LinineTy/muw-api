@@ -110,6 +110,8 @@ export function usePlaygroundState() {
   const flushPushRef = useRef<() => Promise<void>>(async () => {})
   const pushRetryCountRef = useRef(0)
   const lastPullAtRef = useRef(0)
+  // 是否还没完成首次成功拉取：用于「空新对话自动切到最近会话」的首次拉取门控。
+  const initialPullRef = useRef(true)
   const mountedRef = useRef(true)
   // active 会话 id 的 ref 镜像：render 期同步，供 pullAndMerge 等 callback 读取当前值
   // 而不必把它加进依赖数组（否则 focus listener 会反复重建）。
@@ -244,6 +246,9 @@ export function usePlaygroundState() {
     ) {
       return
     }
+    // 首个成功拉取：记录已拉过，后续聚焦拉取不再做「空新对话自动切换」。
+    const firstSuccessfulPull = initialPullRef.current
+    initialPullRef.current = false
     const local = latestConversationsRef.current
     const activeId = activeConversationIdRef.current
     const activeBefore = local.find((c) => c.id === activeId)?.updatedAt
@@ -262,15 +267,38 @@ export function usePlaygroundState() {
       merged.some((c) => localById.get(c.id) !== c.updatedAt)
 
     if (changed) {
+      // 首次拉取：当前 active 是本地空「新对话」（种子/新建，无消息、服务端无该
+      // 记录）且服务端有真实会话时，切到最近一条——否则新浏览器/新设备首次打开
+      // 会一直停在空「新对话」上，即使真实会话已同步进来。用户自己新建的空对话
+      // 不受影响（仅在首个成功拉取时判定，聚焦拉取不再切换，避免打扰）。
+      let adoptedActiveId: string | null = null
+      if (firstSuccessfulPull) {
+        const currentActive = local.find((c) => c.id === activeId)
+        const remoteReal = remote.find((c) => (c.messages?.length ?? 0) > 0)
+        if (
+          remoteReal &&
+          currentActive &&
+          currentActive.messages.length === 0 &&
+          !remote.some((c) => c.id === currentActive.id)
+        ) {
+          adoptedActiveId = remoteReal.id
+        }
+      }
       latestConversationsRef.current = merged
       setConversations(merged)
       saveConversations(merged)
       setActiveConversationId((prev) => {
+        if (adoptedActiveId) {
+          return adoptedActiveId
+        }
         if (prev && merged.some((conversation) => conversation.id === prev)) {
           return prev
         }
         return merged[0]?.id ?? prev
       })
+      if (adoptedActiveId) {
+        saveActiveConversationId(adoptedActiveId)
+      }
       // 当前正在看的会话被远端覆盖 → 轻提示（30s 防噪）。仅此场景提示，其余静默。
       if (activeId) {
         const activeAfter = merged.find((c) => c.id === activeId)?.updatedAt

@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { MESSAGE_STATUS, STORAGE_KEYS } from '../../constants'
+import i18next from 'i18next'
 import { useAuthStore } from '@/stores/auth-store'
 import type { Conversation, PlaygroundConfig, ParameterEnabled, Message } from '../../types'
 import {
@@ -520,7 +521,7 @@ export function loadOrCreateConversations(): {
     return migrated
   }
 
-  const seeded = createConversationWithMessages('New chat', [])
+  const seeded = createConversationWithMessages(i18next.t('New chat'), [])
   saveConversations([seeded])
   saveActiveConversationId(seeded.id)
   return { conversations: [seeded], activeId: seeded.id }
@@ -584,7 +585,7 @@ function migrateLegacyPlaygroundData(): {
       return null
     }
     const seeded = createConversationWithMessages(
-      deriveConversationTitle(legacy, 'New chat'),
+      deriveConversationTitle(legacy, i18next.t('New chat')),
       legacy
     )
     return { conversations: [seeded], activeId: seeded.id }
