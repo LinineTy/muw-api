@@ -481,6 +481,13 @@ const AUDIT_TEMPLATES: Record<string, string> = {
   // Image host (图床)
   'image.upload': 'Uploaded a file to the media library',
   'image.delete': 'Deleted image (ID: {{id}})',
+  // Landing page theme (落地页主题)
+  'home_page_theme.import':
+    'Imported landing page theme {{theme_name}} (ID: {{theme_id}})',
+  'home_page_theme.select': 'Selected landing page theme (ID: {{theme_id}})',
+  'home_page_theme.manual_update': 'Updated the manual landing page preset',
+  'home_page_theme.delete':
+    'Deleted landing page theme {{theme_name}} (ID: {{theme_id}})',
   // Generic middleware fallback
   generic: '{{method}} {{route}}',
 }

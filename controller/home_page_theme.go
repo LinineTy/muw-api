@@ -640,7 +640,8 @@ func DeleteHomePageTheme(c *gin.Context) {
 	}
 
 	themes, selected := readHomePageThemeLibrary()
-	if _, ok := findHomePageTheme(themes, id); !ok {
+	theme, ok := findHomePageTheme(themes, id)
+	if !ok {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": "主题不存在",
@@ -665,7 +666,8 @@ func DeleteHomePageTheme(c *gin.Context) {
 		return
 	}
 	recordManageAudit(c, "home_page_theme.delete", map[string]interface{}{
-		"theme_id": id,
+		"theme_id":   id,
+		"theme_name": theme.Name,
 	})
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
