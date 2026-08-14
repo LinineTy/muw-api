@@ -1,4 +1,5 @@
 {
+  "Failed to load orders": "Failed to load orders",
   "A vision-capable model used to describe images. It must have an enabled channel in the user group and a configured price/ratio, because each vision call is billed to the user.": "A vision-capable model used to describe images. It must have an enabled channel in the user group and a configured price/ratio, because each vision call is billed to the user.",
   "Allow users to claim quota from configured pools on the wallet page.": "Allow users to claim quota from configured pools on the wallet page.",
   "Allow users to claim quota from the pool on the wallet page": "Allow users to claim quota from the pool on the wallet page",
