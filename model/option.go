@@ -158,6 +158,7 @@ func InitOptionMap() {
 	common.OptionMap["UserSpaceInitialMB"] = strconv.Itoa(setting.UserSpaceInitialMB)
 	common.OptionMap["UserSpacePurchaseRatio"] = strconv.FormatFloat(setting.UserSpacePurchaseRatio, 'f', -1, 64)
 	common.OptionMap["UserSpaceMaxPurchaseMB"] = strconv.Itoa(setting.UserSpaceMaxPurchaseMB)
+	common.OptionMap["UserSpaceMaxPurchasedMB"] = strconv.Itoa(setting.UserSpaceMaxPurchasedMB)
 	common.OptionMap["UserSpaceGlobalMaxMB"] = strconv.Itoa(setting.UserSpaceGlobalMaxMB)
 	common.OptionMap["AutomaticDisableKeywords"] = operation_setting.AutomaticDisableKeywordsToString()
 	common.OptionMap["AutomaticDisableStatusCodes"] = operation_setting.AutomaticDisableStatusCodesToString()
@@ -245,6 +246,11 @@ func validateOptionValue(key string, value string) error {
 		n, err := strconv.Atoi(value)
 		if err != nil || n <= 0 || n > setting.MaxUserSpaceMaxPurchaseMB {
 			return fmt.Errorf("must be an integer in (0, %d], got %q", setting.MaxUserSpaceMaxPurchaseMB, value)
+		}
+	case "UserSpaceMaxPurchasedMB":
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 0 || n > setting.MaxUserSpaceMaxPurchasedMB {
+			return fmt.Errorf("must be an integer in [0, %d], got %q", setting.MaxUserSpaceMaxPurchasedMB, value)
 		}
 	case "UserSpaceGlobalMaxMB":
 		n, err := strconv.Atoi(value)
@@ -663,6 +669,12 @@ func updateOptionMap(key string, value string) (err error) {
 			mb = setting.DefaultUserSpaceMaxPurchaseMB
 		}
 		setting.UserSpaceMaxPurchaseMB = mb
+	case "UserSpaceMaxPurchasedMB":
+		mb, _ := strconv.Atoi(value)
+		if mb < 0 {
+			mb = setting.DefaultUserSpaceMaxPurchasedMB
+		}
+		setting.UserSpaceMaxPurchasedMB = mb
 	case "UserSpaceGlobalMaxMB":
 		mb, _ := strconv.Atoi(value)
 		if mb < 1 {

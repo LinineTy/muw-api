@@ -186,6 +186,7 @@ export type ContentSettings = {
   UserSpaceInitialMB: number
   UserSpacePurchaseRatio: number
   UserSpaceMaxPurchaseMB: number
+  UserSpaceMaxPurchasedMB: number
   UserSpaceGlobalMaxMB: number
 }
 

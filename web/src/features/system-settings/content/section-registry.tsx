@@ -137,6 +137,7 @@ const CONTENT_SECTIONS = [
           UserSpaceInitialMB: settings.UserSpaceInitialMB,
           UserSpacePurchaseRatio: settings.UserSpacePurchaseRatio,
           UserSpaceMaxPurchaseMB: settings.UserSpaceMaxPurchaseMB,
+          UserSpaceMaxPurchasedMB: settings.UserSpaceMaxPurchasedMB,
           UserSpaceGlobalMaxMB: settings.UserSpaceGlobalMaxMB,
         }}
       />

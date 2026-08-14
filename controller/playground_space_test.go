@@ -191,6 +191,41 @@ func TestPurchasePlaygroundSpaceSuccess(t *testing.T) {
 	assert.Equal(t, int64((setting.UserSpaceInitialMB+10))<<20, user.SpaceCapacity)
 }
 
+// TestPurchasePlaygroundSpaceMaxPurchased 累计购买上限：已购 40MB、上限 50MB 时，
+// 再买 10MB 恰好达上限放行，再买 1MB 超限拒绝且不扣费。
+func TestPurchasePlaygroundSpaceMaxPurchased(t *testing.T) {
+	setupPlaygroundImageTestDB(t)
+	prev := setting.UserSpaceMaxPurchasedMB
+	setting.UserSpaceMaxPurchasedMB = 50
+	t.Cleanup(func() { setting.UserSpaceMaxPurchasedMB = prev })
+
+	expectedCost10 := userSpacePurchaseRawQuota(10, setting.UserSpacePurchaseRatio)
+	// quota 足够买 10MB + 1MB（10 亿量级，int32 范围内）。
+	insertTestUserWithSpace(t, 100, int(expectedCost10*2), 0)
+	require.NoError(t, model.DB.Model(&model.User{}).Where("id = ?", 100).
+		Update("space_purchased_bytes", int64(40)<<20).Error)
+	router := newPlaygroundSpaceTestEngine(100, common.RoleCommonUser)
+
+	buy := func(mb int) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/purchase",
+			bytes.NewBufferString(fmt.Sprintf(`{"mb":%d}`, mb))))
+		return rec
+	}
+
+	// 40+10=50 = 上限，允许。
+	env := playgroundDecodeEnvelope(t, buy(10))
+	require.True(t, env.Success, env.Message)
+	// 再买 1MB → 51 > 50，拒绝。
+	env = playgroundDecodeEnvelope(t, buy(1))
+	assert.False(t, env.Success)
+	assert.Contains(t, env.Message, "累计上限")
+
+	user, err := model.GetUserById(100, false)
+	require.NoError(t, err)
+	assert.Equal(t, int64(50)<<20, user.SpacePurchasedBytes)
+}
+
 // TestPurchasePlaygroundSpaceInsufficientBalance 余额不足拒绝，且不写容量。
 func TestPurchasePlaygroundSpaceInsufficientBalance(t *testing.T) {
 	setupPlaygroundImageTestDB(t)

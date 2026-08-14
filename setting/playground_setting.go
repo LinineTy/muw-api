@@ -15,10 +15,11 @@ const (
 	// 用户云空间容量模型：
 	// 每用户容量 = 初始容量（管理员全局统一，不看分组）+ 购买容量（余额 quota 购买）。
 	// 临时+永久图片合并计到这一个总空间；root 无限制。
-	DefaultUserSpaceInitialMB     = 15   // 每用户初始容量（MB）
+	DefaultUserSpaceInitialMB     = 20    // 每用户初始容量（MB）
 	DefaultUserSpacePurchaseRatio = 100.0 // 每 MB 展示货币价格（默认 100 额度/MB，购买时换算为原始额度扣减）
-	DefaultUserSpaceMaxPurchaseMB = 25   // 单次购买容量上限（MB）
-	DefaultUserSpaceGlobalMaxMB   = 2048 // 云空间总分配量（红线）：固定分配 2G
+	DefaultUserSpaceMaxPurchaseMB = 10    // 单次购买容量上限（MB）
+	DefaultUserSpaceMaxPurchasedMB = 50   // 每用户累计购买容量上限（MB），0 表示不限制
+	DefaultUserSpaceGlobalMaxMB   = 2048  // 云空间总分配量（红线）：固定分配 2G
 
 	// 设置上界：防止 time.Duration 溢出与 MB<<20 字节换算溢出（validateOptionValue 校验用）。
 	MaxPlaygroundImageTTLDays      = 3650   // TTL 天数上限（10 年），防 Duration 溢出把全部临时图误清
@@ -27,6 +28,7 @@ const (
 	MaxPlaygroundImageMaxPermanent = 100000
 	MaxUserSpaceInitialMB          = 1 << 20
 	MaxUserSpaceMaxPurchaseMB      = 1 << 20
+	MaxUserSpaceMaxPurchasedMB     = 1 << 20
 	MaxUserSpaceGlobalMaxMB        = 1 << 20
 )
 
@@ -48,6 +50,8 @@ var (
 	UserSpacePurchaseRatio = DefaultUserSpacePurchaseRatio
 	// UserSpaceMaxPurchaseMB 单次购买容量的上限（MB），管理员可调。
 	UserSpaceMaxPurchaseMB = DefaultUserSpaceMaxPurchaseMB
+	// UserSpaceMaxPurchasedMB 每用户累计购买容量的上限（MB）。0 表示不限制。
+	UserSpaceMaxPurchasedMB = DefaultUserSpaceMaxPurchasedMB
 	// UserSpaceGlobalMaxMB 云空间总分配量（红线）：全部用户云空间文件总字节达到
 	// 该值即拒绝普通用户上传（固定分配，非磁盘剩余空间）。图床（image_assets）不计入。
 	UserSpaceGlobalMaxMB = DefaultUserSpaceGlobalMaxMB
