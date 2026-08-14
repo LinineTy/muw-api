@@ -170,7 +170,9 @@ func TestGetUserPlaygroundSpace(t *testing.T) {
 // TestPurchasePlaygroundSpaceSuccess 购买成功：quota 扣减、容量按「初始+购买」写回。
 func TestPurchasePlaygroundSpaceSuccess(t *testing.T) {
 	setupPlaygroundImageTestDB(t)
-	insertTestUserWithSpace(t, 100, 1000, 0) // 初始容量 20MB
+	// cost 随展示货币类型/购买比例换算，动态取期望值；quota 正好等于 cost，扣完为 0。
+	expectedCost := userSpacePurchaseRawQuota(10, setting.UserSpacePurchaseRatio)
+	insertTestUserWithSpace(t, 100, int(expectedCost), 0)
 	router := newPlaygroundSpaceTestEngine(100, common.RoleCommonUser)
 
 	body := bytes.NewBufferString(`{"mb":10}`)
@@ -180,8 +182,7 @@ func TestPurchasePlaygroundSpaceSuccess(t *testing.T) {
 	require.True(t, env.Success, env.Message)
 	raw := map[string]any{}
 	require.NoError(t, json.Unmarshal(env.Data, &raw))
-	// cost = 10MB * 100 ratio = 1000
-	assert.Equal(t, float64(1000), raw["cost"])
+	assert.Equal(t, float64(expectedCost), raw["cost"])
 	assert.Equal(t, float64((int64(setting.UserSpaceInitialMB)+10)<<20), raw["capacity_bytes"])
 
 	user, err := model.GetUserById(100, false)
