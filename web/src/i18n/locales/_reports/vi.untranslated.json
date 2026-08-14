@@ -1,5 +1,6 @@
 {
   "Failed to load orders": "Failed to load orders",
+  "Recharge, subscription and cloud space purchase orders.": "Recharge, subscription and cloud space purchase orders.",
   "A vision-capable model used to describe images. It must have an enabled channel in the user group and a configured price/ratio, because each vision call is billed to the user.": "A vision-capable model used to describe images. It must have an enabled channel in the user group and a configured price/ratio, because each vision call is billed to the user.",
   "Allow users to claim quota from configured pools on the wallet page.": "Allow users to claim quota from configured pools on the wallet page.",
   "Allow users to claim quota from the pool on the wallet page": "Allow users to claim quota from the pool on the wallet page",
@@ -9,6 +10,7 @@
   "Applies to web page assets and fallback routes": "Applies to web page assets and fallback routes",
   "Are you sure you want to delete \"{{name}}\"? Users who authenticated with this provider will no longer be able to log in.": "Are you sure you want to delete \"{{name}}\"? Users who authenticated with this provider will no longer be able to log in.",
   "Are you sure you want to delete vendor \"{{name}}\"? This action cannot be undone.": "Are you sure you want to delete vendor \"{{name}}\"? This action cannot be undone.",
+  "When enabled, the group is re-synced from the LinuxDO trust level on every login.": "When enabled, the group is re-synced from the LinuxDO trust level on every login.",
   "Auto-renew failed: insufficient balance or plan unavailable. Please top up or renew manually.": "Auto-renew failed: insufficient balance or plan unavailable. Please top up or renew manually.",
   "Back to sign in": "Back to sign in",
   "Balance above the threshold": "Balance above the threshold",
