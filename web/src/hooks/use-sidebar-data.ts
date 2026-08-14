@@ -31,6 +31,7 @@ import {
   MessageSquare,
   ImageUp,
   Radio,
+  Receipt,
   ServerCog,
   Settings,
   Ticket,
@@ -116,6 +117,11 @@ export function useSidebarData(): SidebarData {
             title: t('Wallet'),
             url: '/wallet',
             icon: Wallet,
+          },
+          {
+            title: t('Order Center'),
+            url: '/orders',
+            icon: Receipt,
           },
           {
             title: t('Cloud Space'),
