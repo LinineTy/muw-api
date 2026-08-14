@@ -356,6 +356,48 @@ func TestDeletePlaygroundConversationOwnership(t *testing.T) {
 	assert.Error(t, err) // 软删后查不到
 }
 
+// TestDeletePlaygroundConversationIdempotent 删除幂等：会话不存在 / 重复删除
+// 均返回成功（本地新建从未推送的「新对话」删除不应误报「会话不存在」），
+// 他人会话仍返回 403。
+func TestDeletePlaygroundConversationIdempotent(t *testing.T) {
+	setupPlaygroundImageTestDB(t)
+	migratePlaygroundConversation(t)
+	insertTestUser(t, 100, false)
+	insertTestUser(t, 101, false)
+	require.NoError(t, model.UpsertPlaygroundConversation(&model.PlaygroundConversation{
+		UserId: 100, ClientId: "conv-idem", Title: "t", Messages: `[]`,
+	}))
+	require.NoError(t, model.UpsertPlaygroundConversation(&model.PlaygroundConversation{
+		UserId: 100, ClientId: "conv-other", Title: "t", Messages: `[]`,
+	}))
+
+	owner := newPlaygroundSpaceTestEngine(100, common.RoleCommonUser)
+
+	del := func(clientId string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		owner.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/conversations/"+clientId, nil))
+		return rec
+	}
+
+	// 从不存在的会话：幂等成功。
+	env := playgroundDecodeEnvelope(t, del("never-pushed"))
+	require.True(t, env.Success, env.Message)
+
+	// 首次删除：成功。
+	env = playgroundDecodeEnvelope(t, del("conv-idem"))
+	require.True(t, env.Success, env.Message)
+
+	// 重复删除已软删会话：仍成功。
+	env = playgroundDecodeEnvelope(t, del("conv-idem"))
+	require.True(t, env.Success, env.Message)
+
+	// 越权语义保留：他人删除存在且属本人的会话 → 403。
+	other := newPlaygroundSpaceTestEngine(101, common.RoleCommonUser)
+	rec := httptest.NewRecorder()
+	other.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/conversations/conv-other", nil))
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+}
+
 func mustMarshal(t *testing.T, v any) []byte {
 	t.Helper()
 	data, err := json.Marshal(v)
