@@ -21,6 +21,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -38,22 +39,12 @@ import (
 // 可用环境变量 UPDATE_CHECK_REGISTRY 覆盖(如换 registry 部署)。
 const updateCheckRegistryDefault = "https://registry.dev3.mulink.top/v2/muw/new-api"
 
-// versionChangelogs 内置各版本的更新说明(与仓库根 CHANGELOG.md 同步维护)。
-// 更新检查发现新版本时,前端据此展示「这个版本更新了啥」。registry 的
-// tags/list 只有版本号没有发布说明,故由这里提供。
-var versionChangelogs = map[string]string{
-	"v26.08.14.muw.1": "### 云空间\n" +
-		"- 新增容量购买双通道(余额 + 易支付),购买记录写入日志\n" +
-		"- 新增订单中心(充值/订阅 + 云空间订单),管理员可补单/驳回卡单\n" +
-		"- 修复余额购买成功误报、在线支付最低限额、订单 pending 卡死与过期清理\n\n" +
-		"### 游乐场\n" +
-		"- 新增对话多设备同步\n" +
-		"- 修复推送竞态、已删会话被复活、同秒编辑丢失、chat/绘图切换丢状态\n" +
-		"- 修复图片发送失败静默丢弃、会话请求体无上限、上传容量竞态\n\n" +
-		"### 其他\n" +
-		"- 版本号改日期制 v26.08.14.muw.1,旧版本号部署会提示更新\n" +
-		"- 界面文案三语言补齐,生产备份 MySQL 迁移验证通过",
-}
+// updateCheckChangelogDefault 公共 CHANGELOG.md 的 URL,挂在更新检测 registry 的
+// 反向代理下同源服务(registry.dev3.mulink.top 是反代,反代上把该路径映射到
+// 仓库的 CHANGELOG.md 文件即可)。更新说明不能随当前二进制内置(旧版本部署的
+// 二进制里没有新版本的 changelog),而是像上游 GitHub release body 一样从公共源
+// 动态拉取。可用 UPDATE_CHECK_CHANGELOG_URL 覆盖。
+const updateCheckChangelogDefault = "https://registry.dev3.mulink.top/CHANGELOG.md"
 
 // parseForkVersion 解析 muw fork 版本号,支持两种体系,返回可比数组:
 //   - 旧 semver:vX.Y.Z[-rc.N][-muw.M][后缀] → [1, X, Y, Z, 稳定度(1=正式,0=rc), rc号, muw号]
@@ -213,10 +204,79 @@ func GetUpdateCheck(c *gin.Context) {
 	}
 
 	hasUpdate := latestTag != "" && (current == nil || compareForkVersions(latestVals, current) > 0)
+	latestChangelog := ""
+	if hasUpdate && latestTag != "" {
+		// 从公共源拉取新版本的更新说明(任何版本的部署都能读到)。
+		latestChangelog = fetchVersionChangelog(latestTag)
+	}
 	common.ApiSuccess(c, gin.H{
 		"has_update":       hasUpdate,
 		"latest_tag":       latestTag,
 		"current_version":  common.Version,
-		"latest_changelog": versionChangelogs[latestTag],
+		"latest_changelog": latestChangelog,
 	})
+}
+
+// fetchVersionChangelog 拉取公共 CHANGELOG.md 并提取指定版本的条目。
+// 拉取/解析失败时返回空串,不阻塞更新检测本身。
+func fetchVersionChangelog(version string) string {
+	url := common.GetEnvOrDefaultString("UPDATE_CHECK_CHANGELOG_URL", updateCheckChangelogDefault)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Accept", "text/plain")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return ""
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return ""
+	}
+	return extractChangelogSection(string(data), version)
+}
+
+// extractChangelogSection 从 CHANGELOG.md 文本中提取 "## <version>" 标题到
+// 下一个 "## " 标题之间的内容(不含标题行)。处理「长版本号是短版本号前缀」
+// 的误匹配(如 v1 vs v10)。
+func extractChangelogSection(markdown, version string) string {
+	header := "## " + version
+	idx := strings.Index(markdown, header)
+	for idx >= 0 {
+		end := idx + len(header)
+		if end >= len(markdown) || markdown[end] == ' ' || markdown[end] == '\n' {
+			break
+		}
+		// 前缀误匹配(如 v1 命中 v10):继续向后找。
+		next := strings.Index(markdown[end:], header)
+		if next < 0 {
+			idx = -1
+			break
+		}
+		idx = end + next
+	}
+	if idx < 0 {
+		return ""
+	}
+
+	start := idx + len(header)
+	// 跳到标题行末尾(标题可能是 "## vX (日期)" 等,内容从下一行开始)。
+	if nl := strings.Index(markdown[start:], "\n"); nl >= 0 {
+		start += nl + 1
+	}
+	rest := markdown[start:]
+	nextHeader := strings.Index(rest, "\n## ")
+	if nextHeader < 0 {
+		return strings.TrimSpace(rest)
+	}
+	return strings.TrimSpace(rest[:nextHeader])
 }
