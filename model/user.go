@@ -1434,8 +1434,10 @@ func PurchaseUserSpaceCapacity(id int, cost int, deltaBytes int64, initialBytes 
 	}
 	query := DB.Model(&User{}).Where("id = ? AND quota >= ?", id, cost)
 	// 累计购买上限（<=0 表示不限制）：并入 UPDATE 条件，防并发购买叠加超限。
+	// COALESCE 兜底存量 NULL（v6 新列无默认值）：NULL + x 会得 NULL，导致条件恒假、
+	// 写回也变 NULL。三种数据库均支持 COALESCE。
 	if maxPurchasedBytes > 0 {
-		query = query.Where("space_purchased_bytes + ? <= ?", deltaBytes, maxPurchasedBytes)
+		query = query.Where("COALESCE(space_purchased_bytes, 0) + ? <= ?", deltaBytes, maxPurchasedBytes)
 	}
 	result := query.Updates(map[string]interface{}{
 		"quota": gorm.Expr("quota - ?", cost),
@@ -1443,7 +1445,7 @@ func PurchaseUserSpaceCapacity(id int, cost int, deltaBytes int64, initialBytes 
 			"CASE WHEN space_capacity > 0 THEN space_capacity + ? ELSE ? + ? END",
 			deltaBytes, initialBytes, deltaBytes,
 		),
-		"space_purchased_bytes": gorm.Expr("space_purchased_bytes + ?", deltaBytes),
+		"space_purchased_bytes": gorm.Expr("COALESCE(space_purchased_bytes, 0) + ?", deltaBytes),
 	})
 	if result.Error != nil {
 		return false, result.Error

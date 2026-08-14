@@ -41,7 +41,8 @@ func (SchemaMigration) TableName() string { return "schema_migrations" }
 // 兜底：DEBUG=true 启动时即使已最新也强制 AutoMigrate 校验结构。
 // v5：users 表新增 space_capacity 列 + 新增 playground_conversations 表。
 // v6：users 表新增 space_purchased_bytes 列（累计购买量）。
-const CurrentSchemaVersion = 6
+// v7：新增 playground_space_orders 表（云空间在线支付订单）。
+const CurrentSchemaVersion = 7
 
 // Migration 是一个可单独应用、记录版本戳的迁移步骤。Up 按版本升序执行，
 // 用于 AutoMigrate 补不了的结构改造（换类型、删列）与数据迁移/特殊适配。
@@ -69,6 +70,12 @@ var migrations = []Migration{
 	{Version: 4, Name: "image-asset-table-noop", Up: func(db *gorm.DB) error { return nil }},
 	{Version: 5, Name: "playground-space-noop", Up: func(db *gorm.DB) error { return nil }},
 	{Version: 6, Name: "user-space-purchased-noop", Up: func(db *gorm.DB) error { return nil }},
+	// v7：新增 playground_space_orders 表（AutoMigrate 建）+ 存量 users.space_purchased_bytes
+	// 置 0。v6 新列无默认值，存量行是 NULL，累计上限条件 NULL + x 恒假导致拒买，这里统一回填。
+	// 幂等：跑过版本戳后不再执行。
+	{Version: 7, Name: "user-space-purchased-backfill", Up: func(db *gorm.DB) error {
+		return db.Model(&User{}).Where("space_purchased_bytes IS NULL").Update("space_purchased_bytes", 0).Error
+	}},
 }
 
 // ensureSchemaMigrationsTable 用纯 SQL 建版本表，避免对版本表自身跑 AutoMigrate。
