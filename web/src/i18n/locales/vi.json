@@ -5934,6 +5934,19 @@
     "Usage is shown in the cloud space page. Here you can clean up temporary images for all users.": "Usage is shown in the cloud space page. Here you can clean up temporary images for all users.",
     "Temporary image cleanup": "Temporary image cleanup",
     "Price per MB in the display currency; converted to quota when buying.": "Price per MB in the display currency; converted to quota when buying.",
-    "When the display currency is tokens, this value is the token price per MB directly.": "When the display currency is tokens, this value is the token price per MB directly."
+    "When the display currency is tokens, this value is the token price per MB directly.": "When the display currency is tokens, this value is the token price per MB directly.",
+    "Reject": "Reject",
+    "Reject Order": "Reject Order",
+    "Are you sure you want to reject this order? The user will not be charged for it.": "Are you sure you want to reject this order? The user will not be charged for it.",
+    "Order completed": "Order completed",
+    "Order rejected": "Order rejected",
+    "Failed to reject order": "Failed to reject order",
+    "Failed to load cloud space": "Failed to load cloud space",
+    "Failed to load images": "Failed to load images",
+    "Failed to load conversations": "Failed to load conversations",
+    "Conversation is too large to sync": "Conversation is too large to sync",
+    "Failed to delete conversation": "Failed to delete conversation",
+    "Some images failed to load and were not sent.": "Some images failed to load and were not sent.",
+    "This conversation was updated on another device.": "This conversation was updated on another device."
   }
 }

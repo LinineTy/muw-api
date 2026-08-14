@@ -5934,6 +5934,19 @@
     "Usage is shown in the cloud space page. Here you can clean up temporary images for all users.": "用量统计已移至云空间页展示，这里可清理所有用户的临时图片。",
     "Temporary image cleanup": "临时图片清理",
     "Price per MB in the display currency; converted to quota when buying.": "按展示货币填每 MB 价格，购买时自动换算为额度扣减。",
-    "When the display currency is tokens, this value is the token price per MB directly.": "当展示货币为 tokens 时，该值直接作为每 MB 的 token 价格。"
+    "When the display currency is tokens, this value is the token price per MB directly.": "当展示货币为 tokens 时，该值直接作为每 MB 的 token 价格。",
+    "Reject": "驳回",
+    "Reject Order": "驳回订单",
+    "Are you sure you want to reject this order? The user will not be charged for it.": "确定要驳回该订单吗？用户不会因此被扣费。",
+    "Order completed": "订单已完成",
+    "Order rejected": "订单已驳回",
+    "Failed to reject order": "驳回订单失败",
+    "Failed to load cloud space": "加载云空间失败",
+    "Failed to load images": "加载图片失败",
+    "Failed to load conversations": "加载会话失败",
+    "Conversation is too large to sync": "会话过大，无法同步",
+    "Failed to delete conversation": "删除会话失败",
+    "Some images failed to load and were not sent.": "部分图片加载失败，未随消息发送。",
+    "This conversation was updated on another device.": "当前会话已在其他设备更新。"
   }
 }
