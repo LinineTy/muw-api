@@ -124,7 +124,7 @@ export function PlaygroundInput({
         maxFileSize={MAX_IMAGE_UPLOAD_BYTES}
         maxFiles={MAX_IMAGES_PER_MESSAGE}
         multiple
-        onError={(err) => toast.error(t(err.message))}
+        onError={(err) => toast.error(err.message)}
         onSubmit={handleSubmit}
       >
         <PromptInputTextarea

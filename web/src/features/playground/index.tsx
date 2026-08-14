@@ -203,52 +203,54 @@ export function Playground() {
         onSwitch={switchConversation}
       />
 
-      {mode === 'chat' ? (
-        <>
-          {/* Full-width scroll container: scrolling works even over side whitespace */}
-          <div className='flex min-h-0 flex-1 flex-col overflow-hidden'>
-            <PlaygroundChat
-              messages={messages}
-              isLoadingMessages={isLoadingMessages}
-              onRegenerateMessage={handleRegenerateMessage}
-              onEditMessage={handleEditMessage}
-              onDeleteMessage={handleDeleteMessage}
-              onSelectPrompt={handleSendMessageWithTitle}
-              isGenerating={isGenerating}
-              editingKey={editingMessageKey}
-              onCancelEdit={handleEditOpenChange}
-              onSaveEdit={(newContent) => applyEdit(newContent, false)}
-              onSaveEditAndSubmit={(newContent) => applyEdit(newContent, true)}
-            />
-          </div>
+      {/* chat 与 image 两个模式都保持挂载，仅用 CSS 隐藏未激活的：切换 tab 不卸载
+          子树，输入框草稿与绘图历史跨切换保留（display:contents 让 chat 的
+          flex-1 滚动布局照常参与父容器布局）。 */}
+      <div className={mode === 'chat' ? 'contents' : 'hidden'}>
+        {/* Full-width scroll container: scrolling works even over side whitespace */}
+        <div className='flex min-h-0 flex-1 flex-col overflow-hidden'>
+          <PlaygroundChat
+            messages={messages}
+            isLoadingMessages={isLoadingMessages}
+            onRegenerateMessage={handleRegenerateMessage}
+            onEditMessage={handleEditMessage}
+            onDeleteMessage={handleDeleteMessage}
+            onSelectPrompt={handleSendMessageWithTitle}
+            isGenerating={isGenerating}
+            editingKey={editingMessageKey}
+            onCancelEdit={handleEditOpenChange}
+            onSaveEdit={(newContent) => applyEdit(newContent, false)}
+            onSaveEditAndSubmit={(newContent) => applyEdit(newContent, true)}
+          />
+        </div>
 
-          {/* Input area: center content and constrain to the same container width */}
-          <div className='mx-auto w-full max-w-4xl'>
-            <PlaygroundInput
-              config={config}
-              disabled={isGenerating}
-              groups={groups}
-              groupValue={config.group}
-              isGenerating={isGenerating}
-              isModelLoading={isLoadingModels}
-              modelValue={config.model}
-              models={models}
-              onGroupChange={(value) => updateConfig('group', value)}
-              onConfigChange={updateConfig}
-              onClearMessages={handleClearMessages}
-              onModelChange={(value) => updateConfig('model', value)}
-              onParameterEnabledChange={updateParameterEnabled}
-              onStop={stopGeneration}
-              onSubmit={handleSendMessageWithTitle}
-              onUploadFiles={onUploadFiles}
-              parameterEnabled={parameterEnabled}
-              hasMessages={messages.length > 0}
-            />
-          </div>
-        </>
-      ) : (
+        {/* Input area: center content and constrain to the same container width */}
+        <div className='mx-auto w-full max-w-4xl'>
+          <PlaygroundInput
+            config={config}
+            disabled={isGenerating}
+            groups={groups}
+            groupValue={config.group}
+            isGenerating={isGenerating}
+            isModelLoading={isLoadingModels}
+            modelValue={config.model}
+            models={models}
+            onGroupChange={(value) => updateConfig('group', value)}
+            onConfigChange={updateConfig}
+            onClearMessages={handleClearMessages}
+            onModelChange={(value) => updateConfig('model', value)}
+            onParameterEnabledChange={updateParameterEnabled}
+            onStop={stopGeneration}
+            onSubmit={handleSendMessageWithTitle}
+            onUploadFiles={onUploadFiles}
+            parameterEnabled={parameterEnabled}
+            hasMessages={messages.length > 0}
+          />
+        </div>
+      </div>
+      <div className={mode === 'chat' ? 'hidden' : ''}>
         <PlaygroundImageGeneration group={config.group} models={models} />
-      )}
+      </div>
 
       <PlaygroundSystemPromptDialog
         initialContent={systemPromptContent()}

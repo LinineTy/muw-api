@@ -16,8 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import i18next from 'i18next'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { DEFAULT_CONFIG, DEFAULT_PARAMETER_ENABLED } from '../constants'
 import {
@@ -42,6 +44,8 @@ import {
 } from '../lib/message/message-utils'
 import {
   deleteServerConversation,
+  getDeletedConversationIds,
+  markConversationDeleted,
   mergeConversations,
   pullServerConversations,
   pushServerConversation,
@@ -57,6 +61,14 @@ import type {
 const CONVERSATIONS_SAVE_DEBOUNCE_MS = 500
 // 推送失败退避的最大连续重试次数；超过后停止自动重试，等下次本地改动/聚焦再触发。
 const MAX_PUSH_RETRY_COUNT = 5
+// 单会话可同步的请求体上限（与服务端 maxConversationMessagesBytes 2MB 对齐，
+// 含 JSON 序列化开销）。超过即放弃推送并提示，避免静默失败 + 退避重试刷日志。
+const MAX_SYNC_PAYLOAD_BYTES = 2 * 1024 * 1024
+// 拉取节流：快速切换窗口/聚焦时避免连续发 GET。
+const CONVERSATIONS_PULL_THROTTLE_MS = 2000
+// 会话被远端覆盖时的一次性提示防噪间隔：同一会话短期内只提示一次，聚焦/切窗口
+// 反复触发同步也不会刷屏。
+const CONVERSATION_SYNC_NOTIFY_THROTTLE_MS = 30_000
 
 /**
  * Main state management hook for playground.
@@ -97,7 +109,14 @@ export function usePlaygroundState() {
   const lastPushedUpdatedAtRef = useRef<Map<string, number>>(new Map())
   const flushPushRef = useRef<() => Promise<void>>(async () => {})
   const pushRetryCountRef = useRef(0)
+  const lastPullAtRef = useRef(0)
   const mountedRef = useRef(true)
+  // active 会话 id 的 ref 镜像：render 期同步，供 pullAndMerge 等 callback 读取当前值
+  // 而不必把它加进依赖数组（否则 focus listener 会反复重建）。
+  const activeConversationIdRef = useRef(activeConversationId)
+  activeConversationIdRef.current = activeConversationId
+  // 会话被远端覆盖提示的防噪表：client_id → 上次提示时间。
+  const conversationSyncNotifiedAtRef = useRef(new Map<string, number>())
   useEffect(() => {
     mountedRef.current = true
     return () => {
@@ -145,7 +164,45 @@ export function usePlaygroundState() {
           dirty.delete(conversation.id)
           continue
         }
+        // 空会话（无任何消息）同步无意义：跳过推送，避免 seed 的「New chat」
+        // 或清空后的会话在服务端堆积/被其他设备复活。
+        if (conversation.messages.length === 0) {
+          dirty.delete(conversation.id)
+          lastPushedUpdatedAtRef.current.set(
+            conversation.id,
+            conversation.updatedAt
+          )
+          continue
+        }
+        // 推送前预检体积：超过服务端 2MB 上限的会话无法同步，直接放弃并提示，
+        // 避免静默失败 + 退避重试刷日志（消息含 base64 附件时尤其容易超限）。
+        const payloadSize = new TextEncoder().encode(
+          JSON.stringify({
+            title: conversation.title,
+            messages: conversation.messages,
+          })
+        ).length
+        if (payloadSize > MAX_SYNC_PAYLOAD_BYTES) {
+          dirty.delete(conversation.id)
+          lastPushedUpdatedAtRef.current.set(
+            conversation.id,
+            conversation.updatedAt
+          )
+          toast.error(i18next.t('Conversation is too large to sync'))
+          continue
+        }
+        const pushedAt = conversation.updatedAt
         await pushServerConversation(conversation)
+        // 推送在途期间用户可能又编辑了该会话：以最新 updatedAt 为准，若已前进
+        // 则保留脏标记并重推，避免新编辑被旧推送的 lastPushedUpdatedAt 覆盖而丢失。
+        const latest = latestConversationsRef.current.find(
+          (c) => c.id === conversation.id
+        )
+        if (latest && latest.updatedAt > pushedAt) {
+          dirtyClientIdsRef.current.add(conversation.id)
+          lastPushedUpdatedAtRef.current.delete(conversation.id)
+          continue
+        }
         lastPushedUpdatedAtRef.current.set(conversation.id, conversation.updatedAt)
         dirty.delete(conversation.id)
       }
@@ -172,6 +229,12 @@ export function usePlaygroundState() {
 
   // 拉取服务端会话并按 updatedAt 合并到本地。本地独有会话标记脏待推送。
   const pullAndMerge = useCallback(async () => {
+    // 节流：快速切换窗口/聚焦时跳过，避免每次 focus/visibilitychange 都发请求。
+    const now = Date.now()
+    if (now - lastPullAtRef.current < CONVERSATIONS_PULL_THROTTLE_MS) {
+      return
+    }
+    lastPullAtRef.current = now
     const remote = await pullServerConversations()
     // mountedRef 防卸载后 setState（聚焦/visibilitychange 触发的拉取可能在卸载后返回）。
     if (
@@ -182,8 +245,23 @@ export function usePlaygroundState() {
       return
     }
     const local = latestConversationsRef.current
-    const { merged, dirtyIds } = mergeConversations(local, remote)
-    if (merged.length !== local.length || dirtyIds.length > 0) {
+    const activeId = activeConversationIdRef.current
+    const activeBefore = local.find((c) => c.id === activeId)?.updatedAt
+    const { merged, dirtyIds } = mergeConversations(
+      local,
+      remote,
+      getDeletedConversationIds()
+    )
+
+    // 合并条件：任一会话 updatedAt 变化或 id 集变化即应用。只用「长度或 dirtyIds」
+    // 判断会漏掉纯远端覆盖（内容更新但数组长度不变、且本地无脏会话）——远端的新
+    // 内容会被静默丢弃。
+    const localById = new Map(local.map((c) => [c.id, c.updatedAt]))
+    const changed =
+      local.length !== merged.length ||
+      merged.some((c) => localById.get(c.id) !== c.updatedAt)
+
+    if (changed) {
       latestConversationsRef.current = merged
       setConversations(merged)
       saveConversations(merged)
@@ -193,6 +271,22 @@ export function usePlaygroundState() {
         }
         return merged[0]?.id ?? prev
       })
+      // 当前正在看的会话被远端覆盖 → 轻提示（30s 防噪）。仅此场景提示，其余静默。
+      if (activeId) {
+        const activeAfter = merged.find((c) => c.id === activeId)?.updatedAt
+        const notifiedAt = conversationSyncNotifiedAtRef.current.get(activeId) ?? 0
+        if (
+          activeAfter !== undefined &&
+          activeBefore !== undefined &&
+          activeAfter > activeBefore &&
+          Date.now() - notifiedAt >= CONVERSATION_SYNC_NOTIFY_THROTTLE_MS
+        ) {
+          conversationSyncNotifiedAtRef.current.set(activeId, Date.now())
+          toast.info(
+            i18next.t('This conversation was updated on another device.')
+          )
+        }
+      }
       for (const id of dirtyIds) {
         dirtyClientIdsRef.current.add(id)
       }
@@ -373,7 +467,12 @@ export function usePlaygroundState() {
       setConversations(next)
       dirtyClientIdsRef.current.delete(id)
       lastPushedUpdatedAtRef.current.delete(id)
-      void deleteServerConversation(id).catch(() => {})
+      // tombstone：本设备不再把它当「本地独有」重推而软删复活；即使服务端删失败
+      // 也保留标记，避免每次拉取都试图复活它（服务端残留行可后续清理）。
+      markConversationDeleted(id)
+      void deleteServerConversation(id).catch(() => {
+        toast.error(t('Failed to delete conversation'))
+      })
       persistConversations(next)
     },
     [activeConversationId, conversations, persistConversations, t]

@@ -242,6 +242,17 @@ export function useChatHandler({
   )
 
   // Send streaming chat request
+  // 附件解析失败提示：发送时某张图加载失败（已 GC/网络）会被剔除出请求，
+  // 必须明确告知用户，避免纯图消息变成空 content 静默发上游。
+  const notifyAttachmentFailures = useCallback(
+    (failed: number) => {
+      toast.error(
+        t('Some images failed to load and were not sent.', { count: failed })
+      )
+    },
+    [t]
+  )
+
   const sendStreamingChat = useCallback(
     async (messages: Message[]) => {
       const generation = requestGenerationRef.current + 1
@@ -253,7 +264,8 @@ export function useChatHandler({
       const payload = await buildChatCompletionPayload(
         messages,
         config,
-        parameterEnabled
+        parameterEnabled,
+        notifyAttachmentFailures
       )
       void sendStreamRequest(
         payload,
@@ -270,6 +282,7 @@ export function useChatHandler({
       handleStreamUpdate,
       handleStreamComplete,
       handleStreamError,
+      notifyAttachmentFailures,
     ]
   )
 
@@ -279,7 +292,8 @@ export function useChatHandler({
       const payload = await buildChatCompletionPayload(
         messages,
         config,
-        parameterEnabled
+        parameterEnabled,
+        notifyAttachmentFailures
       )
       const generation = requestGenerationRef.current + 1
       const abortController = new AbortController()
@@ -343,6 +357,7 @@ export function useChatHandler({
       discardPendingStreamUpdates,
       onMessageUpdate,
       handleStreamError,
+      notifyAttachmentFailures,
     ]
   )
 

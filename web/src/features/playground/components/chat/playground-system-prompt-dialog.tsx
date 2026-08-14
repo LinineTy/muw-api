@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -60,6 +60,14 @@ export function PlaygroundSystemPromptDialog({
     loadSystemPresets()
   )
   const [presetName, setPresetName] = useState('')
+
+  // 弹窗常驻挂载，content 初始化只在首次挂载生效；切换会话后重开必须重置为
+  // 当前会话的 initialContent，否则会把上一个会话的文本写进新会话。
+  useEffect(() => {
+    if (open) {
+      setContent(initialContent)
+    }
+  }, [open, initialContent])
 
   const handleSavePreset = () => {
     const name = presetName.trim()

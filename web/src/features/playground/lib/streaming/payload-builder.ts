@@ -27,17 +27,27 @@ import { formatMessageForAPI, isValidMessage } from '../message/message-utils'
 /**
  * Build API request payload from messages and config.
  * Async because image attachments must be resolved to base64 data URIs.
+ * onAttachmentFailure (optional) is called once when some attachments failed to
+ * resolve, so the caller can tell the user which images did not make it into
+ * the request instead of silently dropping them.
  */
 export async function buildChatCompletionPayload(
   messages: Message[],
   config: PlaygroundConfig,
-  parameterEnabled: ParameterEnabled
+  parameterEnabled: ParameterEnabled,
+  onAttachmentFailure?: (failedCount: number) => void
 ): Promise<ChatCompletionRequest> {
   // Filter and format valid messages
   const validMessages = messages.filter(isValidMessage)
-  const processedMessages = await Promise.all(
-    validMessages.map(formatMessageForAPI)
+  const processed = await Promise.all(validMessages.map(formatMessageForAPI))
+  const attachmentFailures = processed.reduce(
+    (sum, result) => sum + result.attachmentFailures,
+    0
   )
+  const processedMessages = processed.map((result) => result.message)
+  if (attachmentFailures > 0) {
+    onAttachmentFailure?.(attachmentFailures)
+  }
 
   const payload: ChatCompletionRequest = {
     model: config.model,

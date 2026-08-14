@@ -32,7 +32,8 @@ export function downloadBlob(
   document.body.appendChild(anchor)
   anchor.click()
   anchor.remove()
-  URL.revokeObjectURL(url)
+  // 延迟 revoke：click 后立即 revoke 在部分浏览器（旧 Safari/Firefox）会中断下载。
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 /**
@@ -46,5 +47,5 @@ export function downloadBlobObject(blob: Blob, filename: string): void {
   document.body.appendChild(anchor)
   anchor.click()
   anchor.remove()
-  URL.revokeObjectURL(url)
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
