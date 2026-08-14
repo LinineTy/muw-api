@@ -128,6 +128,95 @@ func TestPurchasePlaygroundSpaceLogs(t *testing.T) {
 	assert.Equal(t, int64(1), countTopupLogs(t, 100))
 }
 
+// TestGetPlaygroundSpaceOrders 订单查询：用户隔离 + 分页 + trade_no 搜索 + 管理员全平台。
+func TestGetPlaygroundSpaceOrders(t *testing.T) {
+	setupPlaygroundImageTestDB(t)
+	migratePlaygroundSpaceOrder(t)
+	insert := func(userId, mb int, tradeNo string) {
+		t.Helper()
+		require.NoError(t, (&model.PlaygroundSpaceOrder{
+			UserId: userId, Mb: mb, Money: float64(mb) / 10, TradeNo: tradeNo,
+			PaymentMethod: "alipay", PaymentProvider: model.PaymentProviderEpay, Status: common.TopUpStatusSuccess,
+		}).Insert())
+	}
+	insert(100, 10, "SPCUSR100NO1")
+	insert(100, 5, "SPCUSR100NO2")
+	insert(101, 20, "SPCUSR101NO1")
+
+	pageInfo := &common.PageInfo{Page: 1, PageSize: 10}
+
+	// 用户隔离：100 只见自己 2 单。
+	orders, total, err := model.GetUserPlaygroundSpaceOrders(100, pageInfo, "")
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), total)
+	assert.Len(t, orders, 2)
+
+	// trade_no 搜索命中 1 单。
+	orders, total, err = model.GetUserPlaygroundSpaceOrders(100, pageInfo, "SPCUSR100NO2")
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	require.Len(t, orders, 1)
+	assert.Equal(t, "SPCUSR100NO2", orders[0].TradeNo)
+
+	// 管理员全平台 3 单。
+	orders, total, err = model.GetAllPlaygroundSpaceOrders(pageInfo, "")
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), total)
+	assert.Len(t, orders, 3)
+}
+
+func newPlaygroundSpaceOrdersTestEngine(userId, role int) *gin.Engine {
+	router := gin.New()
+	router.GET("/space/orders", func(c *gin.Context) {
+		c.Set("id", userId)
+		c.Set("role", role)
+		GetUserPlaygroundSpaceOrders(c)
+	})
+	router.GET("/admin/orders", func(c *gin.Context) {
+		c.Set("id", userId)
+		c.Set("role", role)
+		AdminListPlaygroundSpaceOrders(c)
+	})
+	return router
+}
+
+// TestPlaygroundSpaceOrdersEndpoints 用户接口只返回本人订单；管理员接口返回全平台。
+func TestPlaygroundSpaceOrdersEndpoints(t *testing.T) {
+	setupPlaygroundImageTestDB(t)
+	migratePlaygroundSpaceOrder(t)
+	insertTestUser(t, 100, false)
+	insertTestUser(t, 101, false)
+	require.NoError(t, (&model.PlaygroundSpaceOrder{
+		UserId: 100, Mb: 10, TradeNo: "SPCUSR100NOa",
+		PaymentProvider: model.PaymentProviderEpay, Status: common.TopUpStatusSuccess,
+	}).Insert())
+	require.NoError(t, (&model.PlaygroundSpaceOrder{
+		UserId: 101, Mb: 20, TradeNo: "SPCUSR101NOa",
+		PaymentProvider: model.PaymentProviderEpay, Status: common.TopUpStatusSuccess,
+	}).Insert())
+
+	userRouter := newPlaygroundSpaceOrdersTestEngine(100, common.RoleCommonUser)
+	rec := httptest.NewRecorder()
+	userRouter.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/space/orders?p=1&page_size=10", nil))
+	env := playgroundDecodeEnvelope(t, rec)
+	require.True(t, env.Success, env.Message)
+	raw := map[string]any{}
+	require.NoError(t, json.Unmarshal(env.Data, &raw))
+	assert.Equal(t, float64(1), raw["total"])
+	items := raw["items"].([]any)
+	require.Len(t, items, 1)
+	assert.Equal(t, "SPCUSR100NOa", items[0].(map[string]any)["trade_no"])
+
+	adminRouter := newPlaygroundSpaceOrdersTestEngine(100, common.RoleRootUser)
+	rec = httptest.NewRecorder()
+	adminRouter.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin/orders?p=1&page_size=10", nil))
+	env = playgroundDecodeEnvelope(t, rec)
+	require.True(t, env.Success, env.Message)
+	raw = map[string]any{}
+	require.NoError(t, json.Unmarshal(env.Data, &raw))
+	assert.Equal(t, float64(2), raw["total"])
+}
+
 // TestCompletePlaygroundSpaceOrderCumulativeLimit 累计上限兜底：已购 45MB、上限 50MB
 // 再买 10MB 超限 → 订单不完成、不扩容、保持 pending；恰好等于上限放行。
 func TestCompletePlaygroundSpaceOrderCumulativeLimit(t *testing.T) {

@@ -209,3 +209,34 @@ func parseEpayParams(c *gin.Context) (map[string]string, bool) {
 	}
 	return params, len(params) > 0
 }
+
+// GetUserPlaygroundSpaceOrders 当前用户的云空间购买订单（分页 + 可选 trade_no 搜索）。
+func GetUserPlaygroundSpaceOrders(c *gin.Context) {
+	userId := c.GetInt("id")
+	if userId <= 0 {
+		common.ApiErrorMsg(c, "无效的用户")
+		return
+	}
+	pageInfo := common.GetPageQuery(c)
+	orders, total, err := model.GetUserPlaygroundSpaceOrders(userId, pageInfo, c.Query("keyword"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(orders)
+	common.ApiSuccess(c, pageInfo)
+}
+
+// AdminListPlaygroundSpaceOrders 管理员查看全平台云空间购买订单（分页 + 可选 trade_no 搜索）。
+func AdminListPlaygroundSpaceOrders(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	orders, total, err := model.GetAllPlaygroundSpaceOrders(pageInfo, c.Query("keyword"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(orders)
+	common.ApiSuccess(c, pageInfo)
+}
