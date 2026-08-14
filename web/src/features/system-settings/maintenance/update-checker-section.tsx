@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Dialog } from '@/components/dialog'
+import { Markdown } from '@/components/ui/markdown'
 import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
 import { formatTimestamp } from '@/lib/format'
@@ -148,9 +149,9 @@ export function UpdateCheckerSection({
               <div className='mb-1 font-medium'>
                 {t('What is new in this version')}
               </div>
-              <div className='text-muted-foreground max-h-64 overflow-y-auto whitespace-pre-wrap'>
+              <Markdown className='max-h-64 overflow-y-auto'>
                 {latestChangelog}
-              </div>
+              </Markdown>
             </div>
           )}
         </div>
