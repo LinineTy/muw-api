@@ -135,7 +135,7 @@ func CompletePlaygroundSpaceOrder(tradeNo string, providerPayload string, expect
 	if logUserId > 0 {
 		common.SysLog(fmt.Sprintf("user %d purchased %d MB playground space via epay (money %.2f, method %s)", logUserId, logMb, logMoney, logPaymentMethod))
 		// 用户可见日志（usage-logs 页）：与充值/订阅购买一致，事务外记录。
-		RecordLog(logUserId, LogTypeTopup, fmt.Sprintf("云空间购买成功，容量: %d MB，支付金额: %.2f，支付方式: %s", logMb, logMoney, logPaymentMethod))
+		RecordTopupLogWithPayment(logUserId, fmt.Sprintf("云空间购买成功，容量: %d MB，支付金额: %.2f，支付方式: %s", logMb, logMoney, logPaymentMethod), logPaymentMethod)
 	}
 	return nil
 }
@@ -236,7 +236,7 @@ func AdminCompletePlaygroundSpaceOrder(tradeNo string, callerIp string, initialB
 	}
 	if logUserId > 0 {
 		common.SysLog(fmt.Sprintf("admin completed playground space order %s: user %d +%d MB (money %.2f, method %s, caller_ip %s)", tradeNo, logUserId, logMb, logMoney, logPaymentMethod, callerIp))
-		RecordLog(logUserId, LogTypeTopup, fmt.Sprintf("云空间购买补单成功，容量: %d MB，支付金额: %.2f，支付方式: %s", logMb, logMoney, logPaymentMethod))
+		RecordTopupLogWithPayment(logUserId, fmt.Sprintf("云空间购买补单成功，容量: %d MB，支付金额: %.2f，支付方式: %s", logMb, logMoney, logPaymentMethod), logPaymentMethod)
 	}
 	return nil
 }

@@ -279,6 +279,20 @@ func RecordTopupLog(userId int, content string, callerIp string, paymentMethod s
 	}
 }
 
+// RecordTopupLogWithPayment 记录充值/购买类 type=1 日志并携带支付方式等审计信息。
+// 供余额/兑换码等非在线支付渠道（订阅购买、云空间购买、兑换码充值）使用：不带
+// admin_info 的 type=1 日志会在详情弹窗被误判为「历史记录缺少审计字段」——那些
+// 渠道本就没有支付回调，不是历史遗留缺字段，而是应该如实记录自己的支付方式。
+func RecordTopupLogWithPayment(userId int, content string, paymentMethod string) {
+	adminInfo := map[string]interface{}{
+		"server_ip":      common.GetIp(),
+		"node_name":      common.NodeName,
+		"payment_method": paymentMethod,
+		"version":        common.Version,
+	}
+	RecordLogWithAdminInfo(userId, LogTypeTopup, content, adminInfo)
+}
+
 func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string, tokenName string, content string, tokenId int, useTimeSeconds int,
 	isStream bool, group string, other map[string]interface{}) {
 	logger.LogInfo(c, fmt.Sprintf("record error log: userId=%d, channelId=%d, modelName=%s, tokenName=%s, content=%s", userId, channelId, modelName, tokenName, common.LocalLogPreview(content)))
