@@ -120,15 +120,17 @@ func DeletePlaygroundConversation(c *gin.Context) {
 		return
 	}
 
-	// 区分「会话不存在」（含已软删）与「会话属他人（无权）」：只按 user_id 查询
-	// 会把两者混为不存在，越权语义丢失且无法正确提示。
+	// 区分「会话不存在」（含已软删、本地新建从未推送的新对话）与「会话属他人
+	// （无权）」：只按 user_id 查询会把两者混为不存在，越权语义丢失且无法正确
+	// 提示。删除是幂等操作：会话本就不存在时目标已达成，直接返回成功而非报错，
+	// 避免前端删除本地新建（从未同步到服务端）的会话时误报「会话不存在」。
 	exists, err := model.PlaygroundConversationClientIdExists(clientId)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
 	if !exists {
-		common.ApiErrorMsg(c, "会话不存在")
+		common.ApiSuccess(c, nil)
 		return
 	}
 	if _, err := model.GetPlaygroundConversationByClientId(userId, clientId); err != nil {
@@ -142,7 +144,8 @@ func DeletePlaygroundConversation(c *gin.Context) {
 		return
 	}
 	if affected == 0 {
-		common.ApiErrorMsg(c, "会话不存在")
+		// 查询与删除之间存在并发软删：幂等视为成功。
+		common.ApiSuccess(c, nil)
 		return
 	}
 	common.ApiSuccess(c, nil)
