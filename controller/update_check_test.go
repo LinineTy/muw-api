@@ -27,13 +27,18 @@ import (
 
 func TestParseForkVersion(t *testing.T) {
 	// 标准 fork 版本号解析成可比数组 [X, Y, Z, 稳定度, rc, muw]。
-	assert.Equal(t, []int{1, 0, 0, 0, 24, 1}, parseForkVersion("v1.0.0-rc.24-muw.1"))
-	assert.Equal(t, []int{1, 0, 0, 0, 23, 5}, parseForkVersion("v1.0.0-rc.23-muw.5"))
+	assert.Equal(t, []int{1, 1, 0, 0, 0, 24, 1}, parseForkVersion("v1.0.0-rc.24-muw.1"))
+	assert.Equal(t, []int{1, 1, 0, 0, 0, 23, 5}, parseForkVersion("v1.0.0-rc.23-muw.5"))
 	// 历史误标的杂后缀(.ts)忽略,不影响比较。
-	assert.Equal(t, []int{1, 0, 0, 0, 23, 3}, parseForkVersion("v1.0.0-rc.23-muw.3.ts"))
+	assert.Equal(t, []int{1, 1, 0, 0, 0, 23, 3}, parseForkVersion("v1.0.0-rc.23-muw.3.ts"))
 	// 无 rc 段视为正式版(稳定度=1);无 muw 段视为 muw.0。
-	assert.Equal(t, []int{1, 0, 0, 1, 0, 0}, parseForkVersion("v1.0.0"))
-	assert.Equal(t, []int{1, 0, 0, 0, 24, 0}, parseForkVersion("v1.0.0-rc.24"))
+	assert.Equal(t, []int{1, 1, 0, 0, 1, 0, 0}, parseForkVersion("v1.0.0"))
+	assert.Equal(t, []int{1, 1, 0, 0, 0, 24, 0}, parseForkVersion("v1.0.0-rc.24"))
+
+	// 日期制版本:epoch=2,后跟 YY.MM.DD + muw 号。
+	assert.Equal(t, []int{2, 26, 8, 14, 1}, parseForkVersion("v26.08.14.muw.1"))
+	assert.Equal(t, []int{2, 26, 8, 14, 0}, parseForkVersion("v26.08.14"))
+	assert.Equal(t, []int{2, 26, 1, 1, 5}, parseForkVersion("v26.01.01-muw.5"))
 
 	// 非版本 tag / 乱串解析失败,更新检查据此跳过。
 	assert.Nil(t, parseForkVersion("latest"))
@@ -68,4 +73,19 @@ func TestCompareForkVersions(t *testing.T) {
 		parseForkVersion("v1.0.0-rc.24-muw.1"),
 		parseForkVersion("v1.0.0-rc.24-muw.1"),
 	))
+
+	// 日期制恒大于旧格式:旧版本号部署一律提示更新到新体系。
+	assert.True(t, compareForkVersions(
+		parseForkVersion("v26.08.14.muw.1"),
+		parseForkVersion("v1.0.0-rc.99-muw.99"),
+	) > 0)
+	// 日期制之间按日期优先、同日期按 muw 号。
+	assert.True(t, compareForkVersions(
+		parseForkVersion("v26.08.15.muw.1"),
+		parseForkVersion("v26.08.14.muw.99"),
+	) > 0)
+	assert.True(t, compareForkVersions(
+		parseForkVersion("v26.08.14.muw.2"),
+		parseForkVersion("v26.08.14.muw.1"),
+	) > 0)
 }

@@ -38,27 +38,53 @@ import (
 // 可用环境变量 UPDATE_CHECK_REGISTRY 覆盖(如换 registry 部署)。
 const updateCheckRegistryDefault = "https://registry.dev3.mulink.top/v2/muw/new-api"
 
-// parseForkVersion 解析 muw fork 版本号 vX.Y.Z[-rc.N][-muw.M][后缀]。
-// 返回可比数组 [X, Y, Z, 稳定度(1=正式版,0=rc), rc号, muw号];
-// 无法解析(如 latest、普通 tag)返回 nil。历史误标的杂后缀(如 .ts)直接忽略。
+// parseForkVersion 解析 muw fork 版本号,支持两种体系,返回可比数组:
+//   - 旧 semver:vX.Y.Z[-rc.N][-muw.M][后缀] → [1, X, Y, Z, 稳定度(1=正式,0=rc), rc号, muw号]
+//   - 日期制:vYY.MM.DD[.muw.N]             → [2, YY, MM, DD, muw号]
+// 首维是体系优先级(epoch):日期制(2)恒大于旧格式(1)——因此部署旧版本号
+// 的实例只要 registry 里出现日期制版本就提示更新(「旧版本号一律提示升级到
+// 新体系」)。无法解析(如 latest、普通 tag)返回 nil。历史误标的杂后缀(如 .ts)
+// 直接忽略。
 func parseForkVersion(s string) []int {
 	s = strings.TrimPrefix(s, "v")
-	parts := strings.Split(s, "-")
+	if s == "" {
+		return nil
+	}
 
+	// 先按 - 拆出主版本(旧格式 v1.0.0 / 日期制 v26.01.01 或 v26.08.14.muw.1
+	// 都可能带连字符后缀)。
+	parts := strings.Split(s, "-")
+	dotParts := strings.Split(parts[0], ".")
+
+	// 主版本数字:开头的点分数字段,遇到非数字段(如日期制里连带的 muw)停止。
 	nums := make([]int, 0, 3)
-	for _, p := range strings.Split(parts[0], ".") {
-		n, err := strconv.Atoi(p)
+	k := 0
+	for ; k < len(dotParts); k++ {
+		n, err := strconv.Atoi(dotParts[k])
 		if err != nil {
-			return nil
+			break
 		}
 		nums = append(nums, n)
+	}
+	if len(nums) == 0 {
+		return nil
 	}
 	for len(nums) < 3 {
 		nums = append(nums, 0)
 	}
 
+	// 修饰段:主版本段之后的点分段(日期制 v26.08.14.muw.1 的 muw.1)+ 所有
+	// - 分段(旧格式 rc.24 / muw.1、日期制 v26.01.01-muw.5 的 muw.5)。
+	rest := append([]string{}, dotParts[k:]...)
+	rest = append(rest, parts[1:]...)
+	// 日期制的 "muw" 与后一数字段被点拆开,合并成 "muw.N" 再解析。
 	stable, stage, fork := 1, 0, 0
-	for _, seg := range parts[1:] {
+	for j := 0; j < len(rest); j++ {
+		seg := rest[j]
+		if seg == "muw" && j+1 < len(rest) {
+			seg = "muw." + rest[j+1]
+			j++
+		}
 		switch {
 		case strings.HasPrefix(seg, "rc."):
 			if n, ok := parseIntPrefix(seg, "rc."); ok {
@@ -70,9 +96,15 @@ func parseForkVersion(s string) []int {
 				fork = n
 			}
 		}
-		// 其他段(如 .ts)忽略
+		// 其他段忽略
 	}
-	return []int{nums[0], nums[1], nums[2], stable, stage, fork}
+
+	// 日期制判别:首段三位中 YY∈[20,99](年份 2020+)且 MM/DD 是合理日期。
+	// 上游 semver 主版本不会达到 20,阈值判别可靠。
+	if nums[0] >= 20 && nums[0] <= 99 && nums[1] >= 1 && nums[1] <= 12 && nums[2] >= 1 && nums[2] <= 31 {
+		return []int{2, nums[0], nums[1], nums[2], fork}
+	}
+	return []int{1, nums[0], nums[1], nums[2], stable, stage, fork}
 }
 
 // parseIntPrefix 取段前缀后的连续数字(如 "muw.3.ts" -> 3,"rc.24" -> 24)。
