@@ -39,7 +39,7 @@ func setupPlaygroundImageTestDB(t *testing.T) *gorm.DB {
 	model.DB = db
 	model.LOG_DB = db
 
-	require.NoError(t, db.AutoMigrate(&model.PlaygroundImage{}, &model.User{}))
+	require.NoError(t, db.AutoMigrate(&model.PlaygroundImage{}, &model.User{}, &model.PlaygroundSpaceOrder{}))
 
 	common.UploadDir = t.TempDir()
 	common.PrivateUploadDir = t.TempDir()
@@ -336,8 +336,9 @@ func TestListPlaygroundImages(t *testing.T) {
 	require.True(t, env.Success)
 	items := []map[string]any{}
 	require.NoError(t, json.Unmarshal(env.Data, &items))
-	require.Len(t, items, 1)
-	assert.Equal(t, float64(2), items[0]["id"]) // 只看永久，用户 200 的行被排除
+	require.Len(t, items, 2) // 缺省列出全部（临时+永久），用户 200 的行被排除
+	assert.Equal(t, float64(2), items[0]["id"])
+	assert.Equal(t, float64(1), items[1]["id"])
 }
 
 // TestDeletePlaygroundImageOwnership 本人可删并删文件；他人 403。

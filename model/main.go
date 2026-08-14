@@ -275,6 +275,11 @@ func migrateDB() error {
 		return err
 	}
 	if shouldSkipMigration(applied) {
+		// 已最新版本：表已存在，仍需补幂等 DDL（LONGTEXT 升级），否则经中间版本
+		// 发布的库升级后永远补不上，&gt;64KB 消息会在 MySQL 写入失败。
+		if err := ensurePlaygroundConversationMessagesLongText(DB); err != nil {
+			return err
+		}
 		common.SysLog(fmt.Sprintf("schema already at version %d, skipping migration", applied))
 		return nil
 	}
@@ -284,10 +289,8 @@ func migrateDB() error {
 	// MySQL 的 TEXT 列上限 64KB，装不下对话消息（消息体上限 2MB）；SQLite/PostgreSQL
 	// 的 text 无此限制。把 messages 列升级为 LONGTEXT（幂等，AutoMigrate 不会改已存在
 	// 列类型）。表由上方 autoMigrateAll 刚建或已存在。
-	if common.UsingMainDatabase(common.DatabaseTypeMySQL) {
-		if err := DB.Exec("ALTER TABLE playground_conversations MODIFY COLUMN messages LONGTEXT").Error; err != nil {
-			return err
-		}
+	if err := ensurePlaygroundConversationMessagesLongText(DB); err != nil {
+		return err
 	}
 	if err := applyPendingMigrations(DB, applied, migrations); err != nil {
 		return err
@@ -352,6 +355,17 @@ func autoMigrateAll() error {
 		}
 	}
 	return nil
+}
+
+// ensurePlaygroundConversationMessagesLongText 把 playground_conversations.messages
+// 列升级为 LONGTEXT（幂等，MySQL 专属；SQLite/PostgreSQL 的 text 无 64KB 上限，跳过）。
+// MySQL TEXT 上限 64KB，装不下消息体上限 2MB。AutoMigrate 不会改已存在列类型，必须
+// 显式 ALTER。表由 autoMigrateAll 或历史迁移保证存在，故只能在表建好后调用。
+func ensurePlaygroundConversationMessagesLongText(db *gorm.DB) error {
+	if !common.UsingMainDatabase(common.DatabaseTypeMySQL) {
+		return nil
+	}
+	return db.Exec("ALTER TABLE playground_conversations MODIFY COLUMN messages LONGTEXT").Error
 }
 
 // ensureSubscriptionPlanRecommendedBackfill 升级兼容：is_recommended 已从 model

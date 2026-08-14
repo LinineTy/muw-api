@@ -1,7 +1,7 @@
 package model
 
 import (
-	"github.com/QuantumNous/new-api/common"
+	"time"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -28,8 +28,11 @@ func (PlaygroundConversation) TableName() string { return "playground_conversati
 // 冲突时更新 title/messages/updated_time 并清空 deleted_at，复活被软删的
 // 同 client_id 会话——否则软删行仍占唯一索引，重发同 client_id 会写入软删行
 // 而列表（默认排除软删）查不到，导致会话「消失且不可恢复」。
+// updated_time 存毫秒时间戳：前端会话时间戳为毫秒，前后端同刻度才能在同一秒内
+// 的两台设备编辑中正确判定「后写者胜」（此前后端秒 × 前端毫秒的错配会静默丢弃
+// 同秒内的后写编辑）。
 func UpsertPlaygroundConversation(conv *PlaygroundConversation) error {
-	conv.UpdatedTime = common.GetTimestamp()
+	conv.UpdatedTime = time.Now().UnixMilli()
 	if conv.CreatedTime == 0 {
 		conv.CreatedTime = conv.UpdatedTime
 	}
@@ -63,7 +66,20 @@ func GetPlaygroundConversationByClientId(userId int, clientId string) (*Playgrou
 	return &conversation, nil
 }
 
-// DeletePlaygroundConversationByClientId 软删某用户指定会话。
-func DeletePlaygroundConversationByClientId(userId int, clientId string) error {
-	return DB.Where("user_id = ? AND client_id = ?", userId, clientId).Delete(&PlaygroundConversation{}).Error
+// PlaygroundConversationClientIdExists 全表判断 client_id 是否存在（不含软删）。
+// 用于删除接口区分「会话不存在」与「会话属他人（无权）」——只按 user_id 查询
+// 会把两者都归为不存在，无法给出越权语义。
+func PlaygroundConversationClientIdExists(clientId string) (bool, error) {
+	var count int64
+	if err := DB.Model(&PlaygroundConversation{}).Where("client_id = ?", clientId).Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// DeletePlaygroundConversationByClientId 软删某用户指定会话，返回受影响行数
+// （0 表示会话不存在或已软删，用于区分"无权删除"与"会话不存在"）。
+func DeletePlaygroundConversationByClientId(userId int, clientId string) (int64, error) {
+	result := DB.Where("user_id = ? AND client_id = ?", userId, clientId).Delete(&PlaygroundConversation{})
+	return result.RowsAffected, result.Error
 }

@@ -2,6 +2,7 @@ package controller
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"image"
 	_ "image/gif"  // register GIF decoder for format detection
@@ -61,25 +62,6 @@ func validatePlaygroundImageData(data []byte) (string, string) {
 	return ext, ""
 }
 
-// persistPlaygroundImage 入库元数据行并落盘到私有目录。任一步失败都硬删已写的
-// DB 行（Unscoped），避免孤儿记录。
-func persistPlaygroundImage(asset *model.PlaygroundImage, data []byte) error {
-	if err := model.InsertPlaygroundImage(asset); err != nil {
-		return err
-	}
-	dir := filepath.Join(common.PrivateUploadDir, "playground-images")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		_, _ = model.HardDeletePlaygroundImagesByIds([]int{asset.Id})
-		return err
-	}
-	filename := fmt.Sprintf("%d.%s", asset.Id, asset.Ext)
-	if err := os.WriteFile(filepath.Join(dir, filename), data, 0o644); err != nil {
-		_, _ = model.HardDeletePlaygroundImagesByIds([]int{asset.Id})
-		return err
-	}
-	return nil
-}
-
 // UploadPlaygroundImage 接收 multipart 图片（字段 "file"），落盘私有目录并写元数据行。
 // ?permanent=true 时归入用户永久收藏（GC 跳过），否则为临时附件（TTL 自动清理）。
 // 配额与 TTL 由设置控制（setting.PlaygroundImage*），改动热生效。
@@ -131,40 +113,6 @@ func UploadPlaygroundImage(c *gin.Context) {
 
 	permanent, _ := strconv.ParseBool(c.Query("permanent"))
 
-	// 落库前容量检查（软删自动排除已删行）。root 无限制：容量与云空间总分配量都跳过。
-	// 云空间统一容量模型：临时+永久合并计一个总空间。
-	if c.GetInt("role") != common.RoleRootUser {
-		capacity := int64(setting.UserSpaceInitialMB) << 20
-		if user.SpaceCapacity > 0 {
-			capacity = user.SpaceCapacity
-		}
-		used, err := model.SumPlaygroundImageSizesByUserAll(userId)
-		if err != nil {
-			common.ApiError(c, err)
-			return
-		}
-		if used+int64(len(data)) > capacity {
-			common.ApiErrorMsg(c, "存储空间不足")
-			return
-		}
-		// 云空间总分配量（红线）：固定分配，非磁盘剩余空间；只拦普通用户。
-		// 云空间全部用户临时+永久文件合计数；图床（image_assets）不计入。
-		globalTransient, err := model.SumPlaygroundImageSizesGlobal(false)
-		if err != nil {
-			common.ApiError(c, err)
-			return
-		}
-		globalPermanent, err := model.SumPlaygroundImageSizesGlobal(true)
-		if err != nil {
-			common.ApiError(c, err)
-			return
-		}
-		if globalTransient+globalPermanent+int64(len(data)) > int64(setting.UserSpaceGlobalMaxMB)<<20 {
-			common.ApiErrorMsg(c, "云空间容量已满")
-			return
-		}
-	}
-
 	name := filepath.Base(fileHeader.Filename)
 	if runes := []rune(name); len(runes) > 255 {
 		name = string(runes[:255])
@@ -177,11 +125,46 @@ func UploadPlaygroundImage(c *gin.Context) {
 		UserId:    userId,
 		Permanent: permanent,
 	}
-	if err := persistPlaygroundImage(asset, data); err != nil {
-		common.SysError("failed to save playground image: " + err.Error())
+
+	// 容量检查 + 插入在 model 层同一事务（锁用户行）内完成，串行化同一用户的
+	// 并发上传，避免「判断容量 → 写入」之间的竞态。root 无限制：直接插入。
+	if c.GetInt("role") != common.RoleRootUser {
+		capacity := int64(setting.UserSpaceInitialMB) << 20
+		if user.SpaceCapacity > 0 {
+			capacity = user.SpaceCapacity
+		}
+		if err := model.InsertPlaygroundImageWithCapacity(asset, capacity, int64(setting.UserSpaceGlobalMaxMB)<<20); err != nil {
+			switch {
+			case errors.Is(err, model.ErrPlaygroundImageSpaceInsufficient):
+				common.ApiErrorMsg(c, "存储空间不足")
+				return
+			case errors.Is(err, model.ErrPlaygroundImageSpaceGlobalFull):
+				common.ApiErrorMsg(c, "云空间容量已满")
+				return
+			default:
+				common.ApiError(c, err)
+				return
+			}
+		}
+	} else if err := model.InsertPlaygroundImage(asset); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	// 事务外落盘：写文件失败则硬删已插入的元数据行，避免孤儿记录。
+	dir := filepath.Join(common.PrivateUploadDir, "playground-images")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		_, _ = model.HardDeletePlaygroundImagesByIds([]int{asset.Id})
 		common.ApiErrorMsg(c, "文件保存失败")
 		return
 	}
+	filename := fmt.Sprintf("%d.%s", asset.Id, asset.Ext)
+	if err := os.WriteFile(filepath.Join(dir, filename), data, 0o644); err != nil {
+		_, _ = model.HardDeletePlaygroundImagesByIds([]int{asset.Id})
+		common.ApiErrorMsg(c, "文件保存失败")
+		return
+	}
+
 	common.ApiSuccess(c, gin.H{
 		"id":        asset.Id,
 		"url":       fmt.Sprintf("/api/playground/images/%d", asset.Id),
@@ -230,7 +213,8 @@ func GetPlaygroundImage(c *gin.Context) {
 	c.Data(200, contentType, data)
 }
 
-// ListPlaygroundImages 返回当前用户的图片列表（最新在前）。?permanent=true 时只看永久收藏。
+// ListPlaygroundImages 返回当前用户的图片列表（最新在前）。缺省列出全部（临时+永久），
+// ?permanent=true 只看永久收藏，?permanent=false 只看临时。
 func ListPlaygroundImages(c *gin.Context) {
 	userId := c.GetInt("id")
 	if userId <= 0 {
@@ -238,7 +222,7 @@ func ListPlaygroundImages(c *gin.Context) {
 		return
 	}
 
-	permanentOnly, _ := strconv.ParseBool(c.DefaultQuery("permanent", "true"))
+	permanentOnly, _ := strconv.ParseBool(c.DefaultQuery("permanent", "false"))
 
 	assets, err := model.ListPlaygroundImagesByUser(userId, permanentOnly, 0)
 	if err != nil {
@@ -377,6 +361,12 @@ func AdminCleanupPlaygroundImages(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// 全站破坏性操作：记管理审计 + 后端日志，供追溯。
+	common.SysLog(fmt.Sprintf("admin %d cleaned playground images: all=%t deleted=%d client_ip=%s", c.GetInt("id"), request.All, deleted, c.ClientIP()))
+	recordManageAudit(c, "playground.image_cleanup", map[string]interface{}{
+		"all":     request.All,
+		"deleted": deleted,
+	})
 	common.ApiSuccess(c, gin.H{"deleted": deleted})
 }
 
@@ -402,14 +392,21 @@ func ClearUserTransientPlaygroundImages(c *gin.Context) {
 	ids := make([]int, 0, len(assets))
 	for _, asset := range assets {
 		ids = append(ids, asset.Id)
-		if err := os.Remove(playgroundImageFilepath(asset.Id, asset.Ext)); err != nil && !os.IsNotExist(err) {
-			common.SysError(fmt.Sprintf("failed to remove playground image file %d: %s", asset.Id, err.Error()))
-		}
 	}
 	deleted, err := model.HardDeletePlaygroundImagesByIds(ids)
 	if err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	// 行删除成功后再删文件（DB 删失败时文件保留，避免「文件已丢、行仍在」的 404 残留）。
+	for _, asset := range assets {
+		if err := os.Remove(playgroundImageFilepath(asset.Id, asset.Ext)); err != nil && !os.IsNotExist(err) {
+			common.SysError(fmt.Sprintf("failed to remove playground image file %d: %s", asset.Id, err.Error()))
+		}
+	}
+	// 用户可见日志：清空临时图影响容量，需留痕。
+	if deleted > 0 {
+		model.RecordLog(userId, model.LogTypeSystem, fmt.Sprintf("清空了 %d 张临时图片", deleted))
 	}
 	common.ApiSuccess(c, gin.H{"deleted": deleted})
 }

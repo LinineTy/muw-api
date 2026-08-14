@@ -58,7 +58,9 @@ func TestPlaygroundConversationUpsertOnConflict(t *testing.T) {
 	require.Len(t, convos101, 1)
 
 	// 软删后查不到。
-	require.NoError(t, DeletePlaygroundConversationByClientId(100, "conv-a"))
+	affected, err := DeletePlaygroundConversationByClientId(100, "conv-a")
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), affected)
 	_, err = GetPlaygroundConversationByClientId(100, "conv-a")
 	assert.Error(t, err)
 	// 软删不波及他人。
