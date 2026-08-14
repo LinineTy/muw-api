@@ -1,4 +1,11 @@
 {
+  "Your cloud space purchase history will appear here": "你的云空间购买记录会显示在这里",
+  "Recharge / Subscription": "充值 / 订阅",
+  "Order Center": "订单中心",
+  "No orders found": "没有找到订单",
+  "Failed to load orders": "加载订单失败",
+  "Cloud space orders": "云空间订单",
+  "Capacity": "容量",
   "translation": {
     "360": "360",
     "1000": "1000",

@@ -1,4 +1,11 @@
 {
+  "Your cloud space purchase history will appear here": "Your cloud space purchase history will appear here",
+  "Recharge / Subscription": "Recharge / Subscription",
+  "Order Center": "Order Center",
+  "No orders found": "No orders found",
+  "Failed to load orders": "Failed to load orders",
+  "Cloud space orders": "Cloud space orders",
+  "Capacity": "Capacity",
   "translation": {
     "360": "360",
     "1000": "1000",

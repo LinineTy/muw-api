@@ -1,4 +1,11 @@
 {
+  "Your cloud space purchase history will appear here": "你的雲空間購買記錄會顯示在這裡",
+  "Recharge / Subscription": "充值 / 訂閱",
+  "Order Center": "訂單中心",
+  "No orders found": "沒有找到訂單",
+  "Failed to load orders": "載入訂單失敗",
+  "Cloud space orders": "雲空間訂單",
+  "Capacity": "容量",
   "translation": {
     "360": "360",
     "1000": "1000",
