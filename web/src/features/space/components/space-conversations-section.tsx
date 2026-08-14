@@ -56,14 +56,16 @@ const EXPORT_FORMAT_LABELS: Record<ConversationExportFormat, string> = {
   text: 'Plain text',
 }
 
-function formatTime(unixSeconds: number): string {
-  if (!unixSeconds) {
+// updated_time 已是毫秒时间戳（后端 UnixMilli），直接 new Date，不再 ×1000——
+// 二次放大会把 2026 年的值推到 58588 年。
+function formatTime(timestampMs: number): string {
+  if (!timestampMs) {
     return '—'
   }
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: 'medium',
     timeStyle: 'short',
-  }).format(new Date(unixSeconds * 1000))
+  }).format(new Date(timestampMs))
 }
 
 /**
