@@ -38,6 +38,23 @@ import (
 // 可用环境变量 UPDATE_CHECK_REGISTRY 覆盖(如换 registry 部署)。
 const updateCheckRegistryDefault = "https://registry.dev3.mulink.top/v2/muw/new-api"
 
+// versionChangelogs 内置各版本的更新说明(与仓库根 CHANGELOG.md 同步维护)。
+// 更新检查发现新版本时,前端据此展示「这个版本更新了啥」。registry 的
+// tags/list 只有版本号没有发布说明,故由这里提供。
+var versionChangelogs = map[string]string{
+	"v26.08.14.muw.1": "### 云空间\n" +
+		"- 新增容量购买双通道(余额 + 易支付),购买记录写入日志\n" +
+		"- 新增订单中心(充值/订阅 + 云空间订单),管理员可补单/驳回卡单\n" +
+		"- 修复余额购买成功误报、在线支付最低限额、订单 pending 卡死与过期清理\n\n" +
+		"### 游乐场\n" +
+		"- 新增对话多设备同步\n" +
+		"- 修复推送竞态、已删会话被复活、同秒编辑丢失、chat/绘图切换丢状态\n" +
+		"- 修复图片发送失败静默丢弃、会话请求体无上限、上传容量竞态\n\n" +
+		"### 其他\n" +
+		"- 版本号改日期制 v26.08.14.muw.1,旧版本号部署会提示更新\n" +
+		"- 界面文案三语言补齐,生产备份 MySQL 迁移验证通过",
+}
+
 // parseForkVersion 解析 muw fork 版本号,支持两种体系,返回可比数组:
 //   - 旧 semver:vX.Y.Z[-rc.N][-muw.M][后缀] → [1, X, Y, Z, 稳定度(1=正式,0=rc), rc号, muw号]
 //   - 日期制:vYY.MM.DD[.muw.N]             → [2, YY, MM, DD, muw号]
@@ -197,8 +214,9 @@ func GetUpdateCheck(c *gin.Context) {
 
 	hasUpdate := latestTag != "" && (current == nil || compareForkVersions(latestVals, current) > 0)
 	common.ApiSuccess(c, gin.H{
-		"has_update":      hasUpdate,
-		"latest_tag":      latestTag,
-		"current_version": common.Version,
+		"has_update":       hasUpdate,
+		"latest_tag":       latestTag,
+		"current_version":  common.Version,
+		"latest_changelog": versionChangelogs[latestTag],
 	})
 }
