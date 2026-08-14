@@ -5921,7 +5921,7 @@
     "Max purchased per user (MB)": "Max purchased per user (MB)",
     "Total capacity a user can buy across all purchases. 0 means unlimited.": "Total capacity a user can buy across all purchases. 0 means unlimited.",
     "The most a user can buy in a single purchase.": "The most a user can buy in a single purchase.",
-    "Buy more storage with your quota.": "Buy more storage with your quota.",
+    "Buy more storage with your quota.": "Buy more storage with your quota or online payment.",
     "Manage your cloud storage and synced conversations.": "Manage your cloud storage and synced conversations.",
     "Manual cleanup": "Manual cleanup",
     "Usage is shown in the cloud space page. Here you can clean up temporary images for all users.": "Usage is shown in the cloud space page. Here you can clean up temporary images for all users.",

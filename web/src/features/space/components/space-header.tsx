@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Plus } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -33,13 +33,22 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { getSelf } from '@/lib/api'
 import { getCurrencyDisplay } from '@/lib/currency'
 import { formatQuota } from '@/lib/format'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
+import { useTopupInfo } from '@/features/wallet/hooks/use-topup-info'
 
-import { purchaseSpace } from '../api'
+import { paySpaceEpay, purchaseSpace } from '../api'
 import type { SpaceInfo } from '../types'
 
 function formatBytes(bytes: number): string {
@@ -74,6 +83,7 @@ type SpaceHeaderProps = {
 
 /**
  * 云空间用量：紧凑横条（进度 + 已用/总量 + 购买入口），购买流程在弹窗内完成。
+ * 支付双通道：余额购买（扣 quota）+ 在线支付（易支付，按充值同价换算）。
  */
 export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
   const { t } = useTranslation()
@@ -81,9 +91,26 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
   const [mbInput, setMbInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [selectedEpayMethod, setSelectedEpayMethod] = useState('')
   const isRoot =
     (useAuthStore.getState().auth.user?.role ?? ROLE.USER) >= ROLE.SUPER_ADMIN
   const balance = useAuthStore((state) => state.auth.user?.quota)
+
+  // 在线支付配置：支付方式列表 + 开关（来自充值设置）。
+  const { topupInfo } = useTopupInfo()
+  const epayMethods = useMemo(
+    () => (topupInfo?.pay_methods || []).filter((m) => m?.type),
+    [topupInfo]
+  )
+  const hasEpay = !!topupInfo?.enable_online_topup && epayMethods.length > 0
+
+  useEffect(() => {
+    if (buyOpen && epayMethods.length > 0) {
+      setSelectedEpayMethod(epayMethods[0].type)
+    } else if (!buyOpen) {
+      setSelectedEpayMethod('')
+    }
+  }, [buyOpen, epayMethods])
 
   const mb = Number(mbInput)
   const ratio = space?.purchase_ratio ?? 0
@@ -92,6 +119,8 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
     Number.isInteger(mb) && mb > 0 ? purchasePriceToQuota(mb, ratio) : 0
   const perMBLabel =
     ratio > 0 ? formatQuota(purchasePriceToQuota(1, ratio)) : '—'
+  const insufficientBalance =
+    cost > 0 && balance != null && balance < cost
 
   const percent =
     space && space.capacity_bytes > 0
@@ -105,6 +134,10 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
         ? t('Unlimited')
         : formatBytes(space.capacity_bytes)
   }
+
+  const isSafari =
+    typeof navigator !== 'undefined' &&
+    /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
 
   const openConfirm = () => {
     if (!Number.isInteger(mb) || mb < 1 || mb > maxMB) {
@@ -142,6 +175,62 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
       setConfirmOpen(false)
     }
   }
+
+  const handlePayEpay = async () => {
+    if (!Number.isInteger(mb) || mb < 1 || mb > maxMB) {
+      toast.error(t('Buy 1 to {{max}} MB at a time', { max: maxMB }))
+      return
+    }
+    if (!selectedEpayMethod) {
+      toast.error(t('Please select a payment method'))
+      return
+    }
+    if (busy) {
+      return
+    }
+    setBusy(true)
+    try {
+      const res = await paySpaceEpay({
+        mb,
+        payment_method: selectedEpayMethod,
+      })
+      if (res.message === 'success' && res.url) {
+        const form = document.createElement('form')
+        form.action = res.url
+        form.method = 'POST'
+        if (!isSafari) {
+          form.target = '_blank'
+        }
+        Object.entries(res.data || {}).forEach(([key, value]) => {
+          const input = document.createElement('input')
+          input.type = 'hidden'
+          input.name = key
+          input.value = String(value)
+          form.appendChild(input)
+        })
+        document.body.appendChild(form)
+        form.submit()
+        document.body.removeChild(form)
+        toast.success(t('Payment initiated'))
+        setBuyOpen(false)
+      } else {
+        toast.error(
+          res.message && res.message !== 'success'
+            ? res.message
+            : t('Payment request failed')
+        )
+      }
+    } catch {
+      toast.error(t('Payment request failed'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const selectedEpayMethodLabel =
+    epayMethods.find((m) => m.type === selectedEpayMethod)?.name ||
+    selectedEpayMethod ||
+    t('Select payment method')
 
   return (
     <>
@@ -187,7 +276,7 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
           <DialogHeader>
             <DialogTitle>{t('Buy storage')}</DialogTitle>
             <DialogDescription>
-              {t('Buy more storage with your quota.')}
+              {t('Buy more storage with your quota or online payment.')}
             </DialogDescription>
           </DialogHeader>
           <div className='space-y-3'>
@@ -215,17 +304,61 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
               {t('Max per order')}: {maxMB} MB · {t('Your balance')}:{' '}
               {formatQuota(balance ?? 0)}
             </p>
+            {insufficientBalance && (
+              <p className='text-destructive text-xs'>
+                {t('Insufficient balance')}
+              </p>
+            )}
           </div>
-          <DialogFooter>
-            <Button
-              variant='outline'
-              onClick={() => setBuyOpen(false)}
-            >
-              {t('Cancel')}
-            </Button>
-            <Button disabled={busy} onClick={openConfirm}>
-              {t('Buy storage')}
-            </Button>
+          <DialogFooter className='flex-col items-stretch gap-2'>
+            <div className='flex gap-2'>
+              <Button
+                className='flex-1'
+                variant='outline'
+                disabled={busy || insufficientBalance}
+                onClick={openConfirm}
+              >
+                {t('Pay with Balance')}
+              </Button>
+              <Button
+                variant='ghost'
+                disabled={busy}
+                onClick={() => setBuyOpen(false)}
+              >
+                {t('Cancel')}
+              </Button>
+            </div>
+            {hasEpay && (
+              <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
+                <Select
+                  items={epayMethods.map((m) => ({
+                    value: m.type,
+                    label: m.name || m.type,
+                  }))}
+                  value={selectedEpayMethod}
+                  onValueChange={(v) => v !== null && setSelectedEpayMethod(v)}
+                >
+                  <SelectTrigger className='flex-1'>
+                    <SelectValue>{selectedEpayMethodLabel}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    <SelectGroup>
+                      {epayMethods.map((m) => (
+                        <SelectItem key={m.type} value={m.type}>
+                          {m.name || m.type}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                <Button
+                  onClick={handlePayEpay}
+                  disabled={busy || !selectedEpayMethod}
+                >
+                  {t('Pay')}
+                </Button>
+              </div>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
