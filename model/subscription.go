@@ -831,7 +831,7 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 	}
 	if logUserId > 0 {
 		msg := fmt.Sprintf("订阅购买成功，套餐: %s，支付金额: %.2f，支付方式: %s", logPlanTitle, logMoney, logPaymentMethod)
-		RecordLog(logUserId, LogTypeTopup, msg)
+		RecordTopupLogWithPayment(logUserId, msg, logPaymentMethod)
 	}
 	return nil
 }
@@ -1332,7 +1332,7 @@ func PurchaseWithStrategy(userId int, planId int, subscriptionId int) (string, e
 	}
 	msg := fmt.Sprintf("订阅操作成功，套餐: %s，金额: %.2f，扣除额度: %d，退还额度: %d",
 		logTitle, logMoney, chargedQuota, creditedQuota)
-	RecordLog(userId, LogTypeTopup, msg)
+	RecordTopupLogWithPayment(userId, msg, PaymentMethodBalance)
 	return message, nil
 }
 
@@ -1618,7 +1618,7 @@ func AutoRenewDueSubscriptions(limit int) (int, error) {
 			}
 		}
 		msg := fmt.Sprintf("订阅自动续费成功，套餐: %s，扣除额度: %d", s.PlanTitle, s.ChargedQuota)
-		RecordLog(s.UserId, LogTypeTopup, msg)
+		RecordTopupLogWithPayment(s.UserId, msg, PaymentMethodBalance)
 	}
 	return len(successes), nil
 }
