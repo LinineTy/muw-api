@@ -240,6 +240,7 @@ func SetApiRouter(router *gin.Engine) {
 			playgroundUploadRoute.GET("/space", middleware.DisableCache(), controller.GetUserPlaygroundSpace)
 			playgroundUploadRoute.POST("/space/purchase", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.PurchasePlaygroundSpace)
 			playgroundUploadRoute.POST("/space/epay/pay", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.RequestPlaygroundSpaceEpay)
+			playgroundUploadRoute.GET("/space/orders", middleware.DisableCache(), controller.GetUserPlaygroundSpaceOrders)
 			playgroundUploadRoute.GET("/conversations", middleware.DisableCache(), controller.ListPlaygroundConversations)
 			playgroundUploadRoute.PUT("/conversations/:clientId", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.SavePlaygroundConversation)
 			playgroundUploadRoute.DELETE("/conversations/:clientId", controller.DeletePlaygroundConversation)
@@ -251,6 +252,7 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			playgroundAdminRoute.GET("/images/stats", middleware.DisableCache(), controller.AdminPlaygroundImageStats)
 			playgroundAdminRoute.POST("/images/cleanup", middleware.DisableCache(), controller.AdminCleanupPlaygroundImages)
+			playgroundAdminRoute.GET("/orders", middleware.DisableCache(), controller.AdminListPlaygroundSpaceOrders)
 		}
 
 		// Custom OAuth provider management (root only)

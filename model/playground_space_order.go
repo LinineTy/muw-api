@@ -166,3 +166,41 @@ func ExpirePlaygroundSpaceOrder(tradeNo string, expectedPaymentProvider string) 
 		return tx.Save(&order).Error
 	})
 }
+
+// GetUserPlaygroundSpaceOrders 分页查询某用户的云空间订单（可选按 trade_no 搜索）。
+func GetUserPlaygroundSpaceOrders(userId int, pageInfo *common.PageInfo, keyword string) (orders []PlaygroundSpaceOrder, total int64, err error) {
+	query := DB.Model(&PlaygroundSpaceOrder{}).Where("user_id = ?", userId)
+	if keyword != "" {
+		pattern, perr := sanitizeLikePattern(keyword)
+		if perr != nil {
+			return nil, 0, perr
+		}
+		query = query.Where("trade_no LIKE ? ESCAPE '!'", pattern)
+	}
+	if err = query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if err = query.Order("id desc").Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Find(&orders).Error; err != nil {
+		return nil, 0, err
+	}
+	return orders, total, nil
+}
+
+// GetAllPlaygroundSpaceOrders 管理员分页查询全平台云空间订单（可选按 trade_no 搜索）。
+func GetAllPlaygroundSpaceOrders(pageInfo *common.PageInfo, keyword string) (orders []PlaygroundSpaceOrder, total int64, err error) {
+	query := DB.Model(&PlaygroundSpaceOrder{})
+	if keyword != "" {
+		pattern, perr := sanitizeLikePattern(keyword)
+		if perr != nil {
+			return nil, 0, perr
+		}
+		query = query.Where("trade_no LIKE ? ESCAPE '!'", pattern)
+	}
+	if err = query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if err = query.Order("id desc").Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Find(&orders).Error; err != nil {
+		return nil, 0, err
+	}
+	return orders, total, nil
+}
