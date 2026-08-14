@@ -122,6 +122,20 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
   const insufficientBalance =
     cost > 0 && balance != null && balance < cost
 
+  // 展示货币值（与 purchasePriceToQuota 的 amount 同口径），用于与支付方式
+  // min_topup（展示货币下限）比较：低于下限的小额购买会在网关侧失败或产生
+  // 小额异常单，钱包充值对每张支付卡做了同样校验，这里对齐。
+  const displayAmount = mb * ratio
+  const selectedEpayMethodObj = epayMethods.find(
+    (m) => m.type === selectedEpayMethod
+  )
+  const selectedEpayMinTopup = Math.max(
+    selectedEpayMethodObj?.min_topup ?? 0,
+    topupInfo?.min_topup ?? 0
+  )
+  const epayBelowMin =
+    selectedEpayMinTopup > 0 && displayAmount > 0 && displayAmount < selectedEpayMinTopup
+
   const percent =
     space && space.capacity_bytes > 0
       ? Math.min(100, Math.round((space.used_bytes / space.capacity_bytes) * 100))
@@ -155,19 +169,24 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
     try {
       const result = await purchaseSpace(mb)
       if (!result) {
-        // 业务失败：拦截器已弹出后端 message（余额不足等），这里不重复提示，
-        // 也避免把「购买比例配置错误」等非余额失败误标成 Insufficient balance。
+        // 业务失败：拦截器已弹出后端 message（余额不足等），这里不重复提示。
         return
       }
       toast.success(t('Storage capacity purchased'))
       setMbInput('')
       setBuyOpen(false)
-      // 刷新余额与用量。
-      const self = await getSelf()
-      if (self?.success) {
-        useAuthStore.getState().auth.setUser(self.data)
+      // 刷新余额与用量是购买成功后的非关键步骤：独立 try/catch，失败静默。
+      // 绝不能与购买同 try——否则刷新抖动会弹「Purchase failed」且不关弹窗、
+      // 不清金额，诱导用户二次点击重复扣费（后端购买非幂等）。
+      try {
+        const self = await getSelf()
+        if (self?.success) {
+          useAuthStore.getState().auth.setUser(self.data)
+        }
+        onPurchased()
+      } catch {
+        // 刷新失败不影响购买成功结论。
       }
-      onPurchased()
     } catch {
       toast.error(t('Purchase failed'))
     } finally {
@@ -183,6 +202,12 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
     }
     if (!selectedEpayMethod) {
       toast.error(t('Please select a payment method'))
+      return
+    }
+    if (epayBelowMin) {
+      toast.error(
+        t('Minimum topup amount: {{amount}}', { amount: selectedEpayMinTopup })
+      )
       return
     }
     if (busy) {
@@ -212,6 +237,7 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
         form.submit()
         document.body.removeChild(form)
         toast.success(t('Payment initiated'))
+        setMbInput('')
         setBuyOpen(false)
       } else {
         toast.error(
@@ -353,11 +379,18 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
                 </Select>
                 <Button
                   onClick={handlePayEpay}
-                  disabled={busy || !selectedEpayMethod}
+                  disabled={busy || !selectedEpayMethod || epayBelowMin}
                 >
                   {t('Pay')}
                 </Button>
               </div>
+            )}
+            {hasEpay && epayBelowMin && (
+              <p className='text-destructive text-xs'>
+                {t('Minimum topup amount: {{amount}}', {
+                  amount: selectedEpayMinTopup,
+                })}
+              </p>
             )}
           </DialogFooter>
         </DialogContent>
@@ -374,6 +407,7 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
         )}
         confirmText={t('Buy storage')}
         handleConfirm={() => void handlePurchase()}
+        isLoading={busy}
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title={t('Confirm purchase?')}

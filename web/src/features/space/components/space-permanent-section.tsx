@@ -60,6 +60,7 @@ export function SpacePermanentSection() {
   const { t } = useTranslation()
   const [images, setImages] = useState<PermanentImageItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [deleting, setDeleting] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<PermanentImageItem | null>(
     null
   )
@@ -81,20 +82,23 @@ export function SpacePermanentSection() {
     try {
       setImages(await listPlaygroundImages(true))
     } catch {
+      // 网络失败与「无数据」空态区分：失败给明确提示，避免误导用户以为没有图片。
+      toast.error(t('Failed to load images'))
       setImages([])
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void load()
   }, [load])
 
   const handleDelete = async () => {
-    if (!deleteTarget) {
+    if (!deleteTarget || deleting) {
       return
     }
+    setDeleting(true)
     try {
       await deletePlaygroundImage(deleteTarget.id)
       toast.success(t('Image deleted'))
@@ -102,6 +106,8 @@ export function SpacePermanentSection() {
       await load()
     } catch {
       toast.error(t('Delete failed'))
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -175,6 +181,7 @@ export function SpacePermanentSection() {
         )}
         confirmText={t('Delete')}
         handleConfirm={() => void handleDelete()}
+        isLoading={deleting}
         open={deleteTarget !== null}
         onOpenChange={(open) => {
           if (!open) {

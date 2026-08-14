@@ -144,6 +144,10 @@ export function SidebarModulesSection({
         title: t('Cloud Space'),
         description: t('Manage your cloud storage and synced conversations.'),
       },
+      orders: {
+        title: t('Order Center'),
+        description: t('Recharge, subscription and cloud space purchase orders.'),
+      },
     },
     admin: {
       channel: {
