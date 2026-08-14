@@ -4,7 +4,7 @@ package setting
 // overridable by an admin through the settings page; model/option.go registers
 // them and dispatches changes back into these vars (hot-reloaded by SyncOptions).
 const (
-	DefaultPlaygroundImageTTLDays = 3 // 临时附件 TTL（天）
+	DefaultPlaygroundImageTTLDays = 2 // 临时附件 TTL（天）
 
 	// Deprecated: 统一容量模型后不再强制按数量/单类字节设限（见下）。
 	// 保留默认值仅供存量 DB option 行解析，业务已改用 UserSpace* 容量。
@@ -15,10 +15,10 @@ const (
 	// 用户云空间容量模型：
 	// 每用户容量 = 初始容量（管理员全局统一，不看分组）+ 购买容量（余额 quota 购买）。
 	// 临时+永久图片合并计到这一个总空间；root 无限制。
-	DefaultUserSpaceInitialMB     = 20     // 每用户初始容量（MB）
-	DefaultUserSpacePurchaseRatio = 0.0002 // 每 MB 展示货币价格（默认 $0.0002/MB，≈旧 100 quota/MB）
-	DefaultUserSpaceMaxPurchaseMB = 1024   // 单次购买容量上限（MB）
-	DefaultUserSpaceGlobalMaxMB   = 20480  // 云空间总分配量（红线）：固定分配，如服务器 50G 给云空间划 20G
+	DefaultUserSpaceInitialMB     = 15   // 每用户初始容量（MB）
+	DefaultUserSpacePurchaseRatio = 100.0 // 每 MB 展示货币价格（默认 100 额度/MB，购买时换算为原始额度扣减）
+	DefaultUserSpaceMaxPurchaseMB = 25   // 单次购买容量上限（MB）
+	DefaultUserSpaceGlobalMaxMB   = 2048 // 云空间总分配量（红线）：固定分配 2G
 
 	// 设置上界：防止 time.Duration 溢出与 MB<<20 字节换算溢出（validateOptionValue 校验用）。
 	MaxPlaygroundImageTTLDays      = 3650   // TTL 天数上限（10 年），防 Duration 溢出把全部临时图误清
