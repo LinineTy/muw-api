@@ -5947,6 +5947,7 @@
     "Conversation is too large to sync": "Conversation is too large to sync",
     "Failed to delete conversation": "Failed to delete conversation",
     "Some images failed to load and were not sent.": "Some images failed to load and were not sent.",
-    "This conversation was updated on another device.": "This conversation was updated on another device."
+    "This conversation was updated on another device.": "This conversation was updated on another device.",
+    "What is new in this version": "What is new in this version"
   }
 }

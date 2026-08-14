@@ -5947,6 +5947,7 @@
     "Conversation is too large to sync": "對話過大，無法同步",
     "Failed to delete conversation": "刪除對話失敗",
     "Some images failed to load and were not sent.": "部分圖片載入失敗，未隨訊息發送。",
-    "This conversation was updated on another device.": "當前會話已在其他裝置更新。"
+    "This conversation was updated on another device.": "當前會話已在其他裝置更新。",
+    "What is new in this version": "這個版本更新了什麼"
   }
 }

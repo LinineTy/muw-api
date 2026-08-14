@@ -32,6 +32,7 @@ type UpdateCheckData = {
   has_update: boolean
   latest_tag: string
   current_version: string
+  latest_changelog?: string
 }
 
 type UpdateCheckerSectionProps = {
@@ -47,6 +48,7 @@ export function UpdateCheckerSection({
   const [checking, setChecking] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [latestTag, setLatestTag] = useState('')
+  const [latestChangelog, setLatestChangelog] = useState('')
   const [serverVersion, setServerVersion] = useState('')
 
   const uptime = startTime ? formatTimestamp(startTime) : t('Unknown')
@@ -71,6 +73,7 @@ export function UpdateCheckerSection({
       }
 
       setLatestTag(data.latest_tag)
+      setLatestChangelog(data.latest_changelog || '')
       setServerVersion(data.current_version)
       setDialogOpen(true)
     } catch (error) {
@@ -140,6 +143,16 @@ export function UpdateCheckerSection({
           <p className='text-muted-foreground'>
             {t('Update from the official registry.')}
           </p>
+          {latestChangelog && (
+            <div className='border-t pt-2'>
+              <div className='mb-1 font-medium'>
+                {t('What is new in this version')}
+              </div>
+              <div className='text-muted-foreground max-h-64 overflow-y-auto whitespace-pre-wrap'>
+                {latestChangelog}
+              </div>
+            </div>
+          )}
         </div>
       </Dialog>
     </>
