@@ -77,6 +77,12 @@ var auditContentTemplates = map[string]string{
 	"system_info.delete_stale_instances": "Deleted stale system instances",
 	"system_info.delete_instance":     "Deleted system instance ${node_name}",
 	"custom_oauth.discovery":          "Fetched custom OAuth discovery",
+
+	// 落地页主题
+	"home_page_theme.import":         "Imported landing page theme ${theme_name} (ID: ${theme_id})",
+	"home_page_theme.select":         "Selected landing page theme (ID: ${theme_id})",
+	"home_page_theme.manual_update":  "Updated the manual landing page preset",
+	"home_page_theme.delete":         "Deleted landing page theme ${theme_name} (ID: ${theme_id})",
 }
 
 // auditContentEN 按 action 模板渲染英文兜底文本；未登记的 action 退回 action 本身。
