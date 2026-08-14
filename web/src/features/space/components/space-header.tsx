@@ -276,7 +276,7 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
           <DialogHeader>
             <DialogTitle>{t('Buy storage')}</DialogTitle>
             <DialogDescription>
-              {t('Buy more storage with your quota or online payment.')}
+              {t('Buy more storage with your quota.')}
             </DialogDescription>
           </DialogHeader>
           <div className='space-y-3'>

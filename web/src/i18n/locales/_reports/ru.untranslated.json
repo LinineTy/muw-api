@@ -1,4 +1,10 @@
 {
+  "Capacity": "Capacity",
+  "Cloud space orders": "Cloud space orders",
+  "Failed to load orders": "Failed to load orders",
+  "No orders found": "No orders found",
+  "Order Center": "Order Center",
+  "Recharge / Subscription": "Recharge / Subscription",
   "A vision-capable model used to describe images. It must have an enabled channel in the user group and a configured price/ratio, because each vision call is billed to the user.": "A vision-capable model used to describe images. It must have an enabled channel in the user group and a configured price/ratio, because each vision call is billed to the user.",
   "Add Upstream": "Add Upstream",
   "Add time period": "Add time period",
@@ -315,6 +321,7 @@
   "Your account has been disabled": "Your account has been disabled",
   "Your account is on the blacklist and is not allowed to sign in": "Your account is on the blacklist and is not allowed to sign in",
   "Your balance does not meet the pool requirement": "Your balance does not meet the pool requirement",
+  "Your cloud space purchase history will appear here": "Your cloud space purchase history will appear here",
   "and all of its claim records. This action cannot be undone.": "and all of its claim records. This action cannot be undone.",
   "e.g. pro-family": "e.g. pro-family",
   "e.g. vip, pro (leave empty for all)": "e.g. vip, pro (leave empty for all)",
