@@ -30,7 +30,9 @@ function isApiSuccess(response: { success?: boolean; message?: string }): boolea
 export async function getSpaceOrders(
   page: number,
   pageSize: number,
-  keyword?: string
+  keyword?: string,
+  status?: string,
+  method?: string
 ): Promise<ApiResponse<SpaceOrdersResponse>> {
   const params = new URLSearchParams({
     p: page.toString(),
@@ -38,6 +40,12 @@ export async function getSpaceOrders(
   })
   if (keyword) {
     params.append('keyword', keyword)
+  }
+  if (status) {
+    params.append('status', status)
+  }
+  if (method) {
+    params.append('method', method)
   }
   const res = await api.get(`/api/playground/space/orders?${params.toString()}`)
   return res.data
@@ -49,7 +57,9 @@ export async function getSpaceOrders(
 export async function getAllSpaceOrders(
   page: number,
   pageSize: number,
-  keyword?: string
+  keyword?: string,
+  status?: string,
+  method?: string
 ): Promise<ApiResponse<SpaceOrdersResponse>> {
   const params = new URLSearchParams({
     p: page.toString(),
@@ -57,6 +67,12 @@ export async function getAllSpaceOrders(
   })
   if (keyword) {
     params.append('keyword', keyword)
+  }
+  if (status) {
+    params.append('status', status)
+  }
+  if (method) {
+    params.append('method', method)
   }
   const res = await api.get(`/api/playground/admin/orders?${params.toString()}`)
   return res.data

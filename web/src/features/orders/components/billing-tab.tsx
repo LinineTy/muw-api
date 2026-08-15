@@ -16,16 +16,21 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import {
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  Copy,
-  Search,
-} from 'lucide-react'
-import { useState } from 'react'
+import type {
+  ColumnDef,
+  ColumnFiltersState,
+  OnChangeFn,
+  PaginationState,
+} from '@tanstack/react-table'
+import { Check, CheckCheck, Copy } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import {
+  DATA_TABLE_VIEW_MODES,
+  DataTablePage,
+  useDataTable,
+} from '@/components/data-table'
 import { StatusBadge } from '@/components/status-badge'
 import {
   AlertDialog,
@@ -38,17 +43,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Skeleton } from '@/components/ui/skeleton'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { formatCurrencyFromUSD } from '@/lib/currency'
 import { formatNumber } from '@/lib/format'
@@ -58,31 +52,241 @@ import {
   getPaymentMethodName,
   getStatusConfig,
 } from '@/features/wallet/lib/billing'
+import type { TopupRecord } from '@/features/wallet/types'
 
 /**
- * 充值/订阅订单列表：搜索 + 卡片 + 分页 + 管理员补单。从原钱包弹窗改造为页面 tab。
+ * 充值/订阅订单列表：服务端分页 + 搜索/状态/支付方式筛选 + 视图切换 + 管理员补单。
+ * 工具栏能力与渠道页对齐；筛选 options 与渠道页一致在渲染时内联构建。
  */
 export function BillingTab() {
   const { t } = useTranslation()
+  const [globalFilter, setGlobalFilter] = useState('')
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [confirmTradeNo, setConfirmTradeNo] = useState<string | null>(null)
+  const { copyToClipboard, copiedText } = useCopyToClipboard({ notify: false })
+
+  const statusFilter = useMemo(
+    () =>
+      (columnFilters.find((f) => f.id === 'status')?.value as
+        | string[]
+        | undefined)?.[0] ?? '',
+    [columnFilters]
+  )
+  const methodFilter = useMemo(
+    () =>
+      (columnFilters.find((f) => f.id === 'payment_method')?.value as
+        | string[]
+        | undefined)?.[0] ?? '',
+    [columnFilters]
+  )
+
   const {
     records,
     total,
     page,
     pageSize,
-    keyword,
     loading,
     completing,
     isAdmin,
     handlePageChange,
     handlePageSizeChange,
-    handleSearch,
     handleCompleteOrder,
-  } = useBillingHistory()
+  } = useBillingHistory({
+    keyword: globalFilter,
+    status: statusFilter === 'all' ? '' : statusFilter,
+    method: methodFilter === 'all' ? '' : methodFilter,
+  })
 
-  const [confirmTradeNo, setConfirmTradeNo] = useState<string | null>(null)
-  const { copyToClipboard, copiedText } = useCopyToClipboard({ notify: false })
+  const pagination = useMemo<PaginationState>(
+    () => ({ pageIndex: page - 1, pageSize }),
+    [page, pageSize]
+  )
 
-  const totalPages = Math.ceil(total / pageSize)
+  const columns = useMemo<ColumnDef<TopupRecord>[]>(() => {
+    const cols: ColumnDef<TopupRecord>[] = [
+      {
+        accessorKey: 'trade_no',
+        header: t('Order Number'),
+        meta: { mobileTitle: true },
+        cell: ({ row }) => (
+          <div className='flex min-w-0 items-center gap-1'>
+            <code className='text-foreground truncate font-mono text-sm'>
+              {row.original.trade_no}
+            </code>
+            <Button
+              variant='ghost'
+              size='sm'
+              className='h-5 w-5 shrink-0 p-0'
+              onClick={() => copyToClipboard(row.original.trade_no)}
+            >
+              {copiedText === row.original.trade_no ? (
+                <Check className='h-3 w-3' />
+              ) : (
+                <Copy className='h-3 w-3' />
+              )}
+            </Button>
+          </div>
+        ),
+        size: 220,
+      },
+      {
+        accessorKey: 'create_time',
+        header: t('Time'),
+        meta: { mobileHidden: true },
+        cell: ({ row }) => (
+          <span className='text-muted-foreground whitespace-nowrap'>
+            {formatTimestamp(row.original.create_time)}
+          </span>
+        ),
+        size: 160,
+      },
+    ]
+
+    if (isAdmin) {
+      cols.push({
+        accessorKey: 'user_id',
+        header: t('User ID'),
+        meta: { mobileHidden: true },
+        cell: ({ row }) => (
+          <StatusBadge
+            label={String(row.original.user_id)}
+            variant='neutral'
+            size='sm'
+            copyText={String(row.original.user_id)}
+          />
+        ),
+        size: 90,
+      })
+    }
+
+    cols.push(
+      {
+        accessorKey: 'payment_method',
+        header: t('Payment Method'),
+        cell: ({ row }) => (
+          <span className='text-sm font-medium'>
+            {getPaymentMethodName(row.original.payment_method, t)}
+          </span>
+        ),
+        size: 140,
+      },
+      {
+        accessorKey: 'amount',
+        header: t('Amount'),
+        cell: ({ row }) =>
+          formatCurrencyFromUSD(row.original.amount, {
+            digitsLarge: 2,
+            digitsSmall: 2,
+            abbreviate: false,
+          }),
+        size: 110,
+      },
+      {
+        accessorKey: 'money',
+        header: t('Payment'),
+        cell: ({ row }) => (
+          <span className='text-sm font-semibold text-red-600'>
+            {formatNumber(row.original.money)}
+          </span>
+        ),
+        size: 90,
+      },
+      {
+        accessorKey: 'status',
+        header: t('Status'),
+        meta: { mobileBadge: true },
+        cell: ({ row }) => {
+          const statusConfig = getStatusConfig(row.original.status)
+          return (
+            <StatusBadge
+              label={t(statusConfig.label)}
+              variant={statusConfig.variant}
+              showDot
+              copyable={false}
+            />
+          )
+        },
+        size: 110,
+      },
+      {
+        id: 'actions',
+        header: t('Actions'),
+        cell: ({ row }) => {
+          if (!isAdmin || row.original.status !== 'pending') return null
+          return (
+            <Button
+              variant='ghost'
+              size='icon-sm'
+              onClick={() => setConfirmTradeNo(row.original.trade_no)}
+              disabled={completing}
+              aria-label={t('Complete Order')}
+            >
+              <CheckCheck />
+            </Button>
+          )
+        },
+        size: 60,
+      }
+    )
+
+    return cols
+  }, [t, isAdmin, completing, copiedText, copyToClipboard])
+
+  const resetPage = useCallback(() => {
+    if (page > 1) {
+      handlePageChange(1)
+    }
+  }, [page, handlePageChange])
+
+  const onGlobalFilterChange = useCallback<OnChangeFn<string>>(
+    (updater) => {
+      setGlobalFilter((previous) =>
+        typeof updater === 'function' ? updater(previous) : updater
+      )
+      resetPage()
+    },
+    [resetPage]
+  )
+
+  const onColumnFiltersChange = useCallback<OnChangeFn<ColumnFiltersState>>(
+    (updater) => {
+      setColumnFilters((previous) =>
+        typeof updater === 'function' ? updater(previous) : updater
+      )
+      resetPage()
+    },
+    [resetPage]
+  )
+
+  const { table } = useDataTable({
+    data: records,
+    columns,
+    manualPagination: true,
+    manualFiltering: true,
+    totalCount: total,
+    pagination,
+    columnVisibilityStorageKey: 'orders-billing-column-visibility',
+    onPaginationChange: (updater) => {
+      const next =
+        typeof updater === 'function'
+          ? (updater as (old: PaginationState) => PaginationState)(pagination)
+          : updater
+      if (next.pageSize !== pagination.pageSize) {
+        handlePageSizeChange(next.pageSize)
+      } else if (next.pageIndex !== pagination.pageIndex) {
+        handlePageChange(next.pageIndex + 1)
+      }
+    },
+    ensurePageInRange: (pageCount) => {
+      if (pageCount > 0 && page > pageCount) {
+        handlePageChange(pageCount)
+      }
+    },
+    globalFilter,
+    onGlobalFilterChange,
+    columnFilters,
+    onColumnFiltersChange,
+  })
 
   const handleConfirmComplete = async () => {
     if (confirmTradeNo) {
@@ -95,210 +299,51 @@ export function BillingTab() {
 
   return (
     <>
-      <div className='space-y-3'>
-        {/* 搜索 + 每页条数 */}
-        <div className='flex items-center gap-2'>
-          <div className='relative flex-1'>
-            <Search className='text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2' />
-            <Input
-              placeholder={t('Search by order number...')}
-              value={keyword}
-              onChange={(e) => handleSearch(e.target.value)}
-              className='h-9 pl-10'
-            />
-          </div>
-          <Select
-            items={[
-              { value: '10', label: t('10 / page') },
-              { value: '20', label: t('20 / page') },
-              { value: '50', label: t('50 / page') },
-              { value: '100', label: t('100 / page') },
-            ]}
-            value={pageSize.toString()}
-            onValueChange={(value) =>
-              value !== null && handlePageSizeChange(Number.parseInt(value))
-            }
-          >
-            <SelectTrigger className='h-9 w-[92px] sm:w-32'>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent alignItemWithTrigger={false}>
-              <SelectGroup>
-                <SelectItem value='10'>{t('10 / page')}</SelectItem>
-                <SelectItem value='20'>{t('20 / page')}</SelectItem>
-                <SelectItem value='50'>{t('50 / page')}</SelectItem>
-                <SelectItem value='100'>{t('100 / page')}</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {loading && (
-          <div className='space-y-3'>
-            {[0, 1, 2, 3].map((n) => (
-              <div key={n} className='rounded-lg border p-3 sm:p-4'>
-                <div className='flex items-start justify-between'>
-                  <div className='flex-1 space-y-2'>
-                    <Skeleton className='h-4 w-48' />
-                    <Skeleton className='h-3 w-32' />
-                  </div>
-                  <Skeleton className='h-5 w-16' />
-                </div>
-                <div className='mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4'>
-                  <Skeleton className='h-3 w-full' />
-                  <Skeleton className='h-3 w-full' />
-                  <Skeleton className='h-3 w-full' />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {!loading && records.length === 0 && (
-          <div className='text-muted-foreground flex min-h-40 flex-col items-center justify-center py-10 text-center'>
-            <p className='text-sm font-medium'>
-              {t('No billing records found')}
-            </p>
-            <p className='mt-1 text-xs'>
-              {keyword
-                ? t('Try adjusting your search')
-                : t('Your transaction history will appear here')}
-            </p>
-          </div>
-        )}
-
-        {!loading && records.length > 0 && (
-          <div className='space-y-3'>
-            {records.map((record) => {
-              const statusConfig = getStatusConfig(record.status)
-              return (
-                <div key={record.id} className='rounded-lg border p-3 sm:p-4'>
-                  {/* Header Row */}
-                  <div className='flex items-start justify-between gap-2'>
-                    <div className='flex-1 space-y-1'>
-                      <div className='flex min-w-0 items-center gap-2'>
-                        <code className='text-foreground truncate font-mono text-sm'>
-                          {record.trade_no}
-                        </code>
-                        <Button
-                          variant='ghost'
-                          size='sm'
-                          className='h-5 w-5 p-0'
-                          onClick={() => copyToClipboard(record.trade_no)}
-                        >
-                          {copiedText === record.trade_no ? (
-                            <Check className='h-3 w-3' />
-                          ) : (
-                            <Copy className='h-3 w-3' />
-                          )}
-                        </Button>
-                        {isAdmin && record.user_id != null && (
-                          <StatusBadge
-                            label={`${t('User ID')}: ${record.user_id}`}
-                            variant='neutral'
-                            size='sm'
-                            copyText={String(record.user_id)}
-                          />
-                        )}
-                      </div>
-                      <div className='text-muted-foreground text-xs'>
-                        {formatTimestamp(record.create_time)}
-                      </div>
-                    </div>
-                    <StatusBadge
-                      label={t(statusConfig.label)}
-                      variant={statusConfig.variant}
-                      showDot
-                      copyable={false}
-                    />
-                  </div>
-
-                  {/* Details Grid */}
-                  <div className='mt-3 grid grid-cols-2 gap-3 sm:mt-4 sm:grid-cols-3 sm:gap-4'>
-                    <div className='space-y-1'>
-                      <Label className='text-muted-foreground text-xs'>
-                        {t('Payment Method')}
-                      </Label>
-                      <div className='text-sm font-medium'>
-                        {getPaymentMethodName(record.payment_method, t)}
-                      </div>
-                    </div>
-                    <div className='space-y-1'>
-                      <Label className='text-muted-foreground text-xs'>
-                        {t('Amount')}
-                      </Label>
-                      <div className='text-sm font-semibold'>
-                        {formatCurrencyFromUSD(record.amount, {
-                          digitsLarge: 2,
-                          digitsSmall: 2,
-                          abbreviate: false,
-                        })}
-                      </div>
-                    </div>
-                    <div className='space-y-1'>
-                      <Label className='text-muted-foreground text-xs'>
-                        {t('Payment')}
-                      </Label>
-                      <div className='text-sm font-semibold text-red-600'>
-                        {formatNumber(record.money)}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Admin Actions */}
-                  {isAdmin && record.status === 'pending' && (
-                    <div className='mt-4 flex justify-end'>
-                      <Button
-                        size='sm'
-                        variant='outline'
-                        onClick={() => setConfirmTradeNo(record.trade_no)}
-                        disabled={completing}
-                      >
-                        {t('Complete Order')}
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {/* 分页 */}
-        {!loading && records.length > 0 && (
-          <div className='flex flex-col items-center gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between'>
-            <div className='text-muted-foreground text-xs sm:text-sm'>
-              {t('Showing')} {(page - 1) * pageSize + 1}-
-              {Math.min(page * pageSize, total)} {t('of')} {total}
-            </div>
-            <div className='flex items-center gap-2'>
-              <Button
-                variant='outline'
-                size='sm'
-                onClick={() => handlePageChange(page - 1)}
-                disabled={page <= 1}
-                className='h-8 w-8 p-0'
-              >
-                <ChevronLeft className='h-4 w-4' />
-              </Button>
-              <div className='text-muted-foreground flex items-center gap-1 text-sm'>
-                <span className='font-medium'>{page}</span>
-                <span>/</span>
-                <span>{totalPages}</span>
-              </div>
-              <Button
-                variant='outline'
-                size='sm'
-                onClick={() => handlePageChange(page + 1)}
-                disabled={page >= totalPages}
-                className='h-8 w-8 p-0'
-              >
-                <ChevronRight className='h-4 w-4' />
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
+      <DataTablePage
+        table={table}
+        columns={columns}
+        isLoading={loading}
+        emptyTitle={t('No billing records found')}
+        emptyDescription={
+          globalFilter
+            ? t('Try adjusting your search')
+            : t('Your transaction history will appear here')
+        }
+        skeletonKeyPrefix='billing-tab-skeleton'
+        fixedHeight={false}
+        paginationInFooter={false}
+        applyHeaderSize
+        enableCardView
+        viewModeStorageKey='orders-billing-view-mode'
+        defaultViewMode={DATA_TABLE_VIEW_MODES.TABLE}
+        toolbarProps={{
+          searchPlaceholder: t('Search by order number...'),
+          searchDebounceMs: 500,
+          filters: [
+            {
+              columnId: 'status',
+              title: t('Status'),
+              options: [
+                { label: 'All Statuses', value: 'all' },
+                { label: 'Success', value: 'success' },
+                { label: 'Pending', value: 'pending' },
+                { label: 'Expired', value: 'expired' },
+              ],
+              singleSelect: true,
+            },
+            {
+              columnId: 'payment_method',
+              title: t('Payment Method'),
+              options: [
+                { label: 'All Payment Methods', value: 'all' },
+                { label: 'Alipay', value: 'alipay' },
+                { label: 'WeChat Pay', value: 'wxpay' },
+              ],
+              singleSelect: true,
+            },
+          ],
+        }}
+      />
 
       {/* Confirm Complete Order Dialog */}
       <AlertDialog
