@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import type { HeaderNavCustomLink } from '@/lib/nav-modules'
+
 export type HeaderNavAccessConfig = {
   enabled: boolean
   requireAuth: boolean
@@ -28,7 +30,8 @@ export type HeaderNavModulesConfig = {
   rankings: HeaderNavAccessConfig
   docs: boolean
   about: boolean
-  [key: string]: boolean | HeaderNavAccessConfig
+  customLinks: HeaderNavCustomLink[]
+  [key: string]: boolean | HeaderNavAccessConfig | HeaderNavCustomLink[]
 }
 
 export type SidebarSectionConfig = {
@@ -51,6 +54,7 @@ export const HEADER_NAV_DEFAULT: HeaderNavModulesConfig = {
   },
   docs: true,
   about: true,
+  customLinks: [],
 }
 
 export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
@@ -107,6 +111,7 @@ const cloneHeaderNavDefault = (): HeaderNavModulesConfig => ({
   ...HEADER_NAV_DEFAULT,
   pricing: { ...HEADER_NAV_DEFAULT.pricing },
   rankings: { ...HEADER_NAV_DEFAULT.rankings },
+  customLinks: HEADER_NAV_DEFAULT.customLinks.map((link) => ({ ...link })),
 })
 
 const parseAccessModule = (
@@ -166,6 +171,10 @@ export function parseHeaderNavModules(
         result.rankings = parseAccessModule(raw, base.rankings)
         return
       }
+      if (key === 'customLinks') {
+        result.customLinks = parseHeaderNavCustomLinks(raw)
+        return
+      }
 
       if (typeof raw === 'boolean') {
         result[key] = raw
@@ -181,6 +190,24 @@ export function parseHeaderNavModules(
   } catch {
     return base
   }
+}
+
+const parseHeaderNavCustomLinks = (raw: unknown): HeaderNavCustomLink[] => {
+  if (!Array.isArray(raw)) return []
+  const links: HeaderNavCustomLink[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const record = item as Record<string, unknown>
+    const title = typeof record.title === 'string' ? record.title.trim() : ''
+    const href = typeof record.href === 'string' ? record.href.trim() : ''
+    if (!title || !href) continue
+    links.push({
+      title,
+      href,
+      enabled: toBoolean(record.enabled, true),
+    })
+  }
+  return links
 }
 
 export function serializeHeaderNavModules(
