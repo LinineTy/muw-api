@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
@@ -106,7 +107,7 @@ func topUpQueryCutoff() int64 {
 	return common.GetTimestamp() - topUpQueryWindowSeconds
 }
 
-func GetUserTopUps(userId int, pageInfo *common.PageInfo) (topups []*TopUp, total int64, err error) {
+func GetUserTopUps(userId int, pageInfo *common.PageInfo, status string, method string) (topups []*TopUp, total int64, err error) {
 	// Start transaction
 	tx := DB.Begin()
 	if tx.Error != nil {
@@ -119,16 +120,23 @@ func GetUserTopUps(userId int, pageInfo *common.PageInfo) (topups []*TopUp, tota
 	}()
 
 	cutoff := topUpQueryCutoff()
+	baseQuery := func() *gorm.DB {
+		return applyOrderStatusMethodFilter(
+			tx.Model(&TopUp{}).Where("user_id = ? AND create_time >= ?", userId, cutoff),
+			status,
+			method,
+		)
+	}
 
 	// Get total count within transaction
-	err = tx.Model(&TopUp{}).Where("user_id = ? AND create_time >= ?", userId, cutoff).Count(&total).Error
+	err = baseQuery().Count(&total).Error
 	if err != nil {
 		tx.Rollback()
 		return nil, 0, err
 	}
 
 	// Get paginated topups within same transaction
-	err = tx.Where("user_id = ? AND create_time >= ?", userId, cutoff).Order("id desc").Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Find(&topups).Error
+	err = baseQuery().Order("id desc").Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Find(&topups).Error
 	if err != nil {
 		tx.Rollback()
 		return nil, 0, err
@@ -143,7 +151,7 @@ func GetUserTopUps(userId int, pageInfo *common.PageInfo) (topups []*TopUp, tota
 }
 
 // GetAllTopUps 获取全平台的充值记录（管理员使用，不限制时间窗口）
-func GetAllTopUps(pageInfo *common.PageInfo) (topups []*TopUp, total int64, err error) {
+func GetAllTopUps(pageInfo *common.PageInfo, status string, method string) (topups []*TopUp, total int64, err error) {
 	tx := DB.Begin()
 	if tx.Error != nil {
 		return nil, 0, tx.Error
@@ -154,12 +162,13 @@ func GetAllTopUps(pageInfo *common.PageInfo) (topups []*TopUp, total int64, err 
 		}
 	}()
 
-	if err = tx.Model(&TopUp{}).Count(&total).Error; err != nil {
+	query := applyOrderStatusMethodFilter(tx.Model(&TopUp{}), status, method)
+	if err = query.Count(&total).Error; err != nil {
 		tx.Rollback()
 		return nil, 0, err
 	}
 
-	if err = tx.Order("id desc").Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Find(&topups).Error; err != nil {
+	if err = query.Order("id desc").Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Find(&topups).Error; err != nil {
 		tx.Rollback()
 		return nil, 0, err
 	}
@@ -176,7 +185,7 @@ func GetAllTopUps(pageInfo *common.PageInfo) (topups []*TopUp, total int64, err 
 const searchTopUpCountHardLimit = 10000
 
 // SearchUserTopUps 按订单号搜索某用户的充值记录
-func SearchUserTopUps(userId int, keyword string, pageInfo *common.PageInfo) (topups []*TopUp, total int64, err error) {
+func SearchUserTopUps(userId int, keyword string, pageInfo *common.PageInfo, status string, method string) (topups []*TopUp, total int64, err error) {
 	tx := DB.Begin()
 	if tx.Error != nil {
 		return nil, 0, tx.Error
@@ -189,13 +198,14 @@ func SearchUserTopUps(userId int, keyword string, pageInfo *common.PageInfo) (to
 
 	query := tx.Model(&TopUp{}).Where("user_id = ? AND create_time >= ?", userId, topUpQueryCutoff())
 	if keyword != "" {
-		pattern, perr := sanitizeLikePattern(keyword)
+		pattern, perr := tradeNoLikePattern(keyword)
 		if perr != nil {
 			tx.Rollback()
 			return nil, 0, perr
 		}
 		query = query.Where("trade_no LIKE ? ESCAPE '!'", pattern)
 	}
+	query = applyOrderStatusMethodFilter(query, status, method)
 
 	if err = query.Limit(searchTopUpCountHardLimit).Count(&total).Error; err != nil {
 		tx.Rollback()
@@ -216,7 +226,7 @@ func SearchUserTopUps(userId int, keyword string, pageInfo *common.PageInfo) (to
 }
 
 // SearchAllTopUps 按订单号搜索全平台充值记录（管理员使用，不限制时间窗口）
-func SearchAllTopUps(keyword string, pageInfo *common.PageInfo) (topups []*TopUp, total int64, err error) {
+func SearchAllTopUps(keyword string, pageInfo *common.PageInfo, status string, method string) (topups []*TopUp, total int64, err error) {
 	tx := DB.Begin()
 	if tx.Error != nil {
 		return nil, 0, tx.Error
@@ -229,13 +239,14 @@ func SearchAllTopUps(keyword string, pageInfo *common.PageInfo) (topups []*TopUp
 
 	query := tx.Model(&TopUp{})
 	if keyword != "" {
-		pattern, perr := sanitizeLikePattern(keyword)
+		pattern, perr := tradeNoLikePattern(keyword)
 		if perr != nil {
 			tx.Rollback()
 			return nil, 0, perr
 		}
 		query = query.Where("trade_no LIKE ? ESCAPE '!'", pattern)
 	}
+	query = applyOrderStatusMethodFilter(query, status, method)
 
 	if err = query.Limit(searchTopUpCountHardLimit).Count(&total).Error; err != nil {
 		tx.Rollback()
@@ -253,6 +264,30 @@ func SearchAllTopUps(keyword string, pageInfo *common.PageInfo) (topups []*TopUp
 		return nil, 0, err
 	}
 	return topups, total, nil
+}
+
+// applyOrderStatusMethodFilter 给充值/云空间订单查询附加可选的 status / payment_method 过滤。
+func applyOrderStatusMethodFilter(query *gorm.DB, status string, method string) *gorm.DB {
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if method != "" {
+		query = query.Where("payment_method = ?", method)
+	}
+	return query
+}
+
+// tradeNoLikePattern 把用户输入的关键字转成 trade_no 模糊匹配 pattern：
+// 未包含 % 时自动前后补通配符，让普通片段输入也能模糊命中。
+func tradeNoLikePattern(keyword string) (string, error) {
+	pattern, err := sanitizeLikePattern(keyword)
+	if err != nil {
+		return "", err
+	}
+	if !strings.Contains(pattern, "%") {
+		pattern = "%" + pattern + "%"
+	}
+	return pattern, nil
 }
 
 // ManualCompleteTopUp 管理员手动完成订单并给用户充值

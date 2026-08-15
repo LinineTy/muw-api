@@ -146,20 +146,32 @@ func TestGetPlaygroundSpaceOrders(t *testing.T) {
 	pageInfo := &common.PageInfo{Page: 1, PageSize: 10}
 
 	// 用户隔离：100 只见自己 2 单。
-	orders, total, err := model.GetUserPlaygroundSpaceOrders(100, pageInfo, "")
+	orders, total, err := model.GetUserPlaygroundSpaceOrders(100, pageInfo, "", "", "")
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), total)
 	assert.Len(t, orders, 2)
 
 	// trade_no 搜索命中 1 单。
-	orders, total, err = model.GetUserPlaygroundSpaceOrders(100, pageInfo, "SPCUSR100NO2")
+	orders, total, err = model.GetUserPlaygroundSpaceOrders(100, pageInfo, "SPCUSR100NO2", "", "")
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), total)
 	require.Len(t, orders, 1)
 	assert.Equal(t, "SPCUSR100NO2", orders[0].TradeNo)
 
+	// 模糊搜索：普通片段命中所有含该片段的单号。
+	orders, total, err = model.GetUserPlaygroundSpaceOrders(100, pageInfo, "NO", "", "")
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), total)
+	assert.Len(t, orders, 2)
+
+	// status 过滤：只取 pending。
+	orders, total, err = model.GetUserPlaygroundSpaceOrders(100, pageInfo, "", common.TopUpStatusPending, "")
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), total)
+	assert.Len(t, orders, 0)
+
 	// 管理员全平台 3 单。
-	orders, total, err = model.GetAllPlaygroundSpaceOrders(pageInfo, "")
+	orders, total, err = model.GetAllPlaygroundSpaceOrders(pageInfo, "", "", "")
 	require.NoError(t, err)
 	assert.Equal(t, int64(3), total)
 	assert.Len(t, orders, 3)

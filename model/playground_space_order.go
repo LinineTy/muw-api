@@ -306,16 +306,17 @@ func ExpirePlaygroundSpaceOrder(tradeNo string, expectedPaymentProvider string) 
 	})
 }
 
-// GetUserPlaygroundSpaceOrders 分页查询某用户的云空间订单（可选按 trade_no 搜索）。
-func GetUserPlaygroundSpaceOrders(userId int, pageInfo *common.PageInfo, keyword string) (orders []PlaygroundSpaceOrder, total int64, err error) {
+// GetUserPlaygroundSpaceOrders 分页查询某用户的云空间订单（可选按 trade_no 搜索 + status/payment_method 过滤）。
+func GetUserPlaygroundSpaceOrders(userId int, pageInfo *common.PageInfo, keyword string, status string, method string) (orders []PlaygroundSpaceOrder, total int64, err error) {
 	query := DB.Model(&PlaygroundSpaceOrder{}).Where("user_id = ?", userId)
 	if keyword != "" {
-		pattern, perr := sanitizeLikePattern(keyword)
+		pattern, perr := tradeNoLikePattern(keyword)
 		if perr != nil {
 			return nil, 0, perr
 		}
 		query = query.Where("trade_no LIKE ? ESCAPE '!'", pattern)
 	}
+	query = applyOrderStatusMethodFilter(query, status, method)
 	if err = query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -325,16 +326,17 @@ func GetUserPlaygroundSpaceOrders(userId int, pageInfo *common.PageInfo, keyword
 	return orders, total, nil
 }
 
-// GetAllPlaygroundSpaceOrders 管理员分页查询全平台云空间订单（可选按 trade_no 搜索）。
-func GetAllPlaygroundSpaceOrders(pageInfo *common.PageInfo, keyword string) (orders []PlaygroundSpaceOrder, total int64, err error) {
+// GetAllPlaygroundSpaceOrders 管理员分页查询全平台云空间订单（可选按 trade_no 搜索 + status/payment_method 过滤）。
+func GetAllPlaygroundSpaceOrders(pageInfo *common.PageInfo, keyword string, status string, method string) (orders []PlaygroundSpaceOrder, total int64, err error) {
 	query := DB.Model(&PlaygroundSpaceOrder{})
 	if keyword != "" {
-		pattern, perr := sanitizeLikePattern(keyword)
+		pattern, perr := tradeNoLikePattern(keyword)
 		if perr != nil {
 			return nil, 0, perr
 		}
 		query = query.Where("trade_no LIKE ? ESCAPE '!'", pattern)
 	}
+	query = applyOrderStatusMethodFilter(query, status, method)
 	if err = query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
