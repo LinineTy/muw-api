@@ -253,7 +253,7 @@ func parseEpayParams(c *gin.Context) (map[string]string, bool) {
 	return params, len(params) > 0
 }
 
-// GetUserPlaygroundSpaceOrders 当前用户的云空间购买订单（分页 + 可选 trade_no 搜索）。
+// GetUserPlaygroundSpaceOrders 当前用户的云空间购买订单（分页 + 可选 trade_no 搜索 + status/payment_method 过滤）。
 func GetUserPlaygroundSpaceOrders(c *gin.Context) {
 	userId := c.GetInt("id")
 	if userId <= 0 {
@@ -261,7 +261,7 @@ func GetUserPlaygroundSpaceOrders(c *gin.Context) {
 		return
 	}
 	pageInfo := common.GetPageQuery(c)
-	orders, total, err := model.GetUserPlaygroundSpaceOrders(userId, pageInfo, c.Query("keyword"))
+	orders, total, err := model.GetUserPlaygroundSpaceOrders(userId, pageInfo, c.Query("keyword"), c.Query("status"), c.Query("method"))
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -271,10 +271,10 @@ func GetUserPlaygroundSpaceOrders(c *gin.Context) {
 	common.ApiSuccess(c, pageInfo)
 }
 
-// AdminListPlaygroundSpaceOrders 管理员查看全平台云空间购买订单（分页 + 可选 trade_no 搜索）。
+// AdminListPlaygroundSpaceOrders 管理员查看全平台云空间购买订单（分页 + 可选 trade_no 搜索 + status/payment_method 过滤）。
 func AdminListPlaygroundSpaceOrders(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
-	orders, total, err := model.GetAllPlaygroundSpaceOrders(pageInfo, c.Query("keyword"))
+	orders, total, err := model.GetAllPlaygroundSpaceOrders(pageInfo, c.Query("keyword"), c.Query("status"), c.Query("method"))
 	if err != nil {
 		common.ApiError(c, err)
 		return
