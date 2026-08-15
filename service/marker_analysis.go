@@ -35,7 +35,8 @@ type tokenUsage struct {
 // AnalyzeRecentErrorLogs 违规标记词 AI 自动学习：拉近期错误日志 → 直连 HTTP 调配置的
 // OpenAI 兼容分析端点 → 提取疑似内容安全拒绝的稳定子串 → 存 pending 建议（管理员手动采纳，
 // 不自动加词）。每次运行落分析日志（时间/用量/成本）。base_url 可填站点自身地址实现套娃。
-func AnalyzeRecentErrorLogs(ctx context.Context, triggeredBy string) (map[string]int, error) {
+// force=true 时忽略"已分析去重"过滤，重新分析窗口内所有候选日志（管理员想重查不采纳的建议时用）。
+func AnalyzeRecentErrorLogs(ctx context.Context, triggeredBy string, force bool) (map[string]int, error) {
 	setting := operation_setting.GetCreditScoreSetting()
 	if !setting.MarkerAnalysisEnabled {
 		return map[string]int{"analyzed": 0, "suggestions": 0}, nil
@@ -46,7 +47,7 @@ func AnalyzeRecentErrorLogs(ctx context.Context, triggeredBy string) (map[string
 	}
 	startTime := time.Now()
 
-	errorTexts, err := fetchRecentErrorLogTexts(ctx, 24*3600, 200)
+	errorTexts, err := fetchRecentErrorLogs(ctx, 24*3600, 200, force)
 	if err != nil {
 		logMarkerAnalysisRun(startTime, triggeredBy, 0, 0, 0, setting.MarkerAnalysisModel, baseURL, 0, err.Error())
 		return nil, err
@@ -60,7 +61,21 @@ func AnalyzeRecentErrorLogs(ctx context.Context, triggeredBy string) (map[string
 		return map[string]int{"analyzed": 0, "suggestions": 0}, nil
 	}
 
-	suggestions, usage, callErr := callMarkerAnalysisModel(ctx, setting, candidates)
+	candidateTexts := make([]string, 0, len(candidates))
+	candidateIds := make([]int64, 0, len(candidates))
+	for _, cand := range candidates {
+		candidateTexts = append(candidateTexts, cand.Text)
+		candidateIds = append(candidateIds, int64(cand.Id))
+	}
+
+	suggestions, usage, callErr := callMarkerAnalysisModel(ctx, setting, candidateTexts)
+	// 只有模型调用成功才标记"已分析"：失败不标记，下次手动分析可重试（避免配置
+	// 修好后日志被永久跳过）。已标记的日志不再进入后续分析，不采纳建议也不会反复报。
+	if callErr == nil {
+		if markErr := model.MarkErrorLogsAnalyzed(candidateIds); markErr != nil {
+			common.SysLog("failed to mark analyzed error logs: " + markErr.Error())
+		}
+	}
 	inserted := 0
 	if callErr == nil {
 		for _, s := range suggestions {
@@ -82,6 +97,12 @@ func AnalyzeRecentErrorLogs(ctx context.Context, triggeredBy string) (map[string
 				s.Marker = s.Marker[:cut]
 			}
 			if markerSuggestionExists(s.Marker) {
+				// 强制重新分析：刷新已存在的 pending 建议（内容更新、计入产出），
+				// 而不是跳过——否则"强制"后显示 analyzed:1/suggestions:0 像白跑。
+				// 已采纳（accepted）的建议不刷新，rejected 的走下方重新插入。
+				if force && refreshPendingSuggestion(s) {
+					inserted++
+				}
 				continue
 			}
 			sug := &model.CreditMarkerSuggestion{
@@ -107,9 +128,22 @@ func AnalyzeRecentErrorLogs(ctx context.Context, triggeredBy string) (map[string
 	return map[string]int{"analyzed": len(candidates), "suggestions": inserted}, nil
 }
 
-func fetchRecentErrorLogTexts(ctx context.Context, windowSec int64, limit int) ([]string, error) {
+// errorLogCandidate 一条待分析错误日志：保留日志 ID 用于"已分析去重"标记。
+type errorLogCandidate struct {
+	Id   int
+	Text string
+}
+
+// fetchRecentErrorLogs 拉最近窗口内的错误日志。默认剔除已被分析过的（避免同一条日志被反复
+// 分析——尤其管理员不采纳建议后，二次分析会重复报同一条）；force=true 时忽略该过滤（强制重
+// 查全部候选）。同文本多日志只保留一条。
+func fetchRecentErrorLogs(ctx context.Context, windowSec int64, limit int, force bool) ([]errorLogCandidate, error) {
 	if limit <= 0 {
 		limit = 200
+	}
+	var analyzed map[int64]bool
+	if !force {
+		analyzed, _ = model.GetAnalyzedErrorLogIds()
 	}
 	var logs []model.Log
 	err := model.LOG_DB.WithContext(ctx).
@@ -121,30 +155,33 @@ func fetchRecentErrorLogTexts(ctx context.Context, windowSec int64, limit int) (
 		return nil, err
 	}
 	seen := make(map[string]bool)
-	out := make([]string, 0, len(logs))
+	out := make([]errorLogCandidate, 0, len(logs))
 	for _, l := range logs {
+		if analyzed != nil && analyzed[int64(l.Id)] {
+			continue
+		}
 		text := truncate500(l.Content)
 		if text == "" || seen[text] {
 			continue
 		}
 		seen[text] = true
-		out = append(out, text)
+		out = append(out, errorLogCandidate{Id: l.Id, Text: text})
 	}
 	return out, nil
 }
 
 // filterMarkerCandidates 粗筛：未被现有标记命中、且含疑似内容安全的词，控制分析成本。
-func filterMarkerCandidates(texts []string, setting *operation_setting.CreditScoreSetting) []string {
+func filterMarkerCandidates(texts []errorLogCandidate, setting *operation_setting.CreditScoreSetting) []errorLogCandidate {
 	safetyHints := []string{
 		"sensitive", "moderation", "violat", "block", "refus",
 		"违规", "敏感", "不当", "审核", "check your input", "content policy",
 	}
-	out := make([]string, 0, len(texts))
+	out := make([]errorLogCandidate, 0, len(texts))
 	for _, t := range texts {
-		if setting.HasUpstreamViolationMarker(t) {
+		if setting.HasUpstreamViolationMarker(t.Text) {
 			continue // 已命中现有标记，无需分析
 		}
-		lower := strings.ToLower(t)
+		lower := strings.ToLower(t.Text)
 		hit := false
 		for _, h := range safetyHints {
 			if strings.Contains(lower, h) {
@@ -181,7 +218,12 @@ func callMarkerAnalysisModel(ctx context.Context, setting *operation_setting.Cre
 		return nil, tokenUsage{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if setting.MarkerAnalysisApiKey != "" {
+	// 套娃：配置了内部 token 时优先用它调本站——自己的 relay 按 token_key 识别为内部
+	// 子请求，跳过敏感词检测/对话留存/扣分（分析内容本身含违规特征，不能被自己的风控
+	// 拦截）。未配置内部 token 时退回外部 api key。
+	if setting.MarkerAnalysisInternalToken != "" {
+		req.Header.Set("Authorization", "Bearer "+setting.MarkerAnalysisInternalToken)
+	} else if setting.MarkerAnalysisApiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+setting.MarkerAnalysisApiKey)
 	}
 
@@ -234,14 +276,31 @@ func callMarkerAnalysisModel(ctx context.Context, setting *operation_setting.Cre
 }
 
 func markerSuggestionExists(marker string) bool {
+	// 词还在违规标记词中：已采纳，无需再建议（也是候选过滤的前提）。
 	if operation_setting.GetCreditScoreSetting().HasUpstreamViolationMarker(marker) {
 		return true
 	}
 	var count int64
-	// 大小写不敏感去重：避免 "is sensitive" 与 "Is Sensitive" 各进一条建议。
+	// 仅 pending 建议去重：accepted 的词已进入 violation_markers（上面拦截），若用户又
+	// 从违规词中删掉该词，accepted 历史记录不应再挡着重新建议；rejected 同理。
 	_ = model.DB.Model(&model.CreditMarkerSuggestion{}).
-		Where("LOWER(marker) = LOWER(?) AND status != ?", marker, "rejected").Count(&count).Error
+		Where("LOWER(marker) = LOWER(?) AND status = ?", marker, "pending").Count(&count).Error
 	return count > 0
+}
+
+// refreshPendingSuggestion 强制重新分析时，用最新分析结果刷新已存在的 pending 建议
+// （example/reason 更新），避免重复堆积；返回是否刷新成功（用于产出计数）。
+func refreshPendingSuggestion(s markerSuggestion) bool {
+	var existing model.CreditMarkerSuggestion
+	if err := model.DB.
+		Where("LOWER(marker) = LOWER(?) AND status = ?", s.Marker, "pending").
+		First(&existing).Error; err != nil {
+		return false
+	}
+	return model.DB.Model(&existing).Updates(map[string]any{
+		"example": truncate500(s.Example),
+		"reason":  truncate500(s.Reason),
+	}).Error == nil
 }
 
 func logMarkerAnalysisRun(startTime time.Time, triggeredBy string, analyzedCount, promptTokens, completionTokens int, modelName, baseURL string, suggestionsCount int, errMsg string) {

@@ -2,6 +2,10 @@ package controller
 
 import (
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
@@ -10,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
 )
@@ -214,9 +219,15 @@ func updateOperationSettingOption(c *gin.Context, module, field, value string) e
 	return model.UpdateOption(key, value)
 }
 
-// AnalyzeMarkers 手动立即跑一次违规标记词 AI 分析。
+// AnalyzeMarkers 手动立即跑一次违规标记词 AI 分析。body 可选 force=true：忽略"已分析去重"
+// 过滤，强制重新分析窗口内全部候选日志（管理员想重查不采纳的建议时用）。
 func AnalyzeMarkers(c *gin.Context) {
-	summary, err := service.AnalyzeRecentErrorLogs(c.Request.Context(), "manual")
+	var req struct {
+		Force bool `json:"force"`
+	}
+	// body 可为空（旧调用不带 body），解码失败按 force=false 处理。
+	_ = common.DecodeJson(c.Request.Body, &req)
+	summary, err := service.AnalyzeRecentErrorLogs(c.Request.Context(), "manual", req.Force)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -235,6 +246,19 @@ func GetMarkerSuggestions(c *gin.Context) {
 	}
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(suggestions)
+	common.ApiSuccess(c, pageInfo)
+}
+
+// GetMarkerAnalysisLogs 标记词 AI 分析运行历史（审计：时间/用量/是否调用了模型）。
+func GetMarkerAnalysisLogs(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	logs, total, err := model.ListCreditMarkerAnalysisLogs(pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(logs)
 	common.ApiSuccess(c, pageInfo)
 }
 
@@ -290,4 +314,182 @@ func RejectMarkerSuggestion(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, gin.H{"id": id})
+}
+
+// FetchMarkerAnalysisUpstreamModels 拉取自定义端点（上游 /v1/models）的模型列表，供 custom
+// 模式下"自动获取"分析模型用。base_url/api_key 均为管理员配置的部署目标，走通用 outbound client。
+func FetchMarkerAnalysisUpstreamModels(c *gin.Context) {
+	var req struct {
+		BaseUrl string `json:"base_url"`
+		ApiKey  string `json:"api_key"`
+	}
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiErrorMsg(c, "invalid request body")
+		return
+	}
+	baseURL := strings.TrimRight(strings.TrimSpace(req.BaseUrl), "/")
+	if baseURL == "" {
+		common.ApiErrorMsg(c, "base_url is required")
+		return
+	}
+	httpReq, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, baseURL+"/models", nil)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if req.ApiKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+req.ApiKey)
+	}
+	httpReq.Header.Set("Accept", "application/json")
+	resp, err := service.GetHttpClient().Do(httpReq)
+	if err != nil {
+		common.ApiErrorMsg(c, "fetch upstream models failed: "+err.Error())
+		return
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if resp.StatusCode != http.StatusOK {
+		common.ApiErrorMsg(c, fmt.Sprintf("upstream /models http %d: %s", resp.StatusCode, truncateBytes(string(raw), 200)))
+		return
+	}
+	var parsed struct {
+		Data []struct {
+			Id string `json:"id"`
+		} `json:"data"`
+	}
+	if err := common.Unmarshal(raw, &parsed); err != nil {
+		common.ApiErrorMsg(c, "parse upstream models failed: "+err.Error())
+		return
+	}
+	models := make([]string, 0, len(parsed.Data))
+	seen := make(map[string]bool)
+	for _, m := range parsed.Data {
+		id := strings.TrimSpace(m.Id)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		models = append(models, id)
+	}
+	common.ApiSuccess(c, gin.H{"models": models})
+}
+
+// ResetRiskControlMarkers 把违规标记词重置为系统初始自带的默认值（"重置"按钮语义）。
+func ResetRiskControlMarkers(c *gin.Context) {
+	setting := operation_setting.GetCreditScoreSetting()
+	setting.ViolationMarkers = operation_setting.DefaultViolationMarkers
+	if err := model.UpdateOption("credit_score_setting.violation_markers", operation_setting.DefaultViolationMarkers); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"markers": splitMarkerLines(setting.ViolationMarkers)})
+}
+
+// GetMarkerAnalysisTokenStatus 套娃内部 token 状态（值敏感不回显，只给 masked 尾号 + 分组）。
+// 同时返回本站内部 base_url（自动按运行端口推断），供前端"本站套娃"预设自动填充——
+// 不用管理员手改非标端口。
+func GetMarkerAnalysisTokenStatus(c *gin.Context) {
+	setting := operation_setting.GetCreditScoreSetting()
+	maskedKey := ""
+	tokenGroup := ""
+	if setting.MarkerAnalysisInternalToken != "" {
+		maskedKey = model.MaskTokenKey(setting.MarkerAnalysisInternalToken)
+		// token 表的 group 才是真实路由分组：option 里的 group 可能被设置页单独保存过
+		// （改分组没重新生成），前端据此红字提示需要重新生成。
+		if t, err := model.GetTokenByKey(setting.MarkerAnalysisInternalToken, false); err == nil {
+			tokenGroup = t.Group
+		}
+	}
+	common.ApiSuccess(c, gin.H{
+		"configured":        setting.MarkerAnalysisInternalToken != "",
+		"masked_key":        maskedKey,
+		"group":             setting.MarkerAnalysisInternalGroup,
+		"token_group":       tokenGroup,
+		"internal_base_url": buildInternalAnalysisBaseURL(),
+	})
+}
+
+// buildInternalAnalysisBaseURL 构造后端进程可达的自身 /v1 地址（回环 + 运行端口）。
+// 套娃请求从后端进程发往此处，不经过外部反代，127.0.0.1 一定可达。
+func buildInternalAnalysisBaseURL() string {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = strconv.Itoa(*common.Port)
+	}
+	return "http://127.0.0.1:" + port + "/v1"
+}
+
+// RegenerateAnalysisToken 生成/重生成套娃内部 token：挂 root、allow_ips 仅本地回环、
+// 永不过期、额度不限；旧 token 立即禁用，避免重新生成后旧值仍可免交互使用。
+func RegenerateAnalysisToken(c *gin.Context) {
+	var req struct {
+		Group string `json:"group"`
+	}
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiErrorMsg(c, "invalid request body")
+		return
+	}
+	req.Group = strings.TrimSpace(req.Group)
+	// auto 分组按用户所在组动态路由，内部 token 需要固定的分组才能路由渠道，直接拒绝。
+	if req.Group == "auto" {
+		common.ApiErrorMsg(c, "auto group is not allowed for the internal analysis token")
+		return
+	}
+	if _, ok := ratio_setting.GetGroupRatioCopy()[req.Group]; !ok {
+		common.ApiErrorMsg(c, fmt.Sprintf("invalid group: %s", req.Group))
+		return
+	}
+	rootUser := model.GetRootUser()
+	if rootUser == nil || rootUser.Id == 0 {
+		common.ApiErrorMsg(c, "root user not found")
+		return
+	}
+	setting := operation_setting.GetCreditScoreSetting()
+	// 删除旧 token：重新生成后旧值立即作废。内部 token 无审计价值，删除比禁用更干净
+	// （不留堆积的失效行）；token.Delete 走软删除，auth 查询会自动排除，即刻不可用。
+	if oldKey := setting.MarkerAnalysisInternalToken; oldKey != "" {
+		if oldToken, err := model.GetTokenByKey(oldKey, false); err == nil {
+			if delErr := oldToken.Delete(); delErr != nil {
+				common.SysLog("failed to delete old marker analysis token: " + delErr.Error())
+			}
+		}
+	}
+	key, err := common.GenerateKey()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	allowIps := "127.0.0.1\n::1"
+	token := model.Token{
+		UserId:         rootUser.Id,
+		Name:           model.InternalTokenNamePrefix + " (risk-control)",
+		Key:            key,
+		CreatedTime:    common.GetTimestamp(),
+		AccessedTime:   common.GetTimestamp(),
+		ExpiredTime:    -1,
+		UnlimitedQuota: true,
+		AllowIps:       &allowIps,
+		Group:          req.Group,
+	}
+	if err := token.Insert(); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.UpdateOption("credit_score_setting.marker_analysis_internal_token", key); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.UpdateOption("credit_score_setting.marker_analysis_internal_group", req.Group); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"configured": true,
+		"masked_key": model.MaskTokenKey(key),
+		"group":      req.Group,
+	})
 }

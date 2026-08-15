@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
@@ -103,8 +104,19 @@ func StringData(c *gin.Context, str string) error {
 		return fmt.Errorf("request context done: %w", c.Request.Context().Err())
 	}
 
-	c.Render(-1, common.CustomEvent{Data: "data: " + str})
+	c.Render(-1, common.CustomEvent{Data: "data: " + normalizeSSEFrameSeparators(str)})
 	return FlushWriter(c)
+}
+
+// normalizeSSEFrameSeparators 还原部分上游把 SSE 帧间换行写成字面 "\n"（backslash-n）
+// 的非标准输出。此类上游只有首帧用真实换行分隔，后续帧用字面 "\n\n" 拼接，标准客户端
+// 按真实换行拆帧会把剩余整个流当成一行而解析失败。这里只把帧间 "\n\ndata:" 还原为真实
+// 换行；帧内 JSON 转义的字面 "\n"（不紧跟 "data:"）保持不动，避免破坏 JSON 字符串。
+func normalizeSSEFrameSeparators(s string) string {
+	if !strings.Contains(s, "\\n\\ndata:") {
+		return s
+	}
+	return strings.ReplaceAll(s, "\\n\\ndata:", "\n\ndata:")
 }
 
 func PingData(c *gin.Context) error {

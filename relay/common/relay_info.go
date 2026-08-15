@@ -121,6 +121,9 @@ type RelayInfo struct {
 	// 强制预扣全额。用于异步任务（视频/音乐生成等），因为请求返回后任务仍在运行，
 	// 必须在提交前锁定全额。
 	ForcePreConsume bool
+	// FreeBilling 标记内部子请求（套娃分析等）零计费：预扣 0、结算 0。
+	// 请求本身代表系统内部调用，不应消耗任何用户/订阅额度。
+	FreeBilling bool
 	// Billing 是计费会话，封装了预扣费/结算/退款的统一生命周期。
 	// 初始免费组可为 nil；若 auto 重试切换到付费组，会在发送前创建。
 	Billing BillingSettler

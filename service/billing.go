@@ -18,6 +18,10 @@ const (
 // PreConsumeBilling 根据用户计费偏好创建 BillingSession 并执行预扣费。
 // 会话存储在 relayInfo.Billing 上，供后续 Settle / Refund 使用。
 func PreConsumeBilling(c *gin.Context, preConsumedQuota int, relayInfo *relaycommon.RelayInfo) *types.NewAPIError {
+	// 内部子请求（套娃分析等）零计费：不建 session、不预扣，结算路径同样跳过。
+	if relayInfo != nil && relayInfo.FreeBilling {
+		return nil
+	}
 	if relayInfo != nil && relayInfo.QuotaClamp != nil {
 		return types.NewErrorWithStatusCode(
 			relayInfo.QuotaClamp,
@@ -49,6 +53,11 @@ func PreConsumeBilling(c *gin.Context, preConsumedQuota int, relayInfo *relaycom
 // SettleBilling 执行计费结算。如果 RelayInfo 上有 BillingSession 则通过 session 结算，
 // 否则回退到旧的 PostConsumeQuota 路径（兼容按次计费等场景）。
 func SettleBilling(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, actualQuota int) error {
+	// 内部子请求零计费：预扣阶段已跳过（FreeBilling 时 PreConsumeBilling 不建 session），
+	// 结算同样不扣任何额度，与预扣保持平衡。
+	if relayInfo.FreeBilling {
+		return nil
+	}
 	if relayInfo.Billing != nil {
 		preConsumed := relayInfo.Billing.GetPreConsumedQuota()
 		delta := actualQuota - preConsumed

@@ -148,6 +148,16 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		return
 	}
 
+	// 套娃内部请求：token_key 匹配内部分析 token 才标记为内部子请求——对话留存/敏感词检测/
+	// 扣分/计费全部跳过（分析内容本身含违规特征，不能被自己的风控拦截，也不能消耗管理员额度）。
+	// 该 token 由 RegenerateAnalysisToken 生成，仅允许 127.0.0.1/::1 回环地址访问（auth 中间件
+	// 按 allow_ips 校验来源 IP，外部无法伪造），挂 root 且额度不限。
+	if internalToken := operation_setting.GetCreditScoreSetting().MarkerAnalysisInternalToken; internalToken != "" &&
+		c.GetString(string(constant.ContextKeyTokenKey)) == internalToken {
+		c.Set(string(constant.ContextKeyInternalSubRequest), true)
+		relayInfo.FreeBilling = true
+	}
+
 	// 对话记录留存：仅对可留存的 chat 类请求安装响应捕获 writer（流式/非流式都能拿到
 	// 响应体）。embeddings/图片等不落库的请求不装，避免为每条请求白分配大 buffer。
 	var conversationCapture *captureResponseWriter
@@ -180,7 +190,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		meta = fastTokenCountMetaForPricing(request)
 	}
 
-	if needSensitiveCheck && meta != nil {
+	if needSensitiveCheck && meta != nil && !common.GetContextKeyBool(c, constant.ContextKeyInternalSubRequest) {
 		contains, words := service.CheckSensitiveText(meta.CombineText)
 		if contains {
 			logger.LogWarn(c, fmt.Sprintf("user sensitive words detected: %s", strings.Join(words, ", ")))
