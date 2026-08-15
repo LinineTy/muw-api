@@ -93,6 +93,7 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
   addon: {
     enabled: true,
     image_host: true,
+    risk_control: true,
   },
 }
 

@@ -6123,6 +6123,7 @@
     "Save this token now. You won't be able to view it again after closing this dialog.": "请立即保存此令牌。关闭此对话框后，您将无法再次查看。",
     "Supported operators: eq, ne, gt, gte, lt, lte, in, not_in, contains, not_contains, exists, not_exists. Leave empty to allow all users.": "支持的操作符：eq、ne、gt、gte、lt、lte、in、not_in、contains、not_contains、exists、not_exists。留空则允许所有用户。",
     "The new token will only be shown once. Copy it and store it securely.": "新令牌仅显示一次。请复制并妥善保存。",
-    "This will immediately invalidate your existing access token. Any applications or scripts using it will stop working.": "这会立即使现有访问令牌失效。任何正在使用它的应用程序或脚本都将停止工作。"
+    "This will immediately invalidate your existing access token. Any applications or scripts using it will stop working.": "这会立即使现有访问令牌失效。任何正在使用它的应用程序或脚本都将停止工作。",
+    "Credit score, conversation retention and marker analysis.": "信用分、对话留存与标记词分析。"
   }
 }
