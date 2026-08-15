@@ -22,6 +22,17 @@ export type ModuleAccess = { enabled: boolean; requireAuth: boolean }
 
 export type HeaderNavModule = 'rankings' | 'pricing'
 
+/**
+ * A user-defined link rendered after the built-in header navigation modules.
+ * `href` may be an absolute URL (external, opens in a new tab) or a path
+ * starting with `/` (internal, routed through the SPA).
+ */
+export type HeaderNavCustomLink = {
+  title: string
+  href: string
+  enabled: boolean
+}
+
 export type HeaderNavModules = {
   home: boolean
   console: boolean
@@ -29,7 +40,8 @@ export type HeaderNavModules = {
   rankings: ModuleAccess
   docs: boolean
   about: boolean
-  [key: string]: boolean | ModuleAccess
+  customLinks: HeaderNavCustomLink[]
+  [key: string]: boolean | ModuleAccess | HeaderNavCustomLink[]
 }
 
 const DEFAULT_HEADER_NAV_MODULES: HeaderNavModules = {
@@ -39,6 +51,7 @@ const DEFAULT_HEADER_NAV_MODULES: HeaderNavModules = {
   rankings: { enabled: true, requireAuth: false },
   docs: true,
   about: true,
+  customLinks: [],
 }
 
 const DEFAULTS: Record<HeaderNavModule, ModuleAccess> = {
@@ -118,6 +131,10 @@ export function parseHeaderNavModules(raw: unknown): HeaderNavModules {
       result.rankings = parseAccess(value, result.rankings)
       return
     }
+    if (key === 'customLinks') {
+      result.customLinks = parseHeaderNavCustomLinks(value)
+      return
+    }
 
     const fallback = result[key]
     if (
@@ -134,6 +151,24 @@ export function parseHeaderNavModules(raw: unknown): HeaderNavModules {
   })
 
   return result
+}
+
+function parseHeaderNavCustomLinks(raw: unknown): HeaderNavCustomLink[] {
+  if (!Array.isArray(raw)) return []
+  const links: HeaderNavCustomLink[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const record = item as Record<string, unknown>
+    const title = typeof record.title === 'string' ? record.title.trim() : ''
+    const href = typeof record.href === 'string' ? record.href.trim() : ''
+    if (!title || !href) continue
+    links.push({
+      title,
+      href,
+      enabled: parseHeaderNavBoolean(record.enabled, true),
+    })
+  }
+  return links
 }
 
 export function parseHeaderNavModulesFromStatus(
