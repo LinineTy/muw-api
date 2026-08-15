@@ -44,6 +44,10 @@ func TestAdminBindSubscriptionRespectsSimultaneousCap(t *testing.T) {
 	require.NoError(t, DB.Create(plan).Error)
 	InvalidateSubscriptionPlanCache(7101)
 
+	// AdminBindSubscription 加了用户行锁(并发下 MaxPurchasePerUser 检查按用户串行),
+	// 要求绑定目标用户存在,补 fixture。
+	require.NoError(t, DB.Create(&User{Id: 801, Username: "cap-test-user"}).Error)
+
 	// 已持 2 个活跃订阅 → 绑定第 3 个被拒。
 	for _, id := range []int{7101, 7102} {
 		require.NoError(t, DB.Create(&UserSubscription{

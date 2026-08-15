@@ -16,8 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import assert from 'node:assert/strict'
-import { describe, test } from 'node:test'
+import { describe, expect, test } from 'vitest'
 
 import { dispatchSelectedPayment } from './payment'
 
@@ -35,7 +34,7 @@ describe('payment dispatch', () => {
       }
     )
 
-    assert.equal(success, true)
-    assert.deepEqual(calls, ['alipay:120'])
+    expect(success).toBe(true)
+    expect(calls).toEqual(['alipay:120'])
   })
 })
