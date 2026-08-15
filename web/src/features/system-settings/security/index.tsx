@@ -69,6 +69,7 @@ const defaultSecuritySettings: SecuritySettings = {
   'credit_score_setting.marker_analysis_base_url': '',
   'credit_score_setting.marker_analysis_api_key': '',
   'credit_score_setting.marker_analysis_model': '',
+  'credit_score_setting.marker_analysis_internal_group': '',
   'conversation_retention_setting.enabled': false,
   'conversation_retention_setting.request_max_bytes': 2097152,
   'conversation_retention_setting.response_max_bytes': 2097152,

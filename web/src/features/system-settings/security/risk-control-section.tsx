@@ -7,7 +7,8 @@ published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useMemo, useRef } from 'react'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -21,13 +22,36 @@ import {
   FormItem,
   FormLabel,
 } from '@/components/ui/form'
+import { Loader2, Search } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 
+import { getModels } from '@/features/models/api'
+import {
+  fetchUpstreamModels,
+  getAllGroups,
+  getMarkerAnalysisTokenStatus,
+  regenerateMarkerAnalysisToken,
+} from '@/features/risk-control/api'
+
 import {
   SettingsForm,
+  SettingsFormGrid,
   SettingsSwitchContent,
   SettingsSwitchItem,
 } from '../components/settings-form-layout'
@@ -57,6 +81,7 @@ const riskControlSchema = z.object({
     marker_analysis_base_url: z.string(),
     marker_analysis_api_key: z.string(),
     marker_analysis_model: z.string(),
+    marker_analysis_internal_group: z.string(),
   }),
   conversation_retention_setting: z.object({
     enabled: z.boolean(),
@@ -89,6 +114,7 @@ type FlatRiskControlDefaults = {
   'credit_score_setting.marker_analysis_base_url': string
   'credit_score_setting.marker_analysis_api_key': string
   'credit_score_setting.marker_analysis_model': string
+  'credit_score_setting.marker_analysis_internal_group': string
   'conversation_retention_setting.enabled': boolean
   'conversation_retention_setting.request_max_bytes': number
   'conversation_retention_setting.response_max_bytes': number
@@ -129,6 +155,8 @@ const buildFormDefaults = (
       d['credit_score_setting.marker_analysis_api_key'] ?? '',
     marker_analysis_model:
       d['credit_score_setting.marker_analysis_model'] ?? '',
+    marker_analysis_internal_group:
+      d['credit_score_setting.marker_analysis_internal_group'] ?? '',
   },
   conversation_retention_setting: {
     enabled: d['conversation_retention_setting.enabled'],
@@ -185,6 +213,8 @@ const normalizeFormValues = (
     v.credit_score_setting.marker_analysis_api_key,
   'credit_score_setting.marker_analysis_model':
     v.credit_score_setting.marker_analysis_model,
+  'credit_score_setting.marker_analysis_internal_group':
+    v.credit_score_setting.marker_analysis_internal_group,
   'conversation_retention_setting.enabled':
     v.conversation_retention_setting.enabled,
   'conversation_retention_setting.request_max_bytes': Math.round(
@@ -220,9 +250,136 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
 
   useResetForm(form, formDefaults)
 
+  // 接入方式预设：本站套娃（自动内部 base_url + 分组/模型联动 + 内部 token）vs 自定义端点。
+  // 初始按已配置 base_url 判断：空/回环地址视为套娃预设，其它视为自定义。
+  const [mode, setMode] = useState<'site' | 'custom'>(() => {
+    const b = defaultValues['credit_score_setting.marker_analysis_base_url'] ?? ''
+    return b === '' || b.includes('127.0.0.1') || b.includes('localhost')
+      ? 'site'
+      : 'custom'
+  })
+
+  // 套娃内部 token：状态（已配置尾号/分组 + 内部 base_url 自动推断）、全量分组、本站模型。
+  const { data: tokenStatus, refetch: refetchTokenStatus } = useQuery({
+    queryKey: ['marker-analysis-token-status'],
+    queryFn: getMarkerAnalysisTokenStatus,
+  })
+  const internalBaseUrl = tokenStatus?.internal_base_url ?? ''
+  const { data: groups = [] } = useQuery({
+    queryKey: ['groups'],
+    queryFn: getAllGroups,
+  })
+  const { data: modelsData } = useQuery({
+    queryKey: ['models', 'all'],
+    queryFn: () => getModels({ page_size: 1000, status: '1' }),
+  })
+  const allModels = useMemo(
+    () => modelsData?.data?.items ?? [],
+    [modelsData]
+  )
+  // 分组 → 模型联动：选分组后模型下拉只显示该分组下可用的模型（enable_groups）。
+  const selectedGroup = form.watch(
+    'credit_score_setting.marker_analysis_internal_group'
+  )
+  // 已配置内部 token 的实际分组 ≠ 当前所选分组 → 红字提醒重新生成（token 路由仍走旧分组）。
+  const groupChanged =
+    !!tokenStatus?.configured &&
+    !!selectedGroup &&
+    !!tokenStatus.token_group &&
+    tokenStatus.token_group !== selectedGroup
+  // 分析模型被改动（相对上次保存值）→ 红字提醒确认分组可用 / 必要时重新生成。
+  const modelChanged =
+    form.watch('credit_score_setting.marker_analysis_model') !==
+    baselineRef.current['credit_score_setting.marker_analysis_model']
+  const availableModelNames = useMemo(() => {
+    // auto 分组无固定渠道绑定（按用户所在组自动路由），此时不按分组过滤。
+    if (!selectedGroup || selectedGroup === 'auto') {
+      return allModels.map((m) => m.model_name)
+    }
+    return allModels
+      .filter(
+        (m) => !m.enable_groups?.length || m.enable_groups.includes(selectedGroup)
+      )
+      .map((m) => m.model_name)
+  }, [allModels, selectedGroup])
+
+  const generateMutation = useMutation({
+    mutationFn: (group: string) => regenerateMarkerAnalysisToken(group),
+    onSuccess: () => {
+      toast.success(t('Internal token generated'))
+      refetchTokenStatus()
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || t('Failed to generate internal token'))
+    },
+  })
+  const handleGenerateToken = () => {
+    const group = form.getValues(
+      'credit_score_setting.marker_analysis_internal_group'
+    )
+    if (!group) {
+      toast.error(t('Select an analysis group first'))
+      return
+    }
+    generateMutation.mutate(group)
+  }
+
+  // 自动获取分析模型（site 模式）：从当前分组下可用模型挑，custom 模式从本站全部模型挑。
+  const handleAutoPickModel = () => {
+    const names =
+      mode === 'site'
+        ? availableModelNames
+        : allModels.map((m) => m.model_name)
+    if (names.length === 0) {
+      toast.error(t('No model available for the selected group'))
+      return
+    }
+    const picked = names[0]
+    form.setValue('credit_score_setting.marker_analysis_model', picked)
+    toast.success(`${t('Auto picked model')}: ${picked}`)
+  }
+
+  // 上游模型（custom 模式）：点放大镜拉取 base_url 的 /v1/models，弹层里搜索选择。
+  const [upstreamModelsOpen, setUpstreamModelsOpen] = useState(false)
+  const [upstreamModelList, setUpstreamModelList] = useState<string[]>([])
+  const [upstreamSearch, setUpstreamSearch] = useState('')
+  const fetchUpstreamMutation = useMutation({
+    mutationFn: (payload: { base_url: string; api_key: string }) =>
+      fetchUpstreamModels(payload),
+    onSuccess: (r) => {
+      setUpstreamModelList(r.models)
+      setUpstreamModelsOpen(true)
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || t('Failed to fetch upstream models'))
+    },
+  })
+  const handleOpenUpstreamModels = () => {
+    const baseUrl =
+      form.getValues('credit_score_setting.marker_analysis_base_url') ?? ''
+    const apiKey =
+      form.getValues('credit_score_setting.marker_analysis_api_key') ?? ''
+    if (!baseUrl.trim()) {
+      toast.error(t('Fill the base URL first'))
+      return
+    }
+    fetchUpstreamMutation.mutate({ base_url: baseUrl, api_key: apiKey })
+  }
+  const filteredUpstreamModels = upstreamModelList.filter((m) =>
+    m.toLowerCase().includes(upstreamSearch.trim().toLowerCase())
+  )
+
   // 一个保存按钮保存全部区块，但 diff 只提交变更字段：未改动的区块不会连带写入。
+  // site 预设保存时：base_url 用自动推断的内部地址，api key 置空（内部 token 已足够鉴权）。
   const saveAll = async (values: RiskControlFormValues) => {
     const normalized = normalizeFormValues(values)
+    if (mode === 'site') {
+      if (internalBaseUrl) {
+        normalized['credit_score_setting.marker_analysis_base_url'] =
+          internalBaseUrl
+      }
+      normalized['credit_score_setting.marker_analysis_api_key'] = ''
+    }
     const updates = (
       Object.keys(normalized) as Array<keyof FlatRiskControlDefaults>
     ).filter((key) => normalized[key] !== baselineRef.current[key])
@@ -244,7 +401,7 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
             isSaving={updateOption.isPending}
           />
           <SettingsSection title={t('Credit Score')}>
-
+            <SettingsFormGrid>
             <FormField
               control={form.control}
               name='credit_score_setting.enabled'
@@ -515,6 +672,41 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
                 </SettingsSwitchItem>
               )}
             />
+            <div
+              data-settings-form-span='full'
+              className='min-w-0 space-y-2'
+            >
+              <div className='text-sm font-medium'>
+                {t('Analysis connection')}
+              </div>
+              <Select
+                value={mode}
+                onValueChange={(v) => setMode(v as 'site' | 'custom')}
+              >
+                <SelectTrigger>
+                  <SelectValue>
+                    {() =>
+                      mode === 'site'
+                        ? t('Use this site (local models, free)')
+                        : t('Custom OpenAI-compatible endpoint')
+                    }
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent className='min-w-56'>
+                  <SelectItem value='site'>
+                    {t('Use this site (local models, free)')}
+                  </SelectItem>
+                  <SelectItem value='custom'>
+                    {t('Custom OpenAI-compatible endpoint')}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className='text-muted-foreground text-xs'>
+                {t(
+                  'Site mode reuses your own configured models with the internal token and costs nothing; custom mode points to an external OpenAI-compatible API.'
+                )}
+              </p>
+            </div>
             <FormField
               control={form.control}
               name='credit_score_setting.marker_analysis_base_url'
@@ -523,56 +715,275 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
                   <FormLabel>{t('Marker analysis API base URL')}</FormLabel>
                   <FormControl>
                     <Input
-                      value={field.value ?? ''}
+                      value={
+                        mode === 'site'
+                          ? internalBaseUrl || field.value || ''
+                          : field.value ?? ''
+                      }
                       onChange={field.onChange}
+                      disabled={mode === 'site'}
                       placeholder='https://api.openai.com/v1'
                     />
                   </FormControl>
                   <FormDescription>
-                    {t(
-                      'OpenAI-compatible endpoint. Can point at this site itself (e.g. http://127.0.0.1:3000/v1 with a site token) to reuse your own models.'
-                    )}
+                    {mode === 'site'
+                      ? t(
+                          'Auto-filled with the loopback address of this site (runtime port inferred). Save to apply.'
+                        )
+                      : t(
+                          'OpenAI-compatible endpoint. Can point at this site itself (e.g. http://127.0.0.1:3000/v1 with a site token) to reuse your own models.'
+                        )}
                   </FormDescription>
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name='credit_score_setting.marker_analysis_api_key'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Marker analysis API key')}</FormLabel>
-                  <FormControl>
-                    <Input
-                      type='password'
-                      value={field.value ?? ''}
-                      onChange={field.onChange}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name='credit_score_setting.marker_analysis_model'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Marker analysis model')}</FormLabel>
-                  <FormControl>
-                    <Input
-                      value={field.value ?? ''}
-                      onChange={field.onChange}
-                      placeholder='gpt-4o-mini'
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
+            {mode === 'custom' && (
+              <FormField
+                control={form.control}
+                name='credit_score_setting.marker_analysis_api_key'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Marker analysis API key')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type='password'
+                        value={field.value ?? ''}
+                        onChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            )}
+            {mode === 'site' ? (
+              <FormField
+                control={form.control}
+                name='credit_score_setting.marker_analysis_model'
+                render={({ field }) => {
+                  const current = field.value ?? ''
+                  const currentMissing =
+                    current !== '' && !availableModelNames.includes(current)
+                  return (
+                    <FormItem>
+                      <FormLabel>{t('Marker analysis model')}</FormLabel>
+                      <div className='flex items-center gap-2'>
+                        <div className='min-w-0 flex-1'>
+                          <Select value={current} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder={t('Select a model')} />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent className='w-fit min-w-56 max-w-[80vw] max-h-72'>
+                              {currentMissing && (
+                                <SelectItem value={current}>{current}</SelectItem>
+                              )}
+                              {availableModelNames.map((name) => (
+                                <SelectItem key={name} value={name}>
+                                  {name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button
+                          type='button'
+                          variant='outline'
+                          size='sm'
+                          onClick={handleAutoPickModel}
+                        >
+                          {t('Auto pick a model')}
+                        </Button>
+                      </div>
+                      {selectedGroup && currentMissing && (
+                        <FormDescription className='text-amber-600'>
+                          {t(
+                            'This model is not available under the selected group; pick one from the list or regenerate the token with a matching group.'
+                          )}
+                        </FormDescription>
+                      )}
+                      {modelChanged && (
+                        <FormDescription className='text-destructive font-medium'>
+                          {t(
+                            'The analysis model changed; confirm it is available in the selected group and regenerate the internal token if needed.'
+                          )}
+                        </FormDescription>
+                      )}
+                      <FormDescription>
+                        {t(
+                          'Models listed are filtered by the selected analysis group.'
+                        )}
+                      </FormDescription>
+                    </FormItem>
+                  )
+                }}
+              />
+            ) : (
+              <FormField
+                control={form.control}
+                name='credit_score_setting.marker_analysis_model'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Marker analysis model')}</FormLabel>
+                    <FormControl>
+                      <div className='flex items-center gap-2'>
+                        <div className='min-w-0 flex-1'>
+                          <Input
+                            value={field.value ?? ''}
+                            onChange={field.onChange}
+                            placeholder='gpt-4o-mini'
+                          />
+                        </div>
+                        <Popover
+                          open={upstreamModelsOpen}
+                          onOpenChange={setUpstreamModelsOpen}
+                        >
+                          <PopoverTrigger
+                            render={
+                              <Button
+                                type='button'
+                                variant='outline'
+                                size='sm'
+                                aria-label={t('Fetch models from upstream')}
+                                disabled={fetchUpstreamMutation.isPending}
+                                onClick={handleOpenUpstreamModels}
+                              >
+                                {fetchUpstreamMutation.isPending ? (
+                                  <Loader2 className='size-4 animate-spin' />
+                                ) : (
+                                  <Search className='size-4' />
+                                )}
+                              </Button>
+                            }
+                          />
+                          <PopoverContent className='w-72 p-2' align='end'>
+                            <Input
+                              value={upstreamSearch}
+                              onChange={(e) =>
+                                setUpstreamSearch(e.target.value)
+                              }
+                              placeholder={t('Search models...')}
+                              className='mb-2'
+                            />
+                            {upstreamModelList.length === 0 ? (
+                              <p className='text-muted-foreground px-1 py-3 text-center text-sm'>
+                                {t('No models returned by the upstream endpoint')}
+                              </p>
+                            ) : (
+                              <div className='max-h-60 space-y-0.5 overflow-y-auto'>
+                                {filteredUpstreamModels.map((model) => (
+                                  <button
+                                    key={model}
+                                    type='button'
+                                    className='hover:bg-accent hover:text-accent-foreground flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm select-none'
+                                    onClick={() => {
+                                      field.onChange(model)
+                                      setUpstreamModelsOpen(false)
+                                      setUpstreamSearch('')
+                                    }}
+                                  >
+                                    <span className='truncate'>{model}</span>
+                                  </button>
+                                ))}
+                                {filteredUpstreamModels.length === 0 && (
+                                  <p className='text-muted-foreground px-1 py-3 text-center text-sm'>
+                                    {t('No option found.')}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Click the magnifier to fetch models from the base URL above, then pick one; you can also type a custom name.'
+                      )}
+                    </FormDescription>
+                  </FormItem>
+                )}
+              />
+            )}
+            {mode === 'site' && (
+              <>
+                <FormField
+                  control={form.control}
+                  name='credit_score_setting.marker_analysis_internal_group'
+                  render={({ field }) => {
+                    const current = field.value ?? ''
+                    return (
+                      <FormItem>
+                        <FormLabel>{t('Marker analysis group')}</FormLabel>
+                        <Select value={current} onValueChange={field.onChange}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder={t('Select a group')} />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className='min-w-52'>
+                            {groups
+                              .filter((group) => group !== 'auto')
+                              .map((group) => (
+                                <SelectItem key={group} value={group}>
+                                  {group}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          {t(
+                            'Analysis requests are routed under this group using the internal token.'
+                          )}
+                        </FormDescription>
+                        {groupChanged && (
+                          <FormDescription className='text-destructive font-medium'>
+                            {t(
+                              'The analysis group changed; regenerate the internal token so requests route under the new group.'
+                            )}
+                          </FormDescription>
+                        )}
+                      </FormItem>
+                    )
+                  }}
+                />
+                <div className='min-w-0 space-y-2'>
+                  <div className='text-sm font-medium'>
+                    {t('Internal analysis token')}
+                  </div>
+                  <div className='flex flex-wrap items-center gap-2'>
+                    <span className='font-mono text-sm'>
+                      {tokenStatus?.configured
+                        ? tokenStatus.masked_key
+                        : t('Token not configured')}
+                    </span>
+                    <Button
+                      type='button'
+                      variant='outline'
+                      size='sm'
+                      disabled={generateMutation.isPending}
+                      onClick={handleGenerateToken}
+                    >
+                      {tokenStatus?.configured
+                        ? t('Regenerate internal token')
+                        : t('Generate internal token')}
+                    </Button>
+                  </div>
+                  <p className='text-muted-foreground text-xs'>
+                    {t(
+                      'When the analysis base URL points at this site itself (nested), the analysis request authenticates with this token. It is bound to the root user, only reachable from local loopback (127.0.0.1/::1), never expires and has unlimited quota; your own relay recognizes it and skips sensitive-word checks, conversation retention and credit deductions. Regenerating immediately disables the previous token. Changing the analysis group requires regenerating the token.'
+                    )}
+                  </p>
+                </div>
+              </>
+            )}
+            </SettingsFormGrid>
           </SettingsSection>
 
           <Separator className='my-2' />
 
           <SettingsSection title={t('Conversation Retention')}>
+            <SettingsFormGrid>
             <FormField
               control={form.control}
               name='conversation_retention_setting.enabled'
@@ -681,6 +1092,7 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
                 </FormItem>
               )}
             />
+            </SettingsFormGrid>
           </SettingsSection>
         </SettingsForm>
     </Form>
