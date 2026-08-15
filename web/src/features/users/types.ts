@@ -59,6 +59,7 @@ export const userSchema = z.object({
   space_used_bytes: z.number().optional(),
   status: userStatusSchema,
   role: userRoleSchema,
+  credit_score: z.number().optional(),
   created_at: z.number().optional(),
   updated_at: z.number().optional(),
   last_login_at: z.number().optional(),

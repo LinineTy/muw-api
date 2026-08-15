@@ -330,7 +330,7 @@ func describeImage(ctx context.Context, c *gin.Context, info *relaycommon.RelayI
 			{Role: "system", Content: setting.Prompt},
 			{Role: "user", Content: []any{
 				map[string]any{
-					"type":     dto.ContentTypeImageURL,
+					"type":      dto.ContentTypeImageURL,
 					"image_url": map[string]any{"url": imageURL},
 				},
 			}},
@@ -429,6 +429,8 @@ func newSubContext(ctx context.Context, c *gin.Context, body []byte) (*gin.Conte
 		keys[k] = v
 	}
 	subCtx.Keys = keys
+	// 标记为内部子请求：信誉分扣分、敏感词扣分、对话记录留存全部跳过。
+	subCtx.Set(string(constant.ContextKeyInternalSubRequest), true)
 
 	newReq := c.Request.Clone(ctx)
 	newReq.Body = io.NopCloser(bytes.NewReader(body))

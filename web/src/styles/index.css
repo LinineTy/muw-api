@@ -606,6 +606,18 @@ For commercial licensing, please contact support@quantumnous.com
   font-variant-numeric: tabular-nums;
 }
 
+/* Hide native up/down steppers on number inputs (global, matches the
+   styled inputs elsewhere; values are still typed directly). */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 /* Long list rendering optimization */
 .content-auto {
   content-visibility: auto;

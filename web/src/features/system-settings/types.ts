@@ -379,6 +379,28 @@ export type SecuritySettings = {
   'fetch_setting.allowed_ports': number[]
   'fetch_setting.apply_ip_filter_for_domain': boolean
   'token_setting.max_user_tokens': number
+  'credit_score_setting.enabled': boolean
+  'credit_score_setting.auto_freeze_enabled': boolean
+  'credit_score_setting.full_score': number
+  'credit_score_setting.freeze_threshold': number
+  'credit_score_setting.deduction_upstream_violation': number
+  'credit_score_setting.deduction_local_keyword': number
+  'credit_score_setting.violation_markers': string
+  'credit_score_setting.repeat_multiplier_enabled': boolean
+  'credit_score_setting.max_daily_deduction': number
+  'credit_score_setting.recover_enabled': boolean
+  'credit_score_setting.recover_per_day': number
+  'credit_score_setting.pledge_points': number
+  'credit_score_setting.pledge_cooldown_days': number
+  'credit_score_setting.marker_analysis_enabled': boolean
+  'credit_score_setting.marker_analysis_base_url': string
+  'credit_score_setting.marker_analysis_api_key': string
+  'credit_score_setting.marker_analysis_model': string
+  'conversation_retention_setting.enabled': boolean
+  'conversation_retention_setting.request_max_bytes': number
+  'conversation_retention_setting.response_max_bytes': number
+  'conversation_retention_setting.max_total_bytes': number
+  'conversation_retention_setting.ttl_days': number
 }
 
 export type UpstreamChannel = {
