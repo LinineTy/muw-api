@@ -783,6 +783,12 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 		if !plan.Enabled {
 			// still allow completion for already purchased orders
 		}
+		// 锁定用户行：并发完成同一用户的不同订单（包括多实例部署下）时，
+		// 使 CreateUserSubscriptionFromPlanTx 的 MaxPurchasePerUser 检查按用户串行。
+		var userRow User
+		if err := lockForUpdate(tx).Select("id").Where("id = ?", order.UserId).First(&userRow).Error; err != nil {
+			return err
+		}
 		if order.ExtendSubscriptionId > 0 {
 			// Renewal: extend the target subscription instead of creating a new one.
 			var target UserSubscription
@@ -908,6 +914,11 @@ func AdminBindSubscription(userId int, planId int, sourceNote string) (string, e
 	}
 	groupChanged := false
 	err = DB.Transaction(func(tx *gorm.DB) error {
+		// 与 CompleteSubscriptionOrder 一致：先锁用户行，再做购买次数检查。
+		var userRow User
+		if err := lockForUpdate(tx).Select("id").Where("id = ?", userId).First(&userRow).Error; err != nil {
+			return err
+		}
 		if common.SubscriptionMaxSimultaneous > 0 {
 			var activeCount int64
 			if err := tx.Model(&UserSubscription{}).
@@ -944,9 +955,8 @@ func calcSubscriptionBalanceQuota(priceAmount float64) (int, error) {
 	}
 	quota := decimal.NewFromFloat(priceAmount).
 		Mul(decimal.NewFromFloat(common.QuotaPerUnit)).
-		Ceil().
-		IntPart()
-	return int(quota), nil
+		Ceil()
+	return common.QuotaFromDecimalStrict(quota)
 }
 
 // createBalanceOrderTx records a successful wallet-based subscription order.
