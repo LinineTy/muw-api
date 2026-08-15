@@ -34,20 +34,30 @@ import type { SpaceOrderRecord } from '../types'
 interface UseSpaceOrdersOptions {
   initialPage?: number
   initialPageSize?: number
+  /** Keyword filter (trade number), controlled by the caller */
+  keyword?: string
+  status?: string
+  method?: string
 }
 
 /**
  * 云空间购买订单分页查询（用户看本人，管理员看全平台）+ 管理员补单/驳回。
+ * keyword / status / method 为服务端过滤条件，由调用方控制（空字符串 = 不过滤）。
  */
 export function useSpaceOrders(options: UseSpaceOrdersOptions = {}) {
-  const { initialPage = 1, initialPageSize = 10 } = options
+  const {
+    initialPage = 1,
+    initialPageSize = 20,
+    keyword = '',
+    status,
+    method,
+  } = options
   const isAdmin = useIsAdmin()
 
   const [records, setRecords] = useState<SpaceOrderRecord[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(initialPage)
   const [pageSize, setPageSize] = useState(initialPageSize)
-  const [keyword, setKeyword] = useState('')
   const [loading, setLoading] = useState(false)
   const [completing, setCompleting] = useState<string | null>(null)
 
@@ -55,8 +65,8 @@ export function useSpaceOrders(options: UseSpaceOrdersOptions = {}) {
     setLoading(true)
     try {
       const response = isAdmin
-        ? await getAllSpaceOrders(page, pageSize, keyword)
-        : await getSpaceOrders(page, pageSize, keyword)
+        ? await getAllSpaceOrders(page, pageSize, keyword, status, method)
+        : await getSpaceOrders(page, pageSize, keyword, status, method)
 
       if (isApiSuccess(response) && response.data) {
         setRecords(response.data.items || [])
@@ -73,7 +83,7 @@ export function useSpaceOrders(options: UseSpaceOrdersOptions = {}) {
     } finally {
       setLoading(false)
     }
-  }, [isAdmin, page, pageSize, keyword])
+  }, [isAdmin, page, pageSize, keyword, status, method])
 
   const handlePageChange = useCallback((newPage: number) => {
     setPage(newPage)
@@ -81,11 +91,6 @@ export function useSpaceOrders(options: UseSpaceOrdersOptions = {}) {
 
   const handlePageSizeChange = useCallback((newPageSize: number) => {
     setPageSize(newPageSize)
-    setPage(1)
-  }, [])
-
-  const handleSearch = useCallback((newKeyword: string) => {
-    setKeyword(newKeyword)
     setPage(1)
   }, [])
 
@@ -144,13 +149,11 @@ export function useSpaceOrders(options: UseSpaceOrdersOptions = {}) {
     total,
     page,
     pageSize,
-    keyword,
     loading,
     isAdmin,
     completing,
     handlePageChange,
     handlePageSizeChange,
-    handleSearch,
     handleCompleteOrder,
     handleRejectOrder,
     refresh: fetchOrders,
