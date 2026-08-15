@@ -4,6 +4,7 @@ import { api } from '@/lib/api'
 import type {
   CreditScoreLog,
   ConversationRecord,
+  MarkerAnalysisLog,
   MarkerSuggestion,
   MarkerSuggestionSummary,
   PageInfo,
@@ -90,6 +91,11 @@ export async function updateMarkers(
   return unwrapData(api.put('/api/risk-control/markers', { markers }))
 }
 
+/** 重置违规标记词为系统初始自带的默认值。 */
+export async function resetMarkers(): Promise<{ markers: string[] }> {
+  return unwrapData(api.post('/api/risk-control/markers/reset'))
+}
+
 export async function getMarkerSuggestions(params: {
   p?: number
   page_size?: number
@@ -98,8 +104,19 @@ export async function getMarkerSuggestions(params: {
   return unwrapData(api.get('/api/risk-control/marker-suggestions', { params }))
 }
 
-export async function analyzeMarkers(): Promise<MarkerSuggestionSummary> {
-  return unwrapData(api.post('/api/risk-control/analyze-markers'))
+export async function getMarkerAnalysisLogs(params: {
+  p?: number
+  page_size?: number
+}): Promise<PageInfo<MarkerAnalysisLog>> {
+  return unwrapData(
+    api.get('/api/risk-control/marker-analysis-logs', { params })
+  )
+}
+
+export async function analyzeMarkers(
+  force = false
+): Promise<MarkerSuggestionSummary> {
+  return unwrapData(api.post('/api/risk-control/analyze-markers', { force }))
 }
 
 export async function acceptMarkerSuggestion(
@@ -115,5 +132,41 @@ export async function rejectMarkerSuggestion(
 ): Promise<{ id: number }> {
   return unwrapData(
     api.post(`/api/risk-control/marker-suggestions/${id}/reject`)
+  )
+}
+
+export interface MarkerAnalysisTokenStatus {
+  configured: boolean
+  masked_key: string
+  group: string
+  /** token 表里的实际分组（设置页单独保存 group 后与 option 不一致，用于红字提醒重新生成）。 */
+  token_group: string
+  internal_base_url: string
+}
+
+export async function getMarkerAnalysisTokenStatus(): Promise<MarkerAnalysisTokenStatus> {
+  return unwrapData(api.get('/api/risk-control/marker-analysis-token-status'))
+}
+
+export async function regenerateMarkerAnalysisToken(
+  group: string
+): Promise<MarkerAnalysisTokenStatus> {
+  return unwrapData(
+    api.post('/api/risk-control/regenerate-analysis-token', { group })
+  )
+}
+
+/** 全部可用分组名（管理员视角，设置页分组下拉用）。 */
+export async function getAllGroups(): Promise<string[]> {
+  return unwrapData(api.get('/api/group/'))
+}
+
+/** 拉取自定义端点（上游 /v1/models）的模型列表（custom 模式"自动获取"分析模型用）。 */
+export async function fetchUpstreamModels(payload: {
+  base_url: string
+  api_key: string
+}): Promise<{ models: string[] }> {
+  return unwrapData(
+    api.post('/api/risk-control/fetch-upstream-models', payload)
   )
 }

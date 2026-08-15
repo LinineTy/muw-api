@@ -140,6 +140,8 @@ const SECURITY_SECTIONS = [
             settings['credit_score_setting.marker_analysis_api_key'] ?? '',
           'credit_score_setting.marker_analysis_model':
             settings['credit_score_setting.marker_analysis_model'] ?? '',
+          'credit_score_setting.marker_analysis_internal_group':
+            settings['credit_score_setting.marker_analysis_internal_group'] ?? '',
           'conversation_retention_setting.enabled':
             settings['conversation_retention_setting.enabled'] ?? false,
           'conversation_retention_setting.request_max_bytes':
