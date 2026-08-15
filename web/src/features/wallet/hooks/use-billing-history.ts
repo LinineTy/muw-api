@@ -39,17 +39,28 @@ interface UseBillingHistoryOptions {
   initialPage?: number
   /** Initial page size */
   initialPageSize?: number
+  /** Keyword filter (trade number), controlled by the caller */
+  keyword?: string
+  /** Server-side status filter ('' = all) */
+  status?: string
+  /** Server-side payment method filter ('' = all) */
+  method?: string
 }
 
 export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
-  const { initialPage = 1, initialPageSize = 10 } = options
+  const {
+    initialPage = 1,
+    initialPageSize = 20,
+    keyword = '',
+    status,
+    method,
+  } = options
   const isAdmin = useIsAdmin()
 
   const [records, setRecords] = useState<TopupRecord[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(initialPage)
   const [pageSize, setPageSize] = useState(initialPageSize)
-  const [keyword, setKeyword] = useState('')
   const [loading, setLoading] = useState(false)
   const [completing, setCompleting] = useState(false)
 
@@ -60,8 +71,8 @@ export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
     setLoading(true)
     try {
       const response = isAdmin
-        ? await getAllBillingHistory(page, pageSize, keyword)
-        : await getUserBillingHistory(page, pageSize, keyword)
+        ? await getAllBillingHistory(page, pageSize, keyword, status, method)
+        : await getUserBillingHistory(page, pageSize, keyword, status, method)
 
       if (isApiSuccess(response) && response.data) {
         setRecords(response.data.items || [])
@@ -82,7 +93,7 @@ export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
     } finally {
       setLoading(false)
     }
-  }, [isAdmin, page, pageSize, keyword])
+  }, [isAdmin, page, pageSize, keyword, status, method])
 
   /**
    * Complete a pending order (admin only)
@@ -133,14 +144,6 @@ export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
     setPage(1) // Reset to first page when changing page size
   }, [])
 
-  /**
-   * Search by keyword
-   */
-  const handleSearch = useCallback((newKeyword: string) => {
-    setKeyword(newKeyword)
-    setPage(1) // Reset to first page when searching
-  }, [])
-
   // Fetch data when dependencies change
   useEffect(() => {
     fetchBillingHistory()
@@ -151,13 +154,11 @@ export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
     total,
     page,
     pageSize,
-    keyword,
     loading,
     completing,
     isAdmin,
     handlePageChange,
     handlePageSizeChange,
-    handleSearch,
     handleCompleteOrder,
     refresh: fetchBillingHistory,
   }
