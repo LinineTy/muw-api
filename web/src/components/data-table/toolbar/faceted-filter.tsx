@@ -189,8 +189,17 @@ function DataTableFacetedFilterInner<TData, TValue>({
   )
 }
 
+// React.memo 浅比较 props 会漏掉受控 column 的 filterValue 变化：column/options 引用
+// 不变（如模块级常量 options）时，勾选后 columnFilters 更新但本组件不重渲染，
+// 勾选状态停留在旧值。自定义比较纳入 filterValue，filter 值变化即重渲染。
 export const DataTableFacetedFilter = React.memo(
-  DataTableFacetedFilterInner
+  DataTableFacetedFilterInner,
+  (prevProps, nextProps) =>
+    prevProps.column === nextProps.column &&
+    prevProps.title === nextProps.title &&
+    prevProps.options === nextProps.options &&
+    prevProps.singleSelect === nextProps.singleSelect &&
+    prevProps.column?.getFilterValue() === nextProps.column?.getFilterValue()
 ) as typeof DataTableFacetedFilterInner
 
 function getNextSelectedValues(
