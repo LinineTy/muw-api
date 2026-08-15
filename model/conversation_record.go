@@ -53,10 +53,12 @@ func ListConversationRecords(userId int, tokenId int, requestId string, modelNam
 		tx = tx.Where("token_id = ?", tokenId)
 	}
 	if requestId != "" {
-		tx = tx.Where("request_id = ?", requestId)
+		// 模糊匹配：管理端按 request_id 检索时输入多为片段。
+		tx = tx.Where("request_id LIKE ?", "%"+requestId+"%")
 	}
 	if modelName != "" {
-		tx = tx.Where("model_name = ?", modelName)
+		// 模型名模糊匹配（含厂商前缀等片段）。
+		tx = tx.Where("model_name LIKE ?", "%"+modelName+"%")
 	}
 	if startTimestamp > 0 {
 		tx = tx.Where("created_at >= ?", startTimestamp)
