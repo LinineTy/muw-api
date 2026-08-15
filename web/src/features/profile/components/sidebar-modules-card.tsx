@@ -32,6 +32,7 @@ import {
 import { IconBadge } from '@/components/ui/icon-badge'
 import { Switch } from '@/components/ui/switch'
 import { api } from '@/lib/api'
+import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
 type SidebarModuleConfig = {
@@ -54,8 +55,10 @@ export function SidebarModulesCard() {
   const [config, setConfig] = useState<SidebarModulesConfig>({})
   const currentUser = useAuthStore((s) => s.auth.user)
   const setUser = useAuthStore((s) => s.auth.setUser)
+  // 管理员/超管才显示 admin 与 addon 区（普通用户侧边栏无这些项）。
+  const isAdminRole = (currentUser?.role ?? ROLE.USER) >= ROLE.ADMIN
 
-  const sectionDefs: SectionDef[] = [
+  const baseSectionDefs: SectionDef[] = [
     {
       key: 'chat',
       title: t('Chat Area'),
@@ -121,6 +124,16 @@ export function SidebarModulesCard() {
           description: t('Balance and top-up management'),
         },
         {
+          key: 'orders',
+          title: t('Order Center'),
+          description: t('Recharge, subscription and cloud space purchase orders.'),
+        },
+        {
+          key: 'space',
+          title: t('Cloud Space'),
+          description: t('Manage your cloud storage and synced conversations.'),
+        },
+        {
           key: 'personal',
           title: t('Personal Settings'),
           description: t('Personal info settings'),
@@ -133,6 +146,73 @@ export function SidebarModulesCard() {
       ],
     },
   ]
+
+  // 管理区（admin/addon）仅对管理员/超管展示。
+  const adminSectionDefs: SectionDef[] = isAdminRole
+    ? [
+        {
+          key: 'admin',
+          title: t('Admin area'),
+          description: t('Global configuration and administrative tools.'),
+          modules: [
+            {
+              key: 'channel',
+              title: t('Channels'),
+              description: t('Configure upstream providers and routing.'),
+            },
+            {
+              key: 'models',
+              title: t('Models'),
+              description: t('Manage catalog visibility and pricing.'),
+            },
+            {
+              key: 'user',
+              title: t('Users'),
+              description: t('Administer user accounts and roles.'),
+            },
+            {
+              key: 'redemption',
+              title: t('Redemption Codes'),
+              description: t('Create and review invite or credit codes.'),
+            },
+            {
+              key: 'subscription',
+              title: t('Subscriptions'),
+              description: t('Manage subscription plans and pricing.'),
+            },
+            {
+              key: 'system_info',
+              title: t('System Info'),
+              description: t('Monitor system instances and background tasks.'),
+            },
+            {
+              key: 'setting',
+              title: t('System Settings'),
+              description: t('Advanced platform configuration.'),
+            },
+          ],
+        },
+        {
+          key: 'addon',
+          title: t('Add-ons'),
+          description: t('Additional tools and utilities.'),
+          modules: [
+            {
+              key: 'image_host',
+              title: t('Image Host'),
+              description: t('Upload and manage images used by themes.'),
+            },
+            {
+              key: 'risk_control',
+              title: t('Risk Control'),
+              description: t('Credit score, conversation retention and marker analysis.'),
+            },
+          ],
+        },
+      ]
+    : []
+
+  const sectionDefs = [...baseSectionDefs, ...adminSectionDefs]
 
   const loadConfig = useCallback(async () => {
     try {

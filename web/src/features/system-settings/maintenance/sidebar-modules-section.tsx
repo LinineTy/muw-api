@@ -184,6 +184,10 @@ export function SidebarModulesSection({
         title: t('Image Host'),
         description: t('Upload and manage images used by themes.'),
       },
+      risk_control: {
+        title: t('Risk Control'),
+        description: t('Credit score, conversation retention and marker analysis.'),
+      },
     },
   }
   const formDefaults = useMemo(() => config, [config])
