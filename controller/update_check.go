@@ -221,6 +221,14 @@ func GetUpdateCheck(c *gin.Context) {
 // 拉取/解析失败时返回空串,不阻塞更新检测本身。
 func fetchVersionChangelog(version string) string {
 	url := common.GetEnvOrDefaultString("UPDATE_CHECK_CHANGELOG_URL", updateCheckChangelogDefault)
+	// CHANGELOG.md 是静态文件,CDN(EdgeOne 等)可能长期缓存旧版本——旧缓存里没有
+	// 新版本条目,提取必然落空(表现为弹窗提示有新版本但更新日志空白)。带时间戳
+	// 查询参数强制绕缓存,保证每次拉到最新内容(检查更新不频繁,回源代价可忽略)。
+	sep := "?"
+	if strings.Contains(url, "?") {
+		sep = "&"
+	}
+	url += sep + "t=" + strconv.FormatInt(time.Now().Unix(), 10)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
