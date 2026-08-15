@@ -75,18 +75,29 @@ var migrations = []Migration{
 	// v7：新增 playground_space_orders 表（AutoMigrate 建）+ 存量 users.space_purchased_bytes
 	// 置 0。v6 新列无默认值，存量行是 NULL，累计上限条件 NULL + x 恒假导致拒买，这里统一回填。
 	// 顺带把同属 v5 新增、同样无默认值的 space_capacity 的 NULL 一并置 0，归一化存量态。
+	// Unscoped：Model(&User{}) 默认自动附加 deleted_at IS NULL，会把被软删除的行跳过，
+	// 导致其 space 字段保持 NULL，恢复后仍触发拒买。Unscoped 去掉该过滤，覆盖全部行。
 	// 幂等：跑过版本戳后不再执行。
 	{Version: 7, Name: "user-space-purchased-backfill", Up: func(db *gorm.DB) error {
-		if err := db.Model(&User{}).Where("space_purchased_bytes IS NULL").Update("space_purchased_bytes", 0).Error; err != nil {
+		if err := db.Unscoped().Model(&User{}).Where("space_purchased_bytes IS NULL").Update("space_purchased_bytes", 0).Error; err != nil {
 			return err
 		}
-		return db.Model(&User{}).Where("space_capacity IS NULL").Update("space_capacity", 0).Error
+		return db.Unscoped().Model(&User{}).Where("space_capacity IS NULL").Update("space_capacity", 0).Error
 	}},
 	// v8：users.credit_score 列由 AutoMigrate 添加（带 default:650，存量行在
-	// ALTER 时已回填 650）。此处防御性兜底：任何残余 NULL 统一置 650（满分），
+	// ALTER 时已回填 650）。此处防御性兜底：任何残余 NULL 统一置 650（满分）。
+	// 同时 Unscoped 补 space 残留：早期 v7（未加 Unscoped）跑过的库，被软删除行的
+	// space 字段仍是 NULL，这里一并归一，恢复后不再拒买。credit_score 同理——
+	// 软删除行若残留 NULL，恢复后 Go 读作 0，会直接被信誉分冻结。
 	// 幂等，跑过版本戳后不再执行。
-	{Version: 8, Name: "credit-score-backfill", Up: func(db *gorm.DB) error {
-		return db.Model(&User{}).Where("credit_score IS NULL").Update("credit_score", 650).Error
+	{Version: 8, Name: "user-null-backfill", Up: func(db *gorm.DB) error {
+		if err := db.Unscoped().Model(&User{}).Where("space_purchased_bytes IS NULL").Update("space_purchased_bytes", 0).Error; err != nil {
+			return err
+		}
+		if err := db.Unscoped().Model(&User{}).Where("space_capacity IS NULL").Update("space_capacity", 0).Error; err != nil {
+			return err
+		}
+		return db.Unscoped().Model(&User{}).Where("credit_score IS NULL").Update("credit_score", 650).Error
 	}},
 }
 
