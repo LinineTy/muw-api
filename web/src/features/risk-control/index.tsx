@@ -715,7 +715,10 @@ function CreditLogsTab() {
           {
             columnId: 'source',
             title: t('Source'),
-            options: CREDIT_LOG_SOURCE_OPTIONS,
+            // 每次渲染新建数组(而非模块常量):DataTableFacetedFilter 被 React.memo
+            // 缓存、浅比较 props,options 引用变化才能让 memo 失效、勾选状态随
+            // columnFilters 刷新(与 channels 页 [...CHANNEL_STATUS_OPTIONS] 一致)。
+            options: [...CREDIT_LOG_SOURCE_OPTIONS],
             singleSelect: true,
           },
         ],
