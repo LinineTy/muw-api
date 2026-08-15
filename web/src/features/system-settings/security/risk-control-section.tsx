@@ -7,7 +7,6 @@ published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Save } from 'lucide-react'
 import { useMemo, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -22,7 +21,6 @@ import {
   FormItem,
   FormLabel,
 } from '@/components/ui/form'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
@@ -222,19 +220,12 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
 
   useResetForm(form, formDefaults)
 
-  // 每个区块独立保存：diff 只考虑本区块字段，避免点留存保存连带提交信誉分改动。
-  const saveFields = async (
-    values: RiskControlFormValues,
-    prefix: 'credit_score_setting' | 'conversation_retention_setting'
-  ) => {
+  // 一个保存按钮保存全部区块，但 diff 只提交变更字段：未改动的区块不会连带写入。
+  const saveAll = async (values: RiskControlFormValues) => {
     const normalized = normalizeFormValues(values)
-    const prefixKey = `${prefix}.`
     const updates = (
       Object.keys(normalized) as Array<keyof FlatRiskControlDefaults>
-    ).filter(
-      (key) =>
-        key.startsWith(prefixKey) && normalized[key] !== baselineRef.current[key]
-    )
+    ).filter((key) => normalized[key] !== baselineRef.current[key])
     if (updates.length === 0) {
       toast.info(t('No changes to save'))
       return
@@ -246,20 +237,13 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
   }
 
   return (
-    <>
-      <SettingsSection title={t('Credit Score')}>
-        <Form {...form}>
-          <SettingsForm
-            onSubmit={form.handleSubmit((v) =>
-              saveFields(v, 'credit_score_setting')
-            )}
-          >
-            <SettingsPageFormActions
-              onSave={form.handleSubmit((v) =>
-                saveFields(v, 'credit_score_setting')
-              )}
-              isSaving={updateOption.isPending}
-            />
+    <Form {...form}>
+      <SettingsForm onSubmit={form.handleSubmit(saveAll)}>
+          <SettingsPageFormActions
+            onSave={form.handleSubmit(saveAll)}
+            isSaving={updateOption.isPending}
+          />
+          <SettingsSection title={t('Credit Score')}>
 
             <FormField
               control={form.control}
@@ -584,19 +568,11 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
                 </FormItem>
               )}
             />
-          </SettingsForm>
-        </Form>
-      </SettingsSection>
+          </SettingsSection>
 
-      <Separator className='my-2' />
+          <Separator className='my-2' />
 
-      <SettingsSection title={t('Conversation Retention')}>
-        <Form {...form}>
-          <SettingsForm
-            onSubmit={form.handleSubmit((v) =>
-              saveFields(v, 'conversation_retention_setting')
-            )}
-          >
+          <SettingsSection title={t('Conversation Retention')}>
             <FormField
               control={form.control}
               name='conversation_retention_setting.enabled'
@@ -705,21 +681,9 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
                 </FormItem>
               )}
             />
-            <Button
-              type='button'
-              size='sm'
-              onClick={form.handleSubmit((v) =>
-                saveFields(v, 'conversation_retention_setting')
-              )}
-              disabled={updateOption.isPending}
-            >
-              <Save data-icon='inline-start' />
-              {t('Save Retention Settings')}
-            </Button>
-          </SettingsForm>
-        </Form>
-      </SettingsSection>
-    </>
+          </SettingsSection>
+        </SettingsForm>
+    </Form>
   )
 }
 
