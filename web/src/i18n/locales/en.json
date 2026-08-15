@@ -6123,6 +6123,7 @@
     "Save this token now. You won't be able to view it again after closing this dialog.": "Save this token now. You won't be able to view it again after closing this dialog.",
     "Supported operators: eq, ne, gt, gte, lt, lte, in, not_in, contains, not_contains, exists, not_exists. Leave empty to allow all users.": "Supported operators: eq, ne, gt, gte, lt, lte, in, not_in, contains, not_contains, exists, not_exists. Leave empty to allow all users.",
     "The new token will only be shown once. Copy it and store it securely.": "The new token will only be shown once. Copy it and store it securely.",
-    "This will immediately invalidate your existing access token. Any applications or scripts using it will stop working.": "This will immediately invalidate your existing access token. Any applications or scripts using it will stop working."
+    "This will immediately invalidate your existing access token. Any applications or scripts using it will stop working.": "This will immediately invalidate your existing access token. Any applications or scripts using it will stop working.",
+    "Credit score, conversation retention and marker analysis.": "Credit score, conversation retention and marker analysis."
   }
 }
