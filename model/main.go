@@ -280,6 +280,15 @@ func migrateDB() error {
 		if err := ensurePlaygroundConversationMessagesLongText(DB); err != nil {
 			return err
 		}
+		if err := ensureConversationRecordLongText(DB); err != nil {
+			return err
+		}
+		if err := ensureConversationRecordSizeBytes(DB); err != nil {
+			return err
+		}
+		if err := ensureUserCreditScoreIndex(DB); err != nil {
+			return err
+		}
 		common.SysLog(fmt.Sprintf("schema already at version %d, skipping migration", applied))
 		return nil
 	}
@@ -290,6 +299,15 @@ func migrateDB() error {
 	// 的 text 无此限制。把 messages 列升级为 LONGTEXT（幂等，AutoMigrate 不会改已存在
 	// 列类型）。表由上方 autoMigrateAll 刚建或已存在。
 	if err := ensurePlaygroundConversationMessagesLongText(DB); err != nil {
+		return err
+	}
+	if err := ensureConversationRecordLongText(DB); err != nil {
+		return err
+	}
+	if err := ensureConversationRecordSizeBytes(DB); err != nil {
+		return err
+	}
+	if err := ensureUserCreditScoreIndex(DB); err != nil {
 		return err
 	}
 	if err := applyPendingMigrations(DB, applied, migrations); err != nil {
@@ -343,6 +361,10 @@ func autoMigrateAll() error {
 		&ChannelTestRecord{},
 		&CasbinRule{},
 		&AuthzRole{},
+		&CreditScoreLog{},
+		&ConversationRecord{},
+		&CreditMarkerSuggestion{},
+		&CreditMarkerAnalysisLog{},
 	)
 	if err != nil {
 		return err
@@ -366,6 +388,59 @@ func ensurePlaygroundConversationMessagesLongText(db *gorm.DB) error {
 		return nil
 	}
 	return db.Exec("ALTER TABLE playground_conversations MODIFY COLUMN messages LONGTEXT").Error
+}
+
+// conversationColumnIsLongText 检查 conversation_records 某列是否已是 LONGTEXT。
+// MySQL 的 ALTER TABLE ... MODIFY 即使类型不变也会整表 COPY 重建，表按设计会涨到
+// GB 级，每次启动盲目执行代价很高，故先探测列类型、已是 LONGTEXT 则跳过。
+func conversationColumnIsLongText(db *gorm.DB, column string) bool {
+	types, err := db.Migrator().ColumnTypes(&ConversationRecord{})
+	if err != nil {
+		return false
+	}
+	for _, t := range types {
+		if t.Name() == column {
+			return strings.EqualFold(t.DatabaseTypeName(), "longtext")
+		}
+	}
+	return false
+}
+
+// ensureConversationRecordLongText 把 conversation_records.request/response 列升级为
+// LONGTEXT（幂等，MySQL 专属；SQLite/PostgreSQL 的 text 无 64KB 上限，跳过）。
+// MySQL TEXT 上限 64KB，装不下响应体（SSE 流截断上限 64KB+）。照
+// ensurePlaygroundConversationMessagesLongText 的模式。
+func ensureConversationRecordLongText(db *gorm.DB) error {
+	if !common.UsingMainDatabase(common.DatabaseTypeMySQL) {
+		return nil
+	}
+	if conversationColumnIsLongText(db, "request") && conversationColumnIsLongText(db, "response") {
+		return nil
+	}
+	if err := db.Exec("ALTER TABLE conversation_records MODIFY COLUMN request LONGTEXT").Error; err != nil {
+		return err
+	}
+	return db.Exec("ALTER TABLE conversation_records MODIFY COLUMN response LONGTEXT").Error
+}
+
+// ensureUserCreditScoreIndex 幂等补 users.credit_score 索引。低分用户列表、风控
+// 概览计数、被动恢复的关联查询都按 credit_score 过滤；AutoMigrate 只在新装/升版本时
+// 建索引，存量已最新库走 skip 路径不会重跑，需显式补。
+func ensureUserCreditScoreIndex(db *gorm.DB) error {
+	if db.Migrator().HasIndex(&User{}, "idx_credit_score") {
+		return nil
+	}
+	return db.Migrator().CreateIndex(&User{}, "idx_credit_score")
+}
+
+// ensureConversationRecordSizeBytes 幂等补 conversation_records.size_bytes 列（总存量核算用）。
+// 该列在 AutoMigrate 模型里新增，但 AutoMigrate 只在 schema 版本变化时执行；存量库（已是最新
+// 版本）走"跳过迁移"路径不会重跑 AutoMigrate，需在这里显式补列。
+func ensureConversationRecordSizeBytes(db *gorm.DB) error {
+	if db.Migrator().HasColumn(&ConversationRecord{}, "size_bytes") {
+		return nil
+	}
+	return db.Migrator().AddColumn(&ConversationRecord{}, "size_bytes")
 }
 
 // ensureSubscriptionPlanRecommendedBackfill 升级兼容：is_recommended 已从 model

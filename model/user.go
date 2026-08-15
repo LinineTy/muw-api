@@ -108,24 +108,29 @@ type User struct {
 	// LinuxDO OAuth tokens, AES-256-GCM encrypted (base64). Never serialized.
 	// Used by the silent trust-level refresh; requires CRYPTO_SECRET to survive
 	// restarts. ExpiresAt is the unix second the access token expires.
-	LinuxDOAccessToken    string                     `json:"-" gorm:"column:linux_do_access_token;type:text"`
-	LinuxDORefreshToken   string                     `json:"-" gorm:"column:linux_do_refresh_token;type:text"`
-	LinuxDOTokenExpiresAt int64                      `json:"-" gorm:"column:linux_do_token_expires_at;type:bigint;default:0"`
-	Avatar                string                     `json:"avatar" gorm:"column:avatar"`               // 头像 URL（本地上传路径或 OAuth 外链）
-	AvatarCustom          bool                       `json:"avatar_custom" gorm:"column:avatar_custom"` // 头像是否为用户上传（true 时 OAuth 登录不再覆盖）
-	Setting               string                     `json:"setting" gorm:"type:text;column:setting"`
-	Remark                string                     `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
-	CreatedAt             int64                      `json:"created_at" gorm:"autoCreateTime;column:created_at"`
-	LastLoginAt           int64                      `json:"last_login_at" gorm:"default:0;column:last_login_at"`
-	AuthVersion           int64                      `json:"-" gorm:"type:bigint;not null;default:1;column:auth_version"`
-	PlaygroundImageDisabled bool                     `json:"playground_image_disabled" gorm:"column:playground_image_disabled"` // 管理员封禁该用户的图床（游乐场图片上传），不影响其余功能
+	LinuxDOAccessToken      string `json:"-" gorm:"column:linux_do_access_token;type:text"`
+	LinuxDORefreshToken     string `json:"-" gorm:"column:linux_do_refresh_token;type:text"`
+	LinuxDOTokenExpiresAt   int64  `json:"-" gorm:"column:linux_do_token_expires_at;type:bigint;default:0"`
+	Avatar                  string `json:"avatar" gorm:"column:avatar"`               // 头像 URL（本地上传路径或 OAuth 外链）
+	AvatarCustom            bool   `json:"avatar_custom" gorm:"column:avatar_custom"` // 头像是否为用户上传（true 时 OAuth 登录不再覆盖）
+	Setting                 string `json:"setting" gorm:"type:text;column:setting"`
+	Remark                  string `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
+	CreatedAt               int64  `json:"created_at" gorm:"autoCreateTime;column:created_at"`
+	LastLoginAt             int64  `json:"last_login_at" gorm:"default:0;column:last_login_at"`
+	AuthVersion             int64  `json:"-" gorm:"type:bigint;not null;default:1;column:auth_version"`
+	PlaygroundImageDisabled bool   `json:"playground_image_disabled" gorm:"column:playground_image_disabled"` // 管理员封禁该用户的图床（游乐场图片上传），不影响其余功能
 	// SpaceCapacity 用户云空间总容量（字节）。0 表示未初始化，按全局初始容量
 	// （setting.UserSpaceInitialMB）计；购买容量会累加写入；root 无限制。
-	SpaceCapacity         int64                      `json:"space_capacity" gorm:"bigint;column:space_capacity"` // 不加 gorm default 标签（跨库迁移安全）
+	SpaceCapacity int64 `json:"space_capacity" gorm:"bigint;column:space_capacity"` // 不加 gorm default 标签（跨库迁移安全）
 	// SpacePurchasedBytes 用户累计购买的云空间容量（字节），受
 	// setting.UserSpaceMaxPurchasedMB 累计上限约束；管理员赠容量不计入。
-	SpacePurchasedBytes   int64                      `json:"space_purchased_bytes" gorm:"bigint;column:space_purchased_bytes"`
-	AdminPermissions      map[string]map[string]bool `json:"admin_permissions,omitempty" gorm:"-:all"`
+	SpacePurchasedBytes int64 `json:"space_purchased_bytes" gorm:"bigint;column:space_purchased_bytes"`
+	// CreditScore 用户信誉分。650 满分，低于 FreezeThreshold（默认 500）时
+	// TokenAuth 冻结 /v1 调用（账号本身不禁用）。default:650 让存量行回填、
+	// 新用户开局满分；数值由风控系统扣分/恢复动态调整。
+	// 索引供低分用户列表/概览计数/被动恢复查询使用。
+	CreditScore      int                        `json:"credit_score" gorm:"type:int;column:credit_score;default:650;index:idx_credit_score"`
+	AdminPermissions map[string]map[string]bool `json:"admin_permissions,omitempty" gorm:"-:all"`
 }
 
 func (user *User) ToBaseUser() *UserBase {
@@ -140,6 +145,7 @@ func (user *User) ToBaseUser() *UserBase {
 		Email:       user.Email,
 		AuthVersion: user.AuthVersion,
 		CacheSchema: userCacheSchemaVersion,
+		CreditScore: user.CreditScore,
 	}
 	return cache
 }
@@ -915,12 +921,12 @@ func (user *User) EditWithTx(tx *gorm.DB, updatePassword bool) error {
 
 	newUser := *user
 	updates := map[string]interface{}{
-		"username":                   newUser.Username,
-		"display_name":               newUser.DisplayName,
-		"group":                      newUser.Group,
-		"remark":                     newUser.Remark,
-		"playground_image_disabled":  newUser.PlaygroundImageDisabled,
-		"space_capacity":             newUser.SpaceCapacity,
+		"username":                  newUser.Username,
+		"display_name":              newUser.DisplayName,
+		"group":                     newUser.Group,
+		"remark":                    newUser.Remark,
+		"playground_image_disabled": newUser.PlaygroundImageDisabled,
+		"space_capacity":            newUser.SpaceCapacity,
 	}
 	if updatePassword {
 		updates["password"] = newUser.Password

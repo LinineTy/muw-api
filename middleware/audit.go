@@ -49,6 +49,7 @@ var auditRouteActions = map[string]string{
 	// 系统设置（root）
 	"POST /api/option/rest_model_ratio":         "option.reset_ratio",
 	"DELETE /api/option/channel_affinity_cache": "option.clear_affinity_cache",
+	"PUT /api/option/":                          "option.update",
 
 	// 自定义 OAuth（root）
 	"POST /api/custom-oauth-provider/":      "custom_oauth.create",
@@ -108,6 +109,13 @@ var auditRouteActions = map[string]string{
 
 	// 日志
 	"POST /api/system-task/log-cleanup": "log.cleanup_start",
+
+	// 风控
+	"POST /api/risk-control/adjust": "risk_control.adjust",
+	"PUT /api/risk-control/markers": "risk_control.markers_update",
+	"POST /api/risk-control/analyze-markers": "risk_control.analyze_markers",
+	"POST /api/risk-control/marker-suggestions/:id/accept": "risk_control.marker_accept",
+	"POST /api/risk-control/marker-suggestions/:id/reject": "risk_control.marker_reject",
 
 	// 渠道：能力修复 / 拉取上游模型 / Codex / Ollama / 上游模型检测
 	"POST /api/channel/fix":                     "channel.fix_abilities",
@@ -186,6 +194,11 @@ func finishAdminAudit(c *gin.Context, writer *auditResponseWriter) {
 		routeParams[p.Key] = p.Value
 	}
 	action, opParams := resolveAuditAction(method, route, routeParams)
+
+	// 设置保存（PUT /api/option/）由 UpdateOption 埋点 option key，让审计能展示改了哪个配置。
+	if key := c.GetString("audit_option_key"); key != "" {
+		opParams["key"] = key
+	}
 
 	// content 为英文兜底文本（供导出等非本地化消费者使用）。
 	content := method + " " + route

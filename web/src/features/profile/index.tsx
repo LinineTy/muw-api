@@ -26,6 +26,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { LanguagePreferencesCard } from './components/language-preferences-card'
 import { LoginSessionsCard } from './components/login-sessions-card'
 import { PasskeyCard } from './components/passkey-card'
+import { CreditScoreCard } from './components/credit-score-card'
 import { ProfileHeader } from './components/profile-header'
 import { ProfileSecurityCard } from './components/profile-security-card'
 import { ProfileSettingsCard } from './components/profile-settings-card'
@@ -49,6 +50,10 @@ export function Profile() {
               loading={loading}
               onProfileUpdate={refreshProfile}
             />
+          </CardStaggerItem>
+
+          <CardStaggerItem>
+            <CreditScoreCard />
           </CardStaggerItem>
 
           <CardStaggerItem>

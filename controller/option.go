@@ -116,6 +116,8 @@ func UpdateOption(c *gin.Context) {
 		})
 		return
 	}
+	// 供管理操作审计展示具体改了哪个配置项。
+	c.Set("audit_option_key", option.Key)
 	switch option.Value.(type) {
 	case bool:
 		option.Value = common.Interface2String(option.Value.(bool))

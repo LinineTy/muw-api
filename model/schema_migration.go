@@ -42,7 +42,9 @@ func (SchemaMigration) TableName() string { return "schema_migrations" }
 // v5：users 表新增 space_capacity 列 + 新增 playground_conversations 表。
 // v6：users 表新增 space_purchased_bytes 列（累计购买量）。
 // v7：新增 playground_space_orders 表（云空间在线支付订单）。
-const CurrentSchemaVersion = 7
+// v8：users 表新增 credit_score 列 + 新增 credit_score_logs / conversation_records /
+// credit_marker_suggestions / credit_marker_analysis_logs 表（AutoMigrate 建）。
+const CurrentSchemaVersion = 8
 
 // Migration 是一个可单独应用、记录版本戳的迁移步骤。Up 按版本升序执行，
 // 用于 AutoMigrate 补不了的结构改造（换类型、删列）与数据迁移/特殊适配。
@@ -79,6 +81,12 @@ var migrations = []Migration{
 			return err
 		}
 		return db.Model(&User{}).Where("space_capacity IS NULL").Update("space_capacity", 0).Error
+	}},
+	// v8：users.credit_score 列由 AutoMigrate 添加（带 default:650，存量行在
+	// ALTER 时已回填 650）。此处防御性兜底：任何残余 NULL 统一置 650（满分），
+	// 幂等，跑过版本戳后不再执行。
+	{Version: 8, Name: "credit-score-backfill", Up: func(db *gorm.DB) error {
+		return db.Model(&User{}).Where("credit_score IS NULL").Update("credit_score", 650).Error
 	}},
 }
 

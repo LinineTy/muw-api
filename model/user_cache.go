@@ -11,7 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const userCacheSchemaVersion = 2
+const userCacheSchemaVersion = 3
 
 type UserBase struct {
 	Id          int    `json:"id"`
@@ -22,6 +22,7 @@ type UserBase struct {
 	Role        int    `json:"role"`
 	Username    string `json:"username"`
 	Setting     string `json:"setting"`
+	CreditScore int    `json:"credit_score"`
 	AuthVersion int64  `json:"-"`
 	CacheSchema int    `json:"-"`
 }
@@ -211,6 +212,17 @@ func updateUserQuotaCache(userId int, quota int) error {
 		return nil
 	}
 	return common.RedisHSetField(getUserCacheKey(userId), "Quota", fmt.Sprintf("%d", quota))
+}
+
+// updateUserCreditScoreCache 刷信用分缓存字段（带 auth-version fence），供扣分/恢复后
+// 立即使 TokenAuth 冻结判定读到新分数。失败时上层可兜底 invalidateUserCache。
+func updateUserCreditScoreCache(userId int, score int) error {
+	return updateUserCacheField(userId, "CreditScore", score)
+}
+
+// UpdateUserCreditScoreCache 是 updateUserCreditScoreCache 的导出版本，供 service 层调用。
+func UpdateUserCreditScoreCache(userId int, score int) error {
+	return updateUserCreditScoreCache(userId, score)
 }
 
 // RefreshUserGroupCache writes the database-authoritative group into an

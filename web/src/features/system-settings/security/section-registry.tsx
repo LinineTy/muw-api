@@ -22,6 +22,7 @@ import { SSRFSection } from '../request-limits/ssrf-section'
 import { TokenLimitSection } from '../request-limits/token-limit-section'
 import type { SecuritySettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
+import { RiskControlSection } from './risk-control-section'
 
 const SECURITY_SECTIONS = [
   {
@@ -95,6 +96,63 @@ const SECURITY_SECTIONS = [
         defaultValues={{
           'token_setting.max_user_tokens':
             settings['token_setting.max_user_tokens'],
+        }}
+      />
+    ),
+  },
+  {
+    id: 'risk-control',
+    titleKey: 'Risk Control',
+    build: (settings: SecuritySettings) => (
+      <RiskControlSection
+        defaultValues={{
+          'credit_score_setting.enabled':
+            settings['credit_score_setting.enabled'] ?? false,
+          'credit_score_setting.auto_freeze_enabled':
+            settings['credit_score_setting.auto_freeze_enabled'] ?? true,
+          'credit_score_setting.full_score':
+            settings['credit_score_setting.full_score'] ?? 650,
+          'credit_score_setting.freeze_threshold':
+            settings['credit_score_setting.freeze_threshold'] ?? 500,
+          'credit_score_setting.deduction_upstream_violation':
+            settings['credit_score_setting.deduction_upstream_violation'] ?? 5,
+          'credit_score_setting.deduction_local_keyword':
+            settings['credit_score_setting.deduction_local_keyword'] ?? 1,
+          'credit_score_setting.violation_markers':
+            settings['credit_score_setting.violation_markers'] ?? '',
+          'credit_score_setting.repeat_multiplier_enabled':
+            settings['credit_score_setting.repeat_multiplier_enabled'] ?? true,
+          'credit_score_setting.max_daily_deduction':
+            settings['credit_score_setting.max_daily_deduction'] ?? 50,
+          'credit_score_setting.recover_enabled':
+            settings['credit_score_setting.recover_enabled'] ?? true,
+          'credit_score_setting.recover_per_day':
+            settings['credit_score_setting.recover_per_day'] ?? 5,
+          'credit_score_setting.pledge_points':
+            settings['credit_score_setting.pledge_points'] ?? 10,
+          'credit_score_setting.pledge_cooldown_days':
+            settings['credit_score_setting.pledge_cooldown_days'] ?? 7,
+          'credit_score_setting.marker_analysis_enabled':
+            settings['credit_score_setting.marker_analysis_enabled'] ?? false,
+          'credit_score_setting.marker_analysis_base_url':
+            settings['credit_score_setting.marker_analysis_base_url'] ?? '',
+          'credit_score_setting.marker_analysis_api_key':
+            settings['credit_score_setting.marker_analysis_api_key'] ?? '',
+          'credit_score_setting.marker_analysis_model':
+            settings['credit_score_setting.marker_analysis_model'] ?? '',
+          'conversation_retention_setting.enabled':
+            settings['conversation_retention_setting.enabled'] ?? false,
+          'conversation_retention_setting.request_max_bytes':
+            settings['conversation_retention_setting.request_max_bytes'] ??
+            2097152,
+          'conversation_retention_setting.response_max_bytes':
+            settings['conversation_retention_setting.response_max_bytes'] ??
+            2097152,
+          'conversation_retention_setting.max_total_bytes':
+            settings['conversation_retention_setting.max_total_bytes'] ??
+            5368709120,
+          'conversation_retention_setting.ttl_days':
+            settings['conversation_retention_setting.ttl_days'] ?? 30,
         }}
       />
     ),

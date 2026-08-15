@@ -32,6 +32,11 @@ auth.user_id_format_error: "Unauthorized, New-Api-User header format error"
 auth.user_id_mismatch: "Unauthorized, New-Api-User does not match logged in user"
 auth.user_banned: "User has been banned"
 auth.insufficient_privilege: "Unauthorized, insufficient privileges"
+credit_score.insufficient: "Insufficient credit score, account is frozen. Please check the risk control center."
+credit_score.at_full_score: "Your credit score is already at full score, no pledge needed."
+credit_score.pledge_disabled: "The pledge feature is not enabled."
+risk_control.invalid_adjust: "user_id and points are required, points cannot be 0."
+risk_control.suggestion_not_pending: "Only pending suggestions can be accepted."
 
 # Token messages
 token.name_too_long: "Token name is too long"
