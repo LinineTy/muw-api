@@ -415,7 +415,7 @@ func (creditMarkerAnalysisHandler) Interval() time.Duration { return 12 * time.H
 func (creditMarkerAnalysisHandler) NewPayload() any { return nil }
 
 func (creditMarkerAnalysisHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
-	summary, err := service.AnalyzeRecentErrorLogs(ctx, "scheduled")
+	summary, err := service.AnalyzeRecentErrorLogs(ctx, "scheduled", false)
 	if err != nil {
 		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
 		return

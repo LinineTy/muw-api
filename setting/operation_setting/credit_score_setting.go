@@ -29,7 +29,18 @@ type CreditScoreSetting struct {
 	MarkerAnalysisBaseUrl string `json:"marker_analysis_base_url"`
 	MarkerAnalysisApiKey  string `json:"marker_analysis_api_key"`
 	MarkerAnalysisModel   string `json:"marker_analysis_model"`
+	// 套娃内部 token：base_url 指向站点自身时，分析请求用此 token 调本站（token 挂 root、
+	// allow_ips=127.0.0.1/::1、永不过期、额度不限），自己的 relay 按 token_key 识别为内部
+	// 子请求，跳过敏感词检测/对话留存/扣分（分析内容本身含违规特征，不能被自己拦截）。
+	MarkerAnalysisInternalToken string `json:"marker_analysis_internal_token"`
+	MarkerAnalysisInternalGroup string `json:"marker_analysis_internal_group"`
 }
+
+// DefaultViolationMarkers 系统初始自带的违规标记词（设置页"重置"按钮恢复用）。
+const DefaultViolationMarkers = "Failed check: SAFETY_CHECK_TYPE\n" +
+	"Content violates usage guidelines\n" +
+	"is sensitive\n" +
+	"please check your input"
 
 // 默认配置。标记词按真实日志格式配：现有 violation_fee 的两个硬编码标记 +
 // 用户实测的 "image is sensitive / please check your input" 格式。
@@ -40,10 +51,7 @@ var creditScoreSetting = CreditScoreSetting{
 	FreezeThreshold:            500,
 	DeductionUpstreamViolation: 5,
 	DeductionLocalKeyword:      1,
-	ViolationMarkers: "Failed check: SAFETY_CHECK_TYPE\n" +
-		"Content violates usage guidelines\n" +
-		"is sensitive\n" +
-		"please check your input",
+	ViolationMarkers:           DefaultViolationMarkers,
 	RepeatMultiplierEnabled: true,
 	MaxDailyDeduction:       50,
 	RecoverEnabled:          true,

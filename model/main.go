@@ -289,6 +289,9 @@ func migrateDB() error {
 		if err := ensureUserCreditScoreIndex(DB); err != nil {
 			return err
 		}
+		if err := ensureCreditMarkerAnalyzedLogTable(DB); err != nil {
+			return err
+		}
 		common.SysLog(fmt.Sprintf("schema already at version %d, skipping migration", applied))
 		return nil
 	}
@@ -365,6 +368,7 @@ func autoMigrateAll() error {
 		&ConversationRecord{},
 		&CreditMarkerSuggestion{},
 		&CreditMarkerAnalysisLog{},
+		&CreditMarkerAnalyzedLog{},
 	)
 	if err != nil {
 		return err
@@ -431,6 +435,16 @@ func ensureUserCreditScoreIndex(db *gorm.DB) error {
 		return nil
 	}
 	return db.Migrator().CreateIndex(&User{}, "idx_credit_score")
+}
+
+// ensureCreditMarkerAnalyzedLogTable 幂等建 credit_marker_analyzed_logs 表。该表在
+// autoMigrateAll 的 AutoMigrate 列表里，但 AutoMigrate 只在 schema 版本变化时执行；存量库
+// （已是最新版本）走"跳过迁移"路径不会重跑 AutoMigrate，需在这里显式建表。
+func ensureCreditMarkerAnalyzedLogTable(db *gorm.DB) error {
+	if db.Migrator().HasTable(&CreditMarkerAnalyzedLog{}) {
+		return nil
+	}
+	return db.Migrator().CreateTable(&CreditMarkerAnalyzedLog{})
 }
 
 // ensureConversationRecordSizeBytes 幂等补 conversation_records.size_bytes 列（总存量核算用）。
