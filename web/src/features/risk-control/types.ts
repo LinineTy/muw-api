@@ -42,6 +42,23 @@ export interface MarkerSuggestion {
   created_at: number
 }
 
+export interface MarkerAnalysisLog {
+  id: number
+  triggered_by: 'manual' | 'scheduled'
+  started_at: number
+  finished_at: number
+  duration_ms: number
+  analyzed_count: number
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+  model: string
+  base_url: string
+  suggestions_count: number
+  error_message: string
+  created_at: number
+}
+
 export interface MarkerSuggestionSummary {
   analyzed: number
   suggestions: number
