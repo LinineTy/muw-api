@@ -99,6 +99,8 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.GET("/topup/info", controller.GetTopUpInfo)
 				selfRoute.GET("/topup/self", controller.GetUserTopUps)
 				selfRoute.POST("/topup", middleware.CriticalRateLimit(), controller.TopUp)
+				selfRoute.GET("/credit", controller.GetUserCreditStatus)
+				selfRoute.POST("/credit/pledge", middleware.CriticalRateLimit(), controller.CreditScorePledge)
 				selfRoute.POST("/pay", middleware.CriticalRateLimit(), controller.RequestEpay)
 				selfRoute.POST("/amount", controller.RequestAmount)
 				selfRoute.POST("/aff_transfer", middleware.UserCriticalRateLimit("aff-transfer"), controller.TransferAffQuota)
@@ -338,6 +340,27 @@ func SetApiRouter(router *gin.Engine) {
 			systemTaskRoute.GET("/list", controller.ListSystemTasks)
 			systemTaskRoute.GET("/current", controller.GetCurrentSystemTask)
 			systemTaskRoute.GET("/:task_id", controller.GetSystemTask)
+		}
+		riskControlRoute := apiRouter.Group("/risk-control")
+		riskControlRoute.Use(middleware.RootAuth())
+		{
+			riskControlRoute.GET("/overview", controller.GetRiskControlOverview)
+			riskControlRoute.GET("/users", controller.GetLowCreditScoreUsers)
+			riskControlRoute.GET("/logs", controller.GetCreditScoreLogs)
+			riskControlRoute.POST("/adjust", controller.AdjustCreditScore)
+			riskControlRoute.GET("/markers", controller.GetRiskControlMarkers)
+			riskControlRoute.PUT("/markers", controller.SetRiskControlMarkers)
+			riskControlRoute.POST("/analyze-markers", controller.AnalyzeMarkers)
+			riskControlRoute.GET("/marker-suggestions", controller.GetMarkerSuggestions)
+			riskControlRoute.POST("/marker-suggestions/:id/accept", controller.AcceptMarkerSuggestion)
+			riskControlRoute.POST("/marker-suggestions/:id/reject", controller.RejectMarkerSuggestion)
+		}
+		conversationRecordRoute := apiRouter.Group("/conversation-records")
+		// 对话留存含用户请求/响应明文，与风控中心页面对齐为仅 Root 可见。
+		conversationRecordRoute.Use(middleware.RootAuth())
+		{
+			conversationRecordRoute.GET("/", controller.GetConversationRecords)
+			conversationRecordRoute.GET("/:id", controller.GetConversationRecordDetail)
 		}
 		systemInfoRoute := apiRouter.Group("/system-info")
 		systemInfoRoute.Use(middleware.RootAuth())

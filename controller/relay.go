@@ -148,6 +148,18 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		return
 	}
 
+	// 对话记录留存：仅对可留存的 chat 类请求安装响应捕获 writer（流式/非流式都能拿到
+	// 响应体）。embeddings/图片等不落库的请求不装，避免为每条请求白分配大 buffer。
+	var conversationCapture *captureResponseWriter
+	if ShouldRecordConversation(c, relayInfo) {
+		conversationCapture = InstallConversationCapture(c, operation_setting.GetConversationRetentionSetting().EffectiveResponseMaxBytes())
+	}
+	defer func() {
+		if conversationCapture != nil {
+			persistConversationRecord(c, relayInfo, newAPIError, conversationCapture)
+		}
+	}()
+
 	// Replace image parts with text descriptions for non-vision models before
 	// pricing/billing so both the vision sub-call and the main text request are
 	// billed correctly.
@@ -172,6 +184,8 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		contains, words := service.CheckSensitiveText(meta.CombineText)
 		if contains {
 			logger.LogWarn(c, fmt.Sprintf("user sensitive words detected: %s", strings.Join(words, ", ")))
+			// 信誉分：本地关键词命中扣分（在预扣费之前，被拦请求本身零计费）。
+			service.ApplyKeywordCreditDeduction(c, relayInfo, words)
 			newAPIError = types.NewError(err, types.ErrorCodeSensitiveWordsDetected)
 			return
 		}
@@ -210,6 +224,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 				relayInfo.Billing.Refund(c)
 			}
 			service.ChargeViolationFeeIfNeeded(c, relayInfo, newAPIError)
+			// 信誉分：上游返回违规标记（可配标记词命中）时扣分。与违规扣费并列，
+			// 判定独立于 Grok 扣费开关。
+			service.ApplyViolationCreditDeduction(c, relayInfo, newAPIError)
 		}
 	}()
 

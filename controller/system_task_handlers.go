@@ -25,6 +25,10 @@ func RegisterScheduledSystemTasks() {
 	service.RegisterSystemTaskHandler(midjourneyPollHandler{})
 	service.RegisterSystemTaskHandler(asyncTaskPollHandler{})
 	service.RegisterSystemTaskHandler(linuxDoTrustRefreshHandler{})
+	service.RegisterSystemTaskHandler(creditScoreRecoverHandler{})
+	service.RegisterSystemTaskHandler(conversationCleanupHandler{})
+	service.RegisterSystemTaskHandler(creditMarkerAnalysisHandler{})
+	service.RegisterSystemTaskHandler(creditAuditCleanupHandler{})
 }
 
 // channelTestHandler runs the scheduled "test all channels" job. Enablement and
@@ -267,4 +271,227 @@ func refreshOneLinuxDOUser(ctx context.Context, provider *oauth.LinuxDOProvider,
 		return err
 	}
 	return nil
+}
+
+// creditScoreRecoverHandler 被动恢复：无违规 24h 的用户 +RecoverPerDay（clamp 满分级）。
+// 恢复记录写 credit_score_logs，24h 内有恢复的用户不会再被选中。
+type creditScoreRecoverHandler struct{}
+
+func (creditScoreRecoverHandler) Type() string { return model.SystemTaskTypeCreditScoreRecover }
+
+func (creditScoreRecoverHandler) Enabled() bool {
+	s := operation_setting.GetCreditScoreSetting()
+	return s.Enabled && s.RecoverEnabled
+}
+
+func (creditScoreRecoverHandler) Interval() time.Duration { return time.Hour }
+
+func (creditScoreRecoverHandler) NewPayload() any { return nil }
+
+func (creditScoreRecoverHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	summary, err := runCreditScoreRecover(ctx, task, runnerID)
+	if err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		return
+	}
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, summary, nil)
+}
+
+func runCreditScoreRecover(ctx context.Context, task *model.SystemTask, runnerID string) (map[string]int, error) {
+	setting := operation_setting.GetCreditScoreSetting()
+	if !setting.Enabled || !setting.RecoverEnabled || setting.RecoverPerDay <= 0 {
+		return map[string]int{"recovered": 0}, nil
+	}
+	recovered := 0
+	for batch := 0; batch < 200; batch++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		users, err := model.ListUsersEligibleForRecover(setting.FullScore, time.Now().Unix()-24*3600, 100)
+		if err != nil {
+			return nil, fmt.Errorf("list eligible users: %w", err)
+		}
+		if len(users) == 0 {
+			break
+		}
+		for _, user := range users {
+			log := &model.CreditScoreLog{Source: service.CreditSourcePassiveRecover, Reason: "无违规被动恢复"}
+			newBalance, err := model.ApplyCreditScoreDelta(user.Id, setting.RecoverPerDay, setting.FullScore, log)
+			if err != nil {
+				common.SysLog(fmt.Sprintf("[CreditRecover] user %d recover failed: %s", user.Id, err.Error()))
+				continue
+			}
+			if err := model.UpdateUserCreditScoreCache(user.Id, newBalance); err != nil {
+				_ = model.InvalidateUserCache(user.Id)
+			}
+			recovered++
+		}
+	}
+	return map[string]int{"recovered": recovered}, nil
+}
+
+// conversationCleanupHandler 按 TTLDays 清理过期对话记录。
+type conversationCleanupHandler struct{}
+
+func (conversationCleanupHandler) Type() string { return model.SystemTaskTypeConversationCleanup }
+
+func (conversationCleanupHandler) Enabled() bool {
+	return operation_setting.GetConversationRetentionSetting().Enabled
+}
+
+func (conversationCleanupHandler) Interval() time.Duration { return 6 * time.Hour }
+
+func (conversationCleanupHandler) NewPayload() any { return nil }
+
+func (conversationCleanupHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	summary, err := runConversationRecordCleanup(ctx, task, runnerID)
+	if err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		return
+	}
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, summary, nil)
+}
+
+func runConversationRecordCleanup(ctx context.Context, task *model.SystemTask, runnerID string) (map[string]int, error) {
+	setting := operation_setting.GetConversationRetentionSetting()
+	if !setting.Enabled {
+		return map[string]int{"deleted": 0}, nil
+	}
+	deleted := 0
+	// TTL：按保留天数删过期记录。
+	if setting.TTLDays > 0 {
+		target := time.Now().AddDate(0, 0, -setting.TTLDays).Unix()
+		for {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			batch, err := model.DeleteOldConversationRecordsBatch(ctx, target, 200)
+			if err != nil {
+				return nil, fmt.Errorf("delete old conversation records: %w", err)
+			}
+			deleted += int(batch)
+			if batch == 0 {
+				break
+			}
+		}
+	}
+	// 总存量上限：超出 MaxTotalBytes 后滚动删最老记录，直到低于上限。
+	if setting.MaxTotalBytes > 0 {
+		for batch := 0; batch < 200; batch++ {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			total, err := model.SumConversationSize(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("sum conversation size: %w", err)
+			}
+			if total <= setting.MaxTotalBytes {
+				break
+			}
+			n, err := model.DeleteOldestConversationRecordsBatch(ctx, 200)
+			if err != nil {
+				return nil, fmt.Errorf("delete oldest conversation records: %w", err)
+			}
+			deleted += int(n)
+			if n == 0 {
+				break
+			}
+		}
+	}
+	return map[string]int{"deleted": deleted}, nil
+}
+
+// creditMarkerAnalysisHandler 定时跑违规标记词 AI 分析（Enabled 默认关，走配置开关）。
+type creditMarkerAnalysisHandler struct{}
+
+func (creditMarkerAnalysisHandler) Type() string { return model.SystemTaskTypeCreditMarkerAnalysis }
+
+func (creditMarkerAnalysisHandler) Enabled() bool {
+	return operation_setting.GetCreditScoreSetting().MarkerAnalysisEnabled
+}
+
+func (creditMarkerAnalysisHandler) Interval() time.Duration { return 12 * time.Hour }
+
+func (creditMarkerAnalysisHandler) NewPayload() any { return nil }
+
+func (creditMarkerAnalysisHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	summary, err := service.AnalyzeRecentErrorLogs(ctx, "scheduled")
+	if err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		return
+	}
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, summary, nil)
+}
+
+// creditAuditCleanupHandler 清理信誉分审计类表：扣分明细保留 180 天（审计证据，
+// 保留窗口长一点），标记词建议（仅已处理）与分析运行日志保留 90 天；pending 建议永不删。
+type creditAuditCleanupHandler struct{}
+
+const (
+	creditScoreLogRetentionDays = 180
+	creditMarkerRetentionDays   = 90
+)
+
+func (creditAuditCleanupHandler) Type() string { return model.SystemTaskTypeCreditAuditCleanup }
+
+func (creditAuditCleanupHandler) Enabled() bool {
+	// 跟随信誉分总开关：功能关闭时三张审计表无新数据，不必每日空转清理。
+	return operation_setting.GetCreditScoreSetting().Enabled
+}
+
+func (creditAuditCleanupHandler) Interval() time.Duration { return 24 * time.Hour }
+
+func (creditAuditCleanupHandler) NewPayload() any { return nil }
+
+func (creditAuditCleanupHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	summary, err := runCreditAuditCleanup(ctx)
+	if err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		return
+	}
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, summary, nil)
+}
+
+func runCreditAuditCleanup(ctx context.Context) (map[string]int, error) {
+	deleted := map[string]int{"credit_logs": 0, "marker_suggestions": 0, "marker_analysis_logs": 0}
+	scoreTarget := time.Now().AddDate(0, 0, -creditScoreLogRetentionDays).Unix()
+	n, err := deleteInBatches(ctx, model.DeleteOldCreditScoreLogsBatch, scoreTarget)
+	if err != nil {
+		return nil, fmt.Errorf("delete old credit score logs: %w", err)
+	}
+	deleted["credit_logs"] = n
+
+	markerTarget := time.Now().AddDate(0, 0, -creditMarkerRetentionDays).Unix()
+	n, err = deleteInBatches(ctx, model.DeleteOldResolvedCreditMarkerSuggestionsBatch, markerTarget)
+	if err != nil {
+		return nil, fmt.Errorf("delete old marker suggestions: %w", err)
+	}
+	deleted["marker_suggestions"] = n
+
+	n, err = deleteInBatches(ctx, model.DeleteOldCreditMarkerAnalysisLogsBatch, markerTarget)
+	if err != nil {
+		return nil, fmt.Errorf("delete old marker analysis logs: %w", err)
+	}
+	deleted["marker_analysis_logs"] = n
+	return deleted, nil
+}
+
+// deleteInBatches 按批次循环删除直到删光或上下文取消，返回总删除行数。
+// 批次上限兜底，防止异常状态下单次任务跑太久。
+func deleteInBatches(ctx context.Context, fn func(context.Context, int64, int) (int64, error), target int64) (int, error) {
+	total := 0
+	for batch := 0; batch < 500; batch++ {
+		if err := ctx.Err(); err != nil {
+			return total, err
+		}
+		n, err := fn(ctx, target, 200)
+		if err != nil {
+			return total, err
+		}
+		total += int(n)
+		if n == 0 {
+			break
+		}
+	}
+	return total, nil
 }

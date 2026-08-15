@@ -79,4 +79,10 @@ const (
 	// committed). Any later relay failure must then be reported as an SSE error
 	// event instead of a JSON body.
 	ContextKeyVisionFallbackSSEStarted ContextKey = "vision_fallback_sse_started"
+
+	// ContextKeyInternalSubRequest marks an internal relay sub-request that must be
+	// exempt from risk-control side effects: credit deduction, keyword deduction,
+	// and conversation retention. Set on vision-fallback sub-contexts (and any
+	// future internal model calls) so they never create user-visible noise.
+	ContextKeyInternalSubRequest ContextKey = "internal_sub_request"
 )

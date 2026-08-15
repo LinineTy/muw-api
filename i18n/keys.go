@@ -38,6 +38,11 @@ const (
 	MsgAuthUserIdMismatch        = "auth.user_id_mismatch"
 	MsgAuthUserBanned            = "auth.user_banned"
 	MsgAuthInsufficientPrivilege = "auth.insufficient_privilege"
+	MsgCreditScoreInsufficient         = "credit_score.insufficient"
+	MsgCreditScoreAtFullScore          = "credit_score.at_full_score"
+	MsgCreditScorePledgeDisabled       = "credit_score.pledge_disabled"
+	MsgRiskControlInvalidAdjust        = "risk_control.invalid_adjust"
+	MsgRiskControlSuggestionNotPending = "risk_control.suggestion_not_pending"
 )
 
 // Token related messages

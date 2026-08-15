@@ -15,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/service/authz"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
@@ -450,6 +451,15 @@ func TokenAuth() func(c *gin.Context) {
 		userEnabled := userCache.Status == common.UserStatusEnabled
 		if !userEnabled {
 			abortWithOpenAiMessage(c, http.StatusForbidden, common.TranslateMessage(c, i18n.MsgAuthUserBanned))
+			return
+		}
+
+		// 信誉分冻结：只冻 /v1 API 调用（TokenAuth），不触碰 user.Status，账号本身
+		// （dashboard 登录/充值/管理）不受影响。只读检查，扣分在 relay 结算路径做。
+		if operation_setting.GetCreditScoreSetting().IsFrozen(userCache.CreditScore) {
+			abortWithOpenAiMessage(c, http.StatusForbidden,
+				common.TranslateMessage(c, i18n.MsgCreditScoreInsufficient),
+				types.ErrorCodeCreditScoreInsufficient)
 			return
 		}
 

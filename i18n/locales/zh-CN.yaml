@@ -33,6 +33,11 @@ auth.user_id_format_error: "无权进行此操作，New-Api-User 格式错误"
 auth.user_id_mismatch: "无权进行此操作，New-Api-User 与登录用户不匹配"
 auth.user_banned: "用户已被封禁"
 auth.insufficient_privilege: "无权进行此操作，权限不足"
+credit_score.insufficient: "信用分不足，账户已被冻结，请前往风控中心查看"
+credit_score.at_full_score: "信用分已满，无需完成保证书"
+credit_score.pledge_disabled: "保证书功能未启用"
+risk_control.invalid_adjust: "user_id 与 points 必填，points 不能为 0"
+risk_control.suggestion_not_pending: "仅 pending 状态的建议可采纳"
 
 # Token messages
 token.name_too_long: "令牌名称过长"
