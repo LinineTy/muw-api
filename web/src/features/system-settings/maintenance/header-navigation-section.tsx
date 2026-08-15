@@ -17,19 +17,23 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
+import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
-import { useForm } from 'react-hook-form'
+import { useFieldArray, useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import * as z from 'zod'
 
+import { Button } from '@/components/ui/button'
 import {
   Form,
   FormControl,
   FormDescription,
   FormField,
+  FormItem,
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
+import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 
 import {
@@ -48,6 +52,19 @@ import {
   serializeHeaderNavModules,
 } from './config'
 
+const customLinkSchema = z.object({
+  title: z.string().trim().min(1, 'Link title is required'),
+  href: z
+    .string()
+    .trim()
+    .min(1, 'Link URL is required')
+    .refine(
+      (value) => /^(?:[a-z][a-z\d+.-]*:|\/\/|\/)/i.test(value),
+      'Link URL must start with http(s)://, //, or /'
+    ),
+  enabled: z.boolean(),
+})
+
 const headerNavSchema = z.object({
   home: z.boolean(),
   console: z.boolean(),
@@ -57,6 +74,7 @@ const headerNavSchema = z.object({
   rankingsRequireAuth: z.boolean(),
   docs: z.boolean(),
   about: z.boolean(),
+  customLinks: z.array(customLinkSchema),
 })
 
 type HeaderNavFormValues = z.infer<typeof headerNavSchema>
@@ -95,7 +113,16 @@ const toFormValues = (config: HeaderNavModulesConfig): HeaderNavFormValues => ({
     config.about === undefined
       ? HEADER_NAV_DEFAULT.about
       : Boolean(config.about),
+  customLinks: (config.customLinks ?? []).map((link) => ({ ...link })),
 })
+
+function GroupLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className='text-muted-foreground text-[11px] font-semibold tracking-wider uppercase'>
+      {children}
+    </div>
+  )
+}
 
 export function HeaderNavigationSection({
   config,
@@ -114,6 +141,11 @@ export function HeaderNavigationSection({
     form.reset(formDefaults)
   }, [formDefaults, form])
 
+  const { fields, append, remove, move } = useFieldArray({
+    control: form.control,
+    name: 'customLinks',
+  })
+
   const onSubmit = async (values: HeaderNavFormValues) => {
     const payload: HeaderNavModulesConfig = {
       ...config,
@@ -131,6 +163,7 @@ export function HeaderNavigationSection({
         enabled: values.rankingsEnabled,
         requireAuth: values.rankingsRequireAuth,
       },
+      customLinks: values.customLinks,
     }
 
     const serialized = serializeHeaderNavModules(payload)
@@ -149,7 +182,7 @@ export function HeaderNavigationSection({
   }
 
   const simpleModules: Array<{
-    key: keyof HeaderNavFormValues
+    key: 'home' | 'console' | 'docs' | 'about'
     title: string
     description: string
   }> = [
@@ -176,8 +209,8 @@ export function HeaderNavigationSection({
   ]
 
   const accessModules: Array<{
-    enabledKey: keyof HeaderNavFormValues
-    requireAuthKey: keyof HeaderNavFormValues
+    enabledKey: 'pricingEnabled' | 'rankingsEnabled'
+    requireAuthKey: 'pricingRequireAuth' | 'rankingsRequireAuth'
     requireAuthDependsOn: 'pricingEnabled' | 'rankingsEnabled'
     title: string
     description: string
@@ -294,6 +327,119 @@ export function HeaderNavigationSection({
               </SettingsControlGroup>
             ))}
           </div>
+
+          {/* 自定义链接 */}
+          <SettingsControlGroup>
+            <GroupLabel>{t('Custom links')}</GroupLabel>
+            <p className='text-muted-foreground text-xs'>
+              {t(
+                'Custom links shown in the top navigation bar. Absolute URLs open in a new tab; paths starting with / stay inside the app.'
+              )}
+            </p>
+            <div className='space-y-3'>
+              {fields.map((field, index) => (
+                <div key={field.id} className='rounded-lg border p-3'>
+                  <div className='grid gap-3 sm:grid-cols-2'>
+                    <FormField
+                      control={form.control}
+                      name={`customLinks.${index}.title`}
+                      render={({ field: titleField }) => (
+                        <FormItem>
+                          <FormLabel>{t('Link title')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder={t('Label shown in the navigation')}
+                              {...titleField}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`customLinks.${index}.href`}
+                      render={({ field: hrefField }) => (
+                        <FormItem>
+                          <FormLabel>{t('Link URL')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder='https://example.com'
+                              {...hrefField}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div className='mt-3 flex items-center justify-between gap-3'>
+                    <FormField
+                      control={form.control}
+                      name={`customLinks.${index}.enabled`}
+                      render={({ field: enabledField }) => (
+                        <SettingsSwitchItem className='py-0'>
+                          <SettingsSwitchContent>
+                            <FormLabel>{t('Show link')}</FormLabel>
+                          </SettingsSwitchContent>
+                          <FormControl>
+                            <Switch
+                              checked={enabledField.value}
+                              onCheckedChange={enabledField.onChange}
+                            />
+                          </FormControl>
+                        </SettingsSwitchItem>
+                      )}
+                    />
+                    <div className='flex items-center gap-1'>
+                      <Button
+                        type='button'
+                        variant='ghost'
+                        size='icon'
+                        className='size-7'
+                        disabled={index === 0}
+                        onClick={() => move(index, index - 1)}
+                        aria-label={t('Move up')}
+                      >
+                        <ChevronUp />
+                      </Button>
+                      <Button
+                        type='button'
+                        variant='ghost'
+                        size='icon'
+                        className='size-7'
+                        disabled={index === fields.length - 1}
+                        onClick={() => move(index, index + 1)}
+                        aria-label={t('Move down')}
+                      >
+                        <ChevronDown />
+                      </Button>
+                      <Button
+                        type='button'
+                        variant='ghost'
+                        size='icon'
+                        className='size-7'
+                        onClick={() => remove(index)}
+                        aria-label={t('Remove link')}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <Button
+              type='button'
+              variant='outline'
+              size='sm'
+              className='self-start'
+              onClick={() => append({ title: '', href: '', enabled: true })}
+            >
+              <Plus data-icon='inline-start' />
+              {t('Add link')}
+            </Button>
+          </SettingsControlGroup>
         </SettingsForm>
       </Form>
     </SettingsSection>

@@ -100,5 +100,24 @@ export function useTopNavLinks(): TopNavLink[] {
     links.push({ title: t('About'), href: '/about' })
   }
 
+  // Custom links (admin-defined), rendered after the built-in modules
+  for (const link of modules?.customLinks ?? []) {
+    if (!link.enabled) continue
+    links.push({
+      title: link.title,
+      href: link.href,
+      external: isExternalHref(link.href),
+    })
+  }
+
   return links
+}
+
+/**
+ * Heuristic for whether a custom link href points outside the SPA.
+ * Matches any scheme (`https:`, `mailto:`, ...) and protocol-relative
+ * `//` URLs; paths starting with `/` are treated as internal routes.
+ */
+function isExternalHref(href: string): boolean {
+  return /^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(href)
 }
