@@ -127,11 +127,6 @@ export function Wallet(props: WalletProps) {
     }
   }, [props.initialShowHistory, navigate])
 
-  // 深链跳转生效前不渲染 Wallet，避免闪一帧再跳。
-  if (props.initialShowHistory) {
-    return null
-  }
-
   // Initialize topup amount when topup info is loaded
   const topupAmountInitializedRef = useRef(false)
   useEffect(() => {
@@ -227,6 +222,13 @@ export function Wallet(props: WalletProps) {
   const getDiscountRate = useCallback(() => {
     return topupInfo?.discount?.[topupAmount] || DEFAULT_DISCOUNT_RATE
   }, [topupInfo, topupAmount])
+
+  // 深链跳转生效前不渲染 Wallet，避免闪一帧再跳。条件 return 必须放在所有 hooks
+  // 之后，否则同一组件实例在 show_history 参数切换时 hooks 数量不一致会触发
+  // "Rendered more hooks than during the previous render" 崩溃。
+  if (props.initialShowHistory) {
+    return null
+  }
 
   return (
     <>
