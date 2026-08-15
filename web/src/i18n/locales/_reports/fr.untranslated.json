@@ -212,5 +212,22 @@
   "OpenAI-compatible endpoint. Can point at this site itself (e.g. http://127.0.0.1:3000/v1 with a site token) to reuse your own models.": "OpenAI-compatible endpoint. Can point at this site itself (e.g. http://127.0.0.1:3000/v1 with a site token) to reuse your own models.",
   "Store chat request and response content (images omitted) for admin review. Used as the evidence chain for credit deductions.": "Store chat request and response content (images omitted) for admin review. Used as the evidence chain for credit deductions.",
   "Records older than this are deleted by the scheduled cleanup task.": "Records older than this are deleted by the scheduled cleanup task.",
-  "Deducted on content-safety violations. Frozen accounts cannot call the API.": "Deducted on content-safety violations. Frozen accounts cannot call the API."
+  "Deducted on content-safety violations. Frozen accounts cannot call the API.": "Deducted on content-safety violations. Frozen accounts cannot call the API.",
+  "Failed to generate internal token": "Failed to generate internal token",
+  "Analysis requests are routed under this group using the internal token.": "Analysis requests are routed under this group using the internal token.",
+  "The analysis group changed; regenerate the internal token so requests route under the new group.": "The analysis group changed; regenerate the internal token so requests route under the new group.",
+  "The analysis model changed; confirm it is available in the selected group and regenerate the internal token if needed.": "The analysis model changed; confirm it is available in the selected group and regenerate the internal token if needed.",
+  "When the analysis base URL points at this site itself (nested), the analysis request authenticates with this token. It is bound to the root user, only reachable from local loopback (127.0.0.1/::1), never expires and has unlimited quota; your own relay recognizes it and skips sensitive-word checks, conversation retention and credit deductions. Regenerating immediately disables the previous token. Changing the analysis group requires regenerating the token.": "When the analysis base URL points at this site itself (nested), the analysis request authenticates with this token. It is bound to the root user, only reachable from local loopback (127.0.0.1/::1), never expires and has unlimited quota; your own relay recognizes it and skips sensitive-word checks, conversation retention and credit deductions. Regenerating immediately disables the previous token. Changing the analysis group requires regenerating the token.",
+  "Site mode reuses your own configured models with the internal token and costs nothing; custom mode points to an external OpenAI-compatible API.": "Site mode reuses your own configured models with the internal token and costs nothing; custom mode points to an external OpenAI-compatible API.",
+  "Auto-filled with the loopback address of this site (runtime port inferred). Save to apply.": "Auto-filled with the loopback address of this site (runtime port inferred). Save to apply.",
+  "This model is not available under the selected group; pick one from the list or regenerate the token with a matching group.": "This model is not available under the selected group; pick one from the list or regenerate the token with a matching group.",
+  "Models listed are filtered by the selected analysis group.": "Models listed are filtered by the selected analysis group.",
+  "No model available for the selected group": "No model available for the selected group",
+  "Click the magnifier to fetch models from the base URL above, then pick one; you can also type a custom name.": "Click the magnifier to fetch models from the base URL above, then pick one; you can also type a custom name.",
+  "Markers reset to defaults": "Markers reset to defaults",
+  "This replaces the current violation markers with the built-in defaults. Your custom markers will be lost.": "This replaces the current violation markers with the built-in defaults. Your custom markers will be lost.",
+  "Failed to fetch upstream models": "Failed to fetch upstream models",
+  "Fill the base URL first": "Fill the base URL first",
+  "No models returned by the upstream endpoint": "No models returned by the upstream endpoint",
+  "Credit score, conversation retention and marker analysis.": "Credit score, conversation retention and marker analysis."
 }
