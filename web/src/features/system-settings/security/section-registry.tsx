@@ -142,6 +142,16 @@ const SECURITY_SECTIONS = [
             settings['credit_score_setting.marker_analysis_model'] ?? '',
           'credit_score_setting.marker_analysis_internal_group':
             settings['credit_score_setting.marker_analysis_internal_group'] ?? '',
+          'credit_score_setting.marker_analysis_threshold_enabled':
+            settings['credit_score_setting.marker_analysis_threshold_enabled'] ??
+            false,
+          'credit_score_setting.marker_analysis_threshold_count':
+            settings['credit_score_setting.marker_analysis_threshold_count'] ?? 150,
+          'credit_score_setting.marker_analysis_request_interval_ms':
+            settings['credit_score_setting.marker_analysis_request_interval_ms'] ??
+            1000,
+          'credit_score_setting.marker_analysis_prompt':
+            settings['credit_score_setting.marker_analysis_prompt'] ?? '',
           'conversation_retention_setting.enabled':
             settings['conversation_retention_setting.enabled'] ?? false,
           'conversation_retention_setting.request_max_bytes':

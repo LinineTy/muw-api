@@ -33,6 +33,8 @@ export interface SpaceInfo {
   transient_bytes: number
   permanent_count: number
   permanent_bytes: number
+  conversation_count: number
+  conversation_used_bytes: number
 }
 
 /**

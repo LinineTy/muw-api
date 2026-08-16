@@ -22,7 +22,7 @@ import {
   FormItem,
   FormLabel,
 } from '@/components/ui/form'
-import { Loader2, Search } from 'lucide-react'
+import { Loader2, RotateCcw, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -47,7 +47,10 @@ import {
   getAllGroups,
   getMarkerAnalysisTokenStatus,
   regenerateMarkerAnalysisToken,
+  resetMarkerAnalysisPrompt,
 } from '@/features/risk-control/api'
+
+import { ConfirmDialog } from '@/components/confirm-dialog'
 
 import {
   SettingsForm,
@@ -82,6 +85,10 @@ const riskControlSchema = z.object({
     marker_analysis_api_key: z.string(),
     marker_analysis_model: z.string(),
     marker_analysis_internal_group: z.string(),
+    marker_analysis_threshold_enabled: z.boolean(),
+    marker_analysis_threshold_count: z.coerce.number().int().min(1),
+    marker_analysis_request_interval_ms: z.coerce.number().int().min(0),
+    marker_analysis_prompt: z.string(),
   }),
   conversation_retention_setting: z.object({
     enabled: z.boolean(),
@@ -115,6 +122,10 @@ type FlatRiskControlDefaults = {
   'credit_score_setting.marker_analysis_api_key': string
   'credit_score_setting.marker_analysis_model': string
   'credit_score_setting.marker_analysis_internal_group': string
+  'credit_score_setting.marker_analysis_threshold_enabled': boolean
+  'credit_score_setting.marker_analysis_threshold_count': number
+  'credit_score_setting.marker_analysis_request_interval_ms': number
+  'credit_score_setting.marker_analysis_prompt': string
   'conversation_retention_setting.enabled': boolean
   'conversation_retention_setting.request_max_bytes': number
   'conversation_retention_setting.response_max_bytes': number
@@ -157,6 +168,16 @@ const buildFormDefaults = (
       d['credit_score_setting.marker_analysis_model'] ?? '',
     marker_analysis_internal_group:
       d['credit_score_setting.marker_analysis_internal_group'] ?? '',
+    marker_analysis_threshold_enabled:
+      d['credit_score_setting.marker_analysis_threshold_enabled'] ?? false,
+    marker_analysis_threshold_count: num(
+      d['credit_score_setting.marker_analysis_threshold_count']
+    ) || 150,
+    marker_analysis_request_interval_ms: num(
+      d['credit_score_setting.marker_analysis_request_interval_ms']
+    ),
+    marker_analysis_prompt:
+      d['credit_score_setting.marker_analysis_prompt'] ?? '',
   },
   conversation_retention_setting: {
     enabled: d['conversation_retention_setting.enabled'],
@@ -215,6 +236,16 @@ const normalizeFormValues = (
     v.credit_score_setting.marker_analysis_model,
   'credit_score_setting.marker_analysis_internal_group':
     v.credit_score_setting.marker_analysis_internal_group,
+  'credit_score_setting.marker_analysis_threshold_enabled':
+    v.credit_score_setting.marker_analysis_threshold_enabled,
+  'credit_score_setting.marker_analysis_threshold_count': num(
+    v.credit_score_setting.marker_analysis_threshold_count
+  ),
+  'credit_score_setting.marker_analysis_request_interval_ms': num(
+    v.credit_score_setting.marker_analysis_request_interval_ms
+  ),
+  'credit_score_setting.marker_analysis_prompt':
+    v.credit_score_setting.marker_analysis_prompt,
   'conversation_retention_setting.enabled':
     v.conversation_retention_setting.enabled,
   'conversation_retention_setting.request_max_bytes': Math.round(
@@ -280,6 +311,10 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
   // 分组 → 模型联动：选分组后模型下拉只显示该分组下可用的模型（enable_groups）。
   const selectedGroup = form.watch(
     'credit_score_setting.marker_analysis_internal_group'
+  )
+  // 自动触发方式：定量开关决定是否显示阈值参数字段。
+  const thresholdEnabled = form.watch(
+    'credit_score_setting.marker_analysis_threshold_enabled'
   )
   // 已配置内部 token 的实际分组 ≠ 当前所选分组 → 红字提醒重新生成（token 路由仍走旧分组）。
   const groupChanged =
@@ -392,6 +427,25 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
     }
     baselineRef.current = normalized
   }
+
+  // 恢复默认提示词：调后端重置为内置默认（与违规标记词"重置"语义对称，立即持久化），
+  // 把返回的默认提示词回填表单并同步 baseline，避免之后保存时把相同值再写一遍。
+  const [promptResetOpen, setPromptResetOpen] = useState(false)
+  const resetPromptMutation = useMutation({
+    mutationFn: resetMarkerAnalysisPrompt,
+    onSuccess: (r) => {
+      form.setValue(
+        'credit_score_setting.marker_analysis_prompt',
+        r.prompt ?? ''
+      )
+      baselineRef.current['credit_score_setting.marker_analysis_prompt'] =
+        r.prompt ?? ''
+      toast.success(t('Prompt restored to default'))
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || t('Save failed'))
+    },
+  })
 
   return (
     <Form {...form}>
@@ -672,6 +726,111 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
                 </SettingsSwitchItem>
               )}
             />
+            <FormField
+              control={form.control}
+              name='credit_score_setting.marker_analysis_threshold_enabled'
+              render={({ field }) => (
+                <SettingsSwitchItem>
+                  <SettingsSwitchContent>
+                    <FormLabel>{t('Threshold-based analysis')}</FormLabel>
+                    <FormDescription>
+                      {t(
+                        'Run automatically when unanalyzed error logs accumulate to the threshold set below. Unanalyzed counts since the last analysis (no time window).'
+                      )}
+                    </FormDescription>
+                  </SettingsSwitchContent>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </SettingsSwitchItem>
+              )}
+            />
+            {thresholdEnabled && (
+              <FormField
+                control={form.control}
+                name='credit_score_setting.marker_analysis_threshold_count'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      {t('Trigger threshold (unanalyzed errors)')}
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        type='number'
+                        min={1}
+                        value={field.value as number}
+                        onChange={(e) => field.onChange(e.target.value)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Run analysis once unanalyzed error logs reach this count. All accumulated errors are fed to the model in batches, so no upper cap is needed.'
+                      )}
+                    </FormDescription>
+                  </FormItem>
+                )}
+              />
+            )}
+            <FormField
+              control={form.control}
+              name='credit_score_setting.marker_analysis_prompt'
+              render={({ field }) => (
+                <FormItem>
+                  <div className='flex items-center justify-between gap-2'>
+                    <FormLabel>{t('Marker analysis prompt')}</FormLabel>
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='sm'
+                      className='h-6 px-2 text-xs'
+                      disabled={resetPromptMutation.isPending}
+                      onClick={() => setPromptResetOpen(true)}
+                    >
+                      {resetPromptMutation.isPending ? (
+                        <Loader2
+                          className='size-3 animate-spin'
+                          aria-hidden='true'
+                        />
+                      ) : (
+                        <RotateCcw className='size-3' aria-hidden='true' />
+                      )}
+                      {t('Restore default')}
+                    </Button>
+                  </div>
+                  <FormControl>
+                    <Textarea
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                      rows={8}
+                      className='font-mono text-xs'
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'System prompt sent to the analysis model. The {messages} placeholder is replaced with the batch of error messages; if your prompt does not contain it, the messages are appended as the user message. Leave empty to use the built-in default. Save then re-run analysis to apply.'
+                    )}
+                  </FormDescription>
+                </FormItem>
+              )}
+            />
+            <ConfirmDialog
+              open={promptResetOpen}
+              onOpenChange={setPromptResetOpen}
+              title={t('Restore default analysis prompt?')}
+              desc={t(
+                'This replaces the current prompt with the built-in default. Changes apply immediately.'
+              )}
+              destructive
+              confirmText={t('Restore default')}
+              isLoading={resetPromptMutation.isPending}
+              handleConfirm={() => {
+                setPromptResetOpen(false)
+                resetPromptMutation.mutate()
+              }}
+            />
             <div
               data-settings-form-span='full'
               className='min-w-0 space-y-2'
@@ -692,7 +851,10 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
                     }
                   </SelectValue>
                 </SelectTrigger>
-                <SelectContent className='min-w-56'>
+                <SelectContent
+                  className='w-fit min-w-56 max-w-[80vw]'
+                  alignItemWithTrigger={false}
+                >
                   <SelectItem value='site'>
                     {t('Use this site (local models, free)')}
                   </SelectItem>
@@ -707,6 +869,30 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
                 )}
               </p>
             </div>
+            <FormField
+              control={form.control}
+              name='credit_score_setting.marker_analysis_request_interval_ms'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    {t('Request interval between analysis calls (ms)')}
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      type='number'
+                      min={0}
+                      value={field.value as number}
+                      onChange={(e) => field.onChange(e.target.value)}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'Minimum delay between analysis requests when scanning a large backlog, to avoid upstream rate limiting (429). 0 = no delay. Rate-limited responses are auto-retried with backoff regardless.'
+                    )}
+                  </FormDescription>
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name='credit_score_setting.marker_analysis_base_url'
@@ -774,7 +960,10 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
                                 <SelectValue placeholder={t('Select a model')} />
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent className='w-fit min-w-56 max-w-[80vw] max-h-72'>
+                            <SelectContent
+                              className='w-fit min-w-56 max-w-[80vw] max-h-72'
+                              alignItemWithTrigger={false}
+                            >
                               {currentMissing && (
                                 <SelectItem value={current}>{current}</SelectItem>
                               )}
@@ -921,7 +1110,10 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
                               <SelectValue placeholder={t('Select a group')} />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent className='min-w-52'>
+                          <SelectContent
+                            className='min-w-52'
+                            alignItemWithTrigger={false}
+                          >
                             {groups
                               .filter((group) => group !== 'auto')
                               .map((group) => (
