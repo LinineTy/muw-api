@@ -71,6 +71,14 @@ export async function adjustCreditScore(payload: {
   return unwrapData(api.post('/api/risk-control/adjust', payload))
 }
 
+/** 管理端打回一条敏感词扣分（审核误判）：恢复分数，可选从敏感词库删除命中的词。 */
+export async function revertKeywordDeduction(payload: {
+  log_id: number
+  remove_words: string[]
+}): Promise<{ log_id: number; balance: number }> {
+  return unwrapData(api.post('/api/risk-control/revert-deduction', payload))
+}
+
 export async function getConversationRecords(params: {
   p?: number
   page_size?: number

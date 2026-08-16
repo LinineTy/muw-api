@@ -140,6 +140,40 @@ func AdjustCreditScore(c *gin.Context) {
 	common.ApiSuccess(c, gin.H{"user_id": req.UserId, "balance": newBalance})
 }
 
+// RevertCreditScoreDeduction 管理端打回一条敏感词扣分记录（审核认定误判）：恢复分数，
+// 可选从敏感词库删除命中的词（remove_words 为空数组=仅打回不删词）。幂等：同一记录
+// 只能打回一次，重复打回返回已打回错误。
+func RevertCreditScoreDeduction(c *gin.Context) {
+	var req struct {
+		LogId       int64    `json:"log_id"`
+		RemoveWords []string `json:"remove_words"`
+	}
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiErrorMsg(c, "invalid request body")
+		return
+	}
+	if req.LogId <= 0 {
+		common.ApiErrorMsg(c, "invalid log_id")
+		return
+	}
+	newBalance, userId, points, err := service.RevertKeywordDeduction(req.LogId, req.RemoveWords)
+	if err != nil {
+		if errors.Is(err, model.ErrCreditScoreLogAlreadyReverted) {
+			common.ApiErrorMsg(c, "该扣分记录已打回")
+			return
+		}
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
+	// 管理审计归属被操作用户，params 携带打回详情（分数/删词），前端按 action 模板本地化渲染。
+	recordManageAuditFor(c, userId, "risk_control.revert_keyword_deduction", map[string]interface{}{
+		"log_id":       req.LogId,
+		"points":       points,
+		"remove_words": req.RemoveWords,
+	})
+	common.ApiSuccess(c, gin.H{"log_id": req.LogId, "balance": newBalance})
+}
+
 // ResetCreditScores 管理端全站信誉分重置：把所有用户 credit_score 设为当前满分，并清除
 // 仍在冷却期的保证书（重置后可立即重新做保证书）。后台系统任务执行（带进度），逐用户落
 // 审计明细（source=full_score_reset），可审计、可重跑。

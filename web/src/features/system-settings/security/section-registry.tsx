@@ -123,6 +123,8 @@ const SECURITY_SECTIONS = [
             settings['credit_score_setting.violation_markers'] ?? '',
           'credit_score_setting.repeat_multiplier_enabled':
             settings['credit_score_setting.repeat_multiplier_enabled'] ?? true,
+          'credit_score_setting.repeat_multiplier_tiers':
+            settings['credit_score_setting.repeat_multiplier_tiers'] ?? '',
           'credit_score_setting.max_daily_deduction':
             settings['credit_score_setting.max_daily_deduction'] ?? 50,
           'credit_score_setting.recover_enabled':

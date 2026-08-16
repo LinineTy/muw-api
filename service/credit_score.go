@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/types"
+	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/gin-gonic/gin"
@@ -28,6 +29,8 @@ const (
 	CreditSourcePledge            = "pledge"
 	// CreditSourceFullScoreReset 管理端全站信誉分重置（所有用户归一到新满分）。
 	CreditSourceFullScoreReset = "full_score_reset"
+	// CreditSourceRevert 管理端打回误判的敏感词扣分（审核撤销，恢复分数）。
+	CreditSourceRevert = "admin_revert"
 )
 
 // ErrPledgeCooldown 保证书冷却中，nextPledgeAt 由 ApplyUserPledge 的返回值给出。
@@ -238,9 +241,14 @@ func applyCreditDeduction(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, so
 		Reason:    reason,
 	}
 	// 倍率/每日上限在拿到用户行锁之后、事务内计算，并发扣分不会绕过每日上限。
+	// 倍率开关关闭时传 nil 阶梯：model 层以"阶梯非空"作为是否启用递增的判断。
+	repeatTiers := setting.RepeatMultiplierTiers
+	if !setting.RepeatMultiplierEnabled {
+		repeatTiers = nil
+	}
 	applied, newBalance, err := model.ApplyCreditScoreDeduction(
 		relayInfo.UserId, source, basePoints, setting.FullScore,
-		setting.RepeatMultiplierEnabled, setting.MaxDailyDeduction,
+		repeatTiers, setting.MaxDailyDeduction,
 		time.Now().Unix()-24*3600, log)
 	if err != nil {
 		logger.LogError(ctx, fmt.Sprintf("credit score deduction failed: %s", err.Error()))
@@ -276,6 +284,104 @@ func AdjustUserCreditScore(ctx *gin.Context, userId int, delta int, reason strin
 	}
 	logger.LogInfo(ctx, fmt.Sprintf("admin adjust credit score: user=%d delta=%d balance=%d", userId, delta, newBalance))
 	return newBalance, nil
+}
+
+// parseSensitiveWordsFromReason 从扣分原因里解析命中的敏感词。reason 格式由
+// ApplyKeywordCreditDeduction 生成："敏感词命中: 词A, 词B"。解析失败返回 nil。
+func parseSensitiveWordsFromReason(reason string) []string {
+	const prefix = "敏感词命中:"
+	if !strings.HasPrefix(reason, prefix) {
+		return nil
+	}
+	rest := strings.TrimSpace(strings.TrimPrefix(reason, prefix))
+	if rest == "" {
+		return nil
+	}
+	parts := strings.Split(rest, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if w := strings.TrimSpace(p); w != "" {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+// removeSensitiveWordsFromLibrary 从全局敏感词库移除指定词并持久化 option。
+// 词库更新后 AC 缓存 key 变化自动重建，无需手动清缓存。要删的词不在库里也视为成功。
+func removeSensitiveWordsFromLibrary(words []string) error {
+	if len(words) == 0 {
+		return nil
+	}
+	remove := make(map[string]bool, len(words))
+	for _, w := range words {
+		if t := strings.ToLower(strings.TrimSpace(w)); t != "" {
+			remove[t] = true
+		}
+	}
+	kept := make([]string, 0, len(setting.SensitiveWords))
+	for _, w := range setting.SensitiveWords {
+		if !remove[strings.ToLower(strings.TrimSpace(w))] {
+			kept = append(kept, w)
+		}
+	}
+	setting.SensitiveWords = kept
+	return model.UpdateOption("SensitiveWords", setting.SensitiveWordsToString())
+}
+
+// RevertKeywordDeduction 管理端打回一条敏感词扣分记录（审核认定误判）：
+//  1. 校验记录存在、是 local_keyword 扣分、未打回；
+//  2. 校验 removeWords 都是该记录命中的词；
+//  3. 可选先从敏感词库删词（失败即中止，分数不动）；
+//  4. 原子加回分数 + 标记原记录已打回（幂等），落恢复审计明细。
+//
+// 返回更新后余额、被打回的用户 id、恢复的点数（正），供管理审计记录"打回了谁、多少分"。
+func RevertKeywordDeduction(logID int64, removeWords []string) (newBalance int, userId int, points int, err error) {
+	var scoreLog model.CreditScoreLog
+	if err := model.DB.First(&scoreLog, logID).Error; err != nil {
+		return 0, 0, 0, fmt.Errorf("扣分记录不存在")
+	}
+	if scoreLog.Source != CreditSourceLocalKeyword {
+		return 0, 0, 0, fmt.Errorf("仅敏感词扣分可打回")
+	}
+	if scoreLog.Points >= 0 {
+		return 0, 0, 0, fmt.Errorf("该记录不是扣分")
+	}
+	if scoreLog.RevertedAt != 0 {
+		return 0, 0, 0, model.ErrCreditScoreLogAlreadyReverted
+	}
+	hitWords := parseSensitiveWordsFromReason(scoreLog.Reason)
+	for _, w := range removeWords {
+		word := strings.TrimSpace(w)
+		if word == "" {
+			continue
+		}
+		matched := false
+		for _, hit := range hitWords {
+			if strings.EqualFold(hit, word) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return 0, 0, 0, fmt.Errorf("词 %q 不在该记录命中的词中", word)
+		}
+	}
+	// 先删词后加分：删词失败时分数保持不动、整体失败。
+	if err := removeSensitiveWordsFromLibrary(removeWords); err != nil {
+		return 0, 0, 0, fmt.Errorf("敏感词库更新失败: %s", err)
+	}
+	setting := operation_setting.GetCreditScoreSetting()
+	revertLog := &model.CreditScoreLog{
+		Source:    CreditSourceRevert,
+		RequestId: scoreLog.RequestId,
+		Reason:    fmt.Sprintf("管理端打回误判扣分 #%d（原始原因: %s）", scoreLog.Id, scoreLog.Reason),
+	}
+	newBalance, err = model.ApplyCreditScoreRevert(scoreLog.Id, scoreLog.UserId, -scoreLog.Points, setting.FullScore, revertLog)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	return newBalance, scoreLog.UserId, -scoreLog.Points, nil
 }
 
 func truncateForCreditReason(msg string) string {

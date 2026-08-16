@@ -348,6 +348,7 @@ func SetApiRouter(router *gin.Engine) {
 			riskControlRoute.GET("/users", controller.GetLowCreditScoreUsers)
 			riskControlRoute.GET("/logs", controller.GetCreditScoreLogs)
 			riskControlRoute.POST("/adjust", controller.AdjustCreditScore)
+			riskControlRoute.POST("/revert-deduction", controller.RevertCreditScoreDeduction)
 			riskControlRoute.POST("/reset-credit-scores", controller.ResetCreditScores)
 			riskControlRoute.GET("/credit-score-reset/status", controller.GetCreditScoreResetStatus)
 			riskControlRoute.GET("/markers", controller.GetRiskControlMarkers)

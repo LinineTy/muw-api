@@ -47,7 +47,9 @@ func (SchemaMigration) TableName() string { return "schema_migrations" }
 // v9：credit_marker_analysis_logs 新增 retried 列（分析遇 429/5xx 自动重试的次数审计）。
 // v10：credit_marker_suggestions 新增 log_ids 列（AI 建议关联的来源错误日志 id 集合）。
 // v11：credit_marker_analysis_logs 新增 prompt_used 列（本次运行用的默认/自定义提示词标识）。
-const CurrentSchemaVersion = 11
+// v12：credit_score_logs 新增 reverted_at 列（管理端打回误判扣分的标记，补列见
+// ensureCreditScoreLogReverted）。
+const CurrentSchemaVersion = 12
 
 // Migration 是一个可单独应用、记录版本戳的迁移步骤。Up 按版本升序执行，
 // 用于 AutoMigrate 补不了的结构改造（换类型、删列）与数据迁移/特殊适配。
@@ -110,6 +112,11 @@ var migrations = []Migration{
 	{Version: 10, Name: "credit-marker-suggestion-log-ids", Up: func(db *gorm.DB) error { return nil }},
 	// v11：credit_marker_analysis_logs.prompt_used 列同理（补列见 ensureCreditMarkerAnalysisLogPromptUsed）。
 	{Version: 11, Name: "credit-marker-analysis-log-prompt-used", Up: func(db *gorm.DB) error { return nil }},
+	// v12：credit_score_logs.reverted_at 列由 AutoMigrate 添加；存量行该列是 NULL，
+	// 归零（未打回）保证 reverted_at = 0 语义，列表接口读出 0。
+	{Version: 12, Name: "credit-score-log-reverted", Up: func(db *gorm.DB) error {
+		return db.Model(&CreditScoreLog{}).Where("reverted_at IS NULL").Update("reverted_at", 0).Error
+	}},
 }
 
 // ensureSchemaMigrationsTable 用纯 SQL 建版本表，避免对版本表自身跑 AutoMigrate。
