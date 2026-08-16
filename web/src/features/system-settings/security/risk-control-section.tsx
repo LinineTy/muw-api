@@ -374,8 +374,11 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
     queryFn: getMarkerAnalysisTokenStatus,
   })
   const internalBaseUrl = tokenStatus?.internal_base_url ?? ''
+  // queryKey 刻意不用共享的 ['groups']：getAllGroups 解包成 string[]，而 channels/users
+  // 等页面用同一 key + getGroups 缓存的是 {success,message,data} 整包对象。撞 key 时本页
+  // 会读到对象形状，groups.filter 直接抛 P.filter is not a function（切页偶现、刷新即好）。
   const { data: groups = [] } = useQuery({
-    queryKey: ['groups'],
+    queryKey: ['risk-control-groups'],
     queryFn: getAllGroups,
   })
   const { data: modelsData } = useQuery({
