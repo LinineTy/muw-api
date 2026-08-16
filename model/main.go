@@ -304,6 +304,9 @@ func migrateDB() error {
 		if err := ensureCreditMarkerAnalysisLogPromptUsed(DB); err != nil {
 			return err
 		}
+		if err := ensureCreditScoreLogReverted(DB); err != nil {
+			return err
+		}
 		common.SysLog(fmt.Sprintf("schema already at version %d, skipping migration", applied))
 		return nil
 	}
@@ -335,6 +338,9 @@ func migrateDB() error {
 		return err
 	}
 	if err := ensureCreditMarkerAnalysisLogPromptUsed(DB); err != nil {
+		return err
+	}
+	if err := ensureCreditScoreLogReverted(DB); err != nil {
 		return err
 	}
 	if err := applyPendingMigrations(DB, applied, migrations); err != nil {
@@ -526,6 +532,19 @@ func ensureCreditMarkerAnalysisLogPromptUsed(db *gorm.DB) error {
 		return nil
 	}
 	return db.Migrator().AddColumn(&CreditMarkerAnalysisLog{}, "prompt_used")
+}
+
+// ensureCreditScoreLogReverted 幂等补 credit_score_logs.reverted_at 列（管理端打回误判扣分
+// 的标记）。理由同 ensureCreditMarkerAnalysisLogRetried：存量库（已是最新版本）走"跳过迁移"
+// 路径不会重跑 AutoMigrate，需显式补列，否则打回/扣分查询引用 reverted_at 会报列不存在。
+// 补列后把存量 NULL 归零（AddColumn 无默认值），保证 reverted_at = 0 语义。
+func ensureCreditScoreLogReverted(db *gorm.DB) error {
+	if !db.Migrator().HasColumn(&CreditScoreLog{}, "reverted_at") {
+		if err := db.Migrator().AddColumn(&CreditScoreLog{}, "reverted_at"); err != nil {
+			return err
+		}
+	}
+	return db.Model(&CreditScoreLog{}).Where("reverted_at IS NULL").Update("reverted_at", 0).Error
 }
 
 // ensureConversationRecordSizeBytes 幂等补 conversation_records.size_bytes 列（总存量核算用）。

@@ -15,6 +15,7 @@ import {
   ChevronDown,
   Eye,
   RefreshCw,
+  RotateCcw,
   Save,
   Settings2,
   ShieldAlert,
@@ -22,7 +23,7 @@ import {
   Sparkles,
   Wrench,
 } from 'lucide-react'
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -55,6 +56,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Markdown } from '@/components/ui/markdown'
 import { Progress } from '@/components/ui/progress'
@@ -85,6 +87,7 @@ import {
   getRiskControlOverview,
   rejectMarkerSuggestion,
   resetMarkers,
+  revertKeywordDeduction,
   updateMarkers,
 } from './api'
 import type {
@@ -94,6 +97,16 @@ import type {
 } from './types'
 
 const route = getRouteApi('/_authenticated/risk-control/')
+
+// 从敏感词扣分原因里解析命中的词。后端 reason 格式："敏感词命中: 词A, 词B"。
+function parseSensitiveWordsFromReason(reason: string): string[] {
+  const m = reason.match(/敏感词命中:\s*(.+)/)
+  if (!m) return []
+  return m[1]
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
 
 function formatTs(ts?: number): string {
   if (!ts) return '-'
@@ -745,7 +758,7 @@ const CREDIT_LOG_SOURCE_LABELS: Record<string, string> = {
 
 function CreditLogsTab() {
   const { t } = useTranslation()
-
+  const [revertTarget, setRevertTarget] = useState<CreditScoreLog | null>(null)
   const {
     globalFilter,
     onGlobalFilterChange,
@@ -830,6 +843,26 @@ function CreditLogsTab() {
         header: t('Time'),
         cell: ({ row }) => formatTs(row.original.created_at),
       },
+      {
+        id: 'actions',
+        header: t('Actions'),
+        cell: ({ row }) => {
+          const log = row.original
+          const canRevert =
+            log.source === 'local_keyword' && log.points < 0 && !log.reverted_at
+          return canRevert ? (
+            <Button
+              variant='ghost'
+              size='sm'
+              onClick={() => setRevertTarget(log)}
+              aria-label={t('Revert')}
+            >
+              <RotateCcw className='size-4' aria-hidden='true' />
+              {t('Revert')}
+            </Button>
+          ) : null
+        },
+      },
     ],
     [t]
   )
@@ -851,11 +884,12 @@ function CreditLogsTab() {
   })
 
   return (
-    <DataTablePage
-      table={table.table}
-      columns={columns}
-      isLoading={isLoading}
-      isFetching={isFetching}
+    <>
+      <DataTablePage
+        table={table.table}
+        columns={columns}
+        isLoading={isLoading}
+        isFetching={isFetching}
       emptyTitle={t('No records')}
       emptyDescription={t('No credit score events yet.')}
       skeletonKeyPrefix='risk-credit-logs'
@@ -881,6 +915,138 @@ function CreditLogsTab() {
         ],
       }}
     />
+    <RevertKeywordDialog
+      log={revertTarget}
+      onClose={() => setRevertTarget(null)}
+    />
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// 敏感词扣分打回
+// ---------------------------------------------------------------------------
+
+// 管理端审核认为敏感词扣分属误判时打回：恢复扣掉的分，可选从敏感词库删除命中的词。
+function RevertKeywordDialog({
+  log,
+  onClose,
+}: {
+  log: CreditScoreLog | null
+  onClose: () => void
+}) {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const hitWords = useMemo(
+    () => (log ? parseSensitiveWordsFromReason(log.reason) : []),
+    [log]
+  )
+  // 勾选状态初始全选；log 变化（打开/切换目标）时重置。
+  const [checkedWords, setCheckedWords] = useState<string[]>(hitWords)
+  useEffect(() => {
+    setCheckedWords(hitWords)
+  }, [hitWords])
+
+  const revertMutation = useMutation({
+    mutationFn: (removeWords: string[]) =>
+      revertKeywordDeduction({
+        log_id: log?.id ?? 0,
+        remove_words: removeWords,
+      }),
+    onSuccess: () => {
+      toast.success(t('Deduction reverted'))
+      void queryClient.invalidateQueries({
+        queryKey: ['risk-control-credit-logs'],
+      })
+      onClose()
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || t('Revert failed'))
+    },
+  })
+
+  const handleRevert = (removeWords: string[]) => {
+    if (!log || revertMutation.isPending) return
+    revertMutation.mutate(removeWords)
+  }
+
+  const toggleWord = (word: string) => {
+    setCheckedWords((prev) =>
+      prev.includes(word) ? prev.filter((w) => w !== word) : [...prev, word]
+    )
+  }
+
+  return (
+    <Dialog open={log != null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className='sm:max-w-md'>
+        <DialogHeader>
+          <DialogTitle>{t('Revert deduction')}</DialogTitle>
+        </DialogHeader>
+        {log && (
+          <div className='space-y-3 text-sm'>
+            <div className='bg-muted/50 rounded-md border p-2.5 text-xs'>
+              <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
+                <span>
+                  {t('User')} #{log.user_id}
+                </span>
+                <span>{t('Points')}: {log.points}</span>
+                <span>{formatTs(log.created_at)}</span>
+              </div>
+              <p className='text-muted-foreground mt-1 break-all'>
+                {log.reason}
+              </p>
+            </div>
+            <p>{t('The deducted points will be restored to the user.')}</p>
+            {hitWords.length > 0 ? (
+              <div className='space-y-1.5'>
+                <div className='font-medium'>
+                  {t('Also remove from the sensitive-word library')}
+                </div>
+                {hitWords.map((word) => (
+                  <label
+                    key={word}
+                    className='hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded px-1 py-0.5'
+                  >
+                    <Checkbox
+                      checked={checkedWords.includes(word)}
+                      onCheckedChange={() => toggleWord(word)}
+                    />
+                    <span className='min-w-0 truncate'>{word}</span>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <p className='text-muted-foreground text-xs'>
+                {t('No sensitive words parsed from this reason.')}
+              </p>
+            )}
+          </div>
+        )}
+        <DialogFooter>
+          <Button
+            variant='outline'
+            onClick={onClose}
+            disabled={revertMutation.isPending}
+          >
+            {t('Cancel')}
+          </Button>
+          <Button
+            variant='outline'
+            disabled={revertMutation.isPending}
+            onClick={() => handleRevert([])}
+          >
+            {t('Revert only')}
+          </Button>
+          <Button
+            disabled={revertMutation.isPending || checkedWords.length === 0}
+            onClick={() => handleRevert(checkedWords)}
+          >
+            <RotateCcw className='size-4' aria-hidden='true' />
+            {t('Revert & remove selected')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

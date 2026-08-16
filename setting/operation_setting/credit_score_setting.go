@@ -9,6 +9,14 @@ import (
 // CreditScoreSetting 信誉分体系配置。Enabled 总开关（默认关，部署后在设置页开启）；
 // AutoFreezeEnabled 低于 FreezeThreshold 时 TokenAuth 冻结 /v1 调用（账号本身不禁用）。
 // ViolationMarkers 为换行分隔的上游违规标记词（大小写不敏感子串匹配）。
+
+// RepeatMultiplierTier 重复违规倍率阶梯中的一档：From 为第几次（>=2，第 1 次恒为 ×1），
+// Multiplier 为该次起应用的倍率（>=1，可为小数）。
+type RepeatMultiplierTier struct {
+	From       int     `json:"from"`
+	Multiplier float64 `json:"multiplier"`
+}
+
 type CreditScoreSetting struct {
 	Enabled                    bool   `json:"enabled"`
 	AutoFreezeEnabled          bool   `json:"auto_freeze_enabled"`
@@ -18,9 +26,14 @@ type CreditScoreSetting struct {
 	DeductionLocalKeyword      int    `json:"deduction_local_keyword"`
 	ViolationMarkers           string `json:"violation_markers"`
 	RepeatMultiplierEnabled    bool   `json:"repeat_multiplier_enabled"`
-	MaxDailyDeduction          int    `json:"max_daily_deduction"`
-	RecoverEnabled             bool   `json:"recover_enabled"`
-	RecoverPerDay              int    `json:"recover_per_day"`
+	// RepeatMultiplierTiers 24h 同类违规重复扣分倍率阶梯：occurrence 次命中时，取
+	// from <= occurrence 中 from 最大的一档的倍率；低于最小 from 为 ×1，达到最后一档后
+	// 一直沿用该档倍率。默认 [{2,2},{3,3}] 即原"第2次×2、第3次起×3封顶"。倍率可为小数，
+	// 扣分点 = 基础分 × 倍率，乘积经 common.QuotaRound 四舍五入取整。
+	RepeatMultiplierTiers []RepeatMultiplierTier `json:"repeat_multiplier_tiers"`
+	MaxDailyDeduction     int                    `json:"max_daily_deduction"`
+	RecoverEnabled        bool                   `json:"recover_enabled"`
+	RecoverPerDay         int                    `json:"recover_per_day"`
 	// 保证书主动恢复：用户完成保证书 +PledgePoints，冷却 PledgeCooldownDays 天。
 	PledgePoints       int `json:"pledge_points"`
 	PledgeCooldownDays int `json:"pledge_cooldown_days"`
@@ -129,12 +142,16 @@ var creditScoreSetting = CreditScoreSetting{
 	DeductionLocalKeyword:      1,
 	ViolationMarkers:           DefaultViolationMarkers,
 	RepeatMultiplierEnabled:    true,
-	MaxDailyDeduction:          50,
-	RecoverEnabled:             true,
-	RecoverPerDay:              5,
-	PledgePoints:               10,
-	PledgeCooldownDays:         7,
-	MarkerAnalysisEnabled:      false,
+	RepeatMultiplierTiers: []RepeatMultiplierTier{
+		{From: 2, Multiplier: 2},
+		{From: 3, Multiplier: 3},
+	},
+	MaxDailyDeduction:     50,
+	RecoverEnabled:        true,
+	RecoverPerDay:         5,
+	PledgePoints:          10,
+	PledgeCooldownDays:    7,
+	MarkerAnalysisEnabled: false,
 	// 定量默认关：管理员在设置页开启后，错误日志积压到阈值才自动分析。默认阈值 150。
 	MarkerAnalysisThresholdEnabled: false,
 	MarkerAnalysisThresholdCount:   150,

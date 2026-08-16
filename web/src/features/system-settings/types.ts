@@ -391,6 +391,7 @@ export type SecuritySettings = {
   'credit_score_setting.deduction_local_keyword': number
   'credit_score_setting.violation_markers': string
   'credit_score_setting.repeat_multiplier_enabled': boolean
+  'credit_score_setting.repeat_multiplier_tiers': string
   'credit_score_setting.max_daily_deduction': number
   'credit_score_setting.recover_enabled': boolean
   'credit_score_setting.recover_per_day': number
