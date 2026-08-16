@@ -195,10 +195,15 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		contains, words := service.CheckSensitiveText(meta.CombineText)
 		if contains {
 			logger.LogWarn(c, fmt.Sprintf("user sensitive words detected: %s", strings.Join(words, ", ")))
-			// 信誉分：本地关键词命中扣分（在预扣费之前，被拦请求本身零计费）。
+			// 信誉分：本地关键词命中扣分（审计留痕），无论是否拦截都会扣。
 			service.ApplyKeywordCreditDeduction(c, relayInfo, words)
-			newAPIError = types.NewError(err, types.ErrorCodeSensitiveWordsDetected)
-			return
+			// StopOnSensitiveEnabled=true 时拦截请求（400，零计费）；false 时只记录不拦截，
+			// 请求照常转发——敏感词库可能误伤（如网上词库混入 system 等通用词），仅记录时
+			// 误伤只扣点分、不挡请求，可在设置页开启恢复拦截。
+			if setting.StopOnSensitiveEnabled {
+				newAPIError = types.NewError(err, types.ErrorCodeSensitiveWordsDetected)
+				return
+			}
 		}
 	}
 

@@ -17,10 +17,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import * as z from 'zod'
+import { Trash2, Upload } from 'lucide-react'
 
 import {
   Form,
@@ -31,6 +33,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
+import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 
@@ -42,10 +45,13 @@ import {
 import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
+import { SensitiveWordsImportDialog } from './sensitive-words-import-dialog'
+import { SensitiveWordsRemoveDialog } from './sensitive-words-remove-dialog'
 
 const sensitiveSchema = z.object({
   CheckSensitiveEnabled: z.boolean(),
   CheckSensitiveOnPromptEnabled: z.boolean(),
+  StopOnSensitiveEnabled: z.boolean(),
   SensitiveWords: z.string().optional(),
 })
 
@@ -78,6 +84,20 @@ export function SensitiveWordsSection({
     for (const [key, value] of updates) {
       await updateOption.mutateAsync({ key, value: value ?? '' })
     }
+  }
+
+  // 导入解析：从粘贴文本/上传文件解析出关键词，写入表单字段；实际持久化仍走上面的保存。
+  const [importOpen, setImportOpen] = useState(false)
+  const handleApplyWords = (words: string[]) => {
+    form.setValue('SensitiveWords', words.join('\n'), { shouldDirty: true })
+    toast.success(t('Keywords imported, save to apply'))
+  }
+
+  // 人肉排除：输入一个词，从词库中查找并删除（精确或包含），写入表单字段后保存生效。
+  const [removeOpen, setRemoveOpen] = useState(false)
+  const handleRemoveWords = (words: string[]) => {
+    form.setValue('SensitiveWords', words.join('\n'), { shouldDirty: true })
+    toast.success(t('Keywords removed, save to apply'))
   }
 
   return (
@@ -135,6 +155,29 @@ export function SensitiveWordsSection({
                 </SettingsSwitchItem>
               )}
             />
+
+            <FormField
+              control={form.control}
+              name='StopOnSensitiveEnabled'
+              render={({ field }) => (
+                <SettingsSwitchItem>
+                  <SettingsSwitchContent>
+                    <FormLabel>{t('Block the request on hit')}</FormLabel>
+                    <FormDescription>
+                      {t(
+                        'Block the request when a sensitive keyword is detected. When off, the request is still forwarded and the hit is only recorded (and lightly deducted), so false positives from a broad word list do not interrupt normal usage.'
+                      )}
+                    </FormDescription>
+                  </SettingsSwitchContent>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </SettingsSwitchItem>
+              )}
+            />
           </div>
 
           <FormField
@@ -142,7 +185,31 @@ export function SensitiveWordsSection({
             name='SensitiveWords'
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t('Blocked keywords')}</FormLabel>
+                <div className='flex items-center justify-between gap-2'>
+                  <FormLabel>{t('Blocked keywords')}</FormLabel>
+                  <div className='flex items-center gap-1'>
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='sm'
+                      className='h-6 px-2 text-xs'
+                      onClick={() => setImportOpen(true)}
+                    >
+                      <Upload className='size-3' aria-hidden='true' />
+                      {t('Import')}
+                    </Button>
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='sm'
+                      className='h-6 px-2 text-xs'
+                      onClick={() => setRemoveOpen(true)}
+                    >
+                      <Trash2 className='size-3' aria-hidden='true' />
+                      {t('Remove keywords')}
+                    </Button>
+                  </div>
+                </div>
                 <FormControl>
                   <Textarea
                     rows={12}
@@ -160,6 +227,18 @@ export function SensitiveWordsSection({
             )}
           />
         </SettingsForm>
+        <SensitiveWordsImportDialog
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          existingWords={form.getValues('SensitiveWords') ?? ''}
+          onApply={handleApplyWords}
+        />
+        <SensitiveWordsRemoveDialog
+          open={removeOpen}
+          onOpenChange={setRemoveOpen}
+          existingWords={form.getValues('SensitiveWords') ?? ''}
+          onApply={handleRemoveWords}
+        />
       </Form>
     </SettingsSection>
   )

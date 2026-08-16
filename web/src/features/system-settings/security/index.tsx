@@ -41,6 +41,7 @@ const defaultSecuritySettings: SecuritySettings = {
   GlobalWebRateLimitDuration: 180,
   CheckSensitiveEnabled: false,
   CheckSensitiveOnPromptEnabled: false,
+  StopOnSensitiveEnabled: false,
   SensitiveWords: '',
   'fetch_setting.enable_ssrf_protection': true,
   'fetch_setting.allow_private_ip': false,
