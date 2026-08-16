@@ -363,6 +363,28 @@ func CountUsersByEmail(email string) (int64, error) {
 	return count, err
 }
 
+// CountAllUsers 统计全部未软删除用户数，供全站扫描任务（如信誉分重置）的进度总览。
+func CountAllUsers() (int64, error) {
+	var total int64
+	err := DB.Model(&User{}).Count(&total).Error
+	return total, err
+}
+
+// ListUsersByIDBatch 按 id 升序分页返回用户（id > lastID，最多 limit 个），只取信誉分
+// 重置需要的最小列。全站批量任务配合 lastID 游标翻页，避免深分页扫描。
+func ListUsersByIDBatch(lastID int, limit int) ([]*User, error) {
+	if limit <= 0 {
+		limit = 200
+	}
+	var users []*User
+	err := DB.Select("id", "credit_score").
+		Where("id > ?", lastID).
+		Order("id asc").
+		Limit(limit).
+		Find(&users).Error
+	return users, err
+}
+
 func IsEmailAvailable(email string, excludeUserID int) (bool, error) {
 	email = NormalizeEmail(email)
 	if email == "" {
@@ -745,6 +767,14 @@ func (user *User) Insert(inviterId int) error {
 			user.Quota = common.QuotaForNewUser
 			user.AffCode = common.GetRandomString(4)
 
+			// 新用户开局信誉分跟随配置的满分（默认 650），而不是写死的列默认值：
+			// 管理员改满分后，新注册用户也应从新满分开始。仅在调用方未显式指定时覆盖。
+			if user.CreditScore <= 0 {
+				if full := operation_setting.GetCreditScoreSetting().FullScore; full > 0 {
+					user.CreditScore = full
+				}
+			}
+
 			// 初始化用户设置，包括默认的边栏配置
 			if user.Setting == "" {
 				defaultSetting := dto.UserSetting{}
@@ -811,6 +841,13 @@ func (user *User) InsertWithTx(tx *gorm.DB, inviterId int) error {
 		}
 		user.Quota = common.QuotaForNewUser
 		user.AffCode = common.GetRandomString(4)
+
+		// 与 Insert 对齐：新用户信誉分开局分跟随配置的满分（见 Insert 内注释）。
+		if user.CreditScore <= 0 {
+			if full := operation_setting.GetCreditScoreSetting().FullScore; full > 0 {
+				user.CreditScore = full
+			}
+		}
 
 		// 初始化用户设置
 		if user.Setting == "" {

@@ -730,7 +730,18 @@ const CREDIT_LOG_SOURCE_OPTIONS = [
   { label: 'Passive recovery', value: 'passive_recover' },
   { label: 'Pledge', value: 'pledge' },
   { label: 'Admin adjust', value: 'admin_adjust' },
+  { label: 'Full score reset', value: 'full_score_reset' },
 ]
+
+// source 标识 → i18n key（扣分明细"来源"列展示用，中文界面显示中文，未命中回退原始标识）。
+const CREDIT_LOG_SOURCE_LABELS: Record<string, string> = {
+  upstream_violation: 'Upstream violation',
+  local_keyword: 'Sensitive-word hit',
+  passive_recover: 'Passive recovery',
+  pledge: 'Pledge',
+  admin_adjust: 'Admin adjust',
+  full_score_reset: 'Full score reset',
+}
 
 function CreditLogsTab() {
   const { t } = useTranslation()
@@ -784,7 +795,12 @@ function CreditLogsTab() {
         accessorKey: 'source',
         header: t('Source'),
         cell: ({ row }) => (
-          <Badge variant='outline'>{row.original.source}</Badge>
+          <Badge variant='outline'>
+            {t(
+              CREDIT_LOG_SOURCE_LABELS[row.original.source] ??
+                row.original.source
+            )}
+          </Badge>
         ),
       },
       {

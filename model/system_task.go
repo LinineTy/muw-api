@@ -26,6 +26,7 @@ const (
 	SystemTaskTypeConversationCleanup  = "conversation_record_cleanup"
 	SystemTaskTypeCreditMarkerAnalysis = "credit_marker_analysis"
 	SystemTaskTypeCreditAuditCleanup   = "credit_audit_cleanup"
+	SystemTaskTypeCreditScoreReset     = "credit_score_reset"
 )
 
 var ErrSystemTaskLockLost = errors.New("system task lock lost")
