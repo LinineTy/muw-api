@@ -48,7 +48,7 @@ import {
   deletePlaygroundConversation,
   listPlaygroundConversations,
 } from '../api'
-import type { RemoteConversation } from '../types'
+import type { RemoteConversation, SpaceInfo } from '../types'
 
 const EXPORT_FORMAT_LABELS: Record<ConversationExportFormat, string> = {
   markdown: 'Markdown',
@@ -68,10 +68,28 @@ function formatTime(timestampMs: number): string {
   }).format(new Date(timestampMs))
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes <= 0) {
+    return '0 MB'
+  }
+  const mb = bytes / (1024 * 1024)
+  if (mb >= 1024) {
+    return `${(mb / 1024).toFixed(mb >= 10240 ? 0 : 1)} GB`
+  }
+  return `${mb.toFixed(mb >= 10 ? 0 : 1)} MB`
+}
+
 /**
  * 云空间「对话」区：列出服务端同步的会话，提供导出下载，不做在线浏览。
+ * 顶部显示对话占用的云空间用量（与图片合并计入同一容量）。
  */
-export function SpaceConversationsSection() {
+export function SpaceConversationsSection({
+  space,
+  onChanged,
+}: {
+  space: SpaceInfo | null
+  onChanged?: () => void
+}) {
   const { t } = useTranslation()
   const [conversations, setConversations] = useState<RemoteConversation[]>([])
   const [loading, setLoading] = useState(true)
@@ -119,6 +137,8 @@ export function SpaceConversationsSection() {
       toast.success(t('Conversation deleted'))
       setDeleteTarget(null)
       await load()
+      // 删除后刷新顶部用量条与对话占用统计。
+      onChanged?.()
     } catch {
       toast.error(t('Delete failed'))
     }
@@ -205,7 +225,17 @@ export function SpaceConversationsSection() {
           {t('Synced conversations. Download to keep a copy.')}
         </CardDescription>
       </CardHeader>
-      <CardContent>{listBody}</CardContent>
+      <CardContent className='space-y-3'>
+        {space != null && space.conversation_count > 0 && (
+          <p className='text-muted-foreground text-xs'>
+            {t('{{count}} conversations · {{size}} used', {
+              count: space.conversation_count,
+              size: formatBytes(space.conversation_used_bytes ?? 0),
+            })}
+          </p>
+        )}
+        {listBody}
+      </CardContent>
 
       <ConfirmDialog
         destructive

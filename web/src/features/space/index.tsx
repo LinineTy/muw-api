@@ -86,7 +86,10 @@ export function Space() {
               <SpaceTransientSection onCleared={refresh} space={space} />
             </TabsContent>
             <TabsContent value='conversations'>
-              <SpaceConversationsSection />
+              <SpaceConversationsSection
+                space={space}
+                onChanged={refresh}
+              />
             </TabsContent>
           </Tabs>
         </div>

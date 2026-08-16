@@ -414,7 +414,12 @@ const AUDIT_TEMPLATES: Record<string, string> = {
   // Risk control
   'risk_control.adjust': 'Adjusted credit score by {{points}} points',
   'risk_control.markers_update': 'Updated violation markers',
+  'risk_control.markers_reset': 'Reset violation markers to defaults',
   'risk_control.analyze_markers': 'Ran marker analysis on recent error logs',
+  'risk_control.regenerate_analysis_token':
+    'Regenerated the internal marker analysis token',
+  'risk_control.fetch_upstream_models':
+    'Fetched upstream models for marker analysis',
   'risk_control.marker_accept': 'Accepted marker suggestion {{id}}',
   'risk_control.marker_reject': 'Rejected marker suggestion {{id}}',
   'risk_control.pledge': 'Completed the content-safety pledge (+{{points}} points)',

@@ -15,9 +15,9 @@ import { useAuthStore } from '@/stores/auth-store'
 
 const riskControlSearchSchema = z.object({
   tab: z
-    .enum(['users', 'logs', 'conversations', 'markers'])
+    .enum(['overview', 'users', 'logs', 'conversations', 'markers'])
     .optional()
-    .catch('users'),
+    .catch('overview'),
   page: z.number().optional().catch(1),
   pageSize: z.number().optional().catch(undefined),
   // 低分用户：分数上限
