@@ -14,6 +14,8 @@ export interface CreditScoreLog {
   request_id: string
   reason: string
   created_at: number
+  /** 管理端打回（审核误判撤销）时间，0/缺省=未打回。 */
+  reverted_at?: number
 }
 
 export interface ConversationRecord {

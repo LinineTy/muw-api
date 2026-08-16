@@ -413,6 +413,8 @@ const AUDIT_TEMPLATES: Record<string, string> = {
   'option.clear_affinity_cache': 'Cleared channel affinity cache',
   // Risk control
   'risk_control.adjust': 'Adjusted credit score by {{points}} points',
+  'risk_control.revert_keyword_deduction':
+    'Reverted a sensitive-word deduction of {{points}} points (log #{{log_id}}) for user {{target_user_id}}',
   'risk_control.markers_update': 'Updated violation markers',
   'risk_control.markers_reset': 'Reset violation markers to defaults',
   'risk_control.analyze_markers': 'Ran marker analysis on recent error logs',

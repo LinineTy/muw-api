@@ -61,6 +61,8 @@ const defaultSecuritySettings: SecuritySettings = {
   'credit_score_setting.violation_markers':
     'Failed check: SAFETY_CHECK_TYPE\nContent violates usage guidelines\nis sensitive\nplease check your input',
   'credit_score_setting.repeat_multiplier_enabled': true,
+  'credit_score_setting.repeat_multiplier_tiers':
+    '[{"from":2,"multiplier":2},{"from":3,"multiplier":3}]',
   'credit_score_setting.max_daily_deduction': 50,
   'credit_score_setting.recover_enabled': true,
   'credit_score_setting.recover_per_day': 5,

@@ -3,9 +3,11 @@ package model
 import (
 	"context"
 	"errors"
+	"math"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"gorm.io/gorm"
 )
 
@@ -25,9 +27,15 @@ type CreditScoreLog struct {
 	RequestId string `json:"request_id" gorm:"type:varchar(64);index"`
 	Reason    string `json:"reason" gorm:"type:varchar(512)"`
 	CreatedAt int64  `json:"created_at" gorm:"bigint;index;autoCreateTime;index:idx_cs_user_created,priority:2;index:idx_cs_user_source_created,priority:3"`
+	// RevertedAt 管理端打回（审核误判撤销）该条扣分记录的时间，0=未打回。
+	// 仅敏感词扣分（source=local_keyword）可打回；打回后该条不再计入重复倍率次数。
+	RevertedAt int64 `json:"reverted_at" gorm:"bigint;index"`
 }
 
 func (CreditScoreLog) TableName() string { return "credit_score_logs" }
+
+// ErrCreditScoreLogAlreadyReverted 该扣分记录已被打回，不能重复打回。
+var ErrCreditScoreLogAlreadyReverted = errors.New("credit score log already reverted")
 
 // ApplyCreditScoreDelta 原子应用信誉分变动（delta 负=扣、正=恢复），clamp 到 [0, maxScore]，
 // 并写入审计明细 log（log.UserId/Points/Balance 回填为实际值）。lockForUpdate 串行化并发扣分，
@@ -66,9 +74,58 @@ func ApplyCreditScoreDelta(userId int, delta int, maxScore int, log *CreditScore
 	return newBalance, nil
 }
 
-// ApplyUserPledge 在用户行锁内原子完成"冷却检查 + 加分 + 落审计"。冷却检查与写入
-// 共用一把行锁，并发请求不会同时通过检查重复领分。返回更新后余额与下次可做保证书的
-// 时间；冷却中返回 ErrPledgeCooldown（nextPledgeAt 带出下次时间）。
+// ApplyCreditScoreRevert 管理端打回一条扣分记录：用户行锁内原子完成"幂等校验（未打回才
+// 标记）+ 加回分数（delta 为正，clamp 到 [0,maxScore]）+ 落恢复审计明细"。原记录标记
+// 打回与分数更新共用用户行锁，并发打回同一记录时后者因 reverted_at != 0 被拒绝，不会
+// 双重加分。revertLog 的 UserId/Points/Balance 回填为实际值。
+func ApplyCreditScoreRevert(sourceLogID int64, userId int, delta int, maxScore int, revertLog *CreditScoreLog) (int, error) {
+	if userId <= 0 || revertLog == nil {
+		return 0, errors.New("invalid params")
+	}
+	if delta <= 0 {
+		return 0, errors.New("revert delta must be positive")
+	}
+	var newBalance int
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var user User
+		if err := lockForUpdate(tx).Select("credit_score").Where("id = ?", userId).First(&user).Error; err != nil {
+			return err
+		}
+		// 幂等：只把未打回的记录置为已打回；RowsAffected=0 说明已被打回，拒绝。
+		// 用 COALESCE 兼容存量 NULL（AutoMigrate 加列无默认值，老行 reverted_at 是 NULL，
+		// 裸 `reverted_at = 0` 匹配不到 NULL 行，会误判"已打回"）。
+		result := tx.Model(&CreditScoreLog{}).
+			Where("id = ? AND COALESCE(reverted_at, 0) = 0", sourceLogID).
+			Update("reverted_at", common.GetTimestamp())
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return ErrCreditScoreLogAlreadyReverted
+		}
+		newBalance = user.CreditScore + delta
+		if newBalance < 0 {
+			newBalance = 0
+		}
+		if maxScore > 0 && newBalance > maxScore {
+			newBalance = maxScore
+		}
+		if err := tx.Model(&User{}).Where("id = ?", userId).Update("credit_score", newBalance).Error; err != nil {
+			return err
+		}
+		revertLog.UserId = userId
+		revertLog.Points = delta
+		revertLog.Balance = newBalance
+		if revertLog.CreatedAt == 0 {
+			revertLog.CreatedAt = common.GetTimestamp()
+		}
+		return tx.Create(revertLog).Error
+	})
+	if err != nil {
+		return 0, err
+	}
+	return newBalance, nil
+}
 func ApplyUserPledge(userId int, points int, maxScore int, cooldown int64, source string, log *CreditScoreLog) (newBalance int, nextPledgeAt int64, err error) {
 	if userId <= 0 || log == nil || points <= 0 {
 		return 0, 0, errors.New("invalid pledge params")
@@ -119,7 +176,7 @@ func ApplyUserPledge(userId int, points int, maxScore int, cooldown int64, sourc
 // 审计"。倍率与上限统计放在拿到锁之后、事务内进行：并发扣分会在行锁上排队，后到的
 // 请求能读到先前扣分（锁内首读建立于锁后快照），每日上限因此有效，不会被并发突发绕过。
 // 返回实际扣除点数（0=被上限拦下/无需扣）与更新后余额。
-func ApplyCreditScoreDeduction(userId int, source string, basePoints int, maxScore int, repeatEnabled bool, maxDailyDeduction int, windowStart int64, log *CreditScoreLog) (applied int, newBalance int, err error) {
+func ApplyCreditScoreDeduction(userId int, source string, basePoints int, maxScore int, repeatTiers []operation_setting.RepeatMultiplierTier, maxDailyDeduction int, windowStart int64, log *CreditScoreLog) (applied int, newBalance int, err error) {
 	if userId <= 0 || log == nil {
 		return 0, 0, errors.New("invalid params")
 	}
@@ -129,18 +186,22 @@ func ApplyCreditScoreDeduction(userId int, source string, basePoints int, maxSco
 			return err
 		}
 		points := basePoints
-		if repeatEnabled && basePoints > 0 {
+		// 倍率阶梯非空视为启用：occurrence = 已有同类违规数 + 1（本次还没落库）。
+		// 已打回（误判撤销）的记录不计入次数，避免误判推高后续倍率。
+		if len(repeatTiers) > 0 && basePoints > 0 {
 			var count int64
 			if err := tx.Model(&CreditScoreLog{}).
-				Where("user_id = ? AND source = ? AND created_at >= ?", userId, source, windowStart).
+				Where("user_id = ? AND source = ? AND COALESCE(reverted_at, 0) = 0 AND created_at >= ?", userId, source, windowStart).
 				Count(&count).Error; err != nil {
 				return err
 			}
-			mult := int(count) + 1
-			if mult > 3 {
-				mult = 3
+			occurrence := int(count) + 1
+			mult := multiplierForRepeat(occurrence, repeatTiers)
+			// 倍率可为小数（如 ×1.5），乘积四舍五入取整走统一 quota 取整；clamp 防御，
+			// 倍率配置异常导致乘积回退时至少按基础分扣，绝不出现"扣负分"（负扣分=加分）。
+			if points = common.QuotaRound(float64(basePoints) * mult); points < basePoints {
+				points = basePoints
 			}
-			points = basePoints * mult
 		}
 		if maxDailyDeduction > 0 {
 			var used int
@@ -148,7 +209,8 @@ func ApplyCreditScoreDeduction(userId int, source string, basePoints int, maxSco
 				Select("COALESCE(SUM(ABS(points)), 0)").
 				// 只统计系统自动扣分：管理端手动扣分（source=admin_adjust）是人工有意
 				// 操作，不应占用当日的自动风控扣分额度。与 service.CreditSourceAdminAdjust 对齐。
-				Where("user_id = ? AND points < 0 AND source <> ? AND created_at >= ?", userId, "admin_adjust", windowStart).
+				// 已打回（误判撤销）的扣分不占用额度。
+				Where("user_id = ? AND points < 0 AND source <> ? AND COALESCE(reverted_at, 0) = 0 AND created_at >= ?", userId, "admin_adjust", windowStart).
 				Scan(&used).Error; err != nil {
 				return err
 			}
@@ -186,6 +248,28 @@ func ApplyCreditScoreDeduction(userId int, source string, basePoints int, maxSco
 		return 0, 0, err
 	}
 	return applied, newBalance, nil
+}
+
+// multiplierForRepeat 返回第 occurrence 次命中应用的倍率：取 from <= occurrence 中
+// from 最大的一档；occurrence <= 1 或 tiers 为空返回 1（×1）。无效档（from<2、
+// 倍率非正/NaN/Inf）跳过——倍率是管理员配置，防御损坏值绝不参与扣分计算。
+func multiplierForRepeat(occurrence int, tiers []operation_setting.RepeatMultiplierTier) float64 {
+	if occurrence <= 1 || len(tiers) == 0 {
+		return 1
+	}
+	mult := 1.0
+	bestFrom := 1
+	for _, tier := range tiers {
+		if tier.From < 2 || math.IsNaN(tier.Multiplier) ||
+			math.IsInf(tier.Multiplier, 0) || tier.Multiplier < 1 {
+			continue
+		}
+		if tier.From <= occurrence && tier.From >= bestFrom {
+			bestFrom = tier.From
+			mult = tier.Multiplier
+		}
+	}
+	return mult
 }
 
 // ListUsersEligibleForRecover 返回可被动恢复信誉分的用户：分数未满，且 since（unix 秒）

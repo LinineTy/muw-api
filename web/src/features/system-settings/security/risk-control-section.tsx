@@ -9,7 +9,7 @@ License, or (at your option) any later version.
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useRef, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useFieldArray } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import * as z from 'zod'
@@ -22,7 +22,7 @@ import {
   FormItem,
   FormLabel,
 } from '@/components/ui/form'
-import { Loader2, RotateCcw, Search } from 'lucide-react'
+import { Loader2, Plus, RotateCcw, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -78,6 +78,31 @@ const riskControlSchema = z.object({
     deduction_local_keyword: z.coerce.number().min(0),
     violation_markers: z.string(),
     repeat_multiplier_enabled: z.boolean(),
+    // 24h 同类违规重复扣分倍率阶梯：每档"从第几次起 + 倍率"，from 严格递增，
+    // 倍率 >= 1（可为小数）。持久化为 JSON 字符串。
+    repeat_multiplier_tiers: z
+      .array(
+        z.object({
+          from: z.coerce
+            .number()
+            .int()
+            .min(2, 'Occurrence number must be at least 2'),
+          multiplier: z.coerce
+            .number()
+            .min(1, 'Multiplier must be at least 1'),
+        })
+      )
+      .superRefine((tiers, ctx) => {
+        for (let i = 1; i < tiers.length; i++) {
+          if (tiers[i].from <= tiers[i - 1].from) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: 'Occurrence numbers must be strictly increasing',
+            })
+            return
+          }
+        }
+      }),
     max_daily_deduction: z.coerce.number().min(0),
     recover_enabled: z.boolean(),
     recover_per_day: z.coerce.number().min(0),
@@ -106,6 +131,41 @@ const riskControlSchema = z.object({
 type RiskControlFormInput = z.input<typeof riskControlSchema>
 type RiskControlFormValues = z.output<typeof riskControlSchema>
 
+// 倍率阶梯的一档：from 为第几次（>=2，第 1 次恒为 ×1），multiplier 为该次起倍率（>=1 可小数）。
+type RepeatMultiplierTier = { from: number; multiplier: number }
+
+// 与后端 operation_setting 默认值一致：第2次×2、第3次起×3封顶（老配置/空档的兜底）。
+const DEFAULT_REPEAT_TIERS: RepeatMultiplierTier[] = [
+  { from: 2, multiplier: 2 },
+  { from: 3, multiplier: 3 },
+]
+
+// 解析后端 option 存的 JSON 字符串；空/损坏时回退默认阶梯，不让表单崩坏。
+function parseRepeatTiers(raw: string | undefined): RepeatMultiplierTier[] {
+  if (!raw) return DEFAULT_REPEAT_TIERS
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (
+      Array.isArray(parsed) &&
+      parsed.every(
+        (t) =>
+          t &&
+          typeof t.from === 'number' &&
+          typeof t.multiplier === 'number' &&
+          Number.isFinite(t.from) &&
+          Number.isFinite(t.multiplier) &&
+          t.from >= 2 &&
+          t.multiplier >= 1
+      )
+    ) {
+      return parsed as RepeatMultiplierTier[]
+    }
+  } catch {
+    // fall through to defaults
+  }
+  return DEFAULT_REPEAT_TIERS
+}
+
 type FlatRiskControlDefaults = {
   'credit_score_setting.enabled': boolean
   'credit_score_setting.auto_freeze_enabled': boolean
@@ -115,6 +175,7 @@ type FlatRiskControlDefaults = {
   'credit_score_setting.deduction_local_keyword': number
   'credit_score_setting.violation_markers': string
   'credit_score_setting.repeat_multiplier_enabled': boolean
+  'credit_score_setting.repeat_multiplier_tiers': string
   'credit_score_setting.max_daily_deduction': number
   'credit_score_setting.recover_enabled': boolean
   'credit_score_setting.recover_per_day': number
@@ -157,6 +218,9 @@ const buildFormDefaults = (
     violation_markers: d['credit_score_setting.violation_markers'] ?? '',
     repeat_multiplier_enabled:
       d['credit_score_setting.repeat_multiplier_enabled'],
+    repeat_multiplier_tiers: parseRepeatTiers(
+      d['credit_score_setting.repeat_multiplier_tiers']
+    ),
     max_daily_deduction: num(d['credit_score_setting.max_daily_deduction']),
     recover_enabled: d['credit_score_setting.recover_enabled'],
     recover_per_day: num(d['credit_score_setting.recover_per_day']),
@@ -215,6 +279,9 @@ const normalizeFormValues = (
     v.credit_score_setting.violation_markers,
   'credit_score_setting.repeat_multiplier_enabled':
     v.credit_score_setting.repeat_multiplier_enabled,
+  'credit_score_setting.repeat_multiplier_tiers': JSON.stringify(
+    v.credit_score_setting.repeat_multiplier_tiers
+  ),
   'credit_score_setting.max_daily_deduction': num(
     v.credit_score_setting.max_daily_deduction
   ),
@@ -283,6 +350,14 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
   })
 
   useResetForm(form, formDefaults)
+
+  // 24h 重复违规倍率阶梯编辑器（credit_score_setting 嵌套对象下的数组字段）。
+  const repeatTiersField = useFieldArray({
+    control: form.control,
+    name: 'credit_score_setting.repeat_multiplier_tiers',
+  })
+  const repeatTiersError =
+    form.formState.errors.credit_score_setting?.repeat_multiplier_tiers?.message
 
   // 接入方式预设：本站套娃（自动内部 base_url + 分组/模型联动 + 内部 token）vs 自定义端点。
   // 初始按已配置 base_url 判断：空/回环地址视为套娃预设，其它视为自定义。
@@ -738,7 +813,7 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
                     <FormLabel>{t('Repeat violation escalation')}</FormLabel>
                     <FormDescription>
                       {t(
-                        'Repeated same-type violations within 24h deduct x2 then x3.'
+                        'Repeated same-type violations within 24h apply the configured multiplier tiers below.'
                       )}
                     </FormDescription>
                   </SettingsSwitchContent>
@@ -751,6 +826,97 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
                 </SettingsSwitchItem>
               )}
             />
+            <div
+              data-settings-form-span='full'
+              className='min-w-0 space-y-2 rounded-md border p-3'
+            >
+              <div className='text-sm font-medium'>
+                {t('Repeat multiplier tiers')}
+              </div>
+              <p className='text-muted-foreground text-xs'>
+                {t(
+                  'Multiplier applied from the Nth same-type violation within 24h. The first violation is always x1; once the last tier is reached it applies to all later violations.'
+                )}
+              </p>
+              <div className='space-y-2'>
+                {repeatTiersField.fields.map((tier, index) => {
+                  const tierErrors =
+                    form.formState.errors.credit_score_setting
+                      ?.repeat_multiplier_tiers?.[index]
+                  const rowFromError =
+                    tierErrors?.from?.message ??
+                    tierErrors?.multiplier?.message
+                  return (
+                    <div key={tier.id} className='space-y-1'>
+                      <div className='flex items-center gap-2'>
+                        <span className='text-muted-foreground shrink-0 text-xs whitespace-nowrap'>
+                          {t('From occurrence')}
+                        </span>
+                        <Input
+                          type='number'
+                          min={2}
+                          step={1}
+                          value={tier.from as number}
+                          onChange={(e) =>
+                            repeatTiersField.update(index, {
+                              ...tier,
+                              from: Number(e.target.value),
+                            })
+                          }
+                          className='w-20'
+                        />
+                        <span className='text-muted-foreground shrink-0'>
+                          ×
+                        </span>
+                        <Input
+                          type='number'
+                          min={1}
+                          step={0.5}
+                          value={tier.multiplier as number}
+                          onChange={(e) =>
+                            repeatTiersField.update(index, {
+                              ...tier,
+                              multiplier: Number(e.target.value),
+                            })
+                          }
+                          className='w-24'
+                        />
+                        <Button
+                          type='button'
+                          variant='ghost'
+                          size='icon'
+                          aria-label={t('Remove tier')}
+                          onClick={() => repeatTiersField.remove(index)}
+                        >
+                          <X className='size-4' />
+                        </Button>
+                      </div>
+                      {rowFromError && (
+                        <p className='text-destructive pl-1 text-xs'>
+                          {t(rowFromError)}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                onClick={() =>
+                  repeatTiersField.append({ from: 2, multiplier: 2 })
+                }
+              >
+                <Plus className='size-4' />
+                {t('Add tier')}
+              </Button>
+              {repeatTiersError && (
+                <p className='text-destructive text-xs'>
+                  {t(repeatTiersError)}
+                </p>
+              )}
+            </div>
             <FormField
               control={form.control}
               name='credit_score_setting.max_daily_deduction'
