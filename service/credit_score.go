@@ -103,7 +103,15 @@ func GetRiskControlOverview() (map[string]any, error) {
 		overview["conversations_used_bytes"] = used
 	}
 
+	// 信用分百分比分桶分布（按满分等比缩放，改数值不影响展示）。
+	if dist, err := model.CountUsersByCreditScoreSegment(setting.FullScore); err != nil {
+		common.SysLog("risk control overview: credit score distribution failed: " + err.Error())
+	} else if len(dist) > 0 {
+		overview["credit_score_distribution"] = dist
+	}
+
 	overview["freeze_threshold"] = setting.FreezeThreshold
+	overview["full_score"] = setting.FullScore
 	overview["freeze_enabled"] = setting.Enabled && setting.AutoFreezeEnabled
 	return overview, nil
 }

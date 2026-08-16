@@ -9,11 +9,14 @@ import (
 
 // CreditMarkerSuggestion 违规标记词 AI 建议（待管理员采纳后才进 violation_markers）。
 // Source: manual/ai；Status: pending/accepted/rejected。
+// LogIds 为该建议来源的错误日志 id 集合（JSON 数组文本，管道按 marker 子串匹配关联）；
+// 为空表示没关联到具体日志，管理员凭 example 判断。
 type CreditMarkerSuggestion struct {
 	Id        int64  `json:"id" gorm:"primaryKey"`
 	Marker    string `json:"marker" gorm:"type:varchar(255);index"`
 	Example   string `json:"example" gorm:"type:text"`
 	Reason    string `json:"reason" gorm:"type:varchar(512)"`
+	LogIds    string `json:"log_ids" gorm:"type:text"` // JSON 数组，如 [55813,55842]
 	Source    string `json:"source" gorm:"type:varchar(32)"`
 	Status    string `json:"status" gorm:"type:varchar(16);index"`
 	CreatedAt int64  `json:"created_at" gorm:"bigint;index;autoCreateTime"`

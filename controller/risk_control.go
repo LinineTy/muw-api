@@ -219,20 +219,26 @@ func updateOperationSettingOption(c *gin.Context, module, field, value string) e
 	return model.UpdateOption(key, value)
 }
 
-// AnalyzeMarkers 手动立即跑一次违规标记词 AI 分析。body 可选 force=true：忽略"已分析去重"
-// 过滤，强制重新分析窗口内全部候选日志（管理员想重查不采纳的建议时用）。
+// AnalyzeMarkers 触发一次违规标记词 AI 分析（入队后台任务，带进度轮询）。body 可选
+// force=true：先把水位线重置为 0，从建站第一条强制全跑（存量/历史全量重跑，不跳过任何
+// 已分析日志）。常规触发（threshold/manual）只处理水位线之后的新增错误。
 func AnalyzeMarkers(c *gin.Context) {
 	var req struct {
 		Force bool `json:"force"`
 	}
 	// body 可为空（旧调用不带 body），解码失败按 force=false 处理。
 	_ = common.DecodeJson(c.Request.Body, &req)
-	summary, err := service.AnalyzeRecentErrorLogs(c.Request.Context(), "manual", req.Force)
+	triggeredBy := "manual"
+	if req.Force {
+		triggeredBy = "force"
+	}
+	task, created, err := service.EnqueueSystemTask(model.SystemTaskTypeCreditMarkerAnalysis,
+		service.MarkerAnalysisTaskPayload{Force: req.Force, TriggeredBy: triggeredBy})
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	common.ApiSuccess(c, summary)
+	common.ApiSuccess(c, gin.H{"started": created, "task_id": task.TaskID})
 }
 
 // GetMarkerSuggestions 待审/已处理建议列表。
@@ -260,6 +266,27 @@ func GetMarkerAnalysisLogs(c *gin.Context) {
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(logs)
 	common.ApiSuccess(c, pageInfo)
+}
+
+// GetMarkerAnalysisErrorStats 风控中心「错误积压」：累计全部/已分析/未分析错误日志条数
+// + 当前定量触发配置，供前端可视化判断阈值何时达到（未分析 = 水位线之后新增，无窗口）。
+func GetMarkerAnalysisErrorStats(c *gin.Context) {
+	stats, err := service.GetMarkerAnalysisErrorStats(c.Request.Context())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, stats)
+}
+
+// GetMarkerAnalysisStatus 分析任务卡片状态：是否在跑（含进度）、最近一次结果/错误。
+func GetMarkerAnalysisStatus(c *gin.Context) {
+	status, err := service.GetMarkerAnalysisStatus(c.Request.Context())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, status)
 }
 
 // AcceptMarkerSuggestion 采纳建议：append 进 violation_markers 并写 option，标记 accepted。
@@ -387,6 +414,18 @@ func ResetRiskControlMarkers(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, gin.H{"markers": splitMarkerLines(setting.ViolationMarkers)})
+}
+
+// ResetMarkerAnalysisPrompt 把标记词分析的提示词重置为系统内置默认值（"恢复默认"按钮语义），
+// 与 ResetRiskControlMarkers 对称。返回默认提示词供前端回填表单。
+func ResetMarkerAnalysisPrompt(c *gin.Context) {
+	setting := operation_setting.GetCreditScoreSetting()
+	setting.MarkerAnalysisPrompt = operation_setting.DefaultMarkerAnalysisPrompt
+	if err := model.UpdateOption("credit_score_setting.marker_analysis_prompt", operation_setting.DefaultMarkerAnalysisPrompt); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"prompt": operation_setting.DefaultMarkerAnalysisPrompt})
 }
 
 // GetMarkerAnalysisTokenStatus 套娃内部 token 状态（值敏感不回显，只给 masked 尾号 + 分组）。

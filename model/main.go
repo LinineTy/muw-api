@@ -280,6 +280,9 @@ func migrateDB() error {
 		if err := ensurePlaygroundConversationMessagesLongText(DB); err != nil {
 			return err
 		}
+		if err := ensurePlaygroundConversationMessagesBytes(DB); err != nil {
+			return err
+		}
 		if err := ensureConversationRecordLongText(DB); err != nil {
 			return err
 		}
@@ -290,6 +293,15 @@ func migrateDB() error {
 			return err
 		}
 		if err := ensureCreditMarkerAnalyzedLogTable(DB); err != nil {
+			return err
+		}
+		if err := ensureCreditMarkerAnalysisLogRetried(DB); err != nil {
+			return err
+		}
+		if err := ensureCreditMarkerSuggestionLogIds(DB); err != nil {
+			return err
+		}
+		if err := ensureCreditMarkerAnalysisLogPromptUsed(DB); err != nil {
 			return err
 		}
 		common.SysLog(fmt.Sprintf("schema already at version %d, skipping migration", applied))
@@ -304,6 +316,9 @@ func migrateDB() error {
 	if err := ensurePlaygroundConversationMessagesLongText(DB); err != nil {
 		return err
 	}
+	if err := ensurePlaygroundConversationMessagesBytes(DB); err != nil {
+		return err
+	}
 	if err := ensureConversationRecordLongText(DB); err != nil {
 		return err
 	}
@@ -311,6 +326,15 @@ func migrateDB() error {
 		return err
 	}
 	if err := ensureUserCreditScoreIndex(DB); err != nil {
+		return err
+	}
+	if err := ensureCreditMarkerAnalysisLogRetried(DB); err != nil {
+		return err
+	}
+	if err := ensureCreditMarkerSuggestionLogIds(DB); err != nil {
+		return err
+	}
+	if err := ensureCreditMarkerAnalysisLogPromptUsed(DB); err != nil {
 		return err
 	}
 	if err := applyPendingMigrations(DB, applied, migrations); err != nil {
@@ -394,6 +418,35 @@ func ensurePlaygroundConversationMessagesLongText(db *gorm.DB) error {
 	return db.Exec("ALTER TABLE playground_conversations MODIFY COLUMN messages LONGTEXT").Error
 }
 
+// ensurePlaygroundConversationMessagesBytes 幂等补 playground_conversations.messages_bytes
+// 列（对话占用云空间容量核算用）并回填存量行。AutoMigrate 只在 schema 版本变化时执行，
+// 存量库（已最新版本）走"跳过迁移"路径，需在这里显式补列；回填按批次处理，幂等可重跑。
+// 注意：WHERE 必须排除 messages 为空的行——空消息的字节数本来就该是 0，若包含它们，
+// 更新后仍匹配条件会被反复选中，回填循环永不终止（服务卡死在启动）。
+func ensurePlaygroundConversationMessagesBytes(db *gorm.DB) error {
+	if !db.Migrator().HasColumn(&PlaygroundConversation{}, "messages_bytes") {
+		if err := db.Migrator().AddColumn(&PlaygroundConversation{}, "messages_bytes"); err != nil {
+			return err
+		}
+	}
+	for {
+		var rows []PlaygroundConversation
+		if err := db.Where("(messages_bytes IS NULL OR messages_bytes = 0) AND messages != ''").
+			Limit(1000).Find(&rows).Error; err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			return nil
+		}
+		for _, r := range rows {
+			if err := db.Model(&PlaygroundConversation{}).Where("id = ?", r.Id).
+				Update("messages_bytes", len(r.Messages)).Error; err != nil {
+				return err
+			}
+		}
+	}
+}
+
 // conversationColumnIsLongText 检查 conversation_records 某列是否已是 LONGTEXT。
 // MySQL 的 ALTER TABLE ... MODIFY 即使类型不变也会整表 COPY 重建，表按设计会涨到
 // GB 级，每次启动盲目执行代价很高，故先探测列类型、已是 LONGTEXT 则跳过。
@@ -445,6 +498,34 @@ func ensureCreditMarkerAnalyzedLogTable(db *gorm.DB) error {
 		return nil
 	}
 	return db.Migrator().CreateTable(&CreditMarkerAnalyzedLog{})
+}
+
+// ensureCreditMarkerAnalysisLogRetried 幂等补 credit_marker_analysis_logs.retried 列
+// （分析遇 429/5xx 自动重试次数审计）。AutoMigrate 只在 schema 版本变化时执行；已最新版本
+// 库走"跳过迁移"路径不会重跑，需在这里显式补列。
+func ensureCreditMarkerAnalysisLogRetried(db *gorm.DB) error {
+	if db.Migrator().HasColumn(&CreditMarkerAnalysisLog{}, "retried") {
+		return nil
+	}
+	return db.Migrator().AddColumn(&CreditMarkerAnalysisLog{}, "retried")
+}
+
+// ensureCreditMarkerSuggestionLogIds 幂等补 credit_marker_suggestions.log_ids 列（AI 建议
+// 关联的来源错误日志 id）。理由同 ensureCreditMarkerAnalysisLogRetried。
+func ensureCreditMarkerSuggestionLogIds(db *gorm.DB) error {
+	if db.Migrator().HasColumn(&CreditMarkerSuggestion{}, "log_ids") {
+		return nil
+	}
+	return db.Migrator().AddColumn(&CreditMarkerSuggestion{}, "log_ids")
+}
+
+// ensureCreditMarkerAnalysisLogPromptUsed 幂等补 credit_marker_analysis_logs.prompt_used 列
+// （本次分析用的默认/自定义提示词标识）。理由同 ensureCreditMarkerAnalysisLogRetried。
+func ensureCreditMarkerAnalysisLogPromptUsed(db *gorm.DB) error {
+	if db.Migrator().HasColumn(&CreditMarkerAnalysisLog{}, "prompt_used") {
+		return nil
+	}
+	return db.Migrator().AddColumn(&CreditMarkerAnalysisLog{}, "prompt_used")
 }
 
 // ensureConversationRecordSizeBytes 幂等补 conversation_records.size_bytes 列（总存量核算用）。

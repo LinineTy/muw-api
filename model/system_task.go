@@ -418,6 +418,10 @@ func (task *SystemTask) DecodeState(v any) error {
 	return decodeSystemTaskJSONString(task.State, v)
 }
 
+func (task *SystemTask) DecodeResult(v any) error {
+	return decodeSystemTaskJSONString(task.Result, v)
+}
+
 func (task *SystemTask) ToResponse() SystemTaskResponse {
 	return SystemTaskResponse{
 		ID:        task.ID,
