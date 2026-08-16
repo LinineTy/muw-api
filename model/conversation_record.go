@@ -9,8 +9,10 @@ import (
 
 // ConversationRecord 对话记录留存（请求+响应）。独立表放主库 DB。
 // Request 为已剥离图片 base64 的请求文本（截断）；Response 为 tee 捕获的
-// 原始响应文本/SSE（截断）。MySQL 的 request/response 需升 LONGTEXT
-// （见 ensureConversationRecordLongText，model/main.go）。
+// 原始响应文本/SSE（截断）。两列不写 gorm type，让 GORM 按方言推断文本类型：
+// MySQL 默认 longtext（TEXT 只有 64KB 装不下 SSE 响应），SQLite/PostgreSQL 默认
+// text（无 64KB 上限）。显式 type:text 会在版本升级重跑 AutoMigrate 时把已升级的
+// longtext 列缩回 text，遇到 >64KB 存量行直接失败（见 ensureConversationRecordLongText）。
 type ConversationRecord struct {
 	Id         int64  `json:"id" gorm:"primaryKey"`
 	UserId     int    `json:"user_id" gorm:"index"`
@@ -21,9 +23,9 @@ type ConversationRecord struct {
 	RelayMode  int    `json:"relay_mode"`
 	IsStream   bool   `json:"is_stream"`
 	StatusCode int    `json:"status_code"`
-	Request    string `json:"request" gorm:"type:text"`  // 已剥离图片的文本（截断）
-	Response   string `json:"response" gorm:"type:text"` // tee 捕获的原始响应（截断）
-	SizeBytes  int64  `json:"size_bytes" gorm:"bigint"`  // 抓取时按字节计的 request+response 大小（总量核算用）
+	Request    string `json:"request"`                  // 已剥离图片的文本（截断）
+	Response   string `json:"response"`                 // tee 捕获的原始响应（截断）
+	SizeBytes  int64  `json:"size_bytes" gorm:"bigint"` // 抓取时按字节计的 request+response 大小（总量核算用）
 	CreatedAt  int64  `json:"created_at" gorm:"bigint;index;autoCreateTime"`
 }
 

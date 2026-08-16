@@ -67,3 +67,44 @@ func TestPlaygroundConversationUpsertOnConflict(t *testing.T) {
 	_, err = GetPlaygroundConversationByClientId(101, "conv-a")
 	assert.NoError(t, err)
 }
+
+// TestPlaygroundConversationMessagesBytes 保存时记录消息字节数；汇总只算本人活跃会话。
+func TestPlaygroundConversationMessagesBytes(t *testing.T) {
+	openPlaygroundConversationTestDB(t)
+	msg1 := `[{"role":"user","content":"hello"}]`
+	require.NoError(t, UpsertPlaygroundConversation(&PlaygroundConversation{
+		UserId: 100, ClientId: "conv-bytes", Title: "t", Messages: msg1,
+	}))
+	conv, err := GetPlaygroundConversationByClientId(100, "conv-bytes")
+	require.NoError(t, err)
+	assert.Equal(t, int64(len(msg1)), conv.MessagesBytes)
+
+	// 更新同 client_id 后字节数随新消息刷新。
+	msg2 := `[{"role":"user","content":"hello world again"}]`
+	require.NoError(t, UpsertPlaygroundConversation(&PlaygroundConversation{
+		UserId: 100, ClientId: "conv-bytes", Title: "t2", Messages: msg2,
+	}))
+	conv, err = GetPlaygroundConversationByClientId(100, "conv-bytes")
+	require.NoError(t, err)
+	assert.Equal(t, int64(len(msg2)), conv.MessagesBytes)
+
+	// 汇总只算本人活跃会话；软删的会话不计入。
+	sum, err := SumPlaygroundConversationSizesByUser(100)
+	require.NoError(t, err)
+	assert.Equal(t, int64(len(msg2)), sum)
+	other, err := SumPlaygroundConversationSizesByUser(101)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), other)
+
+	require.NoError(t, UpsertPlaygroundConversation(&PlaygroundConversation{
+		UserId: 100, ClientId: "conv-bytes2", Title: "t3", Messages: msg1,
+	}))
+	sum, err = SumPlaygroundConversationSizesByUser(100)
+	require.NoError(t, err)
+	assert.Equal(t, int64(len(msg1)+len(msg2)), sum)
+	_, err = DeletePlaygroundConversationByClientId(100, "conv-bytes2")
+	require.NoError(t, err)
+	sum, err = SumPlaygroundConversationSizesByUser(100)
+	require.NoError(t, err)
+	assert.Equal(t, int64(len(msg2)), sum)
+}

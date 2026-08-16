@@ -7,6 +7,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting"
 
 	"github.com/gin-gonic/gin"
 )
@@ -92,6 +93,32 @@ func SavePlaygroundConversation(c *gin.Context) {
 	if len(request.Messages) > maxConversationMessagesBytes {
 		common.ApiErrorMsg(c, "消息内容过大")
 		return
+	}
+
+	// 对话同步消息也占用用户云空间容量：图片 + 本会话替换后的总占用不得超限（root 无限）。
+	// 更新同 client_id 时先减旧会话占用、再加新大小，只按净增量判定，避免已有会话被重复计满。
+	if c.GetInt("role") != common.RoleRootUser {
+		capacity := int64(setting.UserSpaceInitialMB) << 20
+		if user, err := model.GetUserById(userId, false); err == nil && user != nil && user.SpaceCapacity > 0 {
+			capacity = user.SpaceCapacity
+		}
+		used, err := model.SumPlaygroundImageSizesByUserAll(userId)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		convUsed, err := model.SumPlaygroundConversationSizesByUser(userId)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		if old, err := model.GetPlaygroundConversationByClientId(userId, clientId); err == nil {
+			convUsed -= old.MessagesBytes
+		}
+		if used+convUsed+int64(len(request.Messages)) > capacity {
+			common.ApiErrorMsg(c, "云空间容量不足")
+			return
+		}
 	}
 
 	conv := &model.PlaygroundConversation{

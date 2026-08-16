@@ -52,9 +52,9 @@ var auditRouteActions = map[string]string{
 	"PUT /api/option/":                          "option.update",
 
 	// 自定义 OAuth（root）
-	"POST /api/custom-oauth-provider/":      "custom_oauth.create",
-	"PUT /api/custom-oauth-provider/:id":    "custom_oauth.update",
-	"DELETE /api/custom-oauth-provider/:id": "custom_oauth.delete",
+	"POST /api/custom-oauth-provider/":          "custom_oauth.create",
+	"PUT /api/custom-oauth-provider/:id":        "custom_oauth.update",
+	"DELETE /api/custom-oauth-provider/:id":     "custom_oauth.delete",
 	"POST /api/custom-oauth-provider/discovery": "custom_oauth.discovery",
 
 	// 性能/缓存（root）
@@ -89,12 +89,12 @@ var auditRouteActions = map[string]string{
 	"PUT /api/subscription/admin/plans/:id": "subscription.plan_update",
 	"POST /api/subscription/admin/bind":     "subscription.bind",
 	// 订阅管理：计划状态/删除、用户订阅的新增/作废/删除/彻底清除
-	"PATCH /api/subscription/admin/plans/:id":                    "subscription.plan_status_update",
-	"DELETE /api/subscription/admin/plans/:id":                    "subscription.plan_delete",
-	"POST /api/subscription/admin/users/:id/subscriptions":        "subscription.user_subscription_create",
+	"PATCH /api/subscription/admin/plans/:id":                        "subscription.plan_status_update",
+	"DELETE /api/subscription/admin/plans/:id":                       "subscription.plan_delete",
+	"POST /api/subscription/admin/users/:id/subscriptions":           "subscription.user_subscription_create",
 	"POST /api/subscription/admin/user_subscriptions/:id/invalidate": "subscription.user_subscription_invalidate",
-	"DELETE /api/subscription/admin/user_subscriptions/:id":       "subscription.user_subscription_delete",
-	"POST /api/subscription/admin/user_subscriptions/:id/purge":   "subscription.user_subscription_purge",
+	"DELETE /api/subscription/admin/user_subscriptions/:id":          "subscription.user_subscription_delete",
+	"POST /api/subscription/admin/user_subscriptions/:id/purge":      "subscription.user_subscription_purge",
 
 	// 比率同步（root）
 	"POST /api/ratio_sync/fetch": "ratio_sync.fetch",
@@ -104,16 +104,20 @@ var auditRouteActions = map[string]string{
 	"DELETE /api/system-info/instances/:node_name": "system_info.delete_instance",
 
 	// 图床图片（root）
-	"POST /api/images/":    "image.upload",
+	"POST /api/images/":      "image.upload",
 	"DELETE /api/images/:id": "image.delete",
 
 	// 日志
 	"POST /api/system-task/log-cleanup": "log.cleanup_start",
 
 	// 风控
-	"POST /api/risk-control/adjust": "risk_control.adjust",
-	"PUT /api/risk-control/markers": "risk_control.markers_update",
-	"POST /api/risk-control/analyze-markers": "risk_control.analyze_markers",
+	"POST /api/risk-control/adjust":                        "risk_control.adjust",
+	"PUT /api/risk-control/markers":                        "risk_control.markers_update",
+	"POST /api/risk-control/markers/reset":                 "risk_control.markers_reset",
+	"POST /api/risk-control/analyze-markers":               "risk_control.analyze_markers",
+	"POST /api/risk-control/marker-analysis/reset-prompt":  "risk_control.marker_analysis_prompt_reset",
+	"POST /api/risk-control/regenerate-analysis-token":     "risk_control.regenerate_analysis_token",
+	"POST /api/risk-control/fetch-upstream-models":         "risk_control.fetch_upstream_models",
 	"POST /api/risk-control/marker-suggestions/:id/accept": "risk_control.marker_accept",
 	"POST /api/risk-control/marker-suggestions/:id/reject": "risk_control.marker_reject",
 

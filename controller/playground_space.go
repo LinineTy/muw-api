@@ -55,6 +55,17 @@ func GetUserPlaygroundSpace(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// 对话同步消息也计入云空间用量（与图片合并为统一容量）。
+	conversationUsed, err := model.SumPlaygroundConversationSizesByUser(userId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	conversationCount, err := model.CountPlaygroundConversationsByUser(userId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
 
 	globalTransient, err := model.SumPlaygroundImageSizesGlobal(false)
 	if err != nil {
@@ -103,18 +114,20 @@ func GetUserPlaygroundSpace(c *gin.Context) {
 	}
 
 	common.ApiSuccess(c, gin.H{
-		"capacity_bytes":    capacityBytes,
-		"used_bytes":        used,
-		"purchase_ratio":    setting.UserSpacePurchaseRatio,
-		"max_purchase_mb":   setting.UserSpaceMaxPurchaseMB,
-		"max_purchased_mb":  setting.UserSpaceMaxPurchasedMB,
-		"purchased_bytes":   purchasedBytes,
-		"global_used_bytes": globalTransient + globalPermanent,
-		"global_max_bytes":  int64(setting.UserSpaceGlobalMaxMB) << 20,
-		"transient_count":   transientCount,
-		"transient_bytes":   transientBytes,
-		"permanent_count":   permanentCount,
-		"permanent_bytes":   permanentBytes,
+		"capacity_bytes":          capacityBytes,
+		"used_bytes":              used + conversationUsed,
+		"purchase_ratio":          setting.UserSpacePurchaseRatio,
+		"max_purchase_mb":         setting.UserSpaceMaxPurchaseMB,
+		"max_purchased_mb":        setting.UserSpaceMaxPurchasedMB,
+		"purchased_bytes":         purchasedBytes,
+		"global_used_bytes":       globalTransient + globalPermanent,
+		"global_max_bytes":        int64(setting.UserSpaceGlobalMaxMB) << 20,
+		"transient_count":         transientCount,
+		"transient_bytes":         transientBytes,
+		"permanent_count":         permanentCount,
+		"permanent_bytes":         permanentBytes,
+		"conversation_count":      conversationCount,
+		"conversation_used_bytes": conversationUsed,
 	})
 }
 

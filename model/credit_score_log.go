@@ -257,6 +257,42 @@ func CountUsersBelowCreditScore(threshold int) (int64, error) {
 	return total, err
 }
 
+// CreditScoreSegmentCount 信用分区间统计行（CountUsersByCreditScoreSegment 的返回项）。
+// json tag 必须小写：序列化进 overview 响应后前端按 segment/count 读取。
+type CreditScoreSegmentCount struct {
+	Segment string `json:"segment" gorm:"column:segment"`
+	Count   int64  `json:"count" gorm:"column:segment_count"`
+}
+
+// CountUsersByCreditScoreSegment 按信用分占满分(fullScore)的百分比分桶统计用户数（软删除
+// 自动排除）。百分比桶与 full_score 配置解耦：改满分/冻结阈值等数值时桶等比缩放，不会出现
+// "上限调低后全员落入最低桶"的失真。桶：<50% / 50-79% / 80-99% / 100%，按桶顺序返回
+// （整数运算避免浮点误差）。注意 ORDER BY 必须按 GROUP BY 的 segment 别名排序，不能引用
+// 原始 credit_score 表达式——MySQL 的 only_full_group_by 会拒绝非聚合列进 ORDER BY（SQLite
+// 不强制所以容易漏测，见 TestCountUsersByCreditScoreSegment）。
+func CountUsersByCreditScoreSegment(fullScore int) ([]CreditScoreSegmentCount, error) {
+	if fullScore <= 0 {
+		fullScore = 650 // 兜底，避免除零
+	}
+	var rows []CreditScoreSegmentCount
+	err := DB.Raw("SELECT CASE "+
+		"WHEN credit_score * 100 / ? >= 100 THEN '100%' "+
+		"WHEN credit_score * 100 / ? >= 80 THEN '80-99%' "+
+		"WHEN credit_score * 100 / ? >= 50 THEN '50-79%' "+
+		"ELSE '<50%' END AS segment, "+
+		"COUNT(*) AS segment_count "+
+		"FROM users WHERE deleted_at IS NULL "+
+		"GROUP BY segment "+
+		"ORDER BY CASE segment "+
+		"WHEN '100%' THEN 0 "+
+		"WHEN '80-99%' THEN 1 "+
+		"WHEN '50-79%' THEN 2 "+
+		"ELSE 3 END",
+		fullScore, fullScore, fullScore).
+		Scan(&rows).Error
+	return rows, err
+}
+
 // SumAllDeductionsSince 统计 since 之后所有扣分（points<0）的绝对值总和（全局）。
 func SumAllDeductionsSince(since int64) (int, error) {
 	var sum int

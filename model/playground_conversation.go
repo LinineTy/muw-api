@@ -10,15 +10,22 @@ import (
 // PlaygroundConversation 游乐场对话的服务端持久化（多设备同步）。
 // ClientId 是前端生成的 nanoid，跨设备稳定标识；Messages 存 JSON 文本
 // （前端 Conversation.messages 的序列化）。不做 TTL，由用户主动删除。
+// MessagesBytes 在保存时按消息字节数记录，用于把对话占用计入用户云空间容量
+// （跨库一致：不用 LENGTH()，避免 SQLite 按字符数、MySQL 按字节数的口径差异）。
 type PlaygroundConversation struct {
-	Id          int            `json:"id" gorm:"primaryKey"`
-	UserId      int            `json:"user_id" gorm:"index;uniqueIndex:uk_user_client"`
-	ClientId    string         `json:"client_id" gorm:"size:64;uniqueIndex:uk_user_client"` // 前端 nanoid
-	Title       string         `json:"title" gorm:"size:255"`
-	Messages    string         `json:"-" gorm:"type:text"` // JSON 文本
-	CreatedTime int64          `json:"created_time" gorm:"bigint"`
-	UpdatedTime int64          `json:"updated_time" gorm:"bigint"`
-	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
+	Id       int    `json:"id" gorm:"primaryKey"`
+	UserId   int    `json:"user_id" gorm:"index;uniqueIndex:uk_user_client"`
+	ClientId string `json:"client_id" gorm:"size:64;uniqueIndex:uk_user_client"` // 前端 nanoid
+	Title    string `json:"title" gorm:"size:255"`
+	// Messages 不写 gorm type，让 GORM 按方言推断：MySQL 默认 longtext（TEXT 64KB 装不下
+	// 2MB 消息体），SQLite/PostgreSQL 默认 text。显式 type:text 会在版本升级重跑 AutoMigrate
+	// 时把已升级的 longtext 缩回 text，遇到 >64KB 存量行直接失败（见
+	// ensurePlaygroundConversationMessagesLongText）。
+	Messages      string         `json:"-"` // JSON 文本
+	MessagesBytes int64          `json:"-" gorm:"bigint;column:messages_bytes;default:0"`
+	CreatedTime   int64          `json:"created_time" gorm:"bigint"`
+	UpdatedTime   int64          `json:"updated_time" gorm:"bigint"`
+	DeletedAt     gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 func (PlaygroundConversation) TableName() string { return "playground_conversations" }
@@ -36,16 +43,36 @@ func UpsertPlaygroundConversation(conv *PlaygroundConversation) error {
 	if conv.CreatedTime == 0 {
 		conv.CreatedTime = conv.UpdatedTime
 	}
+	conv.MessagesBytes = int64(len(conv.Messages))
 	err := DB.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "user_id"}, {Name: "client_id"}},
 		DoUpdates: clause.Assignments(map[string]interface{}{
-			"title":        conv.Title,
-			"messages":     conv.Messages,
-			"updated_time": conv.UpdatedTime,
-			"deleted_at":   gorm.Expr("NULL"),
+			"title":          conv.Title,
+			"messages":       conv.Messages,
+			"messages_bytes": conv.MessagesBytes,
+			"updated_time":   conv.UpdatedTime,
+			"deleted_at":     gorm.Expr("NULL"),
 		}),
 	}).Create(conv).Error
 	return err
+}
+
+// SumPlaygroundConversationSizesByUser 统计某用户活跃会话的消息字节总数（软删自动排除）。
+// 计入用户云空间用量（与图片合并）。
+func SumPlaygroundConversationSizesByUser(userId int) (int64, error) {
+	var sum int64
+	err := DB.Model(&PlaygroundConversation{}).
+		Where("user_id = ?", userId).
+		Select("COALESCE(SUM(messages_bytes), 0)").
+		Scan(&sum).Error
+	return sum, err
+}
+
+// CountPlaygroundConversationsByUser 统计某用户活跃会话数（云空间页对话分区展示）。
+func CountPlaygroundConversationsByUser(userId int) (int64, error) {
+	var count int64
+	err := DB.Model(&PlaygroundConversation{}).Where("user_id = ?", userId).Count(&count).Error
+	return count, err
 }
 
 // ListPlaygroundConversationsByUser 返回某用户全部会话（最新更新在前，软删排除）。

@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -483,6 +484,10 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		}
 		useTimeSeconds := int(time.Since(startTime).Seconds())
 		model.RecordErrorLog(c, userId, channelId, modelName, tokenName, err.MaskSensitiveErrorWithStatusCode(), tokenId, useTimeSeconds, common.GetContextKeyBool(c, constant.ContextKeyIsStream), userGroup, other)
+		// 定量触发：错误日志落库后检查未分析积压（水位线之后）是否达到阈值，够则入队分析任务
+		// （带节流）。这是"量到了就分析"的惰性触发点——无定时调度、无轮询。用 Background ctx，
+		// 避免客户端断开导致计数中止漏触发。
+		service.MaybeTriggerMarkerAnalysis(context.Background())
 	}
 
 }
