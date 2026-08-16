@@ -1,6 +1,8 @@
 package model
 
 import (
+	"context"
+
 	"github.com/QuantumNous/new-api/common"
 
 	"gorm.io/gorm/clause"
@@ -33,19 +35,19 @@ func MarkErrorLogsAnalyzed(logIds []int64) error {
 	return DB.Clauses(clause.OnConflict{DoNothing: true}).Create(&rows).Error
 }
 
-// GetAnalyzedErrorLogIds 返回全部已分析日志 ID 集合（供 fetchRecentErrorLogs 排除）。
-// 候选日志（含内容安全特征、未命中现有标记）数量远小于全量错误日志，50 万上限足够。
-func GetAnalyzedErrorLogIds() (map[int64]bool, error) {
-	var rows []CreditMarkerAnalyzedLog
-	if err := DB.Model(&CreditMarkerAnalyzedLog{}).Limit(500000).Find(&rows).Error; err != nil {
-		return nil, err
+// DeleteOldCreditMarkerAnalyzedLogsBatch 按 analyzed_at 批量删除过期的"已分析日志"标记。
+// 已分析标记由分析管道按批写入（审计留痕），保留窗口内有用；定量触发与全量分析会加速
+// 增长，需定期清理防无限膨胀（分析管道本身以水位线判定"处理到哪"，不依赖此表）。
+func DeleteOldCreditMarkerAnalyzedLogsBatch(ctx context.Context, targetTimestamp int64, limit int) (int64, error) {
+	if limit <= 0 {
+		limit = 100
 	}
-	if len(rows) == 0 {
-		return nil, nil
+	if ctx != nil && ctx.Err() != nil {
+		return 0, ctx.Err()
 	}
-	set := make(map[int64]bool, len(rows))
-	for _, r := range rows {
-		set[r.LogId] = true
+	result := DB.WithContext(ctx).Where("analyzed_at < ?", targetTimestamp).Limit(limit).Delete(&CreditMarkerAnalyzedLog{})
+	if result.Error != nil {
+		return 0, result.Error
 	}
-	return set, nil
+	return result.RowsAffected, nil
 }

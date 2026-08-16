@@ -57,8 +57,9 @@ func InstallConversationCapture(c *gin.Context, maxSize int) *captureResponseWri
 }
 
 // ShouldRecordConversation 是否应留存本条请求：开启且为 chat 类模式，
-// 排除内部子请求（视觉兜底等）、渠道测试与 Playground（站内试用消息已由
-// playground_conversations 单独留存，避免重复占存量）。
+// 排除内部子请求（视觉兜底等）与渠道测试。Playground（/pg 站内试用）也纳入留存：
+// 风控中心需要审查游乐场里的违规内容；playground_conversations 只服务前端多设备
+// 同步（客户端消息列表），与留存的请求/响应日志用途不同，不构成重复占量。
 func ShouldRecordConversation(c *gin.Context, relayInfo *relaycommon.RelayInfo) bool {
 	if c == nil || relayInfo == nil {
 		return false
@@ -66,7 +67,7 @@ func ShouldRecordConversation(c *gin.Context, relayInfo *relaycommon.RelayInfo) 
 	if !operation_setting.GetConversationRetentionSetting().Enabled {
 		return false
 	}
-	if relayInfo.UserId <= 0 || relayInfo.IsChannelTest || relayInfo.IsPlayground {
+	if relayInfo.UserId <= 0 || relayInfo.IsChannelTest {
 		return false
 	}
 	if common.GetContextKeyBool(c, constant.ContextKeyInternalSubRequest) {

@@ -27,6 +27,8 @@ func RegisterScheduledSystemTasks() {
 	service.RegisterSystemTaskHandler(linuxDoTrustRefreshHandler{})
 	service.RegisterSystemTaskHandler(creditScoreRecoverHandler{})
 	service.RegisterSystemTaskHandler(conversationCleanupHandler{})
+	// creditMarkerAnalysisHandler 非定时调度：由写错误日志路径 / 手动按钮 / 强制重跑
+	// 通过 service.EnqueueSystemTask 触发。
 	service.RegisterSystemTaskHandler(creditMarkerAnalysisHandler{})
 	service.RegisterSystemTaskHandler(creditAuditCleanupHandler{})
 }
@@ -401,35 +403,46 @@ func runConversationRecordCleanup(ctx context.Context, task *model.SystemTask, r
 	return map[string]int{"deleted": deleted}, nil
 }
 
-// creditMarkerAnalysisHandler 定时跑违规标记词 AI 分析（Enabled 默认关，走配置开关）。
+// creditMarkerAnalysisHandler 违规标记词 AI 分析任务（非定时调度）。由写错误日志路径的
+// 定量触发（service.MaybeTriggerMarkerAnalysis）、手动「分析」按钮、强制「全量重跑」
+// （force）入队。Run 走统一水位线管道：从水位线按 id 升序分批全量喂入，批间推进水位线。
 type creditMarkerAnalysisHandler struct{}
 
 func (creditMarkerAnalysisHandler) Type() string { return model.SystemTaskTypeCreditMarkerAnalysis }
 
-func (creditMarkerAnalysisHandler) Enabled() bool {
-	return operation_setting.GetCreditScoreSetting().MarkerAnalysisEnabled
-}
-
-func (creditMarkerAnalysisHandler) Interval() time.Duration { return 12 * time.Hour }
-
-func (creditMarkerAnalysisHandler) NewPayload() any { return nil }
-
 func (creditMarkerAnalysisHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
-	summary, err := service.AnalyzeRecentErrorLogs(ctx, "scheduled", false)
+	payload := service.MarkerAnalysisTaskPayload{}
+	_ = task.DecodePayload(&payload)
+	triggeredBy := payload.TriggeredBy
+	if triggeredBy == "" {
+		triggeredBy = "manual"
+	}
+	summary, err := service.AnalyzeMarkerBacklog(ctx, triggeredBy, payload.Force, func(s service.MarkerAnalysisTaskState) {
+		_ = model.UpdateSystemTaskState(task.TaskID, runnerID, s)
+	})
 	if err != nil {
 		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
-		return
+	} else {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, summary, nil)
 	}
-	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, summary, nil)
+	// 自续：运行期间新增/失败未推进导致积压仍超阈值时，节流允许则再触发下一轮。
+	service.MaybeTriggerMarkerAnalysis(ctx)
 }
 
-// creditAuditCleanupHandler 清理信誉分审计类表：扣分明细保留 180 天（审计证据，
-// 保留窗口长一点），标记词建议（仅已处理）与分析运行日志保留 90 天；pending 建议永不删。
+// creditAuditCleanupHandler 清理信誉分审计类表：扣分明细保留 180 天（审计证据，保留窗口
+// 长一点），标记词建议（仅已处理）与分析运行日志保留 90 天；已分析日志标记与分析候选只
+// 做"别重复喂"去重、不承载审计价值，保留 30 天即可。pending 建议永不删。
 type creditAuditCleanupHandler struct{}
 
 const (
 	creditScoreLogRetentionDays = 180
 	creditMarkerRetentionDays   = 90
+	// creditMarkerAnalyzedLogRetentionDays 已分析日志标记/分析候选的去重窗口。它们唯一
+	// 的作用是"这条日志别再喂模型"，不承载审计价值；错误日志本身由管理员手动清理、无固定
+	// 保留期，标记比日志活得久就是浪费行数——GetAnalyzedErrorLogIds 每次把最多 50 万行
+	// 载入内存（定量轮询每 30 分钟一次），短窗口显著降低内存与磁盘。30 天覆盖常规分析
+	// （24h 窗口）与历史重拉/重析的近期幂等，更早的日志重拉后重新分析反而是期望行为。
+	creditMarkerAnalyzedLogRetentionDays = 30
 )
 
 func (creditAuditCleanupHandler) Type() string { return model.SystemTaskTypeCreditAuditCleanup }
@@ -453,7 +466,12 @@ func (creditAuditCleanupHandler) Run(ctx context.Context, task *model.SystemTask
 }
 
 func runCreditAuditCleanup(ctx context.Context) (map[string]int, error) {
-	deleted := map[string]int{"credit_logs": 0, "marker_suggestions": 0, "marker_analysis_logs": 0}
+	deleted := map[string]int{
+		"credit_logs":          0,
+		"marker_suggestions":   0,
+		"marker_analysis_logs": 0,
+		"analyzed_logs":        0,
+	}
 	scoreTarget := time.Now().AddDate(0, 0, -creditScoreLogRetentionDays).Unix()
 	n, err := deleteInBatches(ctx, model.DeleteOldCreditScoreLogsBatch, scoreTarget)
 	if err != nil {
@@ -473,6 +491,14 @@ func runCreditAuditCleanup(ctx context.Context) (map[string]int, error) {
 		return nil, fmt.Errorf("delete old marker analysis logs: %w", err)
 	}
 	deleted["marker_analysis_logs"] = n
+
+	// 已分析日志标记：只做审计留痕，用更短的去重窗口（分析历史已由水位线承载"处理到哪"）。
+	analyzedTarget := time.Now().AddDate(0, 0, -creditMarkerAnalyzedLogRetentionDays).Unix()
+	n, err = deleteInBatches(ctx, model.DeleteOldCreditMarkerAnalyzedLogsBatch, analyzedTarget)
+	if err != nil {
+		return nil, fmt.Errorf("delete old marker analyzed logs: %w", err)
+	}
+	deleted["analyzed_logs"] = n
 	return deleted, nil
 }
 

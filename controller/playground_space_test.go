@@ -139,6 +139,8 @@ func TestClearUserTransientPlaygroundImages(t *testing.T) {
 // TestGetUserPlaygroundSpace 普通用户容量=初始，root 返回 -1。
 func TestGetUserPlaygroundSpace(t *testing.T) {
 	setupPlaygroundImageTestDB(t)
+	// GetUserPlaygroundSpace 现在也汇总对话同步占用，需要会话表。
+	migratePlaygroundConversation(t)
 	insertTestUser(t, 100, false)
 	require.NoError(t, model.InsertPlaygroundImage(&model.PlaygroundImage{
 		Name: "x", Ext: "png", Size: 10, UserId: 100, Permanent: false,
@@ -165,6 +167,30 @@ func TestGetUserPlaygroundSpace(t *testing.T) {
 	raw = map[string]any{}
 	require.NoError(t, json.Unmarshal(env.Data, &raw))
 	assert.Equal(t, float64(-1), raw["capacity_bytes"])
+}
+
+// TestSavePlaygroundConversationEnforcesCapacity 对话也计入云空间容量：总占用超限时保存被拒。
+func TestSavePlaygroundConversationEnforcesCapacity(t *testing.T) {
+	setupPlaygroundImageTestDB(t)
+	migratePlaygroundConversation(t)
+	// 用户容量 5 字节，消息远大于 5 字节 → 拒绝；root 无限制 → 放行。
+	insertTestUserWithSpace(t, 100, 0, 5)
+	msg := `[{"role":"user","content":"hello world conversation body"}]`
+
+	userRouter := newPlaygroundSpaceTestEngine(100, common.RoleCommonUser)
+	body := bytes.NewBufferString(`{"client_id":"c1","title":"t","messages":` + msg + `}`)
+	rec := httptest.NewRecorder()
+	userRouter.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/conversations/c1", body))
+	env := playgroundDecodeEnvelope(t, rec)
+	require.False(t, env.Success)
+
+	rootRouter := newPlaygroundSpaceTestEngine(100, common.RoleRootUser)
+	rec = httptest.NewRecorder()
+	// body 已被上一次 ServeHTTP 消费，重新构造。
+	rootBody := bytes.NewBufferString(`{"client_id":"c1","title":"t","messages":` + msg + `}`)
+	rootRouter.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/conversations/c1", rootBody))
+	env = playgroundDecodeEnvelope(t, rec)
+	require.True(t, env.Success)
 }
 
 // TestPurchasePlaygroundSpaceSuccess 购买成功：quota 扣减、容量按「初始+购买」写回。

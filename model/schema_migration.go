@@ -44,7 +44,10 @@ func (SchemaMigration) TableName() string { return "schema_migrations" }
 // v7：新增 playground_space_orders 表（云空间在线支付订单）。
 // v8：users 表新增 credit_score 列 + 新增 credit_score_logs / conversation_records /
 // credit_marker_suggestions / credit_marker_analysis_logs 表（AutoMigrate 建）。
-const CurrentSchemaVersion = 8
+// v9：credit_marker_analysis_logs 新增 retried 列（分析遇 429/5xx 自动重试的次数审计）。
+// v10：credit_marker_suggestions 新增 log_ids 列（AI 建议关联的来源错误日志 id 集合）。
+// v11：credit_marker_analysis_logs 新增 prompt_used 列（本次运行用的默认/自定义提示词标识）。
+const CurrentSchemaVersion = 11
 
 // Migration 是一个可单独应用、记录版本戳的迁移步骤。Up 按版本升序执行，
 // 用于 AutoMigrate 补不了的结构改造（换类型、删列）与数据迁移/特殊适配。
@@ -99,6 +102,14 @@ var migrations = []Migration{
 		}
 		return db.Unscoped().Model(&User{}).Where("credit_score IS NULL").Update("credit_score", 650).Error
 	}},
+	// v9：credit_marker_analysis_logs.retried 列由 AutoMigrate（新库/升版本路径）或
+	// ensureCreditMarkerAnalysisLogRetried（已最新版本库的跳过路径）补列，无需数据转换；
+	// 只打版本戳推进 shouldSkipMigration。
+	{Version: 9, Name: "credit-marker-analysis-log-retried", Up: func(db *gorm.DB) error { return nil }},
+	// v10：credit_marker_suggestions.log_ids 列同理（补列见 ensureCreditMarkerSuggestionLogIds）。
+	{Version: 10, Name: "credit-marker-suggestion-log-ids", Up: func(db *gorm.DB) error { return nil }},
+	// v11：credit_marker_analysis_logs.prompt_used 列同理（补列见 ensureCreditMarkerAnalysisLogPromptUsed）。
+	{Version: 11, Name: "credit-marker-analysis-log-prompt-used", Up: func(db *gorm.DB) error { return nil }},
 }
 
 // ensureSchemaMigrationsTable 用纯 SQL 建版本表，避免对版本表自身跑 AutoMigrate。
