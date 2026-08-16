@@ -255,6 +255,11 @@ docker run --name new-api -d --restart always \
 
 </details>
 
+**Risk Control & Content Safety:**
+- 🛡️ **Credit score system**: deducts points on upstream content-safety violations and sensitive-word hits; freeze `/v1` calls when a user's score drops below the threshold; passive daily recovery and pledge-based active recovery
+- ♻️ **Full credit reset**: one-click reset every user to the full score, clear all credit score logs (deduction / recovery / pledge history) and pledge cooldowns — the whole system starts over; audit trail kept per reset
+- ✂️ **Sensitive-word wordlist**: hits are **recorded by default instead of blocking** (switchable in settings); the wordlist supports import parsing (paste text / .txt / .csv) and a prune tool to remove unreasonable keywords; broad single words (e.g. `system`) are flagged during import
+
 ---
 
 ## 🤖 Model Support
