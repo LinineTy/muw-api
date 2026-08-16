@@ -31,6 +31,9 @@ func RegisterScheduledSystemTasks() {
 	// 通过 service.EnqueueSystemTask 触发。
 	service.RegisterSystemTaskHandler(creditMarkerAnalysisHandler{})
 	service.RegisterSystemTaskHandler(creditAuditCleanupHandler{})
+	// creditScoreResetHandler 非定时调度：由风控中心设置页「重置所有用户为当前满分」按钮
+	// 通过 service.EnqueueSystemTask 触发。
+	service.RegisterSystemTaskHandler(creditScoreResetHandler{})
 }
 
 // channelTestHandler runs the scheduled "test all channels" job. Enablement and
@@ -427,6 +430,22 @@ func (creditMarkerAnalysisHandler) Run(ctx context.Context, task *model.SystemTa
 	}
 	// 自续：运行期间新增/失败未推进导致积压仍超阈值时，节流允许则再触发下一轮。
 	service.MaybeTriggerMarkerAnalysis(ctx)
+}
+
+// creditScoreResetHandler 全站信誉分重置（非定时调度）。由风控中心设置页「重置所有用户
+// 为当前满分」按钮触发：把所有用户 credit_score 归一到当前 full_score，逐用户落审计明细，
+// 并清除仍在冷却期的保证书。带进度。
+type creditScoreResetHandler struct{}
+
+func (creditScoreResetHandler) Type() string { return model.SystemTaskTypeCreditScoreReset }
+
+func (creditScoreResetHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	summary, err := service.RunCreditScoreReset(ctx, service.NewSystemTaskProgressReporter(task, runnerID))
+	if err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		return
+	}
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, summary, nil)
 }
 
 // creditAuditCleanupHandler 清理信誉分审计类表：扣分明细保留 180 天（审计证据，保留窗口

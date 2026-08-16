@@ -26,6 +26,8 @@ const (
 	CreditSourceAdminAdjust       = "admin_adjust"
 	CreditSourcePassiveRecover    = "passive_recover"
 	CreditSourcePledge            = "pledge"
+	// CreditSourceFullScoreReset 管理端全站信誉分重置（所有用户归一到新满分）。
+	CreditSourceFullScoreReset = "full_score_reset"
 )
 
 // ErrPledgeCooldown 保证书冷却中，nextPledgeAt 由 ApplyUserPledge 的返回值给出。

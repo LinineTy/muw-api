@@ -120,6 +120,10 @@ var auditRouteActions = map[string]string{
 	"POST /api/risk-control/fetch-upstream-models":         "risk_control.fetch_upstream_models",
 	"POST /api/risk-control/marker-suggestions/:id/accept": "risk_control.marker_accept",
 	"POST /api/risk-control/marker-suggestions/:id/reject": "risk_control.marker_reject",
+	"POST /api/risk-control/reset-credit-scores":           "risk_control.reset_credit_scores",
+
+	// 视觉兜底
+	"POST /api/visual-fallback/reset-prompt": "operation.vision_fallback_prompt_reset",
 
 	// 渠道：能力修复 / 拉取上游模型 / Codex / Ollama / 上游模型检测
 	"POST /api/channel/fix":                     "channel.fix_abilities",

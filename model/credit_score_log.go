@@ -352,6 +352,13 @@ func GetLastCreditScoreLog(userId int, source string) (*CreditScoreLog, error) {
 	return &log, nil
 }
 
+// DeleteAllCreditScoreLogs 清空全部信用分明细（全站信誉分重置时用：重置=从头开始，旧扣分/
+// 恢复/保证书/重置记录一并清掉）。该表无软删字段，走硬删；返回删除行数。
+func DeleteAllCreditScoreLogs() (int64, error) {
+	result := DB.Where("1 = 1").Delete(&CreditScoreLog{})
+	return result.RowsAffected, result.Error
+}
+
 func ListCreditScoreLogs(userId int, source string, startTimestamp int64, endTimestamp int64, startIdx int, num int) (logs []*CreditScoreLog, total int64, err error) {
 	if num <= 0 {
 		num = common.MaxRecentItems

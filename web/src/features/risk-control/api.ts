@@ -177,6 +177,36 @@ export async function getMarkerAnalysisStatus(): Promise<MarkerAnalysisStatus> {
   return unwrapData(api.get('/api/risk-control/marker-analysis/status'))
 }
 
+export interface CreditScoreResetStatus {
+  running: boolean
+  state?: {
+    total: number
+    processed: number
+    progress: number
+  }
+  last?: {
+    reset: number
+    skipped: number
+    failed: number
+    cleared_logs: number
+    error: string
+    finished_at: number
+  }
+}
+
+/** 触发全站信誉分重置（后台任务，所有用户 credit_score 归一到当前满分 + 清保证书冷却）。 */
+export async function resetCreditScores(): Promise<{
+  started: boolean
+  task_id: string
+}> {
+  return unwrapData(api.post('/api/risk-control/reset-credit-scores'))
+}
+
+/** 信誉分重置任务状态：是否在跑（含进度）、最近一次结果/错误。 */
+export async function getCreditScoreResetStatus(): Promise<CreditScoreResetStatus> {
+  return unwrapData(api.get('/api/risk-control/credit-score-reset/status'))
+}
+
 export async function acceptMarkerSuggestion(
   id: number
 ): Promise<{ id: number }> {

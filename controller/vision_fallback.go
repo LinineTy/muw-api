@@ -16,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/middleware"
+	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/cachex"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
@@ -437,4 +438,17 @@ func newSubContext(ctx context.Context, c *gin.Context, body []byte) (*gin.Conte
 	newReq.ContentLength = int64(len(body))
 	subCtx.Request = newReq
 	return subCtx, rec
+}
+
+// ResetVisionFallbackPrompt 把视觉兜底的描述提示词重置为系统内置默认值（"恢复默认"按钮
+// 语义），与 ResetMarkerAnalysisPrompt 对称。返回默认提示词供前端回填表单。
+func ResetVisionFallbackPrompt(c *gin.Context) {
+	setting := operation_setting.GetVisualFallbackSetting()
+	setting.Prompt = operation_setting.DefaultVisualFallbackPrompt
+	if err := model.UpdateOption("visual_fallback_setting.prompt", operation_setting.DefaultVisualFallbackPrompt); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	recordManageAudit(c, "operation.vision_fallback_prompt_reset", map[string]interface{}{})
+	common.ApiSuccess(c, gin.H{"prompt": operation_setting.DefaultVisualFallbackPrompt})
 }

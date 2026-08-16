@@ -7,7 +7,7 @@ published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -37,6 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
@@ -45,8 +46,10 @@ import { getModels } from '@/features/models/api'
 import {
   fetchUpstreamModels,
   getAllGroups,
+  getCreditScoreResetStatus,
   getMarkerAnalysisTokenStatus,
   regenerateMarkerAnalysisToken,
+  resetCreditScores,
   resetMarkerAnalysisPrompt,
 } from '@/features/risk-control/api'
 
@@ -447,6 +450,39 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
     },
   })
 
+  // 全站信誉分重置：把所用用户 credit_score 归一到已保存的满分，并清保证书冷却。
+  // 走后台系统任务（带进度），逐用户落审计明细（source=full_score_reset）。
+  const queryClient = useQueryClient()
+  const { data: resetStatus } = useQuery({
+    queryKey: ['credit-score-reset-status'],
+    queryFn: getCreditScoreResetStatus,
+    // 重置在跑时每 2s 轮询进度；结束后自动停。
+    refetchInterval: (query) => {
+      const s = query.state.data
+      return s?.running ? 2000 : false
+    },
+  })
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false)
+  // 重置按「已保存」的满分执行：表单里改了满分但没保存时禁用按钮并提示先保存。
+  const savedFullScore = num(
+    baselineRef.current['credit_score_setting.full_score']
+  )
+  const fullScoreUnsaved =
+    Number(form.watch('credit_score_setting.full_score')) !== savedFullScore
+  const resetRunning = resetStatus?.running ?? false
+  const resetMutation = useMutation({
+    mutationFn: resetCreditScores,
+    onSuccess: () => {
+      toast.success(t('Credit score reset started'))
+      void queryClient.invalidateQueries({
+        queryKey: ['credit-score-reset-status'],
+      })
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || t('Reset failed'))
+    },
+  })
+
   return (
     <Form {...form}>
       <SettingsForm onSubmit={form.handleSubmit(saveAll)}>
@@ -516,6 +552,113 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
                 </FormItem>
               )}
             />
+            <div
+              data-settings-form-span='full'
+              className='min-w-0 space-y-2 rounded-md border p-3'
+            >
+              <div className='flex flex-wrap items-start justify-between gap-2'>
+                <div className='min-w-0 space-y-1'>
+                  <div className='text-sm font-medium'>
+                    {t('Reset all users to full score')}
+                  </div>
+                  <p className='text-muted-foreground text-xs'>
+                    {t(
+                      'Set every user credit score to the saved full score ({{full_score}}) and clear all credit score logs (deduction, recovery and pledge history). The whole credit score system starts over.',
+                      { full_score: savedFullScore }
+                    )}
+                  </p>
+                  {fullScoreUnsaved && (
+                    <p className='text-destructive text-xs font-medium'>
+                      {t(
+                        'The full score has unsaved changes; save it first so the reset applies to the new value.'
+                      )}
+                    </p>
+                  )}
+                </div>
+                <Button
+                  type='button'
+                  variant='destructive'
+                  size='sm'
+                  disabled={
+                    resetRunning || resetMutation.isPending || fullScoreUnsaved
+                  }
+                  onClick={() => setResetConfirmOpen(true)}
+                >
+                  {resetRunning || resetMutation.isPending ? (
+                    <Loader2
+                      className='size-4 animate-spin'
+                      aria-hidden='true'
+                    />
+                  ) : (
+                    <RotateCcw className='size-4' aria-hidden='true' />
+                  )}
+                  {t('Reset to full score')}
+                </Button>
+              </div>
+              {resetRunning && (
+                <div className='space-y-1.5'>
+                  <div className='flex items-center justify-between text-xs'>
+                    <span className='text-muted-foreground'>
+                      {t('Resetting credit scores…')}
+                    </span>
+                    <span className='tabular-nums'>
+                      {resetStatus?.state?.progress ?? 0}%
+                    </span>
+                  </div>
+                  <Progress value={resetStatus?.state?.progress ?? 0} />
+                  <p className='text-muted-foreground text-xs'>
+                    {t('Processed {{processed}} / {{total}} users.', {
+                      processed: resetStatus?.state?.processed ?? 0,
+                      total: resetStatus?.state?.total ?? 0,
+                    })}
+                  </p>
+                </div>
+              )}
+              {resetStatus?.last && !resetRunning && (
+                <div
+                  className={`rounded-md border p-2 text-xs ${
+                    resetStatus.last.error
+                      ? 'border-destructive/40'
+                      : 'bg-muted/40'
+                  }`}
+                >
+                  {resetStatus.last.error ? (
+                    <p className='text-destructive break-all'>
+                      {t('Last reset failed: {{error}}', {
+                        error: resetStatus.last.error,
+                      })}
+                    </p>
+                  ) : (
+                    <p className='text-muted-foreground'>
+                      {t(
+                        'Last reset: {{reset}} users updated, {{skipped}} unchanged, {{cleared}} credit score logs cleared.',
+                        {
+                          reset: resetStatus.last.reset,
+                          skipped: resetStatus.last.skipped,
+                          cleared: resetStatus.last.cleared_logs,
+                        }
+                      )}
+                    </p>
+                  )}
+                </div>
+              )}
+              <ConfirmDialog
+                open={resetConfirmOpen}
+                onOpenChange={setResetConfirmOpen}
+                title={t('Reset all users to full score?')}
+                desc={t(
+                  'This resets every user credit score to {{full_score}} and permanently deletes all credit score logs — deduction, recovery and pledge history (pledge read counts reset to zero). Each changed user keeps a fresh reset record. This cannot be undone.',
+                  { full_score: savedFullScore }
+                )}
+                destructive
+                confirmText={t('Reset to full score')}
+                isLoading={resetMutation.isPending}
+                handleConfirm={() => {
+                  setResetConfirmOpen(false)
+                  resetMutation.mutate()
+                }}
+              />
+            </div>
             <FormField
               control={form.control}
               name='credit_score_setting.freeze_threshold'

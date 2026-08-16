@@ -423,6 +423,12 @@ const AUDIT_TEMPLATES: Record<string, string> = {
   'risk_control.marker_accept': 'Accepted marker suggestion {{id}}',
   'risk_control.marker_reject': 'Rejected marker suggestion {{id}}',
   'risk_control.pledge': 'Completed the content-safety pledge (+{{points}} points)',
+  'risk_control.marker_analysis_prompt_reset':
+    'Restored the marker analysis prompt to default',
+  'risk_control.reset_credit_scores':
+    'Reset all user credit scores to the full score ({{full_score}})',
+  'operation.vision_fallback_prompt_reset':
+    'Restored the vision fallback description prompt to default',
   // Custom OAuth
   'custom_oauth.create': 'Created a custom OAuth provider',
   'custom_oauth.update': 'Updated a custom OAuth provider',

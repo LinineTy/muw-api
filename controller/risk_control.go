@@ -140,6 +140,36 @@ func AdjustCreditScore(c *gin.Context) {
 	common.ApiSuccess(c, gin.H{"user_id": req.UserId, "balance": newBalance})
 }
 
+// ResetCreditScores 管理端全站信誉分重置：把所有用户 credit_score 设为当前满分，并清除
+// 仍在冷却期的保证书（重置后可立即重新做保证书）。后台系统任务执行（带进度），逐用户落
+// 审计明细（source=full_score_reset），可审计、可重跑。
+func ResetCreditScores(c *gin.Context) {
+	setting := operation_setting.GetCreditScoreSetting()
+	if setting.FullScore <= 0 {
+		common.ApiErrorMsg(c, "full_score must be positive")
+		return
+	}
+	task, started, err := service.EnqueueSystemTask(model.SystemTaskTypeCreditScoreReset, nil)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	recordManageAudit(c, "risk_control.reset_credit_scores", map[string]interface{}{
+		"full_score": setting.FullScore,
+	})
+	common.ApiSuccess(c, gin.H{"started": started, "task_id": task.TaskID})
+}
+
+// GetCreditScoreResetStatus 信誉分重置任务状态（是否在跑含进度、最近一次结果/错误）。
+func GetCreditScoreResetStatus(c *gin.Context) {
+	status, err := service.GetCreditScoreResetStatus(c.Request.Context())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, status)
+}
+
 // GetRiskControlMarkers 返回当前违规标记词列表（换行分隔 → 数组）。
 func GetRiskControlMarkers(c *gin.Context) {
 	setting := operation_setting.GetCreditScoreSetting()
@@ -425,6 +455,7 @@ func ResetMarkerAnalysisPrompt(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	recordManageAudit(c, "risk_control.marker_analysis_prompt_reset", map[string]interface{}{})
 	common.ApiSuccess(c, gin.H{"prompt": operation_setting.DefaultMarkerAnalysisPrompt})
 }
 
