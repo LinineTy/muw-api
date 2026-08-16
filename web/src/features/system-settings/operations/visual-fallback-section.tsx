@@ -17,11 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useMemo, useRef } from 'react'
+import { useMutation } from '@tanstack/react-query'
+import { useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import * as z from 'zod'
+import { Loader2, RotateCcw } from 'lucide-react'
 
 import {
   Form,
@@ -31,10 +33,13 @@ import {
   FormItem,
   FormLabel,
 } from '@/components/ui/form'
+import { Button } from '@/components/ui/button'
 import { ComboboxInput } from '@/components/ui/combobox-input'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { MultiSelect } from '@/components/multi-select'
+import { ConfirmDialog } from '@/components/confirm-dialog'
+import { api } from '@/lib/api'
 
 import {
   SettingsForm,
@@ -174,6 +179,25 @@ export function VisualFallbackSection({
     baselineSerializedRef.current = JSON.stringify(normalized)
   }
 
+  // 恢复默认视觉描述提示词：调后端把提示词重置为内置默认值，返回默认值回填表单并同步 baseline，
+  // 避免之后保存时把相同值再写一遍。
+  const [promptResetOpen, setPromptResetOpen] = useState(false)
+  const resetPromptMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/api/visual-fallback/reset-prompt')
+      const body = res.data as { data?: { prompt?: string } }
+      return body.data?.prompt ?? ''
+    },
+    onSuccess: (prompt) => {
+      form.setValue('visual_fallback_setting.prompt', prompt)
+      baselineRef.current['visual_fallback_setting.prompt'] = prompt
+      toast.success(t('Prompt restored to default'))
+    },
+    onError: () => {
+      toast.error(t('Save failed'))
+    },
+  })
+
   return (
     <SettingsSection title={t('Vision Fallback')}>
       <Form {...form}>
@@ -236,7 +260,27 @@ export function VisualFallbackSection({
             name='visual_fallback_setting.prompt'
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t('Vision description prompt')}</FormLabel>
+                <div className='flex items-center justify-between gap-2'>
+                  <FormLabel>{t('Vision description prompt')}</FormLabel>
+                  <Button
+                    type='button'
+                    variant='ghost'
+                    size='sm'
+                    className='h-6 px-2 text-xs'
+                    disabled={resetPromptMutation.isPending}
+                    onClick={() => setPromptResetOpen(true)}
+                  >
+                    {resetPromptMutation.isPending ? (
+                      <Loader2
+                        className='size-3 animate-spin'
+                        aria-hidden='true'
+                      />
+                    ) : (
+                      <RotateCcw className='size-3' aria-hidden='true' />
+                    )}
+                    {t('Restore default')}
+                  </Button>
+                </div>
                 <FormControl>
                   <Textarea
                     value={field.value ?? ''}
@@ -278,6 +322,20 @@ export function VisualFallbackSection({
                 </FormDescription>
               </FormItem>
             )}
+          />
+          <ConfirmDialog
+            open={promptResetOpen}
+            onOpenChange={setPromptResetOpen}
+            title={t('Restore default vision prompt?')}
+            desc={t(
+              'This replaces the current vision description prompt with the built-in default. Changes apply immediately.'
+            )}
+            confirmText={t('Restore default')}
+            isLoading={resetPromptMutation.isPending}
+            handleConfirm={() => {
+              setPromptResetOpen(false)
+              resetPromptMutation.mutate()
+            }}
           />
         </SettingsForm>
       </Form>

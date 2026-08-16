@@ -24,7 +24,8 @@ type VisualFallbackSetting struct {
 	SupportedModels string `json:"supported_models"`
 }
 
-const defaultVisualFallbackPrompt = `你是一个图片理解助手，负责为AI助手描述用户发送的图片。
+// DefaultVisualFallbackPrompt 视觉兜底描述提示词的内置默认值（设置页"恢复默认"按钮用）。
+const DefaultVisualFallbackPrompt = `你是一个图片理解助手，负责为AI助手描述用户发送的图片。
 一、核心原则
 1. 准确优先：所有文字必须原文提取，不得篡改、遗漏或"翻译"（如日文就保留日文，英文就保留英文）。
 2. 主次分明：区分画面中的核心主体（人物/主要物体）和次要元素（装饰、背景细节），不要把所有东西放在同一优先级。
@@ -53,7 +54,7 @@ const defaultSupportedVisionModels = "gpt-4o\ngpt-4-turbo\ngpt-4-vision\ngpt-4.1
 var visualFallbackSetting = VisualFallbackSetting{
 	Enabled:         false,
 	Model:           "",
-	Prompt:          defaultVisualFallbackPrompt,
+	Prompt:          DefaultVisualFallbackPrompt,
 	SupportedModels: defaultSupportedVisionModels,
 }
 

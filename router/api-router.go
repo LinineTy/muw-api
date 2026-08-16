@@ -348,6 +348,8 @@ func SetApiRouter(router *gin.Engine) {
 			riskControlRoute.GET("/users", controller.GetLowCreditScoreUsers)
 			riskControlRoute.GET("/logs", controller.GetCreditScoreLogs)
 			riskControlRoute.POST("/adjust", controller.AdjustCreditScore)
+			riskControlRoute.POST("/reset-credit-scores", controller.ResetCreditScores)
+			riskControlRoute.GET("/credit-score-reset/status", controller.GetCreditScoreResetStatus)
 			riskControlRoute.GET("/markers", controller.GetRiskControlMarkers)
 			riskControlRoute.PUT("/markers", controller.SetRiskControlMarkers)
 			riskControlRoute.POST("/markers/reset", controller.ResetRiskControlMarkers)
@@ -362,6 +364,11 @@ func SetApiRouter(router *gin.Engine) {
 			riskControlRoute.GET("/marker-suggestions", controller.GetMarkerSuggestions)
 			riskControlRoute.POST("/marker-suggestions/:id/accept", controller.AcceptMarkerSuggestion)
 			riskControlRoute.POST("/marker-suggestions/:id/reject", controller.RejectMarkerSuggestion)
+		}
+		visualFallbackRoute := apiRouter.Group("/visual-fallback")
+		visualFallbackRoute.Use(middleware.RootAuth())
+		{
+			visualFallbackRoute.POST("/reset-prompt", controller.ResetVisionFallbackPrompt)
 		}
 		conversationRecordRoute := apiRouter.Group("/conversation-records")
 		// 对话留存含用户请求/响应明文，与风控中心页面对齐为仅 Root 可见。
