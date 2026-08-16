@@ -37,7 +37,7 @@ import {
 import { Input } from '@/components/ui/input'
 
 import { cleanupPlaygroundImages } from '@/features/playground/api'
-import { SettingsForm } from '../components/settings-form-layout'
+import { SettingsForm, SettingsFormGrid } from '../components/settings-form-layout'
 import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
@@ -57,7 +57,11 @@ const cleanupSchema = z.object({
   PlaygroundImageTTLDays: z.number().int().min(1),
 })
 
-type SpaceSettingsValues = z.infer<typeof spaceSchema>
+// 两个分表单合并成一个：云空间容量 + 临时图片 TTL 共用同一个保存按钮（页头只出
+// 一个「保存」，改动字段才提交），避免页头堆两个保存按钮造成误解。
+const spaceSettingsSchema = spaceSchema.extend(cleanupSchema.shape)
+
+type SpaceSettingsValues = z.infer<typeof spaceSettingsSchema>
 type CleanupSettingsValues = z.infer<typeof cleanupSchema>
 
 type PlaygroundSettingsSectionProps = {
@@ -70,8 +74,6 @@ const SPACE_FIELD_KEYS: Array<keyof SpaceSettingsValues> = [
   'UserSpaceMaxPurchaseMB',
   'UserSpaceMaxPurchasedMB',
   'UserSpaceGlobalMaxMB',
-]
-const CLEANUP_FIELD_KEYS: Array<keyof CleanupSettingsValues> = [
   'PlaygroundImageTTLDays',
 ]
 
@@ -88,7 +90,7 @@ function pick<T extends object, K extends keyof T>(
 
 /**
  * 云空间设置：分两张卡片——「用户云空间」（容量/价格/上限/总分配量）与
- * 「临时图片清理」（TTL + 手动清理），热生效。
+ * 「临时图片清理」（TTL + 手动清理），热生效。两张卡共用一份表单与一个保存按钮。
  */
 export function PlaygroundSettingsSection({
   defaultValues,
@@ -96,29 +98,20 @@ export function PlaygroundSettingsSection({
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
 
-  const spaceForm = useForm<SpaceSettingsValues>({
-    resolver: zodResolver(spaceSchema),
+  const form = useForm<SpaceSettingsValues>({
+    resolver: zodResolver(spaceSettingsSchema),
     mode: 'onChange',
     defaultValues: pick(defaultValues, SPACE_FIELD_KEYS),
   })
-  const spaceInitialRef = useRef<SpaceSettingsValues>(
+  const initialRef = useRef<SpaceSettingsValues>(
     pick(defaultValues, SPACE_FIELD_KEYS)
-  )
-
-  const cleanupForm = useForm<CleanupSettingsValues>({
-    resolver: zodResolver(cleanupSchema),
-    mode: 'onChange',
-    defaultValues: pick(defaultValues, CLEANUP_FIELD_KEYS),
-  })
-  const cleanupInitialRef = useRef<CleanupSettingsValues>(
-    pick(defaultValues, CLEANUP_FIELD_KEYS)
   )
 
   const [busy, setBusy] = useState(false)
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
 
-  const onSubmitSpace = async (values: SpaceSettingsValues) => {
-    const initial = spaceInitialRef.current
+  const onSubmit = async (values: SpaceSettingsValues) => {
+    const initial = initialRef.current
     for (const key of SPACE_FIELD_KEYS) {
       if (values[key] === initial[key]) continue
       await updateOption.mutateAsync({
@@ -126,17 +119,8 @@ export function PlaygroundSettingsSection({
         value: String(values[key]),
       })
     }
-  }
-
-  const onSubmitCleanup = async (values: CleanupSettingsValues) => {
-    const initial = cleanupInitialRef.current
-    for (const key of CLEANUP_FIELD_KEYS) {
-      if (values[key] === initial[key]) continue
-      await updateOption.mutateAsync({
-        key,
-        value: String(values[key]),
-      })
-    }
+    // 保存成功后以本次提交为新的基线，避免下次保存重复提交未变化的字段。
+    initialRef.current = { ...values }
   }
 
   const handleCleanup = async (all: boolean) => {
@@ -160,18 +144,18 @@ export function PlaygroundSettingsSection({
 
   return (
     <>
-      <SettingsSection title={t('User cloud space')}>
-        <Form {...spaceForm}>
-          <SettingsForm onSubmit={spaceForm.handleSubmit(onSubmitSpace)}>
-            <SettingsPageFormActions
-              isSaving={updateOption.isPending}
-              onSave={spaceForm.handleSubmit(onSubmitSpace)}
-              saveLabel='Save cloud space settings'
-            />
+      <Form {...form}>
+        <SettingsForm onSubmit={form.handleSubmit(onSubmit)}>
+          <SettingsPageFormActions
+            isSaving={updateOption.isPending}
+            onSave={form.handleSubmit(onSubmit)}
+            saveLabel='Save cloud space settings'
+          />
 
-            <div className='grid gap-4 sm:grid-cols-2'>
+          <SettingsSection title={t('User cloud space')}>
+            <SettingsFormGrid>
               <FormField
-                control={spaceForm.control}
+                control={form.control}
                 name='UserSpaceInitialMB'
                 render={({ field }) => (
                   <FormItem>
@@ -196,7 +180,7 @@ export function PlaygroundSettingsSection({
               />
 
               <FormField
-                control={spaceForm.control}
+                control={form.control}
                 name='UserSpacePurchaseRatio'
                 render={({ field }) => (
                   <FormItem>
@@ -227,7 +211,7 @@ export function PlaygroundSettingsSection({
               />
 
               <FormField
-                control={spaceForm.control}
+                control={form.control}
                 name='UserSpaceMaxPurchaseMB'
                 render={({ field }) => (
                   <FormItem>
@@ -250,7 +234,7 @@ export function PlaygroundSettingsSection({
               />
 
               <FormField
-                control={spaceForm.control}
+                control={form.control}
                 name='UserSpaceMaxPurchasedMB'
                 render={({ field }) => (
                   <FormItem>
@@ -275,7 +259,7 @@ export function PlaygroundSettingsSection({
               />
 
               <FormField
-                control={spaceForm.control}
+                control={form.control}
                 name='UserSpaceGlobalMaxMB'
                 render={({ field }) => (
                   <FormItem>
@@ -298,70 +282,64 @@ export function PlaygroundSettingsSection({
                   </FormItem>
                 )}
               />
+            </SettingsFormGrid>
+          </SettingsSection>
+
+          <SettingsSection title={t('Temporary image cleanup')}>
+            <SettingsFormGrid>
+              <FormField
+                control={form.control}
+                name='PlaygroundImageTTLDays'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Temporary image TTL (days)')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        min={1}
+                        type='number'
+                        {...safeNumberFieldProps(field)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t('Expire temporary chat attachments after this many days.')}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </SettingsFormGrid>
+
+            <div className='border-border/60 mt-6 border-t pt-4'>
+              <h4 className='text-sm font-semibold'>{t('Manual cleanup')}</h4>
+              <p className='text-muted-foreground mt-1 text-sm'>
+                {t(
+                  'Usage is shown in the cloud space page. Here you can clean up temporary images for all users.'
+                )}
+              </p>
+              <div className='mt-3 flex flex-wrap gap-2'>
+                <Button
+                  type='button'
+                  disabled={busy}
+                  onClick={() => void handleCleanup(false)}
+                  size='sm'
+                  variant='outline'
+                >
+                  {t('Clean up expired temporary images')}
+                </Button>
+                <Button
+                  type='button'
+                  disabled={busy}
+                  onClick={() => setClearConfirmOpen(true)}
+                  size='sm'
+                  variant='destructive'
+                >
+                  {t('Clear all temporary images')}
+                </Button>
+              </div>
             </div>
-          </SettingsForm>
-        </Form>
-      </SettingsSection>
-
-      <SettingsSection title={t('Temporary image cleanup')}>
-        <Form {...cleanupForm}>
-          <SettingsForm onSubmit={cleanupForm.handleSubmit(onSubmitCleanup)}>
-            <SettingsPageFormActions
-              isSaving={updateOption.isPending}
-              onSave={cleanupForm.handleSubmit(onSubmitCleanup)}
-              saveLabel='Save cleanup settings'
-            />
-
-            <FormField
-              control={cleanupForm.control}
-              name='PlaygroundImageTTLDays'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Temporary image TTL (days)')}</FormLabel>
-                  <FormControl>
-                    <Input
-                      min={1}
-                      type='number'
-                      {...safeNumberFieldProps(field)}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    {t('Expire temporary chat attachments after this many days.')}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </SettingsForm>
-        </Form>
-
-        <div className='border-border/60 mt-6 border-t pt-4'>
-          <h4 className='text-sm font-semibold'>{t('Manual cleanup')}</h4>
-          <p className='text-muted-foreground mt-1 text-sm'>
-            {t(
-              'Usage is shown in the cloud space page. Here you can clean up temporary images for all users.'
-            )}
-          </p>
-          <div className='mt-3 flex flex-wrap gap-2'>
-            <Button
-              disabled={busy}
-              onClick={() => void handleCleanup(false)}
-              size='sm'
-              variant='outline'
-            >
-              {t('Clean up expired temporary images')}
-            </Button>
-            <Button
-              disabled={busy}
-              onClick={() => setClearConfirmOpen(true)}
-              size='sm'
-              variant='destructive'
-            >
-              {t('Clear all temporary images')}
-            </Button>
-          </div>
-        </div>
-      </SettingsSection>
+          </SettingsSection>
+        </SettingsForm>
+      </Form>
 
       <ConfirmDialog
         destructive
