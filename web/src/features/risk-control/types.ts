@@ -37,6 +37,8 @@ export interface MarkerSuggestion {
   marker: string
   example: string
   reason: string
+  /** 来源错误日志 id 集合（JSON 数组文本，如 "[55813,55842]"；空串=未关联）。 */
+  log_ids?: string
   source: string
   status: 'pending' | 'accepted' | 'rejected'
   created_at: number
@@ -44,7 +46,7 @@ export interface MarkerSuggestion {
 
 export interface MarkerAnalysisLog {
   id: number
-  triggered_by: 'manual' | 'scheduled'
+  triggered_by: 'manual' | 'threshold' | 'force'
   started_at: number
   finished_at: number
   duration_ms: number
@@ -55,11 +57,10 @@ export interface MarkerAnalysisLog {
   model: string
   base_url: string
   suggestions_count: number
+  /** 本次运行因 429/5xx 自动重试的次数（0=未遇限流）。 */
+  retried: number
+  /** 本次运行用的提示词标识：默认提示词为 "default"，自定义提示词为其单行预览。 */
+  prompt_used?: string
   error_message: string
   created_at: number
-}
-
-export interface MarkerSuggestionSummary {
-  analyzed: number
-  suggestions: number
 }

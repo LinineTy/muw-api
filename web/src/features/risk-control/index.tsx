@@ -7,14 +7,16 @@ published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getRouteApi, useNavigate } from '@tanstack/react-router'
+import { getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import type { ColumnDef } from '@tanstack/react-table'
 import {
+  AlertTriangle,
   Brain,
   ChevronDown,
   Eye,
   RefreshCw,
   Save,
+  Settings2,
   ShieldAlert,
   SlidersHorizontal,
   Sparkles,
@@ -55,6 +57,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Markdown } from '@/components/ui/markdown'
+import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
@@ -74,7 +77,9 @@ import {
   getConversationRecords,
   getCreditScoreLogs,
   getLowScoreUsers,
+  getMarkerAnalysisErrorStats,
   getMarkerAnalysisLogs,
+  getMarkerAnalysisStatus,
   getMarkerSuggestions,
   getMarkers,
   getRiskControlOverview,
@@ -104,6 +109,24 @@ function formatBytes(bytes: number): string {
   )
   const value = bytes / 1024 ** i
   return `${value >= 100 ? Math.round(value) : value.toFixed(1)} ${units[i]}`
+}
+
+// 分析历史触发方式的徽标配色（manual 走默认 outline）。
+const TRIGGER_BADGE_VARIANT: Record<
+  string,
+  'secondary' | 'warning' | 'outline' | 'destructive'
+> = {
+  threshold: 'warning',
+  force: 'destructive',
+}
+
+function analysisTriggerLabel(
+  triggeredBy: string,
+  t: (key: string) => string
+): string {
+  if (triggeredBy === 'threshold') return t('Threshold')
+  if (triggeredBy === 'force') return t('Full re-run')
+  return t('Manual')
 }
 
 // extractThinkBlocks 把内容里内联的 <think>…</think> 块抽出来归为思考（部分模型把思考
@@ -486,6 +509,14 @@ function LowScoreUsersTab() {
     ? Number(globalFilter.trim())
     : undefined
 
+  // 读配置的冻结阈值作为默认展示：空筛选时低分列表按它筛（后端同样默认 freeze_threshold），
+  // 占位符显示配置值而不是写死 500，改配置后这里自动跟着变。
+  const { data: overviewData } = useQuery({
+    queryKey: ['risk-control-overview'],
+    queryFn: getRiskControlOverview,
+  })
+  const freezeThreshold = overviewData?.freeze_threshold
+
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['risk-control-low-users', pagination.pageIndex, thresholdNum],
     queryFn: () =>
@@ -587,7 +618,9 @@ function LowScoreUsersTab() {
         emptyDescription={t('No users below the threshold.')}
         skeletonKeyPrefix='risk-low-users'
         toolbarProps={{
-          searchPlaceholder: t('Max score shown (default 500)'),
+          searchPlaceholder: t('Max score shown (default {{threshold}})', {
+            threshold: freezeThreshold ?? 500,
+          }),
           searchDebounceMs: 500,
         }}
       />
@@ -1284,6 +1317,349 @@ function ConversationDetailDialog({
 // 标记词
 // ---------------------------------------------------------------------------
 
+// 错误积压卡片：展示分析窗口内全部/已分析/未分析错误日志数量，以及定量阈值是否已达。
+// 未分析占比用进度条可视化，定量模式下阈值达标时提示下一次定时检查会触发分析。
+function ErrorBacklogCard() {
+  const { t } = useTranslation()
+  const { data, isLoading } = useQuery({
+    queryKey: ['risk-control-error-stats'],
+    queryFn: getMarkerAnalysisErrorStats,
+  })
+  const total = data?.total_error_logs ?? 0
+  const analyzed = data?.analyzed_error_logs ?? 0
+  const unanalyzed = data?.unanalyzed_error_logs ?? 0
+  const threshold = data?.threshold_count ?? 0
+  const thresholdEnabled = data?.threshold_enabled ?? false
+  const thresholdReached =
+    thresholdEnabled && threshold > 0 && unanalyzed >= threshold
+  const percent =
+    total > 0 ? Math.min(100, Math.round((unanalyzed / total) * 100)) : 0
+
+  // 状态说明：阈值已达标 / 仅定量 / 全部关闭 分别提示。
+  let statusNote: ReactNode
+  if (thresholdReached) {
+    statusNote = (
+      <p className='text-destructive flex items-center gap-1.5 text-sm'>
+        <AlertTriangle className='size-4' aria-hidden='true' />
+        {t(
+          'Unanalyzed errors reached the trigger threshold; analysis will run on the next error log.'
+        )}
+      </p>
+    )
+  } else if (thresholdEnabled && threshold > 0) {
+    statusNote = (
+      <p className='text-muted-foreground text-xs'>
+        {t(
+          'Analysis runs automatically once unanalyzed errors reach the threshold. You can also trigger it manually.'
+        )}
+      </p>
+    )
+  } else {
+    statusNote = (
+      <p className='text-muted-foreground text-xs'>
+        {t(
+          'Automatic analysis is off; use the manual buttons below to run it.'
+        )}
+      </p>
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('Error log backlog')}</CardTitle>
+        <CardDescription>
+          {t(
+            'All error logs since the site started, split by whether the AI marker analysis has already processed them. Unanalyzed counts accumulate since the last analysis (no time window).'
+          )}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className='space-y-3'>
+        {isLoading || !data ? (
+          <Skeleton className='h-10 w-full' />
+        ) : (
+          <>
+            <div className='flex flex-wrap items-center gap-x-4 gap-y-1 text-sm'>
+              <span className='flex items-center gap-1.5'>
+                <span className='text-muted-foreground'>{t('Total')}</span>
+                <Badge variant='outline'>{total}</Badge>
+              </span>
+              <span className='flex items-center gap-1.5'>
+                <span className='text-muted-foreground'>{t('Analyzed')}</span>
+                <Badge variant='secondary'>{analyzed}</Badge>
+              </span>
+              <span className='flex items-center gap-1.5'>
+                <span className='text-muted-foreground'>{t('Unanalyzed')}</span>
+                <Badge
+                  variant={thresholdReached ? 'destructive' : 'warning'}
+                >
+                  {unanalyzed}
+                </Badge>
+              </span>
+              {thresholdEnabled && threshold > 0 && (
+                <span className='flex items-center gap-1.5'>
+                  <span className='text-muted-foreground'>
+                    {t('Trigger threshold')}
+                  </span>
+                  <Badge variant='outline'>{threshold}</Badge>
+                </span>
+              )}
+            </div>
+            <div className='space-y-1'>
+              <div className='flex items-center justify-between text-sm'>
+                <span className='text-muted-foreground'>
+                  {t('Unanalyzed share')}
+                </span>
+                <span className='text-muted-foreground tabular-nums'>
+                  {percent}%
+                </span>
+              </div>
+              <Progress value={percent} />
+            </div>
+            {statusNote}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// 信用分分布卡：按满分百分比分桶展示全站用户占比。百分比桶随 full_score 等比缩放，
+// 调上限/冻结阈值等数值不影响分布形状（不会出现"上限调低后全员落最低桶"的失真）。
+const SEGMENT_COLORS: Record<string, string> = {
+  '100%': 'bg-emerald-500',
+  '80-99%': 'bg-yellow-400',
+  '50-79%': 'bg-amber-500',
+  '<50%': 'bg-red-500',
+}
+
+function CreditScoreDistributionCard() {
+  const { t } = useTranslation()
+  const { data, isLoading } = useQuery({
+    queryKey: ['risk-control-overview'],
+    queryFn: getRiskControlOverview,
+  })
+  const segments = data?.credit_score_distribution ?? []
+  const total = segments.reduce((sum, s) => sum + (s.count ?? 0), 0)
+  const pct = (count: number) =>
+    total > 0 ? Math.round((count / total) * 100) : 0
+  const fullScore = data?.full_score
+
+  let body: ReactNode
+  if (isLoading) {
+    body = <Skeleton className='h-10 w-full' />
+  } else if (segments.length === 0) {
+    body = (
+      <p className='text-muted-foreground py-4 text-center text-sm'>
+        {t('No users yet.')}
+      </p>
+    )
+  } else {
+    body = (
+      <>
+        {/* 堆叠条用 flexGrow 按数量等比分配，避免各段百分比四舍五入后加不满/溢出。 */}
+        <div className='flex h-2.5 w-full overflow-hidden rounded-full'>
+          {segments.map((s) => (
+            <div
+              key={s.segment}
+              className={SEGMENT_COLORS[s.segment] ?? 'bg-muted'}
+              style={{ flexGrow: s.count || 1 }}
+              title={`${s.segment}: ${pct(s.count)}%`}
+            />
+          ))}
+        </div>
+        <ul className='space-y-1.5 text-sm'>
+          {segments.map((s) => {
+            const p = pct(s.count)
+            return (
+              <li key={s.segment} className='flex items-center gap-2'>
+                <span
+                  className={`size-2.5 shrink-0 rounded-full ${SEGMENT_COLORS[s.segment] ?? 'bg-muted'}`}
+                />
+                <span className='w-14 shrink-0 font-medium'>
+                  {s.segment}
+                </span>
+                <div className='bg-muted h-1.5 min-w-0 flex-1 overflow-hidden rounded-full'>
+                  <div
+                    className={`h-full ${SEGMENT_COLORS[s.segment] ?? 'bg-muted'}`}
+                    style={{ width: `${p}%` }}
+                  />
+                </div>
+                <span className='text-muted-foreground w-24 shrink-0 text-right tabular-nums whitespace-nowrap'>
+                  {p}% · {s.count}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+        {fullScore != null && fullScore > 0 && (
+          <p className='text-muted-foreground text-xs'>
+            {t(
+              'Brackets are percentages of the configured full score ({{full_score}}).',
+              { full_score: fullScore }
+            )}
+          </p>
+        )}
+      </>
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('Credit score distribution')}</CardTitle>
+        <CardDescription>
+          {t(
+            'Share of users by credit score as a percentage of the full score. Brackets scale with the configured full score, so changing limits does not distort the picture.'
+          )}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className='space-y-3'>{body}</CardContent>
+    </Card>
+  )
+}
+
+// 全量重新分析卡：把分析任务水位线重置到 0，从建站第一条错误日志开始强制全跑（不跳过任何
+// 已分析日志），与常规（水位线增量）分析共用同一条后台任务，带进度轮询。适合换了标记词/
+// 分析模型后想整站重查。
+function FullReanalysisCard() {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const [forceConfirmOpen, setForceConfirmOpen] = useState(false)
+
+  const { data, isFetching } = useQuery({
+    queryKey: ['risk-control-analysis-status'],
+    queryFn: getMarkerAnalysisStatus,
+    // 分析在跑时每 2s 轮询进度；结束后自动停。
+    refetchInterval: (query) => {
+      const s = query.state.data
+      return s?.running ? 2000 : false
+    },
+  })
+
+  const invalidateStatus = () => {
+    void queryClient.invalidateQueries({
+      queryKey: ['risk-control-analysis-status'],
+    })
+    void queryClient.invalidateQueries({
+      queryKey: ['risk-control-error-stats'],
+    })
+    void queryClient.invalidateQueries({
+      queryKey: ['risk-control-analysis-logs'],
+    })
+    void queryClient.invalidateQueries({ queryKey: ['risk-control-suggestions'] })
+  }
+
+  const forceMutation = useMutation({
+    mutationFn: () => analyzeMarkers({ force: true }),
+    onSuccess: invalidateStatus,
+    onError: () => toast.error(t('Analysis failed')),
+  })
+
+  const running = data?.running ?? false
+  const state = data?.state
+
+  let body: ReactNode
+  if (isFetching && !data) {
+    body = <Skeleton className='h-10 w-full' />
+  } else if (running) {
+    body = (
+      <div className='space-y-2'>
+        <div className='flex items-center justify-between text-sm'>
+          <span className='text-muted-foreground'>
+            {t('Analyzing error logs…')}
+          </span>
+          <span className='tabular-nums'>{state?.progress ?? 0}%</span>
+        </div>
+        <Progress value={state?.progress ?? 0} />
+        <p className='text-muted-foreground text-xs'>
+          {t(
+            'Processed {{processed}} / {{total}} error logs, {{suggestions}} suggestions so far.',
+            {
+              processed: state?.processed ?? 0,
+              total: state?.total ?? 0,
+              suggestions: state?.suggestions ?? 0,
+            }
+          )}
+        </p>
+      </div>
+    )
+  } else {
+    body = (
+      <p className='text-muted-foreground text-sm'>
+        {t(
+          'Re-feeds every error log since the site was first set up, including ones already analyzed. Useful after changing the violation markers or the analysis model.'
+        )}
+      </p>
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('Full re-analysis')}</CardTitle>
+        <CardDescription>
+          {t(
+            'Reset the analysis progress and re-run from the very first error log. All error texts are fed to the model; results are deduplicated against existing markers.'
+          )}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className='space-y-3'>
+        {body}
+        {data?.last && !running && (
+          <div
+            className={`bg-muted/40 rounded-md border p-2.5 text-xs ${
+              data.last.error ? 'border-destructive/40' : ''
+            }`}
+          >
+            {data.last.error ? (
+              <p className='text-destructive break-all'>
+                {t('Last analysis failed: {{error}}', {
+                  error: data.last.error,
+                })}
+              </p>
+            ) : (
+              <p className='text-muted-foreground'>
+                {t('Last analysis: {{analyzed}} error texts, {{suggestions}} suggestions.', {
+                  analyzed: data.last.analyzed,
+                  suggestions: data.last.suggestions,
+                })}
+              </p>
+            )}
+          </div>
+        )}
+        {!running && (
+          <div className='flex flex-wrap items-center gap-2 border-t pt-3'>
+            <Button
+              size='sm'
+              variant='destructive'
+              disabled={forceMutation.isPending}
+              onClick={() => setForceConfirmOpen(true)}
+            >
+              <RefreshCw className='size-4' aria-hidden='true' />
+              {t('Re-analyze from site start')}
+            </Button>
+            <ConfirmDialog
+              open={forceConfirmOpen}
+              onOpenChange={setForceConfirmOpen}
+              title={t('Re-analyze everything from the start?')}
+              desc={t(
+                'This resets the analysis progress to zero and re-feeds every error log since the site was set up to the model. It can take a while and costs tokens.'
+              )}
+              confirmText={t('Re-analyze from site start')}
+              isLoading={forceMutation.isPending}
+              handleConfirm={() => {
+                setForceConfirmOpen(false)
+                forceMutation.mutate()
+              }}
+            />
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 function MarkersTab() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -1332,16 +1708,21 @@ function MarkersTab() {
     onError: () => toast.error(t('Save failed')),
   })
   const analyzeMutation = useMutation({
-    mutationFn: (force: boolean) => analyzeMarkers(force),
+    mutationFn: (opts: { force?: boolean }) => analyzeMarkers(opts),
     onSuccess: (r) => {
       toast.success(
-        `${t('Analysis done')}: ${t('analyzed')} ${r.analyzed}, ${t('suggestions')} ${r.suggestions}`
+        r.started
+          ? t('Analysis started; progress is shown in the overview.')
+          : t('An analysis is already running.')
       )
       void queryClient.invalidateQueries({
-        queryKey: ['risk-control-suggestions'],
+        queryKey: ['risk-control-analysis-status'],
       })
       void queryClient.invalidateQueries({
         queryKey: ['risk-control-analysis-logs'],
+      })
+      void queryClient.invalidateQueries({
+        queryKey: ['risk-control-error-stats'],
       })
     },
     onError: () => toast.error(t('Analysis failed')),
@@ -1423,7 +1804,7 @@ function MarkersTab() {
               size='sm'
               variant='secondary'
               disabled={analyzeMutation.isPending}
-              onClick={() => analyzeMutation.mutate(false)}
+              onClick={() => analyzeMutation.mutate({})}
             >
               <Sparkles className='size-4' aria-hidden='true' />
               {t('Analyze logs for new markers')}
@@ -1432,7 +1813,7 @@ function MarkersTab() {
               size='sm'
               variant='destructive'
               disabled={analyzeMutation.isPending}
-              onClick={() => analyzeMutation.mutate(true)}
+              onClick={() => analyzeMutation.mutate({ force: true })}
             >
               <RefreshCw className='size-4' aria-hidden='true' />
               {t('Force re-analyze')}
@@ -1474,14 +1855,10 @@ function MarkersTab() {
                     </span>
                     <Badge
                       variant={
-                        log.triggered_by === 'scheduled'
-                          ? 'secondary'
-                          : 'outline'
+                        TRIGGER_BADGE_VARIANT[log.triggered_by] ?? 'outline'
                       }
                     >
-                      {log.triggered_by === 'scheduled'
-                        ? t('Scheduled')
-                        : t('Manual')}
+                      {analysisTriggerLabel(log.triggered_by, t)}
                     </Badge>
                     <span>
                       {t('analyzed')} {log.analyzed_count}
@@ -1498,6 +1875,26 @@ function MarkersTab() {
                     <span>
                       {t('suggestions')} {log.suggestions_count}
                     </span>
+                    {log.retried > 0 && (
+                      <Badge variant='warning' className='tabular-nums'>
+                        {t('Retried {{count}}× on rate limit', {
+                          count: log.retried,
+                        })}
+                      </Badge>
+                    )}
+                    {log.prompt_used === 'default' && (
+                      <Badge variant='outline'>{t('Default prompt')}</Badge>
+                    )}
+                    {log.prompt_used &&
+                      log.prompt_used !== 'default' && (
+                        <Badge
+                          variant='secondary'
+                          className='max-w-56 truncate'
+                          title={log.prompt_used}
+                        >
+                          {t('Custom prompt')}: {log.prompt_used}
+                        </Badge>
+                      )}
                     {log.model && (
                       <span className='text-muted-foreground'>
                         {log.model}
@@ -1577,6 +1974,15 @@ function renderSuggestions(
             <div className='text-muted-foreground mt-1 line-clamp-2 text-xs'>
               {s.example}
             </div>
+            {s.log_ids ? (
+              <div className='text-muted-foreground/70 mt-1 font-mono text-[11px]'>
+                {t('Source error logs')}: {s.log_ids}
+              </div>
+            ) : (
+              <div className='text-muted-foreground/70 mt-1 text-[11px]'>
+                {t('No source error log matched')}
+              </div>
+            )}
           </div>
           <div className='flex shrink-0 gap-1'>
             <Button size='sm' onClick={() => accept.mutate(s.id)}>
@@ -1600,13 +2006,32 @@ function renderSuggestions(
 // Page
 // ---------------------------------------------------------------------------
 
-type RiskControlTab = 'users' | 'logs' | 'conversations' | 'markers'
+// 概览 Tab：顶部统计卡 + 错误积压卡 + 信用分分布卡 + 全量重新分析卡。默认页。
+function OverviewTab() {
+  return (
+    <div className='space-y-4'>
+      <OverviewCards />
+      <div className='grid gap-4 lg:grid-cols-2'>
+        <ErrorBacklogCard />
+        <CreditScoreDistributionCard />
+      </div>
+      <FullReanalysisCard />
+    </div>
+  )
+}
+
+type RiskControlTab =
+  | 'overview'
+  | 'users'
+  | 'logs'
+  | 'conversations'
+  | 'markers'
 
 export function RiskControlPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const search = route.useSearch()
-  const activeTab: RiskControlTab = search.tab ?? 'users'
+  const activeTab: RiskControlTab = search.tab ?? 'overview'
 
   const handleTabChange = (value: string) => {
     void navigate({
@@ -1626,11 +2051,27 @@ export function RiskControlPage() {
           </Badge>
         </span>
       </SectionPageLayout.Title>
+      <SectionPageLayout.Actions>
+        {/* 快速跳转到安全设置里的敏感词页（关键词过滤与风控扣分共用一套词库的配置入口）。 */}
+        <Button
+          variant='outline'
+          size='sm'
+          render={
+            <Link
+              to='/system-settings/security/$section'
+              params={{ section: 'sensitive-words' }}
+            />
+          }
+        >
+          <Settings2 data-icon='inline-start' />
+          {t('Sensitive word settings')}
+        </Button>
+      </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
         <div className='space-y-4'>
-          <OverviewCards />
           <Tabs value={activeTab} onValueChange={handleTabChange}>
             <TabsList>
+              <TabsTrigger value='overview'>{t('Overview')}</TabsTrigger>
               <TabsTrigger value='users'>{t('Low Score Users')}</TabsTrigger>
               <TabsTrigger value='logs'>{t('Credit Logs')}</TabsTrigger>
               <TabsTrigger value='conversations'>
@@ -1638,6 +2079,9 @@ export function RiskControlPage() {
               </TabsTrigger>
               <TabsTrigger value='markers'>{t('Markers')}</TabsTrigger>
             </TabsList>
+            <TabsContent value='overview'>
+              <OverviewTab />
+            </TabsContent>
             <TabsContent value='users'>
               <LowScoreUsersTab />
             </TabsContent>

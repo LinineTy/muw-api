@@ -400,6 +400,10 @@ export type SecuritySettings = {
   'credit_score_setting.marker_analysis_api_key': string
   'credit_score_setting.marker_analysis_model': string
   'credit_score_setting.marker_analysis_internal_group': string
+  'credit_score_setting.marker_analysis_threshold_enabled': boolean
+  'credit_score_setting.marker_analysis_threshold_count': number
+  'credit_score_setting.marker_analysis_request_interval_ms': number
+  'credit_score_setting.marker_analysis_prompt': string
   'conversation_retention_setting.enabled': boolean
   'conversation_retention_setting.request_max_bytes': number
   'conversation_retention_setting.response_max_bytes': number
