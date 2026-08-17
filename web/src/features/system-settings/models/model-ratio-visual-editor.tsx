@@ -24,7 +24,7 @@ import type {
   VisibilityState,
   SortingState,
 } from '@tanstack/react-table'
-import { Copy, Plus } from 'lucide-react'
+import { Copy, ListChecks, Plus } from 'lucide-react'
 import {
   useState,
   useMemo,
@@ -47,6 +47,7 @@ import {
   useDataTable,
 } from '@/components/data-table'
 import { Button } from '@/components/ui/button'
+import { MobileToggleMenu, ToggleMenuItem, TogglePill } from '@/components/ui/responsive-toggle'
 import { combineBillingExpr } from '@/features/pricing/lib/billing-expr'
 import { useMediaQuery } from '@/hooks'
 
@@ -144,6 +145,8 @@ const ModelRatioVisualEditorComponent = forwardRef<
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = useState('')
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
+  // 批量模式开关：默认关，打开后才显示勾选列与底部分批栏（与其它页统一）。
+  const [batchMode, setBatchMode] = useState(false)
   const editorPanelRef = useRef<ModelPricingEditorPanelHandle>(null)
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
@@ -464,7 +467,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
     columnVisibility,
     pagination,
     rowSelection,
-    enableRowSelection: true,
+    enableRowSelection: batchMode,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: handleGlobalFilterChange,
@@ -477,6 +480,11 @@ const ModelRatioVisualEditorComponent = forwardRef<
       return row.original.name.toLowerCase().includes(searchValue)
     },
   })
+
+  // 关闭批量模式时清空选中，避免再次打开时残留旧选中。
+  useEffect(() => {
+    if (!batchMode) table.resetRowSelection()
+  }, [batchMode, table])
 
   const persistPricingData = useCallback(
     (data: ModelRatioData, targetNames: string[] = [data.name]) => {
@@ -707,12 +715,29 @@ const ModelRatioVisualEditorComponent = forwardRef<
               },
             ]}
             preActions={
-              filterMode === 'unset' ? undefined : (
-                <Button onClick={handleAdd}>
-                  <Plus data-icon='inline-start' />
-                  {t('Add model')}
-                </Button>
-              )
+              <>
+                <TogglePill
+                  id='ratio-batch-mode'
+                  label={t('Batch Operations')}
+                  icon={<ListChecks className='text-muted-foreground h-4 w-4' aria-hidden='true' />}
+                  checked={batchMode}
+                  onCheckedChange={setBatchMode}
+                />
+                {filterMode !== 'unset' && (
+                  <Button onClick={handleAdd}>
+                    <Plus data-icon='inline-start' />
+                    {t('Add model')}
+                  </Button>
+                )}
+                <MobileToggleMenu>
+                  <ToggleMenuItem
+                    label={t('Batch Operations')}
+                    icon={<ListChecks className='size-4' aria-hidden='true' />}
+                    checked={batchMode}
+                    onCheckedChange={setBatchMode}
+                  />
+                </MobileToggleMenu>
+              </>
             }
           />
 
@@ -803,14 +828,16 @@ const ModelRatioVisualEditorComponent = forwardRef<
         </div>
       </div>
 
-      <DataTableBulkActions table={table} entityName={t('model')}>
-        <Button size='sm' disabled={!editData} onClick={handleBatchCopy}>
-          <Copy data-icon='inline-start' />
-          {editData
-            ? t('Copy {{name}} pricing', { name: editData.name })
-            : t('Open a source model first')}
-        </Button>
-      </DataTableBulkActions>
+      {batchMode && (
+        <DataTableBulkActions table={table} entityName={t('model')}>
+          <Button size='sm' disabled={!editData} onClick={handleBatchCopy}>
+            <Copy data-icon='inline-start' />
+            {editData
+              ? t('Copy {{name}} pricing', { name: editData.name })
+              : t('Open a source model first')}
+          </Button>
+        </DataTableBulkActions>
+      )}
 
       {isMobile && (
         <ModelPricingSheet

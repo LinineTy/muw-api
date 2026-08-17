@@ -86,7 +86,10 @@ test('Add Model opens the drawer when ModelsDialogs lives outside SectionPageLay
           <ModelsProvider>
             <SectionPageLayout fixedContent>
               <SectionPageLayout.Actions>
-                <ModelsPrimaryButtons />
+                <ModelsPrimaryButtons
+                  batchMode={false}
+                  onBatchModeChange={() => {}}
+                />
               </SectionPageLayout.Actions>
               <SectionPageLayout.Content>
                 <div>content</div>

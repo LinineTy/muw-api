@@ -16,14 +16,21 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Plus } from 'lucide-react'
+import { ListChecks, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
+import { MobileToggleMenu, ToggleMenuItem, TogglePill } from '@/components/ui/responsive-toggle'
 
 import { useUsers } from './users-provider'
 
-export function UsersPrimaryButtons() {
+export function UsersPrimaryButtons({
+  batchMode,
+  onBatchModeChange,
+}: {
+  batchMode: boolean
+  onBatchModeChange: (checked: boolean) => void
+}) {
   const { t } = useTranslation()
   const { setOpen, setCurrentRow } = useUsers()
 
@@ -33,11 +40,26 @@ export function UsersPrimaryButtons() {
   }
 
   return (
-    <div className='flex gap-2'>
+    <div className='flex items-center gap-2'>
+      <TogglePill
+        id='users-batch-mode'
+        label={t('Batch Operations')}
+        icon={<ListChecks className='text-muted-foreground h-4 w-4' />}
+        checked={batchMode}
+        onCheckedChange={onBatchModeChange}
+      />
       <Button size='sm' onClick={handleCreate}>
         <Plus className='h-4 w-4' />
         {t('Add User')}
       </Button>
+      <MobileToggleMenu>
+        <ToggleMenuItem
+          label={t('Batch Operations')}
+          icon={<ListChecks className='size-4' />}
+          checked={batchMode}
+          onCheckedChange={onBatchModeChange}
+        />
+      </MobileToggleMenu>
     </div>
   )
 }

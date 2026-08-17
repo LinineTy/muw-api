@@ -23,6 +23,7 @@ import {
   List,
   Building2,
   AlertCircle,
+  ListChecks,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -35,10 +36,17 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { ToggleMenuItem, TogglePill } from '@/components/ui/responsive-toggle'
 
 import { useModels } from './models-provider'
 
-export function ModelsPrimaryButtons() {
+export function ModelsPrimaryButtons({
+  batchMode,
+  onBatchModeChange,
+}: {
+  batchMode: boolean
+  onBatchModeChange: (checked: boolean) => void
+}) {
   const { t } = useTranslation()
   const { setOpen, setCurrentRow } = useModels()
 
@@ -65,6 +73,15 @@ export function ModelsPrimaryButtons() {
 
   return (
     <div className='flex items-center gap-2'>
+      {/* Batch Operations（移动端并入下方 More Actions） */}
+      <TogglePill
+        id='models-batch-mode'
+        label={t('Batch Operations')}
+        icon={<ListChecks className='text-muted-foreground h-4 w-4' />}
+        checked={batchMode}
+        onCheckedChange={onBatchModeChange}
+      />
+
       {/* Create Model */}
       <Button onClick={handleCreateModel} size='sm'>
         <Plus className='h-4 w-4' />
@@ -77,6 +94,16 @@ export function ModelsPrimaryButtons() {
           <MoreHorizontal className='h-4 w-4' />
         </DropdownMenuTrigger>
         <DropdownMenuContent align='end' className='w-56'>
+          {/* Mobile-only: Batch Operations */}
+          <ToggleMenuItem
+            label={t('Batch Operations')}
+            icon={<ListChecks className='size-4' />}
+            checked={batchMode}
+            onCheckedChange={onBatchModeChange}
+          />
+
+          <DropdownMenuSeparator />
+
           <DropdownMenuItem onClick={handleMissingModels}>
             {t('Missing Models')}
             <DropdownMenuShortcut>
