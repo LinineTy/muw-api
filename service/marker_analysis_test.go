@@ -222,6 +222,7 @@ func TestAnalyzeMarkerBacklogForceResetsWatermark(t *testing.T) {
 // TestMarkerAnalysisPromptSubstitution 可配置提示词的组装语义：含 {messages} 占位符时在
 // system 提示词内替换为待分析消息（user 消息只放一句指令）；不含占位符时消息追加到 user。
 func TestMarkerAnalysisPromptSubstitution(t *testing.T) {
+	InitHttpClient() // 单测环境 httpClient 未由服务启动初始化，单独跑本测试也能通过
 	captured := make(chan map[string]any, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any
