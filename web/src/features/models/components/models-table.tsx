@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { DataTablePage, useDataTable } from '@/components/data-table'
@@ -41,7 +41,7 @@ const route = getRouteApi('/_authenticated/models/$section')
 
 const MODELS_VIEW_MODE_STORAGE_KEY = 'models:view-mode'
 
-export function ModelsTable() {
+export function ModelsTable({ batchMode }: { batchMode: boolean }) {
   const { t } = useTranslation()
   const { selectedVendor } = useModels()
   const isMobile = useMediaQuery('(max-width: 640px)')
@@ -155,7 +155,7 @@ export function ModelsTable() {
   const vendorCounts = data?.data?.vendor_counts
 
   // Columns configuration
-  const columns = useModelsColumns(vendors)
+  const columns = useModelsColumns(vendors, { enableSelection: batchMode })
 
   // React Table instance
   const { table } = useDataTable({
@@ -170,7 +170,7 @@ export function ModelsTable() {
     columnFilters,
     pagination,
     globalFilter,
-    enableRowSelection: true,
+    enableRowSelection: batchMode,
     onColumnFiltersChange,
     onPaginationChange,
     onGlobalFilterChange,
@@ -178,6 +178,11 @@ export function ModelsTable() {
     manualFiltering: true,
     ensurePageInRange,
   })
+
+  // 关闭批量模式时清空选中，避免再次打开时残留旧选中。
+  useEffect(() => {
+    if (!batchMode) table.resetRowSelection()
+  }, [batchMode, table])
 
   // Prepare filter options
   const vendorFilterOptions = [
@@ -233,7 +238,7 @@ export function ModelsTable() {
           },
         ],
       }}
-      bulkActions={<DataTableBulkActions table={table} />}
+      bulkActions={batchMode ? <DataTableBulkActions table={table} /> : null}
     />
   )
 }

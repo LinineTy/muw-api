@@ -20,9 +20,8 @@ import { CalendarClock, Layers, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Label } from '@/components/ui/label'
+import { MobileToggleMenu, ToggleMenuItem, TogglePill } from '@/components/ui/responsive-toggle'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type {
   SubscriptionPlan,
@@ -101,8 +100,8 @@ export function MySubscriptionsTabs() {
   const [tab, setTab] = useState<'active' | 'expired' | 'cancelled' | 'plans'>(
     'active'
   )
-  // 套餐目录的「分组显示」开关：默认关（每个套餐平铺独立显示）。
-  const [grouped, setGrouped] = useState(false)
+  // 套餐目录的「分组显示」开关：默认开（按互斥组聚合成块，无互斥组的套餐单独列出）。
+  const [grouped, setGrouped] = useState(true)
 
   const allSubscriptions = useMemo(
     () => selfData?.all_subscriptions ?? [],
@@ -169,20 +168,23 @@ export function MySubscriptionsTabs() {
             </TabsTrigger>
           </TabsList>
           {tab === 'plans' && (
-            <div className='flex items-center gap-2 rounded-md border px-3 py-1.5'>
-              <Layers className='text-muted-foreground h-4 w-4' />
-              <Label
-                htmlFor='catalog-grouped'
-                className='cursor-pointer text-sm'
-              >
-                {t('Group display')}
-              </Label>
-              <Switch
+            <>
+              <TogglePill
                 id='catalog-grouped'
+                label={t('Group display')}
+                icon={<Layers className='text-muted-foreground h-4 w-4' />}
                 checked={grouped}
                 onCheckedChange={setGrouped}
               />
-            </div>
+              <MobileToggleMenu>
+                <ToggleMenuItem
+                  label={t('Group display')}
+                  icon={<Layers className='size-4' />}
+                  checked={grouped}
+                  onCheckedChange={setGrouped}
+                />
+              </MobileToggleMenu>
+            </>
           )}
         </div>
         <TabsContent value='active' className='min-h-0 overflow-y-auto px-2 pt-3 pb-3'>

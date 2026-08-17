@@ -16,19 +16,26 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Plus, Trash2 } from 'lucide-react'
+import { ListChecks, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Button } from '@/components/ui/button'
+import { MobileToggleMenu, ToggleMenuItem, TogglePill } from '@/components/ui/responsive-toggle'
 
 import { deleteInvalidRedemptions } from '../api'
 import { ERROR_MESSAGES } from '../constants'
 import { useRedemptions } from './redemptions-provider'
 
-export function RedemptionsPrimaryButtons() {
+export function RedemptionsPrimaryButtons({
+  batchMode,
+  onBatchModeChange,
+}: {
+  batchMode: boolean
+  onBatchModeChange: (checked: boolean) => void
+}) {
   const { t } = useTranslation()
   const { setOpen, triggerRefresh } = useRedemptions()
   const [showDeleteInvalidConfirm, setShowDeleteInvalidConfirm] =
@@ -58,7 +65,14 @@ export function RedemptionsPrimaryButtons() {
 
   return (
     <>
-      <div className='flex flex-wrap gap-2'>
+      <div className='flex flex-wrap items-center gap-2'>
+        <TogglePill
+          id='redemptions-batch-mode'
+          label={t('Batch Operations')}
+          icon={<ListChecks className='text-muted-foreground h-4 w-4' />}
+          checked={batchMode}
+          onCheckedChange={onBatchModeChange}
+        />
         <Button
           size='sm'
           variant='outline'
@@ -71,6 +85,14 @@ export function RedemptionsPrimaryButtons() {
           <Plus className='h-4 w-4' />
           {t('Create Code')}
         </Button>
+        <MobileToggleMenu>
+          <ToggleMenuItem
+            label={t('Batch Operations')}
+            icon={<ListChecks className='size-4' />}
+            checked={batchMode}
+            onCheckedChange={onBatchModeChange}
+          />
+        </MobileToggleMenu>
       </div>
 
       <ConfirmDialog

@@ -38,14 +38,12 @@ import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuCheckboxItem,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
+import { ToggleMenuItem, TogglePill } from '@/components/ui/responsive-toggle'
 import {
   Tooltip,
   TooltipContent,
@@ -108,44 +106,27 @@ export function ChannelsPrimaryButtons() {
     <>
       <div className='flex items-center gap-2'>
         {/* Desktop: Toggle switches visible */}
-        <div className='hidden items-center gap-2 rounded-md border px-3 py-1.5 sm:flex'>
-          <ListChecks className='text-muted-foreground h-4 w-4' />
-          <Label
-            htmlFor='channel-batch-mode'
-            className='cursor-pointer text-sm'
-          >
-            {t('Batch Operations')}
-          </Label>
-          <Switch
-            id='channel-batch-mode'
-            checked={batchMode}
-            onCheckedChange={handleBatchModeToggle}
-          />
-        </div>
-
-        <div className='hidden items-center gap-2 rounded-md border px-3 py-1.5 sm:flex'>
-          <Tags className='text-muted-foreground h-4 w-4' />
-          <Label htmlFor='tag-mode' className='cursor-pointer text-sm'>
-            {t('Tag Mode')}
-          </Label>
-          <Switch
-            id='tag-mode'
-            checked={enableTagMode}
-            onCheckedChange={handleTagModeToggle}
-          />
-        </div>
-
-        <div className='hidden items-center gap-2 rounded-md border px-3 py-1.5 sm:flex'>
-          <SortAsc className='text-muted-foreground h-4 w-4' />
-          <Label htmlFor='id-sort' className='cursor-pointer text-sm'>
-            {t('Sort by ID')}
-          </Label>
-          <Switch
-            id='id-sort'
-            checked={idSort}
-            onCheckedChange={handleIdSortToggle}
-          />
-        </div>
+        <TogglePill
+          id='channel-batch-mode'
+          label={t('Batch Operations')}
+          icon={<ListChecks className='text-muted-foreground h-4 w-4' />}
+          checked={batchMode}
+          onCheckedChange={handleBatchModeToggle}
+        />
+        <TogglePill
+          id='tag-mode'
+          label={t('Tag Mode')}
+          icon={<Tags className='text-muted-foreground h-4 w-4' />}
+          checked={enableTagMode}
+          onCheckedChange={handleTagModeToggle}
+        />
+        <TogglePill
+          id='id-sort'
+          label={t('Sort by ID')}
+          icon={<SortAsc className='text-muted-foreground h-4 w-4' />}
+          checked={idSort}
+          onCheckedChange={handleIdSortToggle}
+        />
 
         {/* Create Channel */}
         <Tooltip>
@@ -178,32 +159,24 @@ export function ChannelsPrimaryButtons() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align='end' className='w-56'>
             {/* Mobile-only: toggle switches */}
-            <DropdownMenuCheckboxItem
-              className='sm:hidden'
+            <ToggleMenuItem
+              label={t('Batch Operations')}
+              icon={<ListChecks className='size-4' />}
               checked={batchMode}
               onCheckedChange={handleBatchModeToggle}
-            >
-              <ListChecks className='mr-2 h-4 w-4' />
-              {t('Batch Operations')}
-            </DropdownMenuCheckboxItem>
-
-            <DropdownMenuCheckboxItem
-              className='sm:hidden'
+            />
+            <ToggleMenuItem
+              label={t('Tag Mode')}
+              icon={<Tags className='size-4' />}
               checked={enableTagMode}
               onCheckedChange={handleTagModeToggle}
-            >
-              <Tags className='mr-2 h-4 w-4' />
-              {t('Tag Mode')}
-            </DropdownMenuCheckboxItem>
-
-            <DropdownMenuCheckboxItem
-              className='sm:hidden'
+            />
+            <ToggleMenuItem
+              label={t('Sort by ID')}
+              icon={<SortAsc className='size-4' />}
               checked={idSort}
               onCheckedChange={handleIdSortToggle}
-            >
-              <SortAsc className='mr-2 h-4 w-4' />
-              {t('Sort by ID')}
-            </DropdownMenuCheckboxItem>
+            />
 
             <DropdownMenuSeparator className='sm:hidden' />
 

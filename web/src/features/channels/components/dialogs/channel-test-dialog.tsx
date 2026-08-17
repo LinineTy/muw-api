@@ -28,6 +28,7 @@ import {
   Copy,
   Gauge,
   Info,
+  ListChecks,
   Loader2,
   Settings,
   Trash2,
@@ -61,6 +62,7 @@ import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
+import { MobileToggleMenu, ToggleMenuItem, TogglePill } from '@/components/ui/responsive-toggle'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -337,6 +339,8 @@ function ChannelTestDialogContent({
   const [searchTerm, setSearchTerm] = useState('')
   const [testResults, setTestResults] = useState<Record<string, TestResult>>({})
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
+  // 批量模式开关：默认关，打开后才显示勾选列与批量操作（与其它页统一）。
+  const [batchMode, setBatchMode] = useState(false)
   const [testingModels, setTestingModels] = useState<Set<string>>(
     () => new Set()
   )
@@ -838,31 +842,35 @@ function ChannelTestDialogContent({
 
   const columns = useMemo<ColumnDef<ModelRow>[]>(
     () => [
-      {
-        id: 'select',
-        header: ({ table }) => (
-          <Checkbox
-            checked={table.getIsAllRowsSelected()}
-            indeterminate={
-              table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
-            }
-            onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)}
-            aria-label={t('Select all models')}
-          />
-        ),
-        cell: ({ row }) => (
-          <Checkbox
-            checked={row.getIsSelected()}
-            onCheckedChange={(value) => row.toggleSelected(!!value)}
-            aria-label={t('Select model {{model}}', {
-              model: row.original.model,
-            })}
-          />
-        ),
-        enableSorting: false,
-        enableHiding: false,
-        size: 40,
-      },
+      ...(batchMode
+        ? [
+            {
+              id: 'select',
+              header: ({ table }) => (
+                <Checkbox
+                  checked={table.getIsAllRowsSelected()}
+                  indeterminate={
+                    table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
+                  }
+                  onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)}
+                  aria-label={t('Select all models')}
+                />
+              ),
+              cell: ({ row }) => (
+                <Checkbox
+                  checked={row.getIsSelected()}
+                  onCheckedChange={(value) => row.toggleSelected(!!value)}
+                  aria-label={t('Select model {{model}}', {
+                    model: row.original.model,
+                  })}
+                />
+              ),
+              enableSorting: false,
+              enableHiding: false,
+              size: 40,
+            } satisfies ColumnDef<ModelRow>,
+          ]
+        : []),
       {
         accessorKey: 'model',
         header: t('Model'),
@@ -955,6 +963,7 @@ function ChannelTestDialogContent({
       testResults,
       testingModels,
       testSingleModel,
+      batchMode,
     ]
   )
 
@@ -963,7 +972,7 @@ function ChannelTestDialogContent({
     columns,
     rowSelection,
     pagination,
-    enableRowSelection: true,
+    enableRowSelection: batchMode,
     getRowId: (row) => row.model,
     onRowSelectionChange: setRowSelection,
     onPaginationChange: setPagination,
@@ -971,6 +980,11 @@ function ChannelTestDialogContent({
     withSortedRowModel: false,
     withFacetedRowModel: false,
   })
+
+  // 关闭批量模式时清空选中，避免再次打开时残留旧选中。
+  useEffect(() => {
+    if (!batchMode) table.resetRowSelection()
+  }, [batchMode, table])
 
   return (
     <>
@@ -1108,12 +1122,27 @@ function ChannelTestDialogContent({
                 </div>
               </div>
               <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
+                <TogglePill
+                  id='test-models-batch-mode'
+                  label={t('Batch Operations')}
+                  icon={<ListChecks className='text-muted-foreground h-4 w-4' aria-hidden='true' />}
+                  checked={batchMode}
+                  onCheckedChange={setBatchMode}
+                />
                 <Input
                   placeholder={t('Filter models...')}
                   value={searchTerm}
                   onChange={handleSearchTermChange}
                   className='sm:w-64'
                 />
+                <MobileToggleMenu>
+                  <ToggleMenuItem
+                    label={t('Batch Operations')}
+                    icon={<ListChecks className='size-4' aria-hidden='true' />}
+                    checked={batchMode}
+                    onCheckedChange={setBatchMode}
+                  />
+                </MobileToggleMenu>
               </div>
             </div>
 
@@ -1157,7 +1186,7 @@ function ChannelTestDialogContent({
               <DataTablePagination table={table} />
             </div>
 
-            <TestModelsBulkActions table={table} />
+            {batchMode && <TestModelsBulkActions table={table} />}
           </div>
         </div>
       </Dialog>

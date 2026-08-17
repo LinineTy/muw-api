@@ -50,32 +50,40 @@ function formatBytes(bytes: number): string {
   return `${mb.toFixed(mb >= 10 ? 0 : 1)} MB`
 }
 
-export function useUsersColumns(): ColumnDef<User>[] {
+export function useUsersColumns({
+  enableSelection = true,
+}: {
+  enableSelection?: boolean
+} = {}): ColumnDef<User>[] {
   const { t } = useTranslation()
   return [
-    {
-      id: 'select',
-      header: ({ table }) => (
-        <Checkbox
-          checked={table.getIsAllPageRowsSelected()}
-          indeterminate={table.getIsSomePageRowsSelected()}
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label='Select all'
-          className='translate-y-[2px]'
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label='Select row'
-          className='translate-y-[2px]'
-        />
-      ),
-      enableSorting: false,
-      enableHiding: false,
-      size: 40,
-    },
+    ...(enableSelection
+      ? [
+          {
+            id: 'select',
+            header: ({ table }) => (
+              <Checkbox
+                checked={table.getIsAllPageRowsSelected()}
+                indeterminate={table.getIsSomePageRowsSelected()}
+                onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+                aria-label='Select all'
+                className='translate-y-[2px]'
+              />
+            ),
+            cell: ({ row }) => (
+              <Checkbox
+                checked={row.getIsSelected()}
+                onCheckedChange={(value) => row.toggleSelected(!!value)}
+                aria-label='Select row'
+                className='translate-y-[2px]'
+              />
+            ),
+            enableSorting: false,
+            enableHiding: false,
+            size: 40,
+          } satisfies ColumnDef<User>,
+        ]
+      : []),
     {
       accessorKey: 'id',
       header: t('ID'),
