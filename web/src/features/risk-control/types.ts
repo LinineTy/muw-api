@@ -16,6 +16,8 @@ export interface CreditScoreLog {
   created_at: number
   /** 管理端打回（审核误判撤销）时间，0/缺省=未打回。 */
   reverted_at?: number
+  /** 列表接口按 user_id 批量回填的用户名（管理端展示用）。 */
+  username?: string
 }
 
 export interface ConversationRecord {
@@ -32,6 +34,24 @@ export interface ConversationRecord {
   request?: string
   response?: string
   created_at: number
+  /** 列表接口按 user_id 批量回填的用户名（管理端展示用）。 */
+  username?: string
+}
+
+export interface KeywordHitStat {
+  keyword: string
+  count: number
+}
+
+export interface UserHitStat {
+  user_id: number
+  username: string
+  /** 敏感词命中次数（按扣分明细条数计）。 */
+  keyword_count: number
+  /** 上游违规命中次数（按扣分明细条数计）。 */
+  upstream_count: number
+  /** 总次数 = keyword_count + upstream_count。 */
+  count: number
 }
 
 export interface MarkerSuggestion {

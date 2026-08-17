@@ -4,9 +4,11 @@ import { api } from '@/lib/api'
 import type {
   CreditScoreLog,
   ConversationRecord,
+  KeywordHitStat,
   MarkerAnalysisLog,
   MarkerSuggestion,
   PageInfo,
+  UserHitStat,
 } from './types'
 
 // api 拦截器不自动解包 {success, message, data}：统一解包到 data 并抛错。
@@ -79,6 +81,43 @@ export async function revertKeywordDeduction(payload: {
   return unwrapData(api.post('/api/risk-control/revert-deduction', payload))
 }
 
+/** 管理端批量打回多条敏感词扣分：按用户聚合（同一用户只落一条恢复明细），并删除命中的词。 */
+export async function revertKeywordDeductions(payload: {
+  log_ids: number[]
+}): Promise<{ users: number; points: number }> {
+  return unwrapData(api.post('/api/risk-control/revert-deductions', payload))
+}
+
+/** 按关键词一键打回：打回所有命中该关键词的敏感词扣分（按用户聚合），可选同时从词库删除该词。 */
+export async function revertKeywordHits(payload: {
+  keyword: string
+  remove_from_library: boolean
+}): Promise<{ count: number; users: number; points: number }> {
+  return unwrapData(api.post('/api/risk-control/revert-keyword-hits', payload))
+}
+
+export interface KeywordHitStatsResult {
+  items: KeywordHitStat[]
+}
+
+/** 关键词命中统计：聚合近 N 天敏感词扣分明细里各命中词的出现次数（days=0 表示全部）。 */
+export async function getKeywordHitStats(params: {
+  days?: number
+}): Promise<KeywordHitStatsResult> {
+  return unwrapData(api.get('/api/risk-control/keyword-stats', { params }))
+}
+
+export interface UserHitStatsResult {
+  items: UserHitStat[]
+}
+
+/** 用户命中统计：近 N 天每个用户「敏感词命中 + 上游违规命中」的次数（days=0 表示全部）。 */
+export async function getUserHitStats(params: {
+  days?: number
+}): Promise<UserHitStatsResult> {
+  return unwrapData(api.get('/api/risk-control/user-hit-stats', { params }))
+}
+
 export async function getConversationRecords(params: {
   p?: number
   page_size?: number
@@ -86,6 +125,7 @@ export async function getConversationRecords(params: {
   token_id?: number
   request_id?: string
   model_name?: string
+  status_code?: number
 }): Promise<PageInfo<ConversationRecord>> {
   return unwrapData(api.get('/api/conversation-records/', { params }))
 }
