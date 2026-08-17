@@ -26,6 +26,7 @@ import {
 
 import type { UsageLog } from '../data/schema'
 import type { LogOtherData } from '../types'
+import { OPTION_KEY_LABELS } from './option-key-labels'
 
 export { normalizeTierLabel }
 
@@ -428,7 +429,8 @@ const AUDIT_TEMPLATES: Record<string, string> = {
     'Fetched upstream models for marker analysis',
   'risk_control.marker_accept': 'Accepted marker suggestion {{id}}',
   'risk_control.marker_reject': 'Rejected marker suggestion {{id}}',
-  'risk_control.pledge': 'Completed the content-safety pledge (+{{points}} points)',
+  'risk_control.pledge':
+    'Completed the content-safety pledge (+{{points}} points)',
   'risk_control.marker_analysis_prompt_reset':
     'Restored the marker analysis prompt to default',
   'risk_control.reset_credit_scores':
@@ -524,6 +526,13 @@ const AUDIT_TEMPLATES: Record<string, string> = {
   // Image host (图床)
   'image.upload': 'Uploaded a file to the media library',
   'image.delete': 'Deleted image (ID: {{id}})',
+  // Playground image host / space orders (用户云空间)
+  'playground.image_cleanup':
+    'Cleaned up playground images ({{deleted}} deleted)',
+  'playground.order_complete':
+    'Completed a playground space order (trade no: {{trade_no}})',
+  'playground.order_reject':
+    'Rejected a playground space order (trade no: {{trade_no}})',
   // Landing page theme (落地页主题)
   'home_page_theme.import':
     'Imported landing page theme {{theme_name}} (ID: {{theme_id}})',
@@ -548,5 +557,28 @@ export function renderAuditContent(
   if (!op?.action) return null
   const template = AUDIT_TEMPLATES[op.action]
   if (!template) return null
-  return t(template, (op.params ?? {}) as Record<string, unknown>)
+  const params = { ...(op.params ?? {}) }
+  // `option.update` 只记录原始配置键（如 credit_score_setting.marker_analysis_internal_group），
+  // 渲染时解析成设置表单已有的可读标签（如 标记分析组）；未知/动态键回退原键。
+  if (op.action === 'option.update' && typeof params.key === 'string') {
+    const labelKey = OPTION_KEY_LABELS[params.key]
+    params.key = labelKey ? t(labelKey) : params.key
+  }
+  // 失败兜底审计（handler 手动埋点未触发的 generic/命名记录）没有业务参数；模板引用的
+  // 占位符缺失时回退原始 content，避免渲染出空占位的句子。
+  if (hasMissingTemplateParams(template, params)) return null
+  return t(template, params as Record<string, unknown>)
+}
+
+const AUDIT_PLACEHOLDER_RE = /\{\{([^}]+)\}\}/g
+
+function hasMissingTemplateParams(
+  template: string,
+  params: Record<string, unknown>
+): boolean {
+  for (const m of template.matchAll(AUDIT_PLACEHOLDER_RE)) {
+    const key = m[1].trim().split(/[\s,]/)[0]
+    if (!(key in params)) return true
+  }
+  return false
 }
