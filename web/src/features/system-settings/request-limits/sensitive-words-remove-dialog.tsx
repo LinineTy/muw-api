@@ -16,8 +16,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import {
   Dialog,
@@ -28,7 +29,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 
 type MatchMode = 'exact' | 'contains'
 
@@ -46,34 +47,30 @@ function listWords(existing: string): string[] {
   return out
 }
 
-// matchesWords 返回词库中匹配输入词的项（大小写不敏感）。exact=完全等于；contains=包含。
-function matchesWords(
-  existing: string,
-  term: string,
-  mode: MatchMode
-): string[] {
+// parseTerms 把输入文本拆成要去除的词：每行一个词，行内也可用逗号分隔，去重。
+function parseTerms(input: string): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const line of input.split(/\r?\n/)) {
+    for (const part of line.split(',')) {
+      const w = part.trim()
+      if (w && !seen.has(w)) {
+        seen.add(w)
+        out.push(w)
+      }
+    }
+  }
+  return out
+}
+
+// matchesWords 返回词库 words 中匹配输入词 term 的项（大小写不敏感）。exact=完全等于；contains=包含。
+function matchesWords(words: string[], term: string, mode: MatchMode): string[] {
   const needle = term.trim().toLowerCase()
   if (!needle) return []
-  return listWords(existing).filter((w) =>
+  return words.filter((w) =>
     mode === 'exact'
       ? w.toLowerCase() === needle
       : w.toLowerCase().includes(needle)
-  )
-}
-
-// keepAfterRemove 返回删除匹配项后剩余的词。
-function keepAfterRemove(
-  existing: string,
-  term: string,
-  mode: MatchMode
-): string[] {
-  const needle = term.trim().toLowerCase()
-  if (!needle) return listWords(existing)
-  return listWords(existing).filter(
-    (w) =>
-      !(mode === 'exact'
-        ? w.toLowerCase() === needle
-        : w.toLowerCase().includes(needle))
   )
 }
 
@@ -87,6 +84,8 @@ type SensitiveWordsRemoveDialogProps = {
   onApply: (words: string[]) => void
 }
 
+// 批量排除关键词：可一次输入多个词（每行一个/逗号分隔），点一次"从列表移除"删除全部
+// 命中项，弹窗保持打开，可继续追加词；会话内累计显示已删除数量。精确/包含模式对整个输入生效。
 export function SensitiveWordsRemoveDialog({
   open,
   onOpenChange,
@@ -94,24 +93,53 @@ export function SensitiveWordsRemoveDialog({
   onApply,
 }: SensitiveWordsRemoveDialogProps) {
   const { t } = useTranslation()
-  const [term, setTerm] = useState('')
+  const [termsInput, setTermsInput] = useState('')
   const [mode, setMode] = useState<MatchMode>('exact')
+  // 会话内的词库快照：每次删除后更新，后续输入的词基于删除后的库继续匹配。
+  const [currentWords, setCurrentWords] = useState<string[]>([])
+  const [removedCount, setRemovedCount] = useState(0)
 
-  // 每次打开重置输入。
+  // 仅在弹窗由关→开时快照词库并清零；弹窗保持打开期间 onApply 会更新父级
+  // existingWords，不能用它做依赖重置（否则每次删除后都会清空已删计数）。
+  const prevOpen = useRef(open)
   useEffect(() => {
-    if (open) setTerm('')
-  }, [open])
+    if (open && !prevOpen.current) {
+      setTermsInput('')
+      setCurrentWords(listWords(existingWords))
+      setRemovedCount(0)
+    }
+    prevOpen.current = open
+  }, [open, existingWords])
 
-  const needle = term.trim()
-  const matched = useMemo(
-    () => matchesWords(existingWords, needle, mode),
-    [existingWords, needle, mode]
-  )
+  const terms = useMemo(() => parseTerms(termsInput), [termsInput])
+
+  // 当前输入词（们）会从词库删除的项（去重，预览用）。
+  const matchedPreview = useMemo(() => {
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const term of terms) {
+      for (const w of matchesWords(currentWords, term, mode)) {
+        if (!seen.has(w)) {
+          seen.add(w)
+          out.push(w)
+        }
+      }
+    }
+    return out
+  }, [currentWords, mode, terms])
 
   const apply = () => {
-    if (!needle) return
-    onApply(keepAfterRemove(existingWords, needle, mode))
-    onOpenChange(false)
+    if (terms.length === 0) return
+    const toRemove = new Set(matchedPreview)
+    if (toRemove.size === 0) {
+      toast.info(t('No matching keyword to remove.'))
+      return
+    }
+    const next = currentWords.filter((w) => !toRemove.has(w))
+    setCurrentWords(next)
+    setRemovedCount((c) => c + toRemove.size)
+    onApply(next)
+    setTermsInput('')
   }
 
   return (
@@ -121,15 +149,16 @@ export function SensitiveWordsRemoveDialog({
           <DialogTitle>{t('Remove keywords')}</DialogTitle>
           <DialogDescription>
             {t(
-              'Type a keyword to find and remove it from the list. Useful for pruning false positives (e.g. system) from an imported word list.'
+              'Enter one keyword per line (or comma-separated) and remove them all at once. The dialog stays open so you can keep adding keywords. Useful for pruning false positives (e.g. system) from an imported word list.'
             )}
           </DialogDescription>
         </DialogHeader>
 
-        <Input
-          value={term}
-          onChange={(e) => setTerm(e.target.value)}
-          placeholder={t('Type a keyword to remove...')}
+        <Textarea
+          value={termsInput}
+          onChange={(e) => setTermsInput(e.target.value)}
+          rows={3}
+          placeholder={t('keyword one, keyword two')}
         />
 
         <div className='flex flex-wrap items-center gap-2 text-sm'>
@@ -149,11 +178,18 @@ export function SensitiveWordsRemoveDialog({
           >
             {t('Contains')}
           </Button>
+          {removedCount > 0 && (
+            <span className='text-muted-foreground text-xs'>
+              {t('Removed {{count}} keyword(s) this session.', {
+                count: removedCount,
+              })}
+            </span>
+          )}
         </div>
 
-        {needle && (
+        {terms.length > 0 && (
           <div className='space-y-2'>
-            {matched.length === 0 ? (
+            {matchedPreview.length === 0 ? (
               <p className='text-muted-foreground text-xs'>
                 {t('No matching keyword.')}
               </p>
@@ -161,11 +197,11 @@ export function SensitiveWordsRemoveDialog({
               <>
                 <p className='text-muted-foreground text-xs'>
                   {t('Will remove {{count}} keyword(s):', {
-                    count: matched.length,
+                    count: matchedPreview.length,
                   })}
                 </p>
                 <div className='flex max-h-40 min-w-0 flex-wrap gap-1.5 overflow-y-auto rounded-md border p-2 text-xs'>
-                  {matched.slice(0, PREVIEW_LIMIT).map((w) => (
+                  {matchedPreview.slice(0, PREVIEW_LIMIT).map((w) => (
                     <span
                       key={w}
                       className='bg-destructive/10 text-destructive max-w-full break-all rounded px-1 py-0.5'
@@ -173,11 +209,11 @@ export function SensitiveWordsRemoveDialog({
                       {w}
                     </span>
                   ))}
-                  {matched.length > PREVIEW_LIMIT && (
+                  {matchedPreview.length > PREVIEW_LIMIT && (
                     <span className='text-muted-foreground w-full'>
                       {t('Showing first {{shown}} of {{total}}.', {
                         shown: PREVIEW_LIMIT,
-                        total: matched.length,
+                        total: matchedPreview.length,
                       })}
                     </span>
                   )}
@@ -193,12 +229,12 @@ export function SensitiveWordsRemoveDialog({
             variant='outline'
             onClick={() => onOpenChange(false)}
           >
-            {t('Cancel')}
+            {t('Done')}
           </Button>
           <Button
             type='button'
             variant='destructive'
-            disabled={!needle || matched.length === 0}
+            disabled={terms.length === 0 || matchedPreview.length === 0}
             onClick={apply}
           >
             {t('Remove from list')}

@@ -15,7 +15,7 @@ import { useAuthStore } from '@/stores/auth-store'
 
 const riskControlSearchSchema = z.object({
   tab: z
-    .enum(['overview', 'users', 'logs', 'conversations', 'markers'])
+    .enum(['overview', 'users', 'logs', 'conversations', 'stats', 'markers'])
     .optional()
     .catch('overview'),
   page: z.number().optional().catch(1),
@@ -25,9 +25,10 @@ const riskControlSearchSchema = z.object({
   // 扣分明细：用户 ID + 来源
   user_id: z.string().optional().catch(''),
   source: z.array(z.string()).optional().catch([]),
-  // 对话记录：request_id + 模型 + 用户 ID
+  // 对话记录：request_id + 模型 + 用户 ID + 状态码
   request_id: z.string().optional().catch(''),
   model_name: z.string().optional().catch(''),
+  status_code: z.string().optional().catch(''),
 })
 
 export const Route = createFileRoute('/_authenticated/risk-control/')({
