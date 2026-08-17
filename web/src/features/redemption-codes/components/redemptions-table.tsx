@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -53,9 +53,9 @@ function isDisabledRedemptionRow(redemption: Redemption) {
   )
 }
 
-export function RedemptionsTable() {
+export function RedemptionsTable({ batchMode }: { batchMode: boolean }) {
   const { t } = useTranslation()
-  const columns = useRedemptionsColumns()
+  const columns = useRedemptionsColumns({ enableSelection: batchMode })
   const { refreshTrigger } = useRedemptions()
   const isMobile = useMediaQuery('(max-width: 640px)')
 
@@ -132,7 +132,7 @@ export function RedemptionsTable() {
   const { table } = useDataTable({
     data: redemptions,
     columns,
-    enableRowSelection: true,
+    enableRowSelection: batchMode,
     columnFilters,
     globalFilter,
     pagination,
@@ -151,6 +151,11 @@ export function RedemptionsTable() {
     totalCount: data?.total || 0,
     ensurePageInRange,
   })
+
+  // 关闭批量模式时清空选中，避免再次打开时残留旧选中。
+  useEffect(() => {
+    if (!batchMode) table.resetRowSelection()
+  }, [batchMode, table])
 
   const redemptionStatusOptions = useMemo(
     () => getRedemptionStatusOptions(t),
@@ -186,7 +191,7 @@ export function RedemptionsTable() {
         if (!isDisabledRedemptionRow(row.original)) return undefined
         return isMobile ? DISABLED_ROW_MOBILE : DISABLED_ROW_DESKTOP
       }}
-      bulkActions={<DataTableBulkActions table={table} />}
+      bulkActions={batchMode ? <DataTableBulkActions table={table} /> : null}
     />
   )
 }

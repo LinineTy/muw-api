@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
 import type { OnChangeFn, SortingState } from '@tanstack/react-table'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -59,9 +59,9 @@ function isDisabledUserRow(user: User) {
   return isUserDeleted(user) || user.status === USER_STATUS.DISABLED
 }
 
-export function UsersTable() {
+export function UsersTable({ batchMode }: { batchMode: boolean }) {
   const { t } = useTranslation()
-  const columns = useUsersColumns()
+  const columns = useUsersColumns({ enableSelection: batchMode })
   const { refreshTrigger } = useUsers()
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [sorting, setSorting] = useState<SortingState>([])
@@ -173,7 +173,7 @@ export function UsersTable() {
   const { table } = useDataTable({
     data: users,
     columns,
-    enableRowSelection: true,
+    enableRowSelection: batchMode,
     columnFilters,
     globalFilter,
     pagination,
@@ -201,6 +201,11 @@ export function UsersTable() {
     totalCount: data?.total || 0,
     ensurePageInRange,
   })
+
+  // 关闭批量模式时清空选中，避免再次打开时残留旧选中。
+  useEffect(() => {
+    if (!batchMode) table.resetRowSelection()
+  }, [batchMode, table])
 
   return (
     <DataTablePage
@@ -239,7 +244,7 @@ export function UsersTable() {
             : DISABLED_ROW_DESKTOP
           : undefined
       }
-      bulkActions={<DataTableBulkActions table={table} />}
+      bulkActions={batchMode ? <DataTableBulkActions table={table} /> : null}
     />
   )
 }

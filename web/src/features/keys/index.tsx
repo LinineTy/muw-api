@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
@@ -27,15 +28,20 @@ import { ApiKeysTable } from './components/api-keys-table'
 
 export function ApiKeys() {
   const { t } = useTranslation()
+  // 批量模式开关：放页面头部（与渠道一致），表格按它开关勾选列/批量栏。
+  const [batchMode, setBatchMode] = useState(false)
   return (
     <ApiKeysProvider>
       <SectionPageLayout fixedContent>
         <SectionPageLayout.Title>{t('API Keys')}</SectionPageLayout.Title>
         <SectionPageLayout.Actions>
-          <ApiKeysPrimaryButtons />
+          <ApiKeysPrimaryButtons
+            batchMode={batchMode}
+            onBatchModeChange={setBatchMode}
+          />
         </SectionPageLayout.Actions>
         <SectionPageLayout.Content>
-          <ApiKeysTable />
+          <ApiKeysTable batchMode={batchMode} />
         </SectionPageLayout.Content>
       </SectionPageLayout>
 

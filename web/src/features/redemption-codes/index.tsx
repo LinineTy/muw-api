@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
@@ -27,6 +28,8 @@ import { RedemptionsTable } from './components/redemptions-table'
 
 export function Redemptions() {
   const { t } = useTranslation()
+  // 批量模式开关：放页面头部（与渠道一致），表格按它开关勾选列/批量栏。
+  const [batchMode, setBatchMode] = useState(false)
   return (
     <RedemptionsProvider>
       <SectionPageLayout fixedContent>
@@ -34,10 +37,13 @@ export function Redemptions() {
           {t('Redemption Codes')}
         </SectionPageLayout.Title>
         <SectionPageLayout.Actions>
-          <RedemptionsPrimaryButtons />
+          <RedemptionsPrimaryButtons
+            batchMode={batchMode}
+            onBatchModeChange={setBatchMode}
+          />
         </SectionPageLayout.Actions>
         <SectionPageLayout.Content>
-          <RedemptionsTable />
+          <RedemptionsTable batchMode={batchMode} />
         </SectionPageLayout.Content>
       </SectionPageLayout>
 

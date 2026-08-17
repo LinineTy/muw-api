@@ -186,11 +186,11 @@ function ApiKeysMobileList({
   )
 }
 
-export function ApiKeysTable() {
+export function ApiKeysTable({ batchMode }: { batchMode: boolean }) {
   const { t } = useTranslation()
   const { refreshTrigger } = useApiKeys()
   const [now, setNow] = useState(() => Date.now())
-  const columns = useApiKeysColumns(now)
+  const columns = useApiKeysColumns(now, { enableSelection: batchMode })
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -279,7 +279,7 @@ export function ApiKeysTable() {
   const { table } = useDataTable({
     data: apiKeys,
     columns,
-    enableRowSelection: true,
+    enableRowSelection: batchMode,
     columnFilters,
     columnVisibilityStorageKey: API_KEYS_COLUMN_VISIBILITY_STORAGE_KEY,
     globalFilter,
@@ -292,6 +292,11 @@ export function ApiKeysTable() {
     totalCount: data?.total || 0,
     ensurePageInRange,
   })
+
+  // 关闭批量模式时清空选中，避免再次打开时残留旧选中。
+  useEffect(() => {
+    if (!batchMode) table.resetRowSelection()
+  }, [batchMode, table])
 
   return (
     <DataTablePage
@@ -330,7 +335,7 @@ export function ApiKeysTable() {
       getRowClassName={(row) =>
         isDisabledApiKeyRow(row.original) ? DISABLED_ROW_DESKTOP : undefined
       }
-      bulkActions={<DataTableBulkActions table={table} />}
+      bulkActions={batchMode ? <DataTableBulkActions table={table} /> : null}
     />
   )
 }
