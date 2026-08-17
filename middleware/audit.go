@@ -121,6 +121,8 @@ var auditRouteActions = map[string]string{
 	"POST /api/risk-control/marker-suggestions/:id/accept": "risk_control.marker_accept",
 	"POST /api/risk-control/marker-suggestions/:id/reject": "risk_control.marker_reject",
 	"POST /api/risk-control/reset-credit-scores":           "risk_control.reset_credit_scores",
+	"POST /api/risk-control/revert-deductions":             "risk_control.revert_keyword_deductions",
+	"POST /api/risk-control/revert-keyword-hits":           "risk_control.revert_keyword_hits",
 
 	// 视觉兜底
 	"POST /api/visual-fallback/reset-prompt": "operation.vision_fallback_prompt_reset",
@@ -208,8 +210,15 @@ func finishAdminAudit(c *gin.Context, writer *auditResponseWriter) {
 		opParams["key"] = key
 	}
 
-	// content 为英文兜底文本（供导出等非本地化消费者使用）。
+	// content 为英文兜底文本（供导出等非本地化消费者使用）。命中的命名 action 按模板
+	// 渲染成句子，避免落库原始 "METHOD route"；无模板的命名 action 与 generic 路由都
+	// 退回 method+route 以便识别。
 	content := method + " " + route
+	if action != "generic" {
+		if rendered, ok := common.AuditContentEN(action, opParams); ok {
+			content = rendered
+		}
+	}
 
 	adminInfo := map[string]interface{}{
 		"admin_id":       operatorId,
