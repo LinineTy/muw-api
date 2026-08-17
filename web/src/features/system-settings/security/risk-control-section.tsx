@@ -8,7 +8,7 @@ License, or (at your option) any later version.
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/form'
 import { Loader2, Plus, RotateCcw, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { DraftNumberInput } from '@/components/ui/draft-number-input'
 import { Input } from '@/components/ui/input'
 import {
   Popover,
@@ -359,6 +360,28 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
   const repeatTiersError =
     form.formState.errors.credit_score_setting?.repeat_multiplier_tiers?.message
 
+  // RHF 的 useFieldArray.update() 会为被更新的行重新生成内部 id（react-hook-form 的
+  // update 实现里 ids.current[i===index] = generateId()），导致 key={tier.id} 在每次
+  // 按键时都变化 → 整行重挂载 → 输入框失焦（"一次只能输一个数字然后失去选中"的
+  // 真正根因）。这里用一组与字段数组长度同步、但不受 update 影响的稳定行 key。
+  const [tierRowKeys, setTierRowKeys] = useState<string[]>(() =>
+    repeatTiersField.fields.map((_, i) => `tier-row-${i}`)
+  )
+  useEffect(() => {
+    setTierRowKeys((prev) => {
+      const len = repeatTiersField.fields.length
+      if (prev.length === len) return prev
+      if (prev.length < len) {
+        const added = Array.from(
+          { length: len - prev.length },
+          (_, i) => `tier-row-${prev.length + i}`
+        )
+        return [...prev, ...added]
+      }
+      return prev.slice(0, len)
+    })
+  }, [repeatTiersField.fields.length])
+
   // 接入方式预设：本站套娃（自动内部 base_url + 分组/模型联动 + 内部 token）vs 自定义端点。
   // 初始按已配置 base_url 判断：空/回环地址视为套娃预设，其它视为自定义。
   const [mode, setMode] = useState<'site' | 'custom'>(() => {
@@ -641,7 +664,7 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
                   </div>
                   <p className='text-muted-foreground text-xs'>
                     {t(
-                      'Set every user credit score to the saved full score ({{full_score}}) and clear all credit score logs (deduction, recovery and pledge history). The whole credit score system starts over.',
+                      'Set every user credit score to the saved full score ({{full_score}}) and wipe all credit score logs (deduction, recovery and pledge history). The log table is left fully empty and the next record id restarts from 1 — the whole credit score system starts over.',
                       { full_score: savedFullScore }
                     )}
                   </p>
@@ -725,7 +748,7 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
                 onOpenChange={setResetConfirmOpen}
                 title={t('Reset all users to full score?')}
                 desc={t(
-                  'This resets every user credit score to {{full_score}} and permanently deletes all credit score logs — deduction, recovery and pledge history (pledge read counts reset to zero). Each changed user keeps a fresh reset record. This cannot be undone.',
+                  'This resets every user credit score to {{full_score}} and permanently deletes all credit score logs — deduction, recovery and pledge history (pledge read counts reset to zero). The log table is left fully empty and the next record id restarts from 1. This cannot be undone.',
                   { full_score: savedFullScore }
                 )}
                 destructive
@@ -850,20 +873,19 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
                     tierErrors?.from?.message ??
                     tierErrors?.multiplier?.message
                   return (
-                    <div key={tier.id} className='space-y-1'>
+                    <div key={tierRowKeys[index]} className='space-y-1'>
                       <div className='flex items-center gap-2'>
                         <span className='text-muted-foreground shrink-0 text-xs whitespace-nowrap'>
                           {t('From occurrence')}
                         </span>
-                        <Input
-                          type='number'
+                        <DraftNumberInput
                           min={2}
                           step={1}
                           value={tier.from as number}
-                          onChange={(e) =>
+                          onValueChange={(next) =>
                             repeatTiersField.update(index, {
                               ...tier,
-                              from: Number(e.target.value),
+                              from: next,
                             })
                           }
                           className='w-20'
@@ -871,15 +893,14 @@ export function RiskControlSection({ defaultValues }: RiskControlSectionProps) {
                         <span className='text-muted-foreground shrink-0'>
                           ×
                         </span>
-                        <Input
-                          type='number'
+                        <DraftNumberInput
                           min={1}
                           step={0.5}
                           value={tier.multiplier as number}
-                          onChange={(e) =>
+                          onValueChange={(next) =>
                             repeatTiersField.update(index, {
                               ...tier,
-                              multiplier: Number(e.target.value),
+                              multiplier: next,
                             })
                           }
                           className='w-24'

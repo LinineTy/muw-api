@@ -8,12 +8,16 @@ License, or (at your option) any later version.
 */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router'
-import type { ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef, RowSelectionState } from '@tanstack/react-table'
+import { VChart } from '@visactor/react-vchart'
 import {
   AlertTriangle,
   Brain,
   ChevronDown,
   Eye,
+  Hash,
+  ListChecks,
+  ListFilter,
   RefreshCw,
   RotateCcw,
   Save,
@@ -21,13 +25,15 @@ import {
   ShieldAlert,
   SlidersHorizontal,
   Sparkles,
+  Users,
   Wrench,
 } from 'lucide-react'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import {
+  DataTableBulkActions,
   DataTableColumnHeader,
   DataTablePage,
   useDebouncedColumnFilter,
@@ -35,6 +41,7 @@ import {
 } from '@/components/data-table'
 import { SectionPageLayout } from '@/components/layout'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { Dialog as SettingsDialog } from '@/components/dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -57,9 +64,20 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Checkbox } from '@/components/ui/checkbox'
+import { IconBadge } from '@/components/ui/icon-badge'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Markdown } from '@/components/ui/markdown'
 import { Progress } from '@/components/ui/progress'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { MobileToggleMenu, ToggleMenuItem, TogglePill } from '@/components/ui/responsive-toggle'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
@@ -68,8 +86,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { useTheme } from '@/context/theme-provider'
+import { getDashboardChartColors } from '@/features/dashboard/lib/charts'
 import type { User } from '@/features/users/types'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
+import { VCHART_OPTION } from '@/lib/vchart'
 
 import {
   acceptMarkerSuggestion,
@@ -78,6 +99,7 @@ import {
   getConversationRecord,
   getConversationRecords,
   getCreditScoreLogs,
+  getKeywordHitStats,
   getLowScoreUsers,
   getMarkerAnalysisErrorStats,
   getMarkerAnalysisLogs,
@@ -85,9 +107,12 @@ import {
   getMarkerSuggestions,
   getMarkers,
   getRiskControlOverview,
+  getUserHitStats,
   rejectMarkerSuggestion,
   resetMarkers,
   revertKeywordDeduction,
+  revertKeywordDeductions,
+  revertKeywordHits,
   updateMarkers,
 } from './api'
 import type {
@@ -546,6 +571,7 @@ function LowScoreUsersTab() {
 
   const columns = useMemo<ColumnDef<User>[]>(
     () => [
+      { accessorKey: 'id', header: 'ID' },
       {
         accessorKey: 'username',
         header: t('User'),
@@ -743,6 +769,7 @@ const CREDIT_LOG_SOURCE_OPTIONS = [
   { label: 'Passive recovery', value: 'passive_recover' },
   { label: 'Pledge', value: 'pledge' },
   { label: 'Admin adjust', value: 'admin_adjust' },
+  { label: 'Admin revert', value: 'admin_revert' },
   { label: 'Full score reset', value: 'full_score_reset' },
 ]
 
@@ -753,12 +780,26 @@ const CREDIT_LOG_SOURCE_LABELS: Record<string, string> = {
   passive_recover: 'Passive recovery',
   pledge: 'Pledge',
   admin_adjust: 'Admin adjust',
+  admin_revert: 'Admin revert',
   full_score_reset: 'Full score reset',
 }
 
-function CreditLogsTab() {
+// 是否可以打回一条扣分记录：本地敏感词扣分、负分、未打回。
+function canRevertCreditLog(log: CreditScoreLog): boolean {
+  return log.source === 'local_keyword' && log.points < 0 && !log.reverted_at
+}
+
+function CreditLogsTab({ batchMode }: { batchMode: boolean }) {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const [revertTarget, setRevertTarget] = useState<CreditScoreLog | null>(null)
+  const [conversationTarget, setConversationTarget] =
+    useState<ConversationRecord | null>(null)
+  const [batchRevertOpen, setBatchRevertOpen] = useState(false)
+  const [keywordRevertOpen, setKeywordRevertOpen] = useState(false)
+  const [keyword, setKeyword] = useState('')
+  const [keywordRemove, setKeywordRemove] = useState(true)
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const {
     globalFilter,
     onGlobalFilterChange,
@@ -778,6 +819,18 @@ function CreditLogsTab() {
   const sourceFilter =
     (columnFilters.find((f) => f.id === 'source')?.value as string[]) ?? []
   const uid = globalFilter?.trim() ? Number(globalFilter.trim()) : undefined
+
+  // 翻页/筛选变化时清空选中：手动分页下旧页选中行不在当前数据里，留着会被
+  // getFilteredSelectedRowModel 静默忽略，造成"选了几条只打回几条"。
+  // sourceFilter 每次渲染都是新数组，用 join 出的稳定字符串做依赖。
+  const sourceFilterKey = sourceFilter.join(',')
+  useEffect(() => {
+    setRowSelection({})
+  }, [pagination.pageIndex, pagination.pageSize, sourceFilterKey, uid])
+  // 关闭批量模式时清空选中，避免再次打开时残留旧选中。
+  useEffect(() => {
+    if (!batchMode) setRowSelection({})
+  }, [batchMode])
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: [
@@ -800,10 +853,129 @@ function CreditLogsTab() {
     placeholderData: (previousData) => previousData,
   })
 
+  const invalidateCreditLogs = useCallback(() => {
+    void queryClient.invalidateQueries({
+      queryKey: ['risk-control-credit-logs'],
+    })
+    void queryClient.invalidateQueries({ queryKey: ['risk-control-overview'] })
+    void queryClient.invalidateQueries({
+      queryKey: ['risk-control-keyword-stats'],
+    })
+    void queryClient.invalidateQueries({
+      queryKey: ['risk-control-user-hit-stats'],
+    })
+    // 打回会删敏感词，同步失效设置页的词库缓存，避免设置页仍显示已删的词。
+    void queryClient.invalidateQueries({ queryKey: ['system-options'] })
+  }, [queryClient])
+
+  const batchRevertMutation = useMutation({
+    mutationFn: (logIds: number[]) =>
+      revertKeywordDeductions({ log_ids: logIds }),
+    onSuccess: (r) => {
+      toast.success(
+        t(
+          'Batch reverted: {{users}} users affected, {{points}} points restored.',
+          { users: r.users, points: r.points }
+        )
+      )
+      setBatchRevertOpen(false)
+      setRowSelection({})
+      invalidateCreditLogs()
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || t('Revert failed'))
+    },
+  })
+
+  const keywordRevertMutation = useMutation({
+    mutationFn: () =>
+      revertKeywordHits({ keyword, remove_from_library: keywordRemove }),
+    onSuccess: (r) => {
+      toast.success(
+        t(
+          'Reverted {{count}} deductions hitting the keyword ({{users}} users, {{points}} points restored).',
+          { count: r.count, users: r.users, points: r.points }
+        )
+      )
+      setKeywordRevertOpen(false)
+      setKeyword('')
+      invalidateCreditLogs()
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || t('Revert failed'))
+    },
+  })
+
+  // 按 request_id 找到关联的对话记录并打开详情弹窗（证据链：扣分 → 对话原文）。
+  const handleViewConversation = useCallback(async (requestId: string) => {
+    try {
+      const res = await getConversationRecords({
+        request_id: requestId,
+        p: 1,
+        page_size: 1,
+      })
+      const found = res.items[0]
+      if (found) {
+        setConversationTarget(found)
+      } else {
+        toast.info(t('No conversation record found for this request.'))
+      }
+    } catch {
+      toast.error(t('Failed to look up the conversation record'))
+    }
+  }, [t])
+
+  const handleBatchRevert = () => {
+    const ids = table.table
+      .getFilteredSelectedRowModel()
+      .rows.map((r) => r.original)
+      .filter(canRevertCreditLog)
+      .map((l) => l.id)
+    if (ids.length === 0) {
+      toast.info(t('No revertable logs selected'))
+      return
+    }
+    batchRevertMutation.mutate(ids)
+  }
+
   const columns = useMemo<ColumnDef<CreditScoreLog>[]>(
     () => [
+      ...(batchMode
+        ? [
+            {
+              id: 'select',
+              header: ({ table }) => (
+                <Checkbox
+                  checked={table.getIsAllPageRowsSelected()}
+                  indeterminate={table.getIsSomePageRowsSelected()}
+                  onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+                  aria-label={t('Select all')}
+                />
+              ),
+              cell: ({ row }) => (
+                <Checkbox
+                  checked={row.getIsSelected()}
+                  onCheckedChange={(value) => row.toggleSelected(!!value)}
+                  aria-label={t('Select row')}
+                />
+              ),
+              enableSorting: false,
+              enableHiding: false,
+              size: 40,
+            } satisfies ColumnDef<CreditScoreLog>,
+          ]
+        : []),
       { accessorKey: 'id', header: 'ID' },
-      { accessorKey: 'user_id', header: t('User') },
+      {
+        accessorKey: 'user_id',
+        header: t('User'),
+        cell: ({ row }) => (
+          <span className='font-medium'>
+            #{row.original.user_id}
+            {row.original.username ? ` ${row.original.username}` : ''}
+          </span>
+        ),
+      },
       {
         accessorKey: 'source',
         header: t('Source'),
@@ -848,23 +1020,50 @@ function CreditLogsTab() {
         header: t('Actions'),
         cell: ({ row }) => {
           const log = row.original
-          const canRevert =
-            log.source === 'local_keyword' && log.points < 0 && !log.reverted_at
-          return canRevert ? (
-            <Button
-              variant='ghost'
-              size='sm'
-              onClick={() => setRevertTarget(log)}
-              aria-label={t('Revert')}
-            >
-              <RotateCcw className='size-4' aria-hidden='true' />
-              {t('Revert')}
-            </Button>
-          ) : null
+          return (
+            <div className='flex items-center gap-1'>
+              {canRevertCreditLog(log) && (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant='ghost'
+                        size='icon'
+                        aria-label={t('Revert')}
+                        onClick={() => setRevertTarget(log)}
+                        className='text-muted-foreground hover:text-foreground size-8'
+                      />
+                    }
+                  >
+                    <RotateCcw />
+                  </TooltipTrigger>
+                  <TooltipContent>{t('Revert')}</TooltipContent>
+                </Tooltip>
+              )}
+              {log.request_id && (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant='ghost'
+                        size='icon'
+                        aria-label={t('View conversation')}
+                        onClick={() => void handleViewConversation(log.request_id)}
+                        className='text-muted-foreground hover:text-foreground size-8'
+                      />
+                    }
+                  >
+                    <Eye />
+                  </TooltipTrigger>
+                  <TooltipContent>{t('View conversation')}</TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+          )
         },
       },
     ],
-    [t]
+    [t, handleViewConversation, batchMode]
   )
 
   const table = useDataTable({
@@ -881,6 +1080,10 @@ function CreditLogsTab() {
     manualPagination: true,
     manualFiltering: true,
     ensurePageInRange,
+    enableRowSelection: batchMode,
+    getRowId: (row) => String(row.id),
+    rowSelection,
+    onRowSelectionChange: setRowSelection,
   })
 
   return (
@@ -902,6 +1105,16 @@ function CreditLogsTab() {
           onColumnFiltersChange([])
           onGlobalFilterChange?.('')
         },
+        preActions: (
+          <Button
+            variant='outline'
+            size='sm'
+            onClick={() => setKeywordRevertOpen(true)}
+          >
+            <ListFilter className='size-4' aria-hidden='true' />
+            {t('Revert by keyword')}
+          </Button>
+        ),
         filters: [
           {
             columnId: 'source',
@@ -914,12 +1127,131 @@ function CreditLogsTab() {
           },
         ],
       }}
+      bulkActions={
+        batchMode ? (
+          <DataTableBulkActions table={table.table} entityName='credit log'>
+            <Button
+              variant='destructive'
+              size='sm'
+              disabled={batchRevertMutation.isPending}
+              onClick={() => setBatchRevertOpen(true)}
+            >
+              <RotateCcw className='size-4' aria-hidden='true' />
+              {t('Revert selected')}
+            </Button>
+          </DataTableBulkActions>
+        ) : null
+      }
     />
     <RevertKeywordDialog
       log={revertTarget}
       onClose={() => setRevertTarget(null)}
     />
+    <ConversationDetailDialog
+      record={conversationTarget}
+      onClose={() => setConversationTarget(null)}
+    />
+    <ConfirmDialog
+      open={batchRevertOpen}
+      onOpenChange={setBatchRevertOpen}
+      title={t('Revert selected deductions?')}
+      desc={t(
+        'Restores points for the selected sensitive-word deductions and removes the hit words from the sensitive-word library. Each affected user gets a single aggregated revert record.'
+      )}
+      destructive
+      confirmText={t('Revert selected')}
+      isLoading={batchRevertMutation.isPending}
+      handleConfirm={() => {
+        setBatchRevertOpen(false)
+        handleBatchRevert()
+      }}
+    />
+    <KeywordRevertDialog
+      open={keywordRevertOpen}
+      onOpenChange={setKeywordRevertOpen}
+      keyword={keyword}
+      onKeywordChange={setKeyword}
+      removeFromLibrary={keywordRemove}
+      onRemoveFromLibraryChange={setKeywordRemove}
+      isPending={keywordRevertMutation.isPending}
+      onConfirm={() => {
+        setKeywordRevertOpen(false)
+        keywordRevertMutation.mutate()
+      }}
+    />
     </>
+  )
+}
+
+// 按关键词一键打回弹窗：输入关键词，可选同时从敏感词库删除该词。
+function KeywordRevertDialog({
+  open,
+  onOpenChange,
+  keyword,
+  onKeywordChange,
+  removeFromLibrary,
+  onRemoveFromLibraryChange,
+  isPending,
+  onConfirm,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  keyword: string
+  onKeywordChange: (value: string) => void
+  removeFromLibrary: boolean
+  onRemoveFromLibraryChange: (value: boolean) => void
+  isPending: boolean
+  onConfirm: () => void
+}) {
+  const { t } = useTranslation()
+  const trimmed = keyword.trim()
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className='sm:max-w-md'>
+        <DialogHeader>
+          <DialogTitle>{t('Revert by keyword')}</DialogTitle>
+        </DialogHeader>
+        <div className='space-y-3 text-sm'>
+          <p className='text-muted-foreground'>
+            {t(
+              'Reverts every non-reverted sensitive-word deduction that hit this keyword, aggregated per user. Useful after a word turns out to be a false positive.'
+            )}
+          </p>
+          <div>
+            <label className='text-sm'>{t('Keyword')}</label>
+            <Input
+              value={keyword}
+              onChange={(e) => onKeywordChange(e.target.value)}
+              placeholder='keyword'
+            />
+          </div>
+          <label className='flex cursor-pointer items-center gap-2'>
+            <Checkbox
+              checked={removeFromLibrary}
+              onCheckedChange={(value) => onRemoveFromLibraryChange(!!value)}
+            />
+            <span>
+              {t('Also remove this keyword from the sensitive-word library')}
+            </span>
+          </label>
+        </div>
+        <DialogFooter>
+          <Button
+            variant='outline'
+            onClick={() => onOpenChange(false)}
+            disabled={isPending}
+          >
+            {t('Cancel')}
+          </Button>
+          <Button disabled={isPending || !trimmed} onClick={onConfirm}>
+            <RotateCcw className='size-4' aria-hidden='true' />
+            {removeFromLibrary
+              ? t('Revert & remove keyword')
+              : t('Revert all hits')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -958,6 +1290,8 @@ function RevertKeywordDialog({
       void queryClient.invalidateQueries({
         queryKey: ['risk-control-credit-logs'],
       })
+      // 打回会删敏感词，同步失效设置页的词库缓存。
+      void queryClient.invalidateQueries({ queryKey: ['system-options'] })
       onClose()
     },
     onError: (error: Error) => {
@@ -1074,6 +1408,7 @@ function ConversationsTab() {
     columnFilters: [
       { columnId: '_modelSearch', searchKey: 'model_name', type: 'string' },
       { columnId: '_userSearch', searchKey: 'user_id', type: 'string' },
+      { columnId: '_statusSearch', searchKey: 'status_code', type: 'string' },
     ],
   })
 
@@ -1095,8 +1430,20 @@ function ConversationsTab() {
     columnId: '_userSearch',
     onColumnFiltersChange,
   })
+  const {
+    value: statusFilter,
+    inputValue: statusFilterInput,
+    setInputValue: setStatusFilterInput,
+  } = useDebouncedColumnFilter({
+    columnFilters,
+    columnId: '_statusSearch',
+    onColumnFiltersChange,
+  })
 
   const uid = userIdFilter.trim() ? Number(userIdFilter.trim()) : undefined
+  const statusNum = statusFilter.trim()
+    ? Number(statusFilter.trim())
+    : undefined
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: [
@@ -1105,6 +1452,7 @@ function ConversationsTab() {
       globalFilter,
       modelFilter,
       userIdFilter,
+      statusFilter,
     ],
     queryFn: () =>
       getConversationRecords({
@@ -1114,6 +1462,10 @@ function ConversationsTab() {
         model_name: modelFilter || undefined,
         user_id:
           uid && Number.isFinite(uid) && uid > 0 ? uid : undefined,
+        status_code:
+          statusNum && Number.isFinite(statusNum) && statusNum > 0
+            ? statusNum
+            : undefined,
       }),
     placeholderData: (previousData) => previousData,
   })
@@ -1121,7 +1473,16 @@ function ConversationsTab() {
   const columns = useMemo<ColumnDef<ConversationRecord>[]>(
     () => [
       { accessorKey: 'id', header: 'ID' },
-      { accessorKey: 'user_id', header: t('User') },
+      {
+        accessorKey: 'user_id',
+        header: t('User'),
+        cell: ({ row }) => (
+          <span className='font-medium'>
+            #{row.original.user_id}
+            {row.original.username ? ` ${row.original.username}` : ''}
+          </span>
+        ),
+      },
       { accessorKey: 'model_name', header: t('Model') },
       {
         accessorKey: 'status_code',
@@ -1211,6 +1572,7 @@ function ConversationsTab() {
           onReset: () => {
             setModelFilterInput('')
             setUserIdFilterInput('')
+            setStatusFilterInput('')
           },
           additionalSearch: (
             <>
@@ -1225,6 +1587,12 @@ function ConversationsTab() {
                 value={userIdFilterInput}
                 onChange={(e) => setUserIdFilterInput(e.target.value)}
                 className='w-full sm:w-32 lg:w-40'
+              />
+              <Input
+                placeholder={t('Filter by status...')}
+                value={statusFilterInput}
+                onChange={(e) => setStatusFilterInput(e.target.value)}
+                className='w-full sm:w-28 lg:w-32'
               />
             </>
           ),
@@ -2185,6 +2553,403 @@ function renderSuggestions(
 }
 
 // ---------------------------------------------------------------------------
+// 统计（关键词/用户命中排行，图表与控件样式照数据看板）
+// ---------------------------------------------------------------------------
+
+// 时间范围预设：7/30/90 天 / 全部（0=全部）。由「偏好设置」对话框选择，作为两张图的默认范围。
+const HIT_STATS_RANGE_OPTIONS = [
+  { label: 'Last 7 days', value: 7 },
+  { label: 'Last 30 days', value: 30 },
+  { label: 'Last 90 days', value: 90 },
+  { label: 'All time', value: 0 },
+]
+
+// 命中统计默认时间范围持久化（照数据看板 saveChartPreferences 模式）。
+const HIT_STATS_RANGE_STORAGE_KEY = 'risk_control_hit_stats_default_range'
+const DEFAULT_HIT_STATS_RANGE = 30
+
+function getSavedHitStatsRange(): number {
+  if (typeof window === 'undefined') return DEFAULT_HIT_STATS_RANGE
+  const saved = Number(window.localStorage.getItem(HIT_STATS_RANGE_STORAGE_KEY))
+  return HIT_STATS_RANGE_OPTIONS.some((option) => option.value === saved)
+    ? saved
+    : DEFAULT_HIT_STATS_RANGE
+}
+
+function saveHitStatsRange(days: number): void {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(HIT_STATS_RANGE_STORAGE_KEY, String(days))
+}
+
+const HIT_CHART_TYPE_OPTIONS = [
+  { value: 'bar', labelKey: 'Ranking' },
+  { value: 'pie', labelKey: 'Proportion' },
+] as const
+
+type HitChartType = (typeof HIT_CHART_TYPE_OPTIONS)[number]['value']
+
+// 排名柱状图显示前 N，饼图显示前 M（分片太多看不清）。
+const HIT_CHART_TOP_N = 15
+const HIT_PIE_TOP_N = 10
+
+// VChart 主题管理器按需加载（与数据看板图表一致），亮/暗主题切换用。
+let statsChartThemePromise: Promise<
+  (typeof import('@visactor/vchart'))['ThemeManager']
+> | null = null
+
+// HitChartDataItem 命中图的一行：name 为关键词/用户名，value 为次数。
+type HitChartDataItem = { name: string; value: number }
+
+// HitChart 命中排行/占比图卡片：样式照数据看板（bordered 容器 + IconBadge 头 +
+// 图表类型分段控件 + VChart）。bar=横向排名条（传 stackRows 时堆叠成多段），
+// pie=占比。标题由卡片头部承担，spec 内不重复渲染标题。
+function HitChart({
+  title,
+  icon,
+  data,
+  stackRows,
+  total,
+  chartType,
+  onChartTypeChange,
+  loading,
+}: {
+  title: string
+  icon: ReactNode
+  data: HitChartDataItem[]
+  /** 堆叠柱行（含 series 分段，如 敏感词命中/上游违规）；提供时 bar 用堆叠柱。 */
+  stackRows?: Array<HitChartDataItem & { series: string }>
+  total: number
+  chartType: HitChartType
+  onChartTypeChange: (t: HitChartType) => void
+  loading: boolean
+}) {
+  const { t } = useTranslation()
+  const { resolvedTheme } = useTheme()
+  const [themeReady, setThemeReady] = useState(false)
+  const themeManagerRef = useRef<
+    (typeof import('@visactor/vchart'))['ThemeManager'] | null
+  >(null)
+
+  useEffect(() => {
+    const updateTheme = async () => {
+      setThemeReady(false)
+      if (!statsChartThemePromise) {
+        statsChartThemePromise = import('@visactor/vchart').then(
+          (m) => m.ThemeManager
+        )
+      }
+      const ThemeManager = await statsChartThemePromise
+      themeManagerRef.current = ThemeManager
+      ThemeManager.setCurrentTheme(resolvedTheme === 'dark' ? 'dark' : 'light')
+      setThemeReady(true)
+    }
+    void updateTheme()
+  }, [resolvedTheme])
+
+  const colors = getDashboardChartColors(data.length)
+  const hasStack = Boolean(stackRows && stackRows.length > 0)
+  const stackSeries = hasStack && stackRows
+      ? Array.from(new Set(stackRows.map((r) => r.series)))
+      : []
+  const pieValues = data
+    .slice(0, HIT_PIE_TOP_N)
+    .map((d) => ({ type: d.name, value: d.value }))
+  const barValues =
+    hasStack && stackRows
+      ? stackRows.slice(0, HIT_CHART_TOP_N)
+      : data.slice(0, HIT_CHART_TOP_N)
+
+  const spec =
+    chartType === 'bar'
+      ? {
+          type: 'bar',
+          data: [{ id: 'hitBarData', values: barValues }],
+          yField: 'name',
+          xField: 'value',
+          seriesField: hasStack ? 'series' : 'name',
+          direction: 'horizontal',
+          stack: hasStack,
+          legends: hasStack
+            ? { visible: true, selectMode: 'single' }
+            : { visible: false },
+          color: hasStack
+            ? {
+                type: 'ordinal',
+                domain: stackSeries,
+                range: getDashboardChartColors(stackSeries.length),
+              }
+            : { type: 'ordinal', range: colors },
+          bar: { state: { hover: { stroke: '#000', lineWidth: 1 } } },
+          label: {
+            visible: true,
+            position: 'outside',
+            style: { fontSize: 11 },
+          },
+          axes: [
+            { orient: 'left', type: 'band' },
+            { orient: 'bottom', type: 'linear', visible: false },
+          ],
+          tooltip: {
+            mark: {
+              content: [
+                {
+                  key: (datum: Record<string, unknown>) =>
+                    hasStack ? datum?.series : datum?.name,
+                  value: (datum: Record<string, unknown>) =>
+                    Number(datum?.value) || 0,
+                },
+              ],
+            },
+          },
+          background: { fill: 'transparent' },
+          animation: true,
+        }
+      : {
+          type: 'pie',
+          data: [{ id: 'hitPieData', values: pieValues }],
+          outerRadius: 0.8,
+          innerRadius: 0.5,
+          padAngle: 0.6,
+          valueField: 'value',
+          categoryField: 'type',
+          legends: { visible: true, orient: 'left' },
+          label: { visible: true },
+          color: { type: 'ordinal', range: colors },
+          tooltip: {
+            mark: {
+              content: [
+                {
+                  key: (datum: Record<string, unknown>) => datum?.type,
+                  value: (datum: Record<string, unknown>) =>
+                    Number(datum?.value) || 0,
+                },
+              ],
+            },
+          },
+          background: { fill: 'transparent' },
+          animation: true,
+        }
+
+  let chartBody: ReactNode
+  if (loading && data.length === 0) {
+    chartBody = <Skeleton className='h-full w-full' />
+  } else if (data.length === 0) {
+    chartBody = (
+      <p className='text-muted-foreground flex h-full items-center justify-center text-sm'>
+        {t('No data available')}
+      </p>
+    )
+  } else if (themeReady) {
+    chartBody = (
+      <VChart
+        key={`${chartType}-${resolvedTheme}-${data.length}`}
+        spec={{
+          ...spec,
+          theme: resolvedTheme === 'dark' ? 'dark' : 'light',
+          background: 'transparent',
+        }}
+        option={VCHART_OPTION}
+      />
+    )
+  } else {
+    chartBody = null
+  }
+
+  return (
+    <div className='overflow-hidden rounded-lg border'>
+      <div className='flex w-full flex-col gap-1.5 border-b px-3 py-2 sm:gap-3 sm:px-5 sm:py-3 lg:flex-row lg:items-center lg:justify-between'>
+        <div className='flex items-center gap-2'>
+          <IconBadge tone='chart-4' size='sm'>
+            {icon}
+          </IconBadge>
+          <div className='text-sm font-semibold'>{t(title)}</div>
+          <span className='text-muted-foreground text-xs'>
+            {t('Total:')} {total}
+          </span>
+        </div>
+        <div className='bg-muted/60 inline-flex h-7 w-full overflow-x-auto rounded-lg border p-0.5 sm:h-8 sm:w-auto'>
+          {HIT_CHART_TYPE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type='button'
+              onClick={() => onChartTypeChange(opt.value)}
+              className={`shrink-0 rounded-md px-3 text-xs font-medium transition-colors ${
+                chartType === opt.value
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {t(opt.labelKey)}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className='h-[300px] p-1.5 sm:h-96 sm:p-2'>{chartBody}</div>
+    </div>
+  )
+}
+
+// 统计 Tab：关键词命中排行 + 用户命中排行（敏感词命中 + 上游违规命中拼成堆叠柱），
+// 时间范围走「偏好设置」对话框。控件/图表样式照数据看板。
+function StatsTab() {
+  const { t } = useTranslation()
+  const [rangeDays, setRangeDays] = useState<number>(getSavedHitStatsRange)
+  const [preferencesOpen, setPreferencesOpen] = useState(false)
+  const [keywordChartType, setKeywordChartType] = useState<HitChartType>('bar')
+  const [userChartType, setUserChartType] = useState<HitChartType>('bar')
+
+  const handleRangeSave = (days: number) => {
+    saveHitStatsRange(days)
+    setRangeDays(days)
+  }
+
+  const { data: keywordData, isLoading: keywordLoading } = useQuery({
+    queryKey: ['risk-control-keyword-stats', rangeDays],
+    queryFn: () => getKeywordHitStats({ days: rangeDays }),
+    placeholderData: (previousData) => previousData,
+  })
+  const { data: userData, isLoading: userLoading } = useQuery({
+    queryKey: ['risk-control-user-hit-stats', rangeDays],
+    queryFn: () => getUserHitStats({ days: rangeDays }),
+    placeholderData: (previousData) => previousData,
+  })
+
+  const keywordItems = (keywordData?.items ?? []).map((s) => ({
+    name: s.keyword,
+    value: s.count,
+  }))
+  const userItems = (userData?.items ?? []).map((s) => ({
+    name: s.username || `#${s.user_id}`,
+    value: s.count,
+  }))
+  // 用户堆叠柱：同一用户拆成「敏感词命中 / 上游违规命中」两段，一条记一次。
+  const userStackRows: Array<HitChartDataItem & { series: string }> = (
+    userData?.items ?? []
+  ).flatMap((s) => {
+    const name = s.username || `#${s.user_id}`
+    const rows: Array<HitChartDataItem & { series: string }> = []
+    if (s.keyword_count > 0) {
+      rows.push({ name, series: t('Sensitive-word hit'), value: s.keyword_count })
+    }
+    if (s.upstream_count > 0) {
+      rows.push({ name, series: t('Upstream violation'), value: s.upstream_count })
+    }
+    return rows
+  })
+  const keywordTotal = keywordItems.reduce((sum, s) => sum + s.value, 0)
+  const userTotal = userItems.reduce((sum, s) => sum + s.value, 0)
+
+  return (
+    <div className='space-y-4'>
+      <div className='flex justify-end'>
+        <Button
+          variant='outline'
+          size='sm'
+          onClick={() => setPreferencesOpen(true)}
+        >
+          <Settings2 className='mr-2 h-4 w-4' />
+          {t('Preferences')}
+        </Button>
+      </div>
+      <HitChart
+        title='Keyword Hit Ranking'
+        icon={<Hash className='size-4' />}
+        data={keywordItems}
+        total={keywordTotal}
+        chartType={keywordChartType}
+        onChartTypeChange={setKeywordChartType}
+        loading={keywordLoading}
+      />
+      <HitChart
+        title='User Hit Ranking'
+        icon={<Users className='size-4' />}
+        data={userItems}
+        stackRows={userStackRows}
+        total={userTotal}
+        chartType={userChartType}
+        onChartTypeChange={setUserChartType}
+        loading={userLoading}
+      />
+      <StatsPreferencesDialog
+        open={preferencesOpen}
+        onOpenChange={setPreferencesOpen}
+        days={rangeDays}
+        onSave={handleRangeSave}
+      />
+    </div>
+  )
+}
+
+// 偏好设置对话框：设置命中统计图的默认时间范围（照数据看板「偏好设置」样式）。
+function StatsPreferencesDialog({
+  open,
+  onOpenChange,
+  days,
+  onSave,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  days: number
+  onSave: (days: number) => void
+}) {
+  const { t } = useTranslation()
+  const [draftDays, setDraftDays] = useState(days)
+
+  useEffect(() => {
+    if (open) setDraftDays(days)
+  }, [open, days])
+
+  return (
+    <SettingsDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t('Hit Statistics Defaults')}
+      description={t('Set the default time range for the hit statistics charts.')}
+      contentClassName='sm:max-w-md'
+      contentHeight='auto'
+      bodyClassName='grid gap-3'
+      footer={
+        <Button
+          type='button'
+          onClick={() => {
+            onSave(draftDays)
+            onOpenChange(false)
+          }}
+        >
+          <Save className='mr-2 h-4 w-4' />
+          {t('Save')}
+        </Button>
+      }
+    >
+      <div className='grid gap-1.5'>
+        <Label htmlFor='hit-stats-time-range'>{t('Default range')}</Label>
+        <Select
+          items={HIT_STATS_RANGE_OPTIONS.map((option) => ({
+            value: String(option.value),
+            label: t(option.label),
+          }))}
+          value={String(draftDays)}
+          onValueChange={(value) => setDraftDays(Number(value))}
+        >
+          <SelectTrigger id='hit-stats-time-range'>
+            <SelectValue placeholder={t('Select default range')} />
+          </SelectTrigger>
+          <SelectContent alignItemWithTrigger={false}>
+            <SelectGroup>
+              {HIT_STATS_RANGE_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={String(option.value)}>
+                  {t(option.label)}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </div>
+    </SettingsDialog>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -2207,6 +2972,7 @@ type RiskControlTab =
   | 'users'
   | 'logs'
   | 'conversations'
+  | 'stats'
   | 'markers'
 
 export function RiskControlPage() {
@@ -2214,6 +2980,8 @@ export function RiskControlPage() {
   const navigate = useNavigate()
   const search = route.useSearch()
   const activeTab: RiskControlTab = search.tab ?? 'overview'
+  // 批量模式开关：放页面头部，作用于「信用日志」tab 的表格。
+  const [batchMode, setBatchMode] = useState(false)
 
   const handleTabChange = (value: string) => {
     void navigate({
@@ -2234,6 +3002,14 @@ export function RiskControlPage() {
         </span>
       </SectionPageLayout.Title>
       <SectionPageLayout.Actions>
+        {/* 批量模式开关：放页面头部（与渠道一致），作用于「信用日志」tab 的表格。 */}
+        <TogglePill
+          id='risk-credit-batch-mode'
+          label={t('Batch Operations')}
+          icon={<ListChecks className='text-muted-foreground h-4 w-4' aria-hidden='true' />}
+          checked={batchMode}
+          onCheckedChange={setBatchMode}
+        />
         {/* 快速跳转到安全设置里的敏感词页（关键词过滤与风控扣分共用一套词库的配置入口）。 */}
         <Button
           variant='outline'
@@ -2248,6 +3024,14 @@ export function RiskControlPage() {
           <Settings2 data-icon='inline-start' />
           {t('Sensitive word settings')}
         </Button>
+        <MobileToggleMenu>
+          <ToggleMenuItem
+            label={t('Batch Operations')}
+            icon={<ListChecks className='size-4' aria-hidden='true' />}
+            checked={batchMode}
+            onCheckedChange={setBatchMode}
+          />
+        </MobileToggleMenu>
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
         <div className='space-y-4'>
@@ -2259,6 +3043,7 @@ export function RiskControlPage() {
               <TabsTrigger value='conversations'>
                 {t('Conversations')}
               </TabsTrigger>
+              <TabsTrigger value='stats'>{t('Statistics')}</TabsTrigger>
               <TabsTrigger value='markers'>{t('Markers')}</TabsTrigger>
             </TabsList>
             <TabsContent value='overview'>
@@ -2268,10 +3053,13 @@ export function RiskControlPage() {
               <LowScoreUsersTab />
             </TabsContent>
             <TabsContent value='logs'>
-              <CreditLogsTab />
+              <CreditLogsTab batchMode={batchMode} />
             </TabsContent>
             <TabsContent value='conversations'>
               <ConversationsTab />
+            </TabsContent>
+            <TabsContent value='stats'>
+              <StatsTab />
             </TabsContent>
             <TabsContent value='markers'>
               <MarkersTab />
