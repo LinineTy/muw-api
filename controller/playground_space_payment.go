@@ -304,6 +304,10 @@ func AdminCompletePlaygroundSpaceOrder(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// 资金处置高危操作：补单留管理审计。
+	recordManageAudit(c, "playground.order_complete", map[string]interface{}{
+		"trade_no": req.TradeNo,
+	})
 	common.ApiSuccess(c, nil)
 }
 
@@ -321,5 +325,9 @@ func AdminRejectPlaygroundSpaceOrder(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// 资金处置高危操作：关单留管理审计。
+	recordManageAudit(c, "playground.order_reject", map[string]interface{}{
+		"trade_no": req.TradeNo,
+	})
 	common.ApiSuccess(c, nil)
 }

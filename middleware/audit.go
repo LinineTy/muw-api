@@ -107,11 +107,17 @@ var auditRouteActions = map[string]string{
 	"POST /api/images/":      "image.upload",
 	"DELETE /api/images/:id": "image.delete",
 
+	// 用户云空间（admin）
+	"POST /api/playground/admin/images/cleanup":  "playground.image_cleanup",
+	"POST /api/playground/admin/orders/complete": "playground.order_complete",
+	"POST /api/playground/admin/orders/reject":   "playground.order_reject",
+
 	// 日志
 	"POST /api/system-task/log-cleanup": "log.cleanup_start",
 
 	// 风控
 	"POST /api/risk-control/adjust":                        "risk_control.adjust",
+	"POST /api/risk-control/revert-deduction":              "risk_control.revert_keyword_deduction",
 	"PUT /api/risk-control/markers":                        "risk_control.markers_update",
 	"POST /api/risk-control/markers/reset":                 "risk_control.markers_reset",
 	"POST /api/risk-control/analyze-markers":               "risk_control.analyze_markers",
