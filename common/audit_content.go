@@ -3,6 +3,7 @@ package common
 import (
 	"fmt"
 	"os"
+	"regexp"
 )
 
 // auditContentTemplates 将稳定的操作标识 action 映射为英文兜底模板，渲染后写入
@@ -104,6 +105,11 @@ var auditContentTemplates = map[string]string{
 	"image.upload":      "Uploaded a file to the media library",
 	"image.delete":      "Deleted image (ID: ${id})",
 
+	// 图床（用户云空间）
+	"playground.image_cleanup":  "Cleaned up playground images (deleted ${deleted})",
+	"playground.order_complete": "Completed a playground space order (trade no: ${trade_no})",
+	"playground.order_reject":   "Rejected a playground space order (trade no: ${trade_no})",
+
 	"home_page_theme.import":        "Imported landing page theme ${theme_name} (ID: ${theme_id})",
 	"home_page_theme.select":        "Selected landing page theme (ID: ${theme_id})",
 	"home_page_theme.manual_update": "Updated the manual landing page preset",
@@ -128,11 +134,30 @@ var auditContentTemplates = map[string]string{
 	"operation.vision_fallback_prompt_reset": "Restored the vision fallback description prompt to default",
 }
 
+// auditPlaceholderRe 匹配模板里的 ${name} 占位符，用于校验参数是否齐全。
+var auditPlaceholderRe = regexp.MustCompile(`\$\{([^}]+)\}`)
+
+// auditContentParamsProvided 检查模板引用的占位符是否全部有值。失败兜底审计（middleware
+// 在 handler 手动埋点未触发时记录）没有业务参数，此时不应渲染出空占位的句子，应由
+// 调用方回退到 method+route。
+func auditContentParamsProvided(tmpl string, params map[string]interface{}) bool {
+	for _, m := range auditPlaceholderRe.FindAllStringSubmatch(tmpl, -1) {
+		if _, ok := params[m[1]]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
 // AuditContentEN 按 action 模板渲染英文兜底文本。ok=false 表示该 action 未登记模板，
-// 此时返回的 content 为 action 本身，调用方应使用更有上下文的兜底（如 method+route）。
+// 或模板引用的占位符在 params 中缺失（此时返回的 content 为 action 本身，调用方应
+// 使用更有上下文的兜底，如 method+route）。
 func AuditContentEN(action string, params map[string]interface{}) (string, bool) {
 	tmpl, ok := auditContentTemplates[action]
 	if !ok {
+		return action, false
+	}
+	if !auditContentParamsProvided(tmpl, params) {
 		return action, false
 	}
 	return os.Expand(tmpl, func(key string) string {
