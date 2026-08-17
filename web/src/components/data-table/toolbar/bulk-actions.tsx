@@ -218,8 +218,7 @@ export function DataTableBulkActions<TData>({
               {selectedCount}
             </Badge>{' '}
             <span className='hidden sm:inline'>
-              {entityName}
-              {selectedCount > 1 ? 's' : ''}
+              {t(entityName, { count: selectedCount })}
             </span>{' '}
             {t('selected')}
           </div>
