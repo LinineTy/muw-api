@@ -27,6 +27,8 @@ type ConversationRecord struct {
 	Response   string `json:"response"`                 // tee 捕获的原始响应（截断）
 	SizeBytes  int64  `json:"size_bytes" gorm:"bigint"` // 抓取时按字节计的 request+response 大小（总量核算用）
 	CreatedAt  int64  `json:"created_at" gorm:"bigint;index;autoCreateTime"`
+	// Username 列表展示用（列表接口按 user_id 批量回填），非表列。
+	Username string `json:"username,omitempty" gorm:"-"`
 }
 
 func (ConversationRecord) TableName() string { return "conversation_records" }
@@ -43,7 +45,8 @@ func InsertConversationRecord(rec *ConversationRecord) error {
 
 // ListConversationRecords 分页列表。请求/响应正文可能大到 12MB+12MB，列表页按
 // 页拉 20 条会拖垮网络与内存，这里只投影元数据；正文由 GetConversationRecord 详情单独取。
-func ListConversationRecords(userId int, tokenId int, requestId string, modelName string, startTimestamp int64, endTimestamp int64, startIdx int, num int) (records []*ConversationRecord, total int64, err error) {
+// statusCode>0 时按响应状态码精确过滤（风控中心"只看 200"等）。
+func ListConversationRecords(userId int, tokenId int, requestId string, modelName string, statusCode int, startTimestamp int64, endTimestamp int64, startIdx int, num int) (records []*ConversationRecord, total int64, err error) {
 	if num <= 0 {
 		num = common.MaxRecentItems
 	}
@@ -62,6 +65,9 @@ func ListConversationRecords(userId int, tokenId int, requestId string, modelNam
 		// 模型名模糊匹配（含厂商前缀等片段）。
 		tx = tx.Where("model_name LIKE ?", "%"+modelName+"%")
 	}
+	if statusCode > 0 {
+		tx = tx.Where("status_code = ?", statusCode)
+	}
 	if startTimestamp > 0 {
 		tx = tx.Where("created_at >= ?", startTimestamp)
 	}
@@ -72,7 +78,21 @@ func ListConversationRecords(userId int, tokenId int, requestId string, modelNam
 		return nil, 0, err
 	}
 	err = tx.Order("id desc").Limit(num).Offset(startIdx).Find(&records).Error
-	return records, total, err
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(records) > 0 {
+		ids := make([]int, 0, len(records))
+		for _, r := range records {
+			ids = append(ids, r.UserId)
+		}
+		if names, err := GetUserNamesByIds(ids); err == nil {
+			for _, r := range records {
+				r.Username = names[r.UserId]
+			}
+		}
+	}
+	return records, total, nil
 }
 
 // GetConversationRecord 按 id 取单条完整记录（含请求/响应正文），详情弹窗用。

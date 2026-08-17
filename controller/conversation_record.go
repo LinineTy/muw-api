@@ -20,16 +20,17 @@ func GetConversationRecordDetail(c *gin.Context) {
 	common.ApiSuccess(c, record)
 }
 
-// GetConversationRecords 管理端查看对话记录（按 user/token/request_id/model 过滤，分页）。
+// GetConversationRecords 管理端查看对话记录（按 user/token/request_id/model/status 过滤，分页）。
 func GetConversationRecords(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	userId, _ := strconv.Atoi(c.Query("user_id"))
 	tokenId, _ := strconv.Atoi(c.Query("token_id"))
 	requestId := c.Query("request_id")
 	modelName := c.Query("model_name")
+	statusCode, _ := strconv.Atoi(c.Query("status_code"))
 	start, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	end, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
-	records, total, err := model.ListConversationRecords(userId, tokenId, requestId, modelName, start, end, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	records, total, err := model.ListConversationRecords(userId, tokenId, requestId, modelName, statusCode, start, end, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 	if err != nil {
 		common.ApiError(c, err)
 		return
