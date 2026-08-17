@@ -1615,6 +1615,37 @@ func GetUsernameById(id int, fromDB bool) (username string, err error) {
 	return username, nil
 }
 
+// GetUserNamesByIds 批量按 id 查用户名，返回 id→username 映射（不存在的 id 不出现在结果）。
+// 供列表富化（扣分明细/对话记录展示用户名）一次查库，避免逐行调 GetUsernameById。
+func GetUserNamesByIds(ids []int) (map[int]string, error) {
+	names := make(map[int]string)
+	if len(ids) == 0 {
+		return names, nil
+	}
+	seen := make(map[int]bool, len(ids))
+	uniq := make([]int, 0, len(ids))
+	for _, id := range ids {
+		if id > 0 && !seen[id] {
+			seen[id] = true
+			uniq = append(uniq, id)
+		}
+	}
+	if len(uniq) == 0 {
+		return names, nil
+	}
+	var rows []struct {
+		Id       int
+		Username string
+	}
+	if err := DB.Model(&User{}).Select("id", "username").Where("id IN ?", uniq).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		names[r.Id] = r.Username
+	}
+	return names, nil
+}
+
 func IsLinuxDOIdAlreadyTaken(linuxDOId string) bool {
 	var user User
 	err := DB.Unscoped().Where("linux_do_id = ?", linuxDOId).First(&user).Error

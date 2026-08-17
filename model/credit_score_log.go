@@ -30,6 +30,8 @@ type CreditScoreLog struct {
 	// RevertedAt 管理端打回（审核误判撤销）该条扣分记录的时间，0=未打回。
 	// 仅敏感词扣分（source=local_keyword）可打回；打回后该条不再计入重复倍率次数。
 	RevertedAt int64 `json:"reverted_at" gorm:"bigint;index"`
+	// Username 列表展示用（列表接口按 user_id 批量回填），非表列。
+	Username string `json:"username,omitempty" gorm:"-"`
 }
 
 func (CreditScoreLog) TableName() string { return "credit_score_logs" }
@@ -126,6 +128,59 @@ func ApplyCreditScoreRevert(sourceLogID int64, userId int, delta int, maxScore i
 	}
 	return newBalance, nil
 }
+
+// ApplyCreditScoreRevertBatch 批量打回同一用户的若干条扣分：用户行锁内原子完成
+// "批量标记打回 + 一次性加回聚合分数 + 落一条聚合恢复明细"。同一次批量打回中同一
+// 用户只产生一条 admin_revert 记录（Points=聚合 delta），而不是每条源记录一条。
+// sourceLogIDs 必须是该用户、未打回的扣分记录（调用方已预筛）；RowsAffected 不足
+// 说明有记录已被并发打回，整体回滚避免双重加分。revertLog 的 UserId/Points/Balance
+// 回填为实际值。返回更新后余额。
+func ApplyCreditScoreRevertBatch(sourceLogIDs []int64, userId int, delta int, maxScore int, revertLog *CreditScoreLog) (int, error) {
+	if userId <= 0 || revertLog == nil || len(sourceLogIDs) == 0 {
+		return 0, errors.New("invalid params")
+	}
+	if delta <= 0 {
+		return 0, errors.New("revert delta must be positive")
+	}
+	var newBalance int
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var user User
+		if err := lockForUpdate(tx).Select("credit_score").Where("id = ?", userId).First(&user).Error; err != nil {
+			return err
+		}
+		result := tx.Model(&CreditScoreLog{}).
+			Where("id IN ? AND COALESCE(reverted_at, 0) = 0", sourceLogIDs).
+			Update("reverted_at", common.GetTimestamp())
+		if result.Error != nil {
+			return result.Error
+		}
+		if int(result.RowsAffected) != len(sourceLogIDs) {
+			return errors.New("some source logs were already reverted")
+		}
+		newBalance = user.CreditScore + delta
+		if newBalance < 0 {
+			newBalance = 0
+		}
+		if maxScore > 0 && newBalance > maxScore {
+			newBalance = maxScore
+		}
+		if err := tx.Model(&User{}).Where("id = ?", userId).Update("credit_score", newBalance).Error; err != nil {
+			return err
+		}
+		revertLog.UserId = userId
+		revertLog.Points = delta
+		revertLog.Balance = newBalance
+		if revertLog.CreatedAt == 0 {
+			revertLog.CreatedAt = common.GetTimestamp()
+		}
+		return tx.Create(revertLog).Error
+	})
+	if err != nil {
+		return 0, err
+	}
+	return newBalance, nil
+}
+
 func ApplyUserPledge(userId int, points int, maxScore int, cooldown int64, source string, log *CreditScoreLog) (newBalance int, nextPledgeAt int64, err error) {
 	if userId <= 0 || log == nil || points <= 0 {
 		return 0, 0, errors.New("invalid pledge params")
@@ -443,6 +498,95 @@ func DeleteAllCreditScoreLogs() (int64, error) {
 	return result.RowsAffected, result.Error
 }
 
+// UpdateCreditScoreClamped 直接设置用户信用分为 newScore（clamp 到 [0,maxScore]），
+// 不写审计明细。用户行锁内完成，避免与并发扣分交错。返回设置后的余额。
+// 供全站信誉分重置批量归一分数用（重置=从头开始，不产生 full_score_reset 明细）。
+func UpdateCreditScoreClamped(userId int, newScore int, maxScore int) (int, error) {
+	if userId <= 0 {
+		return 0, errors.New("invalid user id")
+	}
+	if newScore < 0 {
+		newScore = 0
+	}
+	if maxScore > 0 && newScore > maxScore {
+		newScore = maxScore
+	}
+	var balance int
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var user User
+		if err := lockForUpdate(tx).Select("credit_score").Where("id = ?", userId).First(&user).Error; err != nil {
+			return err
+		}
+		balance = newScore
+		return tx.Model(&User{}).Where("id = ?", userId).Update("credit_score", newScore).Error
+	})
+	if err != nil {
+		return 0, err
+	}
+	return balance, nil
+}
+
+// ResetCreditScoreLogSequence 清空明细后把主键序列重置为从 1 重新开始（全站信誉分重置
+// 的语义是"从头开始"）。按方言处理：SQLite 清 sqlite_sequence（该表只在列用了
+// AUTOINCREMENT 且插过行后才存在，不存在时表是普通 rowid 主键，清空后自然从 1 重新
+// 开始，无需重置）；MySQL 重置 AUTO_INCREMENT；PostgreSQL 把序列置为当前最大 id（表空
+// 时=1）。带 COALESCE(MAX(id)) 兜底：若清空后又有并发写入残留了行，序列仍会从其后的
+// id 继续，不会撞主键。
+func ResetCreditScoreLogSequence() error {
+	switch {
+	case common.UsingMainDatabase(common.DatabaseTypeSQLite):
+		var n int64
+		if err := DB.Raw("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'sqlite_sequence'").Scan(&n).Error; err != nil {
+			return err
+		}
+		if n > 0 {
+			return DB.Exec("DELETE FROM sqlite_sequence WHERE name = ?", (&CreditScoreLog{}).TableName()).Error
+		}
+		return nil
+	case common.UsingMainDatabase(common.DatabaseTypePostgreSQL):
+		return DB.Exec("SELECT setval(pg_get_serial_sequence('credit_score_logs','id'), COALESCE((SELECT MAX(id) FROM credit_score_logs), 0), true)").Error
+	default: // MySQL / 其它
+		return DB.Exec("ALTER TABLE credit_score_logs AUTO_INCREMENT = 1").Error
+	}
+}
+
+// ListLocalKeywordReasons 返回 since 之后 source=local_keyword 的扣分原因文本（近 limit
+// 条，id 降序取最新），供服务层解析关键词命中统计。只投影 reason 列，避免拉全行。
+func ListLocalKeywordReasons(since int64, limit int) ([]string, error) {
+	if limit <= 0 {
+		limit = common.MaxRecentItems
+	}
+	var reasons []string
+	err := DB.Model(&CreditScoreLog{}).
+		Select("reason").
+		Where("source = ?", "local_keyword").
+		Where("created_at >= ?", since).
+		Order("id desc").
+		Limit(limit).
+		Pluck("reason", &reasons).Error
+	return reasons, err
+}
+
+// UserSourceHitCount 某用户某来源的命中次数（按扣分明细条数计）。
+type UserSourceHitCount struct {
+	UserId int    `json:"user_id"`
+	Source string `json:"source"`
+	Count  int64  `json:"count"`
+}
+
+// ListUserHitCountsBySource 统计 since 之后 local_keyword 与 upstream_violation 两种来源的
+// 扣分明细按 (user_id, source) 的条数（每次命中落一条明细，命中次数=明细条数）。
+// 供「用户命中」图用：同一用户的关键词命中 + 上游违规命中拼成一根堆叠柱。
+func ListUserHitCountsBySource(since int64) ([]UserSourceHitCount, error) {
+	var rows []UserSourceHitCount
+	err := DB.Model(&CreditScoreLog{}).
+		Select("user_id, source, COUNT(*) AS count").
+		Where("source IN ? AND created_at >= ?", []string{"local_keyword", "upstream_violation"}, since).
+		Group("user_id, source").
+		Scan(&rows).Error
+	return rows, err
+}
+
 func ListCreditScoreLogs(userId int, source string, startTimestamp int64, endTimestamp int64, startIdx int, num int) (logs []*CreditScoreLog, total int64, err error) {
 	if num <= 0 {
 		num = common.MaxRecentItems
@@ -464,5 +608,19 @@ func ListCreditScoreLogs(userId int, source string, startTimestamp int64, endTim
 		return nil, 0, err
 	}
 	err = tx.Order("id desc").Limit(num).Offset(startIdx).Find(&logs).Error
-	return logs, total, err
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(logs) > 0 {
+		ids := make([]int, 0, len(logs))
+		for _, l := range logs {
+			ids = append(ids, l.UserId)
+		}
+		if names, err := GetUserNamesByIds(ids); err == nil {
+			for _, l := range logs {
+				l.Username = names[l.UserId]
+			}
+		}
+	}
+	return logs, total, nil
 }

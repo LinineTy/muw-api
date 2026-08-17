@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/i18n"
@@ -172,6 +173,105 @@ func RevertCreditScoreDeduction(c *gin.Context) {
 		"remove_words": req.RemoveWords,
 	})
 	common.ApiSuccess(c, gin.H{"log_id": req.LogId, "balance": newBalance})
+}
+
+// RevertCreditScoreDeductions 管理端批量打回多条敏感词扣分（表格勾选多行）：按用户聚合，
+// 同一用户只落一条恢复明细，命中的词一并从敏感词库删除。返回聚合统计供前端/审计展示。
+func RevertCreditScoreDeductions(c *gin.Context) {
+	var req struct {
+		LogIds []int64 `json:"log_ids"`
+	}
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiErrorMsg(c, "invalid request body")
+		return
+	}
+	if len(req.LogIds) == 0 {
+		common.ApiErrorMsg(c, "no logs selected")
+		return
+	}
+	summary, err := service.RevertKeywordDeductions(req.LogIds)
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
+	users := len(summary)
+	points := 0
+	userIds := make([]int, 0, users)
+	for uid, p := range summary {
+		userIds = append(userIds, uid)
+		points += p
+	}
+	recordManageAudit(c, "risk_control.revert_keyword_deductions", map[string]interface{}{
+		"count":    len(req.LogIds),
+		"users":    users,
+		"points":   points,
+		"log_ids":  req.LogIds,
+		"user_ids": userIds,
+	})
+	common.ApiSuccess(c, gin.H{"users": users, "points": points, "summary": summary})
+}
+
+// RevertKeywordHits 按关键词一键打回：所有命中该关键词的未打回敏感词扣分按用户聚合打回，
+// 可选同时从敏感词库删除该词。返回聚合统计供前端/审计展示。
+func RevertKeywordHits(c *gin.Context) {
+	var req struct {
+		Keyword           string `json:"keyword"`
+		RemoveFromLibrary bool   `json:"remove_from_library"`
+	}
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiErrorMsg(c, "invalid request body")
+		return
+	}
+	summary, count, err := service.RevertAllKeywordHits(req.Keyword, req.RemoveFromLibrary)
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
+	users := len(summary)
+	points := 0
+	for _, p := range summary {
+		points += p
+	}
+	recordManageAudit(c, "risk_control.revert_keyword_hits", map[string]interface{}{
+		"keyword": req.Keyword,
+		"count":   count,
+		"users":   users,
+		"points":  points,
+		"removed": req.RemoveFromLibrary,
+	})
+	common.ApiSuccess(c, gin.H{"count": count, "users": users, "points": points})
+}
+
+// GetKeywordHitStats 关键词命中统计：聚合近 N 天（days 参数，默认 30，0=全部）敏感词扣分
+// 明细里各命中词的出现次数，按次数降序返回（前端展示 Top N）。
+func GetKeywordHitStats(c *gin.Context) {
+	days, _ := strconv.Atoi(c.Query("days"))
+	since := int64(0)
+	if days > 0 {
+		since = time.Now().Add(-time.Duration(days) * 24 * time.Hour).Unix()
+	}
+	stats, err := service.AggregateKeywordHitCounts(since, 0)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"items": stats})
+}
+
+// GetUserHitStats 用户命中统计：聚合近 N 天（days 参数，默认 30，0=全部）每个用户
+// 「敏感词命中 + 上游违规命中」的次数（按扣分明细条数计），按总次数降序。
+func GetUserHitStats(c *gin.Context) {
+	days, _ := strconv.Atoi(c.Query("days"))
+	since := int64(0)
+	if days > 0 {
+		since = time.Now().Add(-time.Duration(days) * 24 * time.Hour).Unix()
+	}
+	stats, err := service.AggregateUserHitCounts(since, 0)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"items": stats})
 }
 
 // ResetCreditScores 管理端全站信誉分重置：把所有用户 credit_score 设为当前满分，并清除

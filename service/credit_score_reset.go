@@ -60,11 +60,12 @@ func GetCreditScoreResetStatus(ctx context.Context) (*CreditScoreResetStatus, er
 // RunCreditScoreReset 全站信誉分重置 = 信用分体系从头开始：
 //  1. 清空全部信用分明细（旧扣分/恢复/保证书/重置记录一并删除）；
 //  2. 把所有未软删除用户的 credit_score 归一到当前 full_score，已满分的跳过；
-//  3. 每个被重置的用户落一条 source=full_score_reset 记录作为新起点（保证书冷却因旧
-//     pledge 记录被清空而自然失效，无需单独处理）。
+//  3. 全部处理完后把 credit_score_logs 主键序列重置为从 1 开始（下次落库的 id 不再
+//     从被删的最后一条记录顺延）。
 //
-// 第 1 步清空发生在重置写入之前，所以新落的重置记录不会被误删。分数写入走
-// ApplyCreditScoreDelta（行锁串行化并发扣分 + clamp 到 [0, full_score]）。
+// 重置本身不再写 full_score_reset 明细——重置后表是彻底的空表，管理端操作本身由操作
+// 审计留痕。分数写入走 UpdateCreditScoreClamped（用户行锁 + clamp 到 [0, full_score]，
+// 不落审计明细）。
 // onProgress 每批回调 (processed, total)（通常由 NewSystemTaskProgressReporter 生成，
 // 可为 nil）。返回结果计数。
 func RunCreditScoreReset(ctx context.Context, onProgress func(processed, total int)) (map[string]int, error) {
@@ -103,11 +104,7 @@ func RunCreditScoreReset(ctx context.Context, onProgress func(processed, total i
 				skipped++
 				continue
 			}
-			log := &model.CreditScoreLog{
-				Source: CreditSourceFullScoreReset,
-				Reason: fmt.Sprintf("管理员调整满分，全站信誉分重置为新满分 %d", fullScore),
-			}
-			newBalance, err := model.ApplyCreditScoreDelta(user.Id, fullScore-user.CreditScore, fullScore, log)
+			newBalance, err := model.UpdateCreditScoreClamped(user.Id, fullScore, fullScore)
 			if err != nil {
 				failed++
 				common.SysLog(fmt.Sprintf("credit score reset: user %d failed: %s", user.Id, err.Error()))
@@ -123,6 +120,13 @@ func RunCreditScoreReset(ctx context.Context, onProgress func(processed, total i
 		if onProgress != nil {
 			onProgress(processed, int(total))
 		}
+	}
+
+	// 重置主键序列，让下次落库 id 从 1 重新开始。分数更新在清空之后、序列重置之前完成，
+	// 期间不写任何明细，序列重置后可放心从 1 起。重置失败只记日志（分数已归一，不因
+	// 一个展示性序列问题把整个任务标失败）。
+	if err := model.ResetCreditScoreLogSequence(); err != nil {
+		common.SysLog(fmt.Sprintf("credit score reset: reset sequence failed: %s", err.Error()))
 	}
 
 	return map[string]int{

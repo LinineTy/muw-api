@@ -15,8 +15,9 @@ import (
 
 // TestRunCreditScoreReset 全站信誉分重置核心不变量：
 //   - 先清空全部信用分明细（旧扣分/保证书历史被删除），再重置分数（含"新满分低于旧分"时
-//     往下拉），每个被重置用户落一条 source=full_score_reset 记录作为新起点；
-//   - 已在满分的用户跳过，不产生记录；
+//     往下拉）；
+//   - 重置本身不写 full_score_reset 明细：重置后表彻底为空，下一条落库 id 从 1 重新开始；
+//   - 已在满分的用户跳过；
 //   - 软删用户不参与；
 //   - 旧保证书记录被清空 → 保证书冷却自然失效。
 func TestRunCreditScoreReset(t *testing.T) {
@@ -62,14 +63,16 @@ func TestRunCreditScoreReset(t *testing.T) {
 		assert.Equal(t, 100, u.CreditScore, name)
 	}
 
-	// 明细=新起点：旧扣分/保证书被清空，只剩本次重置的 full_score_reset 记录（low/high）。
+	// 明细=彻底清空：旧扣分/保证书被删，重置也不写 full_score_reset。
 	var logs []model.CreditScoreLog
 	require.NoError(t, model.DB.Order("id asc").Find(&logs).Error)
-	require.Len(t, logs, 2)
-	assert.Equal(t, CreditSourceFullScoreReset, logs[0].Source)
-	assert.Equal(t, users[1].Id, logs[0].UserId)
-	assert.Equal(t, 100, logs[0].Balance)
-	assert.Equal(t, CreditSourceFullScoreReset, logs[1].Source)
-	assert.Equal(t, users[2].Id, logs[1].UserId)
-	assert.Equal(t, 100, logs[1].Balance)
+	assert.Empty(t, logs)
+
+	// 主键序列已重置：下一条落库 id 从 1 开始（测试跑在 SQLite；MySQL/PG 由
+	// ResetCreditScoreLogSequence 的方言分支处理）。
+	newLog := &model.CreditScoreLog{
+		UserId: users[1].Id, Source: CreditSourcePledge, Points: 5, Balance: 100, CreatedAt: now,
+	}
+	require.NoError(t, model.DB.Create(newLog).Error)
+	assert.Equal(t, int64(1), newLog.Id)
 }
