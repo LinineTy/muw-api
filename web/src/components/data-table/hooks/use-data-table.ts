@@ -370,6 +370,20 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     initialPagination,
     options.onPaginationChange
   )
+  // columnFilters/globalFilter 与其他 state 一样走可受控内部管理：不传
+  // options.* 与 on*Change（客户端表格）时由内部 state 兜底，传了（服务端
+  // 表格走 URL state）则完全受控。此前这两个 state 直接塞进 TanStack state
+  // 且无内部 setter，未受控时搜索/列筛选会一直被 []/undefined 锁死不生效。
+  const [columnFilters, onColumnFiltersChange] = useControllableTableState(
+    options.columnFilters,
+    [],
+    options.onColumnFiltersChange
+  )
+  const [globalFilter, onGlobalFilterChange] = useControllableTableState(
+    options.globalFilter,
+    '',
+    options.onGlobalFilterChange
+  )
 
   const resolvedPageCount =
     explicitPageCount ??
@@ -397,15 +411,17 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
       // spreads the `state` object over its own `columnFilters: []` default,
       // so an explicit `undefined` here leaves `getState().columnFilters`
       // undefined and crashes toolbar consumers that read `.length`.
-      columnFilters: options.columnFilters ?? [],
-      globalFilter: options.globalFilter,
+      columnFilters,
+      globalFilter,
       pagination,
     },
     enableRowSelection: options.enableRowSelection,
     enableSorting: resolvedEnableSorting,
     getRowId: options.getRowId,
     getSubRows: options.getSubRows,
-    globalFilterFn: options.globalFilterFn,
+    // 显式传 undefined 会覆盖 TanStack 默认的 globalFilterFn: 'auto'，
+    // 导致 getGlobalFilterFn() 返回 undefined、全局搜索过滤永不执行。
+    globalFilterFn: options.globalFilterFn ?? 'auto',
     autoResetPageIndex,
     manualFiltering,
     manualPagination,
@@ -417,8 +433,8 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     onColumnSizingChange,
     onRowSelectionChange,
     onExpandedChange,
-    onColumnFiltersChange: options.onColumnFiltersChange,
-    onGlobalFilterChange: options.onGlobalFilterChange,
+    onColumnFiltersChange,
+    onGlobalFilterChange,
     onPaginationChange,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: withFilteredRowModel

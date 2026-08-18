@@ -29,6 +29,7 @@ import type {
 } from '@/features/subscriptions/types'
 
 import { useMySubscriptions } from './my-subscriptions-provider'
+import { EndedSubscriptionsTable } from './ended-subscriptions-table'
 import { SubscriptionList } from './subscription-list'
 import { PlanCatalogSection } from './plan-catalog-section'
 import { classifySubscriptionStatus } from '../lib/helpers'
@@ -36,19 +37,16 @@ import { getExpiringSubscriptions, type ExpiringSubscription } from '../api'
 
 function splitByStatus(subscriptions: UserSubscriptionRecord[]) {
   const active: UserSubscriptionRecord[] = []
-  const expired: UserSubscriptionRecord[] = []
-  const cancelled: UserSubscriptionRecord[] = []
+  const ended: UserSubscriptionRecord[] = []
   for (const sub of subscriptions) {
-    const { isActive, isExpired, isCancelled } = classifySubscriptionStatus(sub)
+    const { isActive } = classifySubscriptionStatus(sub)
     if (isActive) {
       active.push(sub)
-    } else if (isCancelled) {
-      cancelled.push(sub)
-    } else if (isExpired) {
-      expired.push(sub)
+    } else {
+      ended.push(sub)
     }
   }
-  return { active, expired, cancelled }
+  return { active, ended }
 }
 
 function ExpiringBanner() {
@@ -94,12 +92,17 @@ function ExpiringBanner() {
   )
 }
 
-export function MySubscriptionsTabs() {
+export type MySubscriptionsTab = 'active' | 'ended' | 'plans'
+
+export function MySubscriptionsTabs({
+  tab,
+  onTabChange,
+}: {
+  tab: MySubscriptionsTab
+  onTabChange: (tab: MySubscriptionsTab) => void
+}) {
   const { t } = useTranslation()
   const { selfData, plans, loading } = useMySubscriptions()
-  const [tab, setTab] = useState<'active' | 'expired' | 'cancelled' | 'plans'>(
-    'active'
-  )
   // 套餐目录的「分组显示」开关：默认开（按互斥组聚合成块，无互斥组的套餐单独列出）。
   const [grouped, setGrouped] = useState(true)
 
@@ -107,7 +110,7 @@ export function MySubscriptionsTabs() {
     () => selfData?.all_subscriptions ?? [],
     [selfData]
   )
-  const { active, expired, cancelled } = useMemo(() => {
+  const { active, ended } = useMemo(() => {
     const split = splitByStatus(allSubscriptions)
     // Active subscriptions honor the user-set consumption priority: when a
     // preference has been chosen (priorities differ), sort the preferred first.
@@ -149,7 +152,7 @@ export function MySubscriptionsTabs() {
       <ExpiringBanner />
       <Tabs
         value={tab}
-        onValueChange={(value) => setTab(value as typeof tab)}
+        onValueChange={(value) => onTabChange(value as MySubscriptionsTab)}
         className='flex min-h-0 flex-1 flex-col'
       >
         <div className='flex items-center justify-between gap-2'>
@@ -157,11 +160,8 @@ export function MySubscriptionsTabs() {
             <TabsTrigger value='active'>
               {t('Active')} ({active.length})
             </TabsTrigger>
-            <TabsTrigger value='expired'>
-              {t('Expired')} ({expired.length})
-            </TabsTrigger>
-            <TabsTrigger value='cancelled'>
-              {t('Cancelled')} ({cancelled.length})
+            <TabsTrigger value='ended'>
+              {t('Ended')} ({ended.length})
             </TabsTrigger>
             <TabsTrigger value='plans'>
               {t('Subscription Plans')}
@@ -190,11 +190,8 @@ export function MySubscriptionsTabs() {
         <TabsContent value='active' className='min-h-0 overflow-y-auto px-2 pt-3 pb-3'>
           <SubscriptionList subscriptions={active} planMap={planMap} />
         </TabsContent>
-        <TabsContent value='expired' className='min-h-0 overflow-y-auto px-2 pt-3 pb-3'>
-          <SubscriptionList subscriptions={expired} planMap={planMap} />
-        </TabsContent>
-        <TabsContent value='cancelled' className='min-h-0 overflow-y-auto px-2 pt-3 pb-3'>
-          <SubscriptionList subscriptions={cancelled} planMap={planMap} />
+        <TabsContent value='ended' className='min-h-0 overflow-y-auto px-2 pt-3 pb-3'>
+          <EndedSubscriptionsTable subscriptions={ended} planMap={planMap} />
         </TabsContent>
         <TabsContent value='plans' className='min-h-0 overflow-y-auto px-2 pt-3 pb-3'>
           <PlanCatalogSection grouped={grouped} />

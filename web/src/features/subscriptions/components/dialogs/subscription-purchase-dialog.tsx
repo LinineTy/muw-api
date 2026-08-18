@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { useSystemConfig } from '@/hooks/use-system-config'
+import { getCurrencyDisplay } from '@/lib/currency'
 import { formatQuota } from '@/lib/format'
 import { DEFAULT_CURRENCY_CONFIG } from '@/stores/system-config-store'
 
@@ -65,8 +66,12 @@ interface Props {
 export function SubscriptionPurchaseDialog(props: Props) {
   const { t } = useTranslation()
   const { currency } = useSystemConfig()
+  const { meta: currencyMeta } = getCurrencyDisplay()
+  const currencySymbol =
+    currencyMeta.kind === 'tokens' ? '$' : currencyMeta.symbol
   const [paying, setPaying] = useState(false)
   const [selectedEpayMethod, setSelectedEpayMethod] = useState('')
+  const [confirming, setConfirming] = useState(false)
 
   useEffect(() => {
     if (props.open && props.epayMethods && props.epayMethods.length > 0) {
@@ -175,13 +180,19 @@ export function SubscriptionPurchaseDialog(props: Props) {
       toast.error(t('Payment request failed'))
     } finally {
       setPaying(false)
+      setConfirming(false)
     }
   }
 
   return (
     <Dialog
       open={props.open}
-      onOpenChange={props.onOpenChange}
+      onOpenChange={(open) => {
+        props.onOpenChange(open)
+        if (!open) {
+          setConfirming(false)
+        }
+      }}
       title={
         <>
           <Crown className='h-5 w-5' />
@@ -193,6 +204,38 @@ export function SubscriptionPurchaseDialog(props: Props) {
       contentHeight='auto'
       bodyClassName='space-y-4'
     >
+      {confirming ? (
+        <div className='flex flex-col gap-3 rounded-md border p-3'>
+          <p className='text-sm font-medium'>{t('Confirm purchase?')}</p>
+          <p className='text-muted-foreground text-sm'>
+            {t(
+              'Buy {{plan}} for {{cost}} quota. Your balance is {{balance}}.',
+              {
+                plan: plan.title,
+                cost: formatQuota(balanceCost),
+                balance: formatQuota(userQuota),
+              }
+            )}
+          </p>
+          <div className='flex gap-2'>
+            <Button
+              className='flex-1'
+              variant='outline'
+              disabled={paying}
+              onClick={() => setConfirming(false)}
+            >
+              {t('Cancel')}
+            </Button>
+            <Button
+              className='flex-1'
+              disabled={paying}
+              onClick={() => void handlePayBalance()}
+            >
+              {t('Pay with Balance')}
+            </Button>
+          </div>
+        </div>
+      ) : (
       <div className='space-y-3 sm:space-y-4'>
         <div className='bg-muted/50 space-y-2.5 rounded-lg border p-3 sm:space-y-3 sm:p-4'>
           <div className='flex justify-between'>
@@ -240,7 +283,10 @@ export function SubscriptionPurchaseDialog(props: Props) {
           <Separator />
           <div className='flex items-center justify-between'>
             <span className='text-sm font-medium'>{t('Amount Due')}</span>
-            <span className='text-primary text-lg font-bold'>${price}</span>
+            <span className='text-primary text-lg font-bold'>
+              {currencySymbol}
+              {price}
+            </span>
           </div>
         </div>
 
@@ -277,7 +323,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
           )}
           <Button
             variant='outline'
-            onClick={handlePayBalance}
+            onClick={() => setConfirming(true)}
             disabled={
               paying || limitReached || !allowBalancePay || insufficientBalance
             }
@@ -328,6 +374,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
           </div>
         )}
       </div>
+      )}
     </Dialog>
   )
 }

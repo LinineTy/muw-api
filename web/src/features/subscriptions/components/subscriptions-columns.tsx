@@ -24,6 +24,7 @@ import { BadgeCell } from '@/components/data-table'
 import { GroupBadge } from '@/components/group-badge'
 import { StatusBadge } from '@/components/status-badge'
 import { TableId } from '@/components/table-id'
+import { getCurrencyDisplay } from '@/lib/currency'
 import { formatQuota } from '@/lib/format'
 
 import { formatDuration, formatResetPeriod } from '../lib'
@@ -44,6 +45,9 @@ function parseAllowedGroups(raw?: string): string[] {
 
 export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
   const { t } = useTranslation()
+  const { meta: currencyMeta } = getCurrencyDisplay()
+  const currencySymbol =
+    currencyMeta.kind === 'tokens' ? '$' : currencyMeta.symbol
 
   return useMemo(
     (): ColumnDef<PlanRecord>[] => [
@@ -81,7 +85,8 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
         header: t('Price'),
         cell: ({ row }) => (
           <span className='font-semibold text-emerald-600'>
-            ${Number(row.original.plan.price_amount || 0).toFixed(2)}
+            {currencySymbol}
+            {Number(row.original.plan.price_amount || 0).toFixed(2)}
           </span>
         ),
         size: 100,
@@ -287,6 +292,6 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
         meta: { pinned: 'right' as const },
       },
     ],
-    [t]
+    [t, currencySymbol]
   )
 }
