@@ -154,7 +154,7 @@ func persistConversationRecord(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 	rec := &model.ConversationRecord{
 		UserId:     relayInfo.UserId,
 		TokenId:    relayInfo.TokenId,
-		ChannelId:  relayInfo.ChannelId,
+		ChannelId:  relayInfo.GetChannelID(),
 		RequestId:  relayInfo.RequestId,
 		ModelName:  relayInfo.OriginModelName,
 		RelayMode:  relayInfo.RelayMode,

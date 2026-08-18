@@ -228,6 +228,10 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	} else {
 		newAPIError = service.PreConsumeBilling(c, priceData.QuotaToPreConsume, relayInfo)
 		if newAPIError != nil {
+			// 预扣费失败(余额/订阅/配额不足)：写一条 type=5 错误日志，让使用日志可见被拒原因。
+			// 该失败发生在选渠道之前，不经过 processChannelError，且错误带 NoRecordErrorLog 标记，
+			// 默认完全不落使用日志——补记后风控/运维才能审计"谁在持续额度不足"。
+			recordPreConsumeErrorLog(c, relayInfo, newAPIError)
 			return
 		}
 	}
@@ -444,6 +448,30 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 		return false
 	}
 	return operation_setting.ShouldRetryByStatusCode(code)
+}
+
+// recordPreConsumeErrorLog 预扣费失败(余额/订阅/配额不足)时写一条 type=5 错误日志。
+// 预扣费失败发生在选渠道之前，不经过 processChannelError 的错误日志路径，且错误带
+// NoRecordErrorLog 标记（billing_session.go），使用日志里原本完全看不到"余额不足"这类
+// 被拒原因。受独立开关 RECORD_PRE_CONSUME_ERROR_LOG 控制（默认关）：这类高频预期错误
+// 会刷日志，仅需要审计"谁在持续额度不足"的部署才开启。与对话记录的 403 留存互补——
+// 对话记录证明"请求发过"，错误日志在"使用日志"页可见被拒原因。不触发标记词分析
+// （"余额不足"不含违规特征，喂分析模型只会产出噪音建议）。
+func recordPreConsumeErrorLog(c *gin.Context, relayInfo *relaycommon.RelayInfo, apiErr *types.NewAPIError) {
+	if !constant.RecordPreConsumeErrorLog || relayInfo == nil || apiErr == nil {
+		return
+	}
+	other := make(map[string]interface{})
+	if c.Request != nil && c.Request.URL != nil {
+		other["request_path"] = c.Request.URL.Path
+	}
+	other["error_type"] = apiErr.GetErrorType()
+	other["error_code"] = apiErr.GetErrorCode()
+	other["status_code"] = apiErr.StatusCode
+	other["pre_consume_failed"] = true
+	model.RecordErrorLog(c, relayInfo.UserId, 0, relayInfo.OriginModelName,
+		c.GetString("token_name"), apiErr.MaskSensitiveErrorWithStatusCode(),
+		relayInfo.TokenId, 0, relayInfo.IsStream, c.GetString("group"), other)
 }
 
 func processChannelError(c *gin.Context, channelError types.ChannelError, err *types.NewAPIError) {

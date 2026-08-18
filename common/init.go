@@ -214,6 +214,9 @@ func initConstantEnv() {
 	constant.GenerateDefaultToken = GetEnvOrDefaultBool("GENERATE_DEFAULT_TOKEN", false)
 	// 是否启用错误日志
 	constant.ErrorLogEnabled = GetEnvOrDefaultBool("ERROR_LOG_ENABLED", false)
+	// 是否记录预扣费失败(余额/订阅/配额不足)错误日志，默认关：这类高频预期错误刷日志，
+	// 仅需要审计"谁在持续额度不足"的部署才开启。
+	constant.RecordPreConsumeErrorLog = GetEnvOrDefaultBool("RECORD_PRE_CONSUME_ERROR_LOG", false)
 	// 任务轮询时查询的最大数量
 	constant.TaskQueryLimit = GetEnvOrDefault("TASK_QUERY_LIMIT", 1000)
 	// 异步任务超时时间（分钟），超过此时间未完成的任务将被标记为失败并退款。0 表示禁用。
