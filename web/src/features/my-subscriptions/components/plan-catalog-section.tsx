@@ -16,11 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ArrowLeftRight, Sparkles } from 'lucide-react'
+import { ArrowLeftRight, CheckCircle2, Sparkles } from 'lucide-react'
 import { Fragment, useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -39,6 +38,7 @@ import type {
   SubscriptionPlan,
   UserSubscription,
 } from '@/features/subscriptions/types'
+import { getCurrencyDisplay } from '@/lib/currency'
 import { formatQuota } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -58,16 +58,15 @@ function parseAllowedGroups(raw?: string): string[] {
   }
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function BenefitRow({ children }: { children: string }) {
   return (
-    <div className='min-w-0'>
-      <div className='text-muted-foreground text-[11px] font-medium select-none'>
-        {label}
-      </div>
-      <div className='text-muted-foreground min-w-0 truncate text-sm'>
-        {value}
-      </div>
-    </div>
+    <li className='flex min-h-5 min-w-0 items-center gap-2'>
+      <CheckCircle2
+        className='text-primary size-4 shrink-0'
+        aria-hidden='true'
+      />
+      <span className='text-foreground/80 truncate text-xs'>{children}</span>
+    </li>
   )
 }
 
@@ -175,7 +174,7 @@ function PlanActionButton({
   }
   return (
     <Button
-      variant='outline'
+      variant={plan.is_recommended ? 'default' : 'outline'}
       className='w-full'
       onClick={() => onSubscribe(plan)}
     >
@@ -197,6 +196,9 @@ function CatalogPlanCard({
   onSwitch: (plan: SubscriptionPlan) => void
 }) {
   const { t } = useTranslation()
+  const { meta: currencyMeta } = getCurrencyDisplay()
+  const currencySymbol =
+    currencyMeta.kind === 'tokens' ? '$' : currencyMeta.symbol
   const totalAmount = Number(plan.total_amount || 0)
   const price = Number(plan.price_amount || 0).toFixed(2)
   const isPopular = plan.is_recommended === true
@@ -206,99 +208,103 @@ function CatalogPlanCard({
   const monthLimit = Number(plan.monthly_amount_limit || 0)
   const maxDays = Math.floor(Number(plan.max_cumulative_seconds || 0) / 86400)
 
-  const infoRows = [
-    { label: t('Validity'), value: formatDuration(plan, t) },
-    formatResetPeriod(plan, t) !== t('No Reset')
-      ? { label: t('Quota Reset'), value: formatResetPeriod(plan, t) }
-      : null,
-    {
-      label: t('Plan Quota'),
-      value: totalAmount > 0 ? formatQuota(totalAmount) : t('Unlimited'),
-    },
-    cycleLimit > 0
-      ? { label: t('Per-Cycle Quota'), value: formatQuota(cycleLimit) }
-      : null,
-    weekLimit > 0
-      ? { label: t('Weekly Quota'), value: formatQuota(weekLimit) }
-      : null,
-    monthLimit > 0
-      ? { label: t('Monthly Quota'), value: formatQuota(monthLimit) }
-      : null,
-    maxDays > 0
-      ? { label: t('Max Duration'), value: `${maxDays} ${t('days')}` }
-      : null,
-    state.limit > 0
-      ? { label: t('Purchase Limit'), value: `${state.limit}` }
-      : null,
-    plan.upgrade_group
-      ? { label: t('Upgrade Group'), value: plan.upgrade_group }
-      : null,
-  ].filter(Boolean) as { label: string; value: string }[]
+  // 权益清单：套餐额度必现，其余按配置条件出现（与旧 infoRows 同条件）。
+  const benefits: string[] = [
+    t('Quota: {{amount}}', {
+      amount: totalAmount > 0 ? formatQuota(totalAmount) : t('Unlimited'),
+    }),
+  ]
+  if (formatResetPeriod(plan, t) !== t('No Reset')) {
+    benefits.push(
+      t('{{period}} reset', { period: formatResetPeriod(plan, t) })
+    )
+  }
+  if (cycleLimit > 0) {
+    benefits.push(
+      t('{{amount}} per cycle', { amount: formatQuota(cycleLimit) })
+    )
+  }
+  if (weekLimit > 0) {
+    benefits.push(
+      t('{{amount}} per week', { amount: formatQuota(weekLimit) })
+    )
+  }
+  if (monthLimit > 0) {
+    benefits.push(
+      t('{{amount}} per month', { amount: formatQuota(monthLimit) })
+    )
+  }
+  if (maxDays > 0) {
+    benefits.push(t('Up to {{days}} days', { days: maxDays }))
+  }
+  if (plan.upgrade_group) {
+    benefits.push(t('Upgrade to {{group}}', { group: plan.upgrade_group }))
+  }
 
   return (
     <div
       data-card-hover='false'
       className={cn(
-        'bg-card relative flex flex-col overflow-hidden rounded-2xl border shadow-xs',
-        isPopular && 'border-primary/70 shadow-sm'
+        'bg-card flex h-full min-h-[280px] flex-col justify-between gap-4 rounded-xl border border-border/70 p-5',
+        isPopular && 'border-primary/40'
       )}
     >
-      {isPopular && (
-        <div className='from-primary/60 to-primary/20 absolute inset-x-0 top-0 h-1 bg-linear-to-r' />
-      )}
-
-      {/* 顶栏：标题 + 推荐/当前徽标 */}
-      <div className='flex items-center justify-between gap-2 border-b px-4 py-3'>
-        <div className='flex min-w-0 items-center gap-2'>
-          <span className='truncate text-sm font-semibold'>
+      {/* 头部：标题 + 推荐 tag + 副标题 */}
+      <div className='flex flex-col gap-2'>
+        <div className='flex flex-wrap items-center gap-2'>
+          <h3 className='truncate text-lg font-medium'>
             {plan.title || t('Subscription Plans')}
-          </span>
+          </h3>
           {isPopular && (
-            <StatusBadge
-              variant='info'
-              copyable={false}
-              className='shrink-0'
-            >
-              <Sparkles className='h-3 w-3' />
+            <span className='bg-primary/10 text-primary inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium'>
+              <Sparkles className='size-3' />
               {t('Recommended')}
-            </StatusBadge>
-          )}
-          {state.isCurrent && (
-            <StatusBadge
-              variant='success'
-              copyable={false}
-              className='shrink-0'
-            >
-              {t('Current')}
-            </StatusBadge>
+            </span>
           )}
         </div>
-        {plan.subtitle && (
-          <span className='text-muted-foreground truncate text-xs'>
-            {plan.subtitle}
+
+        {/* 副标题固定单行高度：无说明文字时显示淡色占位，保证卡片间虚线对齐 */}
+        <p
+          className={cn(
+            'min-h-5 truncate text-xs',
+            plan.subtitle ? 'text-muted-foreground' : 'text-muted-foreground/50'
+          )}
+          title={plan.subtitle}
+        >
+          {plan.subtitle || t('No description')}
+        </p>
+
+        {/* 价格行：货币符号 + 大价格 + 周期 */}
+        <div className='flex flex-wrap items-end gap-1 pt-1'>
+          <span className='text-primary text-sm leading-5'>
+            {currencySymbol}
           </span>
-        )}
-      </div>
-
-      {/* 价格 + 有效期 */}
-      <div className='flex items-baseline gap-2 px-4 pt-3'>
-        <span className='text-primary text-2xl font-bold'>${price}</span>
-        <span className='text-muted-foreground text-sm'>
-          {formatDuration(plan, t)}
-        </span>
-      </div>
-
-      {/* 元信息 */}
-      <div className='flex-1 px-4 py-3'>
-        <div className='grid grid-cols-2 gap-x-4 gap-y-2'>
-          {infoRows.map((row) => (
-            <InfoRow key={row.label} label={row.label} value={row.value} />
-          ))}
+          <span className='text-primary text-3xl leading-8 font-bold'>
+            {price}
+          </span>
+          <span className='text-foreground/70 text-sm leading-6'>
+            / {formatDuration(plan, t)}
+          </span>
         </div>
+
+        {/* 虚线分隔 */}
+        <div className='border-t border-dashed border-border/70 pt-3' />
+
+        {/* 权益列表：双列排布压缩卡片高度 */}
+        <ul className='grid grid-cols-2 gap-x-3 gap-y-1.5'>
+          {benefits.map((benefit) => (
+            <BenefitRow key={benefit}>{benefit}</BenefitRow>
+          ))}
+        </ul>
       </div>
 
-      {/* 操作区 */}
-      <div className='border-t px-4 py-2.5'>
+      {/* 底部操作区：限购提示 + 按钮 */}
+      <div className='flex flex-col gap-2'>
+        {state.limit > 0 && (
+          <p className='text-muted-foreground text-center text-[11px]'>
+            {t('Purchase Limit')}: {state.limit}
+          </p>
+        )}
         <PlanActionButton
           plan={plan}
           state={state}
@@ -498,7 +504,7 @@ export function PlanCatalogSection({ grouped }: { grouped: boolean }) {
                 <GroupCollapsibleSection
                   group={group}
                   count={groupPlans.length}
-                  contentClassName='lg:grid-cols-2 2xl:grid-cols-3 2xl:gap-4'
+                  contentClassName='gap-3 sm:gap-4 lg:grid-cols-3'
                 >
                   {groupPlans.map((plan) => (
                     <CatalogPlanCard
@@ -519,7 +525,7 @@ export function PlanCatalogSection({ grouped }: { grouped: boolean }) {
                   <div className='text-muted-foreground px-2 py-1.5 text-sm font-medium'>
                     {t('Standalone plans')}
                   </div>
-                  <div className='mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3 2xl:gap-4'>
+                  <div className='mt-3 grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3'>
                     {groupedData.standalone.map((plan) => (
                       <CatalogPlanCard
                         key={plan.id}
@@ -535,7 +541,7 @@ export function PlanCatalogSection({ grouped }: { grouped: boolean }) {
             )}
           </div>
         ) : (
-          <div className='grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3 2xl:gap-4'>
+          <div className='grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3'>
             {plans.map((p) => {
               const plan = p?.plan
               if (!plan) return null
