@@ -136,6 +136,9 @@ func ApplyCreditScoreRevert(sourceLogID int64, userId int, delta int, maxScore i
 // 说明有记录已被并发打回，整体回滚避免双重加分。revertLog 的 UserId/Points/Balance
 // 回填为实际值。返回更新后余额。
 func ApplyCreditScoreRevertBatch(sourceLogIDs []int64, userId int, delta int, maxScore int, revertLog *CreditScoreLog) (int, error) {
+	// revertBatchSize 分批标记打回：单用户命中的记录可能超千条，`id IN` 参数超
+	// SQLite(999)/PostgreSQL(32767) 变量上限会整单失败。
+	const revertBatchSize = 500
 	if userId <= 0 || revertLog == nil || len(sourceLogIDs) == 0 {
 		return 0, errors.New("invalid params")
 	}
@@ -148,13 +151,23 @@ func ApplyCreditScoreRevertBatch(sourceLogIDs []int64, userId int, delta int, ma
 		if err := lockForUpdate(tx).Select("credit_score").Where("id = ?", userId).First(&user).Error; err != nil {
 			return err
 		}
-		result := tx.Model(&CreditScoreLog{}).
-			Where("id IN ? AND COALESCE(reverted_at, 0) = 0", sourceLogIDs).
-			Update("reverted_at", common.GetTimestamp())
-		if result.Error != nil {
-			return result.Error
+		// 分批标记打回（累计受影响行数 = 总数才通过），保持原有幂等语义：并发打回
+		// 同一记录时后者因 reverted_at != 0 不被计入，RowsAffected 不足即整体回滚。
+		affected := 0
+		for start := 0; start < len(sourceLogIDs); start += revertBatchSize {
+			end := start + revertBatchSize
+			if end > len(sourceLogIDs) {
+				end = len(sourceLogIDs)
+			}
+			result := tx.Model(&CreditScoreLog{}).
+				Where("id IN ? AND COALESCE(reverted_at, 0) = 0", sourceLogIDs[start:end]).
+				Update("reverted_at", common.GetTimestamp())
+			if result.Error != nil {
+				return result.Error
+			}
+			affected += int(result.RowsAffected)
 		}
-		if int(result.RowsAffected) != len(sourceLogIDs) {
+		if affected != len(sourceLogIDs) {
 			return errors.New("some source logs were already reverted")
 		}
 		newBalance = user.CreditScore + delta
