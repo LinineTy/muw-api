@@ -359,7 +359,7 @@ func RevertKeywordDeduction(logID int64, removeWords []string) (newBalance int, 
 	revertLog := &model.CreditScoreLog{
 		Source:    CreditSourceRevert,
 		RequestId: scoreLog.RequestId,
-		Reason:    fmt.Sprintf("管理端打回误判扣分 #%d（原始原因: %s）", scoreLog.Id, scoreLog.Reason),
+		Reason:    fmt.Sprintf("管理端打回误判扣分 #%d（原始原因: %s）", scoreLog.Id, truncateForCreditReason(scoreLog.Reason)),
 	}
 	newBalance, err = model.ApplyCreditScoreRevert(scoreLog.Id, scoreLog.UserId, -scoreLog.Points, setting.FullScore, revertLog)
 	if err != nil {
@@ -380,6 +380,9 @@ func RevertKeywordDeduction(logID int64, removeWords []string) (newBalance int, 
 // （可空）。先全部打回成功后统一删词：某用户打回失败时词保持不动（不会"词已删、分没
 // 加"），删词失败返回错误可重试（已打回跳过 + 补删词）。返回 {userId: 恢复点数}。
 func revertDeductionsByUser(logs []*model.CreditScoreLog, removeWords []string) (map[int]int, error) {
+	// Reason 列 varchar(512)：同一关键词误伤累计可上百条，id 列表只列前 maxReasonIDs 个，
+	// 超出以"等共 N 条"概括，任何条数都不超列长（MySQL 严格模式超长会整单回滚）。
+	const maxReasonIDs = 20
 	byUser := make(map[int][]*model.CreditScoreLog)
 	for _, l := range logs {
 		byUser[l.UserId] = append(byUser[l.UserId], l)
@@ -393,13 +396,21 @@ func revertDeductionsByUser(logs []*model.CreditScoreLog, removeWords []string) 
 			delta += -l.Points
 			ids = append(ids, l.Id)
 		}
-		idParts := make([]string, 0, len(ids))
-		for _, id := range ids {
+		idParts := make([]string, 0, min(len(ids), maxReasonIDs))
+		for i, id := range ids {
+			if i >= maxReasonIDs {
+				break
+			}
 			idParts = append(idParts, strconv.FormatInt(id, 10))
+		}
+		idList := strings.Join(idParts, ", ")
+		reason := fmt.Sprintf("管理端批量打回误判扣分 %d 条（记录 #%s）", len(group), idList)
+		if len(ids) > maxReasonIDs {
+			reason = fmt.Sprintf("管理端批量打回误判扣分 %d 条（记录 #%s 等共 %d 条）", len(group), idList, len(ids))
 		}
 		revertLog := &model.CreditScoreLog{
 			Source: CreditSourceRevert,
-			Reason: fmt.Sprintf("管理端批量打回误判扣分 %d 条（记录 #%s）", len(group), strings.Join(idParts, ", ")),
+			Reason: reason,
 		}
 		newBalance, err := model.ApplyCreditScoreRevertBatch(ids, userId, delta, setting.FullScore, revertLog)
 		if err != nil {
