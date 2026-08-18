@@ -16,21 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Plus } from 'lucide-react'
+import { HardDrive, Plus } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { ConfirmDialog } from '@/components/confirm-dialog'
+import { Dialog } from '@/components/dialog'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import {
@@ -90,7 +83,7 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
   const [buyOpen, setBuyOpen] = useState(false)
   const [mbInput, setMbInput] = useState('')
   const [busy, setBusy] = useState(false)
-  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirming, setConfirming] = useState(false)
   const [selectedEpayMethod, setSelectedEpayMethod] = useState('')
   const isRoot =
     (useAuthStore.getState().auth.user?.role ?? ROLE.USER) >= ROLE.SUPER_ADMIN
@@ -158,7 +151,7 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
       toast.error(t('Buy 1 to {{max}} MB at a time', { max: maxMB }))
       return
     }
-    setConfirmOpen(true)
+    setConfirming(true)
   }
 
   const handlePurchase = async () => {
@@ -191,7 +184,7 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
       toast.error(t('Purchase failed'))
     } finally {
       setBusy(false)
-      setConfirmOpen(false)
+      setConfirming(false)
     }
   }
 
@@ -297,121 +290,165 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
         )}
       </div>
 
-      <Dialog open={buyOpen} onOpenChange={setBuyOpen}>
-        <DialogContent className='sm:max-w-sm'>
-          <DialogHeader>
-            <DialogTitle>{t('Buy storage')}</DialogTitle>
-            <DialogDescription>
-              {t('Buy more storage with your quota.')}
-            </DialogDescription>
-          </DialogHeader>
-          <div className='space-y-3'>
-            <div className='space-y-1'>
-              <Input
-                aria-label={t('Buy storage')}
-                inputMode='numeric'
-                max={maxMB}
-                min={1}
-                placeholder={t('MB')}
-                type='number'
-                value={mbInput}
-                onChange={(event) => setMbInput(event.target.value)}
-              />
-              {cost > 0 && (
-                <p className='text-muted-foreground text-xs'>
-                  {t('Cost: {{cost}} ({{perMB}}/MB)', {
-                    cost: formatQuota(cost),
-                    perMB: perMBLabel,
-                  })}
-                </p>
+      <Dialog
+        open={buyOpen}
+        onOpenChange={(open) => {
+          setBuyOpen(open)
+          if (!open) {
+            setConfirming(false)
+          }
+        }}
+        title={
+          <>
+            <HardDrive className='h-5 w-5' />
+            {t('Buy storage')}
+          </>
+        }
+        contentClassName='max-sm:w-[calc(100vw-1.5rem)] sm:max-w-md'
+        titleClassName='flex items-center gap-2'
+        contentHeight='auto'
+        bodyClassName='space-y-4'
+      >
+        {confirming ? (
+          <div className='flex flex-col gap-3 rounded-md border p-3'>
+            <p className='text-sm font-medium'>{t('Confirm purchase?')}</p>
+            <p className='text-muted-foreground text-sm'>
+              {t(
+                'Buy {{mb}} MB of storage for {{cost}} quota. Your balance is {{balance}}.',
+                {
+                  mb,
+                  cost: formatQuota(cost),
+                  balance: formatQuota(balance ?? 0),
+                }
               )}
-            </div>
-            <p className='text-muted-foreground text-xs'>
-              {t('Max per order')}: {maxMB} MB · {t('Your balance')}:{' '}
-              {formatQuota(balance ?? 0)}
             </p>
-            {insufficientBalance && (
-              <p className='text-destructive text-xs'>
-                {t('Insufficient balance')}
-              </p>
-            )}
-          </div>
-          <DialogFooter className='flex-col items-stretch gap-2'>
             <div className='flex gap-2'>
               <Button
                 className='flex-1'
                 variant='outline'
-                disabled={busy || insufficientBalance}
-                onClick={openConfirm}
-              >
-                {t('Pay with Balance')}
-              </Button>
-              <Button
-                variant='ghost'
                 disabled={busy}
-                onClick={() => setBuyOpen(false)}
+                onClick={() => setConfirming(false)}
               >
                 {t('Cancel')}
               </Button>
+              <Button
+                className='flex-1'
+                disabled={busy}
+                onClick={() => void handlePurchase()}
+              >
+                {t('Buy storage')}
+              </Button>
             </div>
-            {hasEpay && (
-              <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
-                <Select
-                  items={epayMethods.map((m) => ({
-                    value: m.type,
-                    label: m.name || m.type,
-                  }))}
-                  value={selectedEpayMethod}
-                  onValueChange={(v) => v !== null && setSelectedEpayMethod(v)}
-                >
-                  <SelectTrigger className='flex-1'>
-                    <SelectValue>{selectedEpayMethodLabel}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent alignItemWithTrigger={false}>
-                    <SelectGroup>
-                      {epayMethods.map((m) => (
-                        <SelectItem key={m.type} value={m.type}>
-                          {m.name || m.type}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-                <Button
-                  onClick={handlePayEpay}
-                  disabled={busy || !selectedEpayMethod || epayBelowMin}
-                >
-                  {t('Pay')}
-                </Button>
-              </div>
-            )}
-            {hasEpay && epayBelowMin && (
-              <p className='text-destructive text-xs'>
-                {t('Minimum topup amount: {{amount}}', {
-                  amount: selectedEpayMinTopup,
-                })}
-              </p>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        ) : (
+          <>
+            {/* 费用信息卡：数量 / 成本 / 单次上限 */}
+        <div className='bg-muted/50 space-y-2.5 rounded-lg border p-3 sm:space-y-3 sm:p-4'>
+          <div className='flex items-center justify-between gap-2'>
+            <span className='text-muted-foreground text-sm'>MB</span>
+            <Input
+              aria-label={t('Buy storage')}
+              className='w-32'
+              inputMode='numeric'
+              max={maxMB}
+              min={1}
+              placeholder={t('MB')}
+              type='number'
+              value={mbInput}
+              onChange={(event) => setMbInput(event.target.value)}
+            />
+          </div>
+          {cost > 0 && (
+            <p className='text-muted-foreground text-xs'>
+              {t('Cost: {{cost}} ({{perMB}}/MB)', {
+                cost: formatQuota(cost),
+                perMB: perMBLabel,
+              })}
+            </p>
+          )}
+          <div className='flex items-center justify-between'>
+            <span className='text-muted-foreground text-sm'>
+              {t('Max per order')}
+            </span>
+            <span className='text-sm'>{maxMB} MB</span>
+          </div>
+        </div>
 
-      <ConfirmDialog
-        desc={t(
-          'Buy {{mb}} MB of storage for {{cost}} quota. Your balance is {{balance}}.',
-          {
-            mb,
-            cost: formatQuota(cost),
-            balance: formatQuota(balance ?? 0),
-          }
+        {/* 余额支付区 */}
+        <div className='flex flex-col gap-2 rounded-md border p-3'>
+          <div className='flex items-center justify-between gap-2 text-xs'>
+            <span className='text-muted-foreground'>{t('Required')}</span>
+            <span>{formatQuota(cost)}</span>
+          </div>
+          <div className='flex items-center justify-between gap-2 text-xs'>
+            <span className='text-muted-foreground'>{t('Available')}</span>
+            <span>{formatQuota(balance ?? 0)}</span>
+          </div>
+          {insufficientBalance && (
+            <Alert variant='destructive'>
+              <AlertDescription>
+                {t('Insufficient balance')}
+              </AlertDescription>
+            </Alert>
+          )}
+          <Button
+            variant='outline'
+            onClick={openConfirm}
+            disabled={busy || insufficientBalance}
+          >
+            {t('Pay with Balance')}
+          </Button>
+        </div>
+
+        {/* 在线支付区 */}
+        {hasEpay && (
+          <div className='space-y-3'>
+            <p className='text-muted-foreground text-xs'>
+              {t('Select payment method')}
+            </p>
+            <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
+              <Select
+                items={epayMethods.map((m) => ({
+                  value: m.type,
+                  label: m.name || m.type,
+                }))}
+                value={selectedEpayMethod}
+                onValueChange={(v) => v !== null && setSelectedEpayMethod(v)}
+              >
+                <SelectTrigger className='flex-1'>
+                  <SelectValue>{selectedEpayMethodLabel}</SelectValue>
+                </SelectTrigger>
+                <SelectContent alignItemWithTrigger={false}>
+                  <SelectGroup>
+                    {epayMethods.map((m) => (
+                      <SelectItem key={m.type} value={m.type}>
+                        {m.name || m.type}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <Button
+                onClick={handlePayEpay}
+                disabled={busy || !selectedEpayMethod || epayBelowMin}
+              >
+                {t('Pay')}
+              </Button>
+            </div>
+            {epayBelowMin && (
+              <Alert variant='destructive'>
+                <AlertDescription>
+                  {t('Minimum topup amount: {{amount}}', {
+                    amount: selectedEpayMinTopup,
+                  })}
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
         )}
-        confirmText={t('Buy storage')}
-        handleConfirm={() => void handlePurchase()}
-        isLoading={busy}
-        open={confirmOpen}
-        onOpenChange={setConfirmOpen}
-        title={t('Confirm purchase?')}
-      />
+          </>
+        )}
+      </Dialog>
     </>
   )
 }
