@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
-import { RefreshCw, Search } from 'lucide-react'
+import { AlertTriangle, RefreshCw } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -28,7 +28,7 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from '@/components/ui/empty'
-import { Input } from '@/components/ui/input'
+import { MobileToggleMenu, ToggleMenuItem, TogglePill } from '@/components/ui/responsive-toggle'
 import {
   Select,
   SelectContent,
@@ -38,31 +38,28 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Switch } from '@/components/ui/switch'
 
 import { getModelHealth } from './api'
 import { ModelHealthCard } from './components/model-health-card'
+import { ModelHealthSummary } from './components/model-health-summary'
 import type { ModelHealthRow } from './types'
-
-const DAY_OPTIONS = [
-  { value: 1, label: '24h' },
-  { value: 7, label: '7d' },
-  { value: 30, label: '30d' },
-]
 
 export function ModelHealth() {
   const { t } = useTranslation()
+  // 天数选项走 i18n("24 Hours"/"7 Days"/"30 Days"),跟随用户语言显示。
+  const DAY_OPTIONS = [
+    { value: 1, label: t('24 Hours') },
+    { value: 7, label: t('7 Days') },
+    { value: 30, label: t('30 Days') },
+  ]
   const [days, setDays] = useState(7)
-  const [query, setQuery] = useState('')
-  const [appliedQuery, setAppliedQuery] = useState('')
   const [unhealthyOnly, setUnhealthyOnly] = useState(false)
 
   const healthQuery = useQuery({
-    queryKey: ['model-health', days, appliedQuery, unhealthyOnly],
+    queryKey: ['model-health', days, unhealthyOnly],
     queryFn: () =>
       getModelHealth({
         days,
-        q: appliedQuery || undefined,
         unhealthy: unhealthyOnly || undefined,
       }),
     retry: false,
@@ -78,11 +75,6 @@ export function ModelHealth() {
     else groups.set(row.model_name, [row])
   }
   const modelNames = [...groups.keys()].sort((a, b) => a.localeCompare(b))
-
-  const handleSearch = (event: React.FormEvent) => {
-    event.preventDefault()
-    setAppliedQuery(query.trim())
-  }
 
   let content: ReactNode
   if (healthQuery.isLoading) {
@@ -107,8 +99,35 @@ export function ModelHealth() {
       </Empty>
     )
   } else {
+    // 汇总统计跟随当前查询范围(天数/仅不健康),直接由 rows 聚合。
+    const channelCount = new Set(rows.map((row) => row.channel_id)).size
+    const totalTests = rows.reduce((sum, row) => sum + row.test_count, 0)
+    const totalSuccess = rows.reduce((sum, row) => sum + row.success_count, 0)
+    const successRate = totalTests > 0 ? (totalSuccess / totalTests) * 100 : 0
+    const weightedLatency = rows.reduce(
+      (sum, row) => sum + row.avg_response_time * row.test_count,
+      0
+    )
+    const avgResponseTime = totalTests > 0 ? weightedLatency / totalTests : 0
+    // "异常模型" = 该模型任一 (channel, model) 行成功率低于 100%。
+    const unhealthyModelCount = [...groups.values()].filter((rows) =>
+      rows.some((row) => row.success_rate < 100)
+    ).length
+    const trafficModelCount = [...groups.values()].filter((rows) =>
+      rows.some((row) => (row.user_traffic_count ?? 0) > 0)
+    ).length
+
     content = (
       <div className='space-y-3'>
+        <ModelHealthSummary
+          modelCount={modelNames.length}
+          channelCount={channelCount}
+          totalTests={totalTests}
+          successRate={successRate}
+          avgResponseTime={avgResponseTime}
+          unhealthyModelCount={unhealthyModelCount}
+          trafficModelCount={trafficModelCount}
+        />
         {modelNames.map((name) => (
           <ModelHealthCard
             key={name}
@@ -123,19 +142,21 @@ export function ModelHealth() {
   return (
     <SectionPageLayout fixedContent>
       <SectionPageLayout.Title>
-        <span className='truncate'>{t('Model Health')}</span>
+        <span className='flex min-w-0 items-center gap-2'>
+          <span className='truncate'>{t('Model Health')}</span>
+          <button
+            type='button'
+            onClick={() => healthQuery.refetch()}
+            className='text-muted-foreground hover:text-foreground p-1'
+            title={t('Refresh')}
+            aria-label={t('Refresh')}
+          >
+            <RefreshCw className='size-4' />
+          </button>
+        </span>
       </SectionPageLayout.Title>
       <SectionPageLayout.Actions>
         <div className='flex flex-wrap items-center gap-2'>
-          <form onSubmit={handleSearch} className='relative'>
-            <Search className='text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2' />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t('Search model or channel')}
-              className='h-9 w-52 pl-8'
-            />
-          </form>
           <Select
             value={days}
             onValueChange={(value) => setDays(Number(value))}
@@ -154,22 +175,21 @@ export function ModelHealth() {
               </SelectGroup>
             </SelectContent>
           </Select>
-          <label className='flex h-9 cursor-pointer items-center gap-2 text-sm'>
-            <Switch
+          <TogglePill
+            id='model-health-unhealthy-only'
+            label={t('Only unhealthy')}
+            icon={<AlertTriangle className='text-muted-foreground size-4' />}
+            checked={unhealthyOnly}
+            onCheckedChange={setUnhealthyOnly}
+          />
+          <MobileToggleMenu>
+            <ToggleMenuItem
+              label={t('Only unhealthy')}
+              icon={<AlertTriangle className='size-4' />}
               checked={unhealthyOnly}
               onCheckedChange={setUnhealthyOnly}
             />
-            {t('Only unhealthy')}
-          </label>
-          <button
-            type='button'
-            onClick={() => healthQuery.refetch()}
-            className='text-muted-foreground hover:text-foreground p-1'
-            title={t('Refresh')}
-            aria-label={t('Refresh')}
-          >
-            <RefreshCw className='size-4' />
-          </button>
+          </MobileToggleMenu>
         </div>
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
