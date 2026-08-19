@@ -45,7 +45,7 @@ export function CancelSubscriptionDialog(props: Props) {
   const { t } = useTranslation()
   const [mode, setMode] = useState<CancelMode>('end_period')
   const [submitting, setSubmitting] = useState(false)
-  const [confirmingImmediate, setConfirmingImmediate] = useState(false)
+  const [confirming, setConfirming] = useState(false)
 
   const sub = props.subscription?.subscription
   // 套餐名优先取套餐快照（含已禁用套餐）；缺失时回退到订阅 id。
@@ -72,18 +72,17 @@ export function CancelSubscriptionDialog(props: Props) {
       toast.error(t('Request failed'))
     } finally {
       setSubmitting(false)
-      setConfirmingImmediate(false)
+      setConfirming(false)
     }
   }
 
-  // 立即取消是毁损性操作（结束订阅 + 回退分组），先弹二次确认；到期取消直接执行。
+  // 两种模式都先进二次确认页（内容按模式区分），确认后再执行。
   const handleConfirm = () => {
-    if (mode === 'immediate') {
-      setConfirmingImmediate(true)
-    } else {
-      void doCancel('end_period')
-    }
+    setConfirming(true)
   }
+
+  const confirmLabel =
+    mode === 'immediate' ? t('Cancel immediately') : t('Cancel at period end')
 
   const options: { value: CancelMode; title: string; desc: string }[] = [
     {
@@ -117,32 +116,47 @@ export function CancelSubscriptionDialog(props: Props) {
       contentHeight='auto'
       bodyClassName='space-y-4'
     >
-      {confirmingImmediate ? (
+      {confirming ? (
         <div className='flex flex-col gap-3 rounded-md border p-3'>
-          <p className='text-sm font-medium'>
-            {t('Immediately cancel this subscription?')}
-          </p>
-          <p className='text-muted-foreground text-sm'>
-            {t(
-              'Ends the subscription right away and reverts the user group if applicable. This cannot be undone.'
-            )}
-          </p>
+          {mode === 'immediate' ? (
+            <>
+              <p className='text-sm font-medium'>
+                {t('Immediately cancel this subscription?')}
+              </p>
+              <p className='text-muted-foreground text-sm'>
+                {t(
+                  'Ends the subscription right away and reverts the user group if applicable. This cannot be undone.'
+                )}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className='text-sm font-medium'>
+                {t('Cancel at period end?')}
+              </p>
+              <p className='text-muted-foreground text-sm'>
+                {t(
+                  'Keeps the subscription active until it expires, then ends it automatically. Auto-renew is turned off.'
+                )}
+              </p>
+            </>
+          )}
           <div className='flex gap-2'>
             <Button
               className='flex-1'
               variant='outline'
               disabled={submitting}
-              onClick={() => setConfirmingImmediate(false)}
+              onClick={() => setConfirming(false)}
             >
               {t('Cancel')}
             </Button>
             <Button
               className='flex-1'
-              variant='destructive'
+              variant={mode === 'immediate' ? 'destructive' : 'default'}
               disabled={submitting}
-              onClick={() => void doCancel('immediate')}
+              onClick={() => void doCancel(mode)}
             >
-              {submitting ? t('Saving...') : t('Cancel immediately')}
+              {submitting ? t('Saving...') : confirmLabel}
             </Button>
           </div>
         </div>
