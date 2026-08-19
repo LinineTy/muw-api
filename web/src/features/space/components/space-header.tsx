@@ -34,12 +34,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { useTopupInfo } from '@/features/wallet/hooks/use-topup-info'
 import { getSelf } from '@/lib/api'
 import { getCurrencyDisplay } from '@/lib/currency'
 import { formatQuota } from '@/lib/format'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
-import { useTopupInfo } from '@/features/wallet/hooks/use-topup-info'
 
 import { paySpaceEpay, purchaseSpace } from '../api'
 import type { SpaceInfo } from '../types'
@@ -112,8 +112,7 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
     Number.isInteger(mb) && mb > 0 ? purchasePriceToQuota(mb, ratio) : 0
   const perMBLabel =
     ratio > 0 ? formatQuota(purchasePriceToQuota(1, ratio)) : '—'
-  const insufficientBalance =
-    cost > 0 && balance != null && balance < cost
+  const insufficientBalance = cost > 0 && balance != null && balance < cost
 
   // 展示货币值（与 purchasePriceToQuota 的 amount 同口径），用于与支付方式
   // min_topup（展示货币下限）比较：低于下限的小额购买会在网关侧失败或产生
@@ -127,11 +126,16 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
     topupInfo?.min_topup ?? 0
   )
   const epayBelowMin =
-    selectedEpayMinTopup > 0 && displayAmount > 0 && displayAmount < selectedEpayMinTopup
+    selectedEpayMinTopup > 0 &&
+    displayAmount > 0 &&
+    displayAmount < selectedEpayMinTopup
 
   const percent =
     space && space.capacity_bytes > 0
-      ? Math.min(100, Math.round((space.used_bytes / space.capacity_bytes) * 100))
+      ? Math.min(
+          100,
+          Math.round((space.used_bytes / space.capacity_bytes) * 100)
+        )
       : 0 // capacity<=0（root 无限 / 尚未加载）时不显示满格，避免误导
   const usedLabel = space ? formatBytes(space.used_bytes) : '—'
   let totalLabel = '—'
@@ -253,7 +257,7 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
 
   return (
     <>
-      <div className='flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border/60 bg-card px-3 py-2.5'>
+      <div className='border-border/60 bg-card flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-3 py-2.5'>
         <span className='text-foreground text-sm font-medium'>
           {t('Storage')}
         </span>
@@ -273,8 +277,7 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
           </span>
         </div>
         <span className='text-muted-foreground text-xs'>
-          {t('Global')}:{' '}
-          {space ? formatBytes(space.global_used_bytes) : '—'} /{' '}
+          {t('Global')}: {space ? formatBytes(space.global_used_bytes) : '—'} /{' '}
           {space ? formatBytes(space.global_max_bytes) : '—'}
         </span>
         {!isRoot && (
@@ -343,109 +346,111 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
         ) : (
           <>
             {/* 费用信息卡：数量 / 成本 / 单次上限 */}
-        <div className='bg-muted/50 space-y-2.5 rounded-lg border p-3 sm:space-y-3 sm:p-4'>
-          <div className='flex items-center justify-between gap-2'>
-            <span className='text-muted-foreground text-sm'>MB</span>
-            <Input
-              aria-label={t('Buy storage')}
-              className='w-32'
-              inputMode='numeric'
-              max={maxMB}
-              min={1}
-              placeholder={t('MB')}
-              type='number'
-              value={mbInput}
-              onChange={(event) => setMbInput(event.target.value)}
-            />
-          </div>
-          {cost > 0 && (
-            <p className='text-muted-foreground text-xs'>
-              {t('Cost: {{cost}} ({{perMB}}/MB)', {
-                cost: formatQuota(cost),
-                perMB: perMBLabel,
-              })}
-            </p>
-          )}
-          <div className='flex items-center justify-between'>
-            <span className='text-muted-foreground text-sm'>
-              {t('Max per order')}
-            </span>
-            <span className='text-sm'>{maxMB} MB</span>
-          </div>
-        </div>
+            <div className='bg-muted/50 space-y-2.5 rounded-lg border p-3 sm:space-y-3 sm:p-4'>
+              <div className='flex items-center justify-between gap-2'>
+                <span className='text-muted-foreground text-sm'>MB</span>
+                <Input
+                  aria-label={t('Buy storage')}
+                  className='w-32'
+                  inputMode='numeric'
+                  max={maxMB}
+                  min={1}
+                  placeholder={t('MB')}
+                  type='number'
+                  value={mbInput}
+                  onChange={(event) => setMbInput(event.target.value)}
+                />
+              </div>
+              {cost > 0 && (
+                <p className='text-muted-foreground text-xs'>
+                  {t('Cost: {{cost}} ({{perMB}}/MB)', {
+                    cost: formatQuota(cost),
+                    perMB: perMBLabel,
+                  })}
+                </p>
+              )}
+              <div className='flex items-center justify-between'>
+                <span className='text-muted-foreground text-sm'>
+                  {t('Max per order')}
+                </span>
+                <span className='text-sm'>{maxMB} MB</span>
+              </div>
+            </div>
 
-        {/* 余额支付区 */}
-        <div className='flex flex-col gap-2 rounded-md border p-3'>
-          <div className='flex items-center justify-between gap-2 text-xs'>
-            <span className='text-muted-foreground'>{t('Required')}</span>
-            <span>{formatQuota(cost)}</span>
-          </div>
-          <div className='flex items-center justify-between gap-2 text-xs'>
-            <span className='text-muted-foreground'>{t('Available')}</span>
-            <span>{formatQuota(balance ?? 0)}</span>
-          </div>
-          {insufficientBalance && (
-            <Alert variant='destructive'>
-              <AlertDescription>
-                {t('Insufficient balance')}
-              </AlertDescription>
-            </Alert>
-          )}
-          <Button
-            variant='outline'
-            onClick={openConfirm}
-            disabled={busy || insufficientBalance}
-          >
-            {t('Pay with Balance')}
-          </Button>
-        </div>
-
-        {/* 在线支付区 */}
-        {hasEpay && (
-          <div className='space-y-3'>
-            <p className='text-muted-foreground text-xs'>
-              {t('Select payment method')}
-            </p>
-            <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
-              <Select
-                items={epayMethods.map((m) => ({
-                  value: m.type,
-                  label: m.name || m.type,
-                }))}
-                value={selectedEpayMethod}
-                onValueChange={(v) => v !== null && setSelectedEpayMethod(v)}
-              >
-                <SelectTrigger className='flex-1'>
-                  <SelectValue>{selectedEpayMethodLabel}</SelectValue>
-                </SelectTrigger>
-                <SelectContent alignItemWithTrigger={false}>
-                  <SelectGroup>
-                    {epayMethods.map((m) => (
-                      <SelectItem key={m.type} value={m.type}>
-                        {m.name || m.type}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
+            {/* 余额支付区 */}
+            <div className='flex flex-col gap-2 rounded-md border p-3'>
+              <div className='flex items-center justify-between gap-2 text-xs'>
+                <span className='text-muted-foreground'>{t('Required')}</span>
+                <span>{formatQuota(cost)}</span>
+              </div>
+              <div className='flex items-center justify-between gap-2 text-xs'>
+                <span className='text-muted-foreground'>{t('Available')}</span>
+                <span>{formatQuota(balance ?? 0)}</span>
+              </div>
+              {insufficientBalance && (
+                <Alert variant='destructive'>
+                  <AlertDescription>
+                    {t('Insufficient balance')}
+                  </AlertDescription>
+                </Alert>
+              )}
               <Button
-                onClick={handlePayEpay}
-                disabled={busy || !selectedEpayMethod || epayBelowMin}
+                variant='outline'
+                onClick={openConfirm}
+                disabled={busy || insufficientBalance}
               >
-                {t('Pay')}
+                {t('Pay with Balance')}
               </Button>
             </div>
-            {epayBelowMin && (
-              <Alert variant='destructive'>
-                <AlertDescription>
-                  {t('Minimum topup amount: {{amount}}', {
-                    amount: selectedEpayMinTopup,
-                  })}
-                </AlertDescription>
-              </Alert>
+
+            {/* 在线支付区 */}
+            {hasEpay && (
+              <div className='space-y-3'>
+                <p className='text-muted-foreground text-xs'>
+                  {t('Select payment method')}
+                </p>
+                <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
+                  <Select
+                    items={epayMethods.map((m) => ({
+                      value: m.type,
+                      label: m.name || m.type,
+                    }))}
+                    value={selectedEpayMethod}
+                    onValueChange={(v) =>
+                      v !== null && setSelectedEpayMethod(v)
+                    }
+                  >
+                    <SelectTrigger className='flex-1'>
+                      <SelectValue>{selectedEpayMethodLabel}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent alignItemWithTrigger={false}>
+                      <SelectGroup>
+                        {epayMethods.map((m) => (
+                          <SelectItem key={m.type} value={m.type}>
+                            {m.name || m.type}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    onClick={handlePayEpay}
+                    disabled={busy || !selectedEpayMethod || epayBelowMin}
+                  >
+                    {t('Pay')}
+                  </Button>
+                </div>
+                {epayBelowMin && (
+                  <Alert variant='destructive'>
+                    <AlertDescription>
+                      {t('Minimum topup amount: {{amount}}', {
+                        amount: selectedEpayMinTopup,
+                      })}
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
             )}
-          </div>
-        )}
           </>
         )}
       </Dialog>
