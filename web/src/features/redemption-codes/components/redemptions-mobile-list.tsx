@@ -34,7 +34,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { formatQuota } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
-import { REDEMPTION_STATUS, REDEMPTION_STATUSES } from '../constants'
+import {
+  REDEMPTION_STATUS,
+  REDEMPTION_STATUSES,
+  REDEMPTION_TYPES,
+} from '../constants'
 import { isRedemptionExpired } from '../lib'
 import type { Redemption } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
@@ -162,9 +166,27 @@ export function RedemptionsMobileList(props: RedemptionsMobileListProps) {
             </div>
 
             <div className='flex items-center justify-between gap-2 text-xs'>
+              <span className='text-muted-foreground'>{t('Type')}</span>
+              {REDEMPTION_TYPES[redemption.type] ? (
+                <StatusBadge
+                  label={t(REDEMPTION_TYPES[redemption.type].labelKey)}
+                  variant={REDEMPTION_TYPES[redemption.type].variant}
+                  copyable={false}
+                />
+              ) : null}
+            </div>
+
+            <div className='flex items-center justify-between gap-2 text-xs'>
               <span className='text-muted-foreground'>{t('Quota')}</span>
               <span className='font-medium tabular-nums'>
                 {formatQuota(redemption.quota)}
+              </span>
+            </div>
+
+            <div className='flex items-center justify-between gap-2 text-xs'>
+              <span className='text-muted-foreground'>{t('Uses')}</span>
+              <span className='font-medium tabular-nums'>
+                {redemption.used_count} / {redemption.max_uses}
               </span>
             </div>
           </div>

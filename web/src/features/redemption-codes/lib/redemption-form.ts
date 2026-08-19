@@ -25,6 +25,7 @@ import {
 } from '@/lib/format'
 
 import {
+  REDEMPTION_TYPE,
   REDEMPTION_VALIDATION,
   getRedemptionFormErrorMessages,
 } from '../constants'
@@ -48,6 +49,19 @@ export function getRedemptionFormSchema(t: TFunction) {
       .min(REDEMPTION_VALIDATION.COUNT_MIN, msg.COUNT_INVALID)
       .max(REDEMPTION_VALIDATION.COUNT_MAX, msg.COUNT_INVALID)
       .optional(),
+    type: z
+      .number()
+      .refine(
+        (value) =>
+          value === REDEMPTION_TYPE.TOPUP || value === REDEMPTION_TYPE.INVITE,
+        t('Invalid code type')
+      )
+      .optional(),
+    max_uses: z
+      .number()
+      .min(REDEMPTION_VALIDATION.MAX_USES_MIN, msg.MAX_USES_INVALID)
+      .max(REDEMPTION_VALIDATION.MAX_USES_MAX, msg.MAX_USES_INVALID)
+      .optional(),
   })
 }
 
@@ -56,6 +70,8 @@ export type RedemptionFormValues = {
   quota_dollars: number
   expired_time?: Date
   count?: number
+  type?: number
+  max_uses?: number
 }
 
 // ============================================================================
@@ -67,6 +83,8 @@ export const REDEMPTION_FORM_DEFAULT_VALUES: RedemptionFormValues = {
   quota_dollars: 10,
   expired_time: undefined,
   count: 1,
+  type: REDEMPTION_TYPE.TOPUP,
+  max_uses: 1,
 }
 
 // ============================================================================
@@ -79,13 +97,17 @@ export const REDEMPTION_FORM_DEFAULT_VALUES: RedemptionFormValues = {
 export function transformFormDataToPayload(
   data: RedemptionFormValues
 ): RedemptionFormData {
+  const type = data.type ?? REDEMPTION_TYPE.TOPUP
   return {
     name: data.name,
-    quota: parseQuotaFromDollars(data.quota_dollars),
+    // 注册邀请码是纯门禁，不携带额度。
+    quota: type === REDEMPTION_TYPE.INVITE ? 0 : parseQuotaFromDollars(data.quota_dollars),
     expired_time: data.expired_time
       ? Math.floor(data.expired_time.getTime() / 1000)
       : 0,
     count: data.count || 1,
+    type,
+    max_uses: data.max_uses ?? 1,
   }
 }
 
@@ -103,5 +125,7 @@ export function transformRedemptionToFormDefaults(
         ? new Date(redemption.expired_time * 1000)
         : undefined,
     count: 1,
+    type: redemption.type,
+    max_uses: redemption.max_uses,
   }
 }
