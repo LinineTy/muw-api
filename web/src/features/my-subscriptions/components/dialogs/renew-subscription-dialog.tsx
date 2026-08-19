@@ -24,7 +24,6 @@ import { toast } from 'sonner'
 import { Dialog } from '@/components/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
 import {
   Select,
   SelectContent,
@@ -33,18 +32,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { useSystemConfig } from '@/hooks/use-system-config'
-import { formatQuota } from '@/lib/format'
-import { DEFAULT_CURRENCY_CONFIG } from '@/stores/system-config-store'
-
-import { renewSubscriptionBalance, paySubscriptionEpay } from '../../api'
+import { Separator } from '@/components/ui/separator'
 import {
   formatDuration,
   formatDurationSeconds,
   parseRenewTerms,
 } from '@/features/subscriptions/lib'
+import type {
+  SubscriptionPlan,
+  UserSubscriptionRecord,
+} from '@/features/subscriptions/types'
+import { useSystemConfig } from '@/hooks/use-system-config'
+import { formatQuota } from '@/lib/format'
+import { DEFAULT_CURRENCY_CONFIG } from '@/stores/system-config-store'
+
+import { renewSubscriptionBalance, paySubscriptionEpay } from '../../api'
 import { getEpayMethods } from '../../lib/helpers'
-import type { SubscriptionPlan, UserSubscriptionRecord } from '@/features/subscriptions/types'
 import { useMySubscriptions } from '../my-subscriptions-provider'
 
 interface Props {
@@ -104,7 +107,9 @@ export function RenewSubscriptionDialog(props: Props) {
     try {
       const res = await renewSubscriptionBalance(sub.id)
       if (res.success) {
-        toast.success(res.data?.message || t('Subscription renewed successfully'))
+        toast.success(
+          res.data?.message || t('Subscription renewed successfully')
+        )
         props.onOpenChange(false)
         void props.onSuccess?.()
       } else {
@@ -183,145 +188,148 @@ export function RenewSubscriptionDialog(props: Props) {
       contentHeight='auto'
       bodyClassName='space-y-4'
     >
-      <div className='space-y-3 sm:space-y-4'>
-        <div className='bg-muted/50 space-y-2.5 rounded-lg border p-3 sm:space-y-3 sm:p-4'>
-          <div className='flex justify-between'>
-            <span className='text-muted-foreground text-sm'>
-              {t('Plan Name')}
-            </span>
-            <span className='max-w-[200px] truncate text-sm font-medium'>
-              {plan.title}
-            </span>
-          </div>
-          <div className='flex items-center justify-between'>
-            <span className='text-muted-foreground text-sm'>
-              {t('Validity Period')}
-            </span>
-            <span className='flex items-center gap-1 text-sm'>
-              <CalendarClock className='h-3.5 w-3.5' />
-              {renewTerms
-                ? formatDurationSeconds(renewTerms.duration_seconds, t)
-                : formatDuration(plan, t)}
-            </span>
-          </div>
-          <div className='flex items-center justify-between'>
-            <span className='text-muted-foreground text-sm'>
-              {t('Plan Quota')}
-            </span>
-            <span className='flex items-center gap-1 text-sm'>
-              <Package className='h-3.5 w-3.5' />
-              {Number(plan.total_amount || 0) > 0
-                ? formatQuota(Number(plan.total_amount || 0))
-                : t('Unlimited')}
-            </span>
-          </div>
-          <Separator />
-          <div className='flex items-center justify-between'>
-            <span className='text-sm font-medium'>{t('Amount Due')}</span>
-            <span className='text-primary text-lg font-bold'>${price}</span>
+      {confirming ? (
+        <div className='flex flex-col gap-3 rounded-md border p-3'>
+          <p className='text-sm font-medium'>{t('Confirm renewal?')}</p>
+          <p className='text-muted-foreground text-sm'>
+            {t(
+              'Renew {{plan}} for {{cost}} quota. Your balance is {{balance}}.',
+              {
+                plan: plan.title,
+                cost: formatQuota(balanceCost),
+                balance: formatQuota(available),
+              }
+            )}
+          </p>
+          <div className='flex gap-2'>
+            <Button
+              className='flex-1'
+              variant='outline'
+              disabled={paying}
+              onClick={() => setConfirming(false)}
+            >
+              {t('Cancel')}
+            </Button>
+            <Button
+              className='flex-1'
+              disabled={paying}
+              onClick={() => void handleRenewBalance()}
+            >
+              {t('Renew with Balance')}
+            </Button>
           </div>
         </div>
+      ) : (
+        <div className='space-y-3 sm:space-y-4'>
+          <div className='bg-muted/50 space-y-2.5 rounded-lg border p-3 sm:space-y-3 sm:p-4'>
+            <div className='flex justify-between'>
+              <span className='text-muted-foreground text-sm'>
+                {t('Plan Name')}
+              </span>
+              <span className='max-w-[200px] truncate text-sm font-medium'>
+                {plan.title}
+              </span>
+            </div>
+            <div className='flex items-center justify-between'>
+              <span className='text-muted-foreground text-sm'>
+                {t('Validity Period')}
+              </span>
+              <span className='flex items-center gap-1 text-sm'>
+                <CalendarClock className='h-3.5 w-3.5' />
+                {renewTerms
+                  ? formatDurationSeconds(renewTerms.duration_seconds, t)
+                  : formatDuration(plan, t)}
+              </span>
+            </div>
+            <div className='flex items-center justify-between'>
+              <span className='text-muted-foreground text-sm'>
+                {t('Plan Quota')}
+              </span>
+              <span className='flex items-center gap-1 text-sm'>
+                <Package className='h-3.5 w-3.5' />
+                {Number(plan.total_amount || 0) > 0
+                  ? formatQuota(Number(plan.total_amount || 0))
+                  : t('Unlimited')}
+              </span>
+            </div>
+            <Separator />
+            <div className='flex items-center justify-between'>
+              <span className='text-sm font-medium'>{t('Amount Due')}</span>
+              <span className='text-primary text-lg font-bold'>${price}</span>
+            </div>
+          </div>
 
-        <div className='flex flex-col gap-2 rounded-md border p-3'>
-          <div className='flex items-center justify-between gap-2 text-xs'>
-            <span className='text-muted-foreground'>{t('Required')}</span>
-            <span>{formatQuota(balanceCost)}</span>
+          <div className='flex flex-col gap-2 rounded-md border p-3'>
+            <div className='flex items-center justify-between gap-2 text-xs'>
+              <span className='text-muted-foreground'>{t('Required')}</span>
+              <span>{formatQuota(balanceCost)}</span>
+            </div>
+            <div className='flex items-center justify-between gap-2 text-xs'>
+              <span className='text-muted-foreground'>{t('Available')}</span>
+              <span>{formatQuota(available)}</span>
+            </div>
+            <Button
+              variant='outline'
+              onClick={() => setConfirming(true)}
+              disabled={paying || insufficientBalance || !allowBalancePay}
+            >
+              {t('Renew with Balance')}
+            </Button>
+            {!allowBalancePay ? (
+              <Alert variant='destructive'>
+                <AlertDescription>
+                  {t('This plan does not allow balance redemption')}
+                </AlertDescription>
+              </Alert>
+            ) : (
+              insufficientBalance && (
+                <Alert variant='destructive'>
+                  <AlertDescription>
+                    {t('Insufficient balance')}
+                  </AlertDescription>
+                </Alert>
+              )
+            )}
           </div>
-          <div className='flex items-center justify-between gap-2 text-xs'>
-            <span className='text-muted-foreground'>{t('Available')}</span>
-            <span>{formatQuota(available)}</span>
-          </div>
-          <Button
-            variant='outline'
-            onClick={() => setConfirming(true)}
-            disabled={paying || insufficientBalance || !allowBalancePay}
-          >
-            {t('Renew with Balance')}
-          </Button>
-          {confirming && (
-            <div className='flex flex-col gap-3 rounded-md border p-3'>
-              <p className='text-sm font-medium'>{t('Confirm renewal?')}</p>
-              <p className='text-muted-foreground text-sm'>
-                {t(
-                  'Renew {{plan}} for {{cost}} quota. Your balance is {{balance}}.',
-                  {
-                    plan: plan.title,
-                    cost: formatQuota(balanceCost),
-                    balance: formatQuota(available),
-                  }
-                )}
+
+          {hasEpay && (
+            <div className='space-y-3'>
+              <p className='text-muted-foreground text-xs'>
+                {t('Select payment method')}
               </p>
-              <div className='flex gap-2'>
-                <Button
-                  className='flex-1'
-                  variant='outline'
-                  disabled={paying}
-                  onClick={() => setConfirming(false)}
+              <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
+                <Select
+                  items={epayMethods.map((m) => ({
+                    value: m.type,
+                    label: m.name || m.type,
+                  }))}
+                  value={selectedEpayMethod}
+                  onValueChange={(v) => v !== null && setSelectedEpayMethod(v)}
                 >
-                  {t('Cancel')}
-                </Button>
+                  <SelectTrigger className='flex-1'>
+                    <SelectValue>{selectedEpayMethod}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    <SelectGroup>
+                      {epayMethods.map((m) => (
+                        <SelectItem key={m.type} value={m.type}>
+                          {m.name || m.type}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
                 <Button
-                  className='flex-1'
-                  disabled={paying}
-                  onClick={() => void handleRenewBalance()}
+                  onClick={handleRenewEpay}
+                  disabled={paying || !selectedEpayMethod}
                 >
-                  {t('Renew with Balance')}
+                  {t('Pay')}
                 </Button>
               </div>
             </div>
           )}
-          {!allowBalancePay ? (
-            <Alert variant='destructive'>
-              <AlertDescription>
-                {t('This plan does not allow balance redemption')}
-              </AlertDescription>
-            </Alert>
-          ) : (
-            insufficientBalance && (
-              <Alert variant='destructive'>
-                <AlertDescription>{t('Insufficient balance')}</AlertDescription>
-              </Alert>
-            )
-          )}
         </div>
-
-        {hasEpay && (
-          <div className='space-y-3'>
-            <p className='text-muted-foreground text-xs'>
-              {t('Select payment method')}
-            </p>
-            <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
-              <Select
-                items={epayMethods.map((m) => ({
-                  value: m.type,
-                  label: m.name || m.type,
-                }))}
-                value={selectedEpayMethod}
-                onValueChange={(v) => v !== null && setSelectedEpayMethod(v)}
-              >
-                <SelectTrigger className='flex-1'>
-                  <SelectValue>{selectedEpayMethod}</SelectValue>
-                </SelectTrigger>
-                <SelectContent alignItemWithTrigger={false}>
-                  <SelectGroup>
-                    {epayMethods.map((m) => (
-                      <SelectItem key={m.type} value={m.type}>
-                        {m.name || m.type}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-              <Button
-                onClick={handleRenewEpay}
-                disabled={paying || !selectedEpayMethod}
-              >
-                {t('Pay')}
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
+      )}
     </Dialog>
   )
 }
