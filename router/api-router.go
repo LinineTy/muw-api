@@ -75,6 +75,9 @@ func SetApiRouter(router *gin.Engine) {
 			userRoute.POST("/epay/notify", anonymousRequestBodyLimit, controller.EpayNotify)
 			userRoute.GET("/epay/notify", controller.EpayNotify)
 			userRoute.GET("/groups", controller.GetUserGroups)
+			// 激活页用接口：UserAuthPending 放行未激活（待激活）账号。
+			userRoute.GET("/self", middleware.UserAuthPending(), controller.GetSelf)
+			userRoute.POST("/activate", middleware.CriticalRateLimit(), middleware.UserAuthPending(), controller.ActivateInviteCode)
 
 			selfRoute := userRoute.Group("/")
 			selfRoute.Use(middleware.UserAuth())
@@ -83,7 +86,6 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.DELETE("/sessions/:sid", middleware.DisableCache(), controller.DeleteLoginSession)
 				selfRoute.POST("/sessions/revoke-others", middleware.DisableCache(), controller.RevokeOtherLoginSessions)
 				selfRoute.GET("/self/groups", controller.GetUserGroups)
-				selfRoute.GET("/self", controller.GetSelf)
 				selfRoute.GET("/models", controller.GetUserModels)
 				selfRoute.PUT("/self", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.UpdateSelf)
 				selfRoute.POST("/avatar", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.UploadAvatar)

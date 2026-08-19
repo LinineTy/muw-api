@@ -69,6 +69,9 @@ var TelegramOAuthEnabled = false
 var TurnstileCheckEnabled = false
 var RegisterEnabled = true
 
+// InviteCodeRegisterEnabled 开启后，新用户注册必须填写有效的注册邀请码（用途为邀请的兑换码）。
+var InviteCodeRegisterEnabled = false
+
 // MaxUserCount 站点最大非超管用户数,0 表示不限制。超管(root)不计入额度,
 // 因此配置值 N 意味着站点允许 N 个非超管用户(加上超管共 N+1)。
 var MaxUserCount = 0
@@ -280,6 +283,11 @@ const (
 	RedemptionCodeStatusEnabled  = 1 // don't use 0, 0 is the default value!
 	RedemptionCodeStatusDisabled = 2 // also don't use 0
 	RedemptionCodeStatusUsed     = 3 // also don't use 0
+)
+
+const (
+	RedemptionCodeTypeTopup  = 1 // 兑换额度（原兑换码行为）
+	RedemptionCodeTypeInvite = 2 // 注册邀请（放行注册）
 )
 
 const (

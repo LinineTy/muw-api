@@ -130,6 +130,10 @@ type User struct {
 	// 新用户开局满分；数值由风控系统扣分/恢复动态调整。
 	// 索引供低分用户列表/概览计数/被动恢复查询使用。
 	CreditScore      int                        `json:"credit_score" gorm:"type:int;column:credit_score;default:650;index:idx_credit_score"`
+	// Activated 账号激活状态：1=已激活（正式账号），0=待激活（激活制下新建的临时
+	// 账号，仅能访问激活页）。default:1 让存量行回填、管理员建号默认正式；激活制
+	// 开启时由 Register/OAuth/微信建号后显式置 0。
+	Activated        int                        `json:"activated" gorm:"type:int;column:activated;default:1"`
 	AdminPermissions map[string]map[string]bool `json:"admin_permissions,omitempty" gorm:"-:all"`
 }
 
@@ -146,6 +150,7 @@ func (user *User) ToBaseUser() *UserBase {
 		AuthVersion: user.AuthVersion,
 		CacheSchema: userCacheSchemaVersion,
 		CreditScore: user.CreditScore,
+		Activated:   user.Activated,
 	}
 	return cache
 }
@@ -484,7 +489,7 @@ func GetAllUsers(pageInfo *common.PageInfo, sortOptions ...UserSortOptions) (use
 	return users, total, nil
 }
 
-func SearchUsers(keyword string, group string, role *int, status *int, startIdx int, num int, sortOptions ...UserSortOptions) ([]*User, int64, error) {
+func SearchUsers(keyword string, group string, role *int, status *int, activated *int, startIdx int, num int, sortOptions ...UserSortOptions) ([]*User, int64, error) {
 	var users []*User
 	var total int64
 	var err error
@@ -529,6 +534,9 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 			query = query.Where("deleted_at IS NULL").Where("status = ?", *status)
 		}
 	}
+	if activated != nil {
+		query = query.Where("activated = ?", *activated)
+	}
 
 	// 获取总数
 	err = query.Count(&total).Error
@@ -565,6 +573,22 @@ func GetUserById(id int, selectAll bool) (*User, error) {
 		err = DB.Omit("password", "access_token").First(&user, "id = ?", id).Error
 	}
 	return &user, err
+}
+
+// ActivateUserById 将用户置为已激活（activated=1）并刷新 UserBase 缓存，使鉴权
+// middleware 立即可见。激活制下由用户激活接口与管理端手动激活复用；幂等。
+func ActivateUserById(id int) error {
+	if id == 0 {
+		return errors.New("id 为空！")
+	}
+	if err := DB.Model(&User{}).Where("id = ?", id).Update("activated", 1).Error; err != nil {
+		return err
+	}
+	user, err := GetUserById(id, false)
+	if err != nil {
+		return err
+	}
+	return updateUserCache(*user)
 }
 
 func GetUserIdByAffCode(affCode string) (int, error) {

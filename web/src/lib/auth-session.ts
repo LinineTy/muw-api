@@ -89,7 +89,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object'
 }
 
-function isAuthUser(value: unknown): value is AuthUser {
+export function isAuthUser(value: unknown): value is AuthUser {
   if (!isRecord(value)) return false
   return (
     Number.isInteger(value.id) &&

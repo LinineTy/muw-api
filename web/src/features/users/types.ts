@@ -58,6 +58,7 @@ export const userSchema = z.object({
   space_capacity: z.number().optional(),
   space_used_bytes: z.number().optional(),
   status: userStatusSchema,
+  activated: z.number().optional(),
   role: userRoleSchema,
   credit_score: z.number().optional(),
   created_at: z.number().optional(),
@@ -117,6 +118,7 @@ export interface SearchUsersParams {
   group?: string
   role?: string
   status?: string
+  activated?: string
   p?: number
   page_size?: number
   sort_by?: UserSortBy
@@ -142,6 +144,7 @@ export type ManageUserAction =
   | 'demote'
   | 'enable'
   | 'disable'
+  | 'activate'
   | 'delete'
   | 'add_quota'
 

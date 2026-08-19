@@ -18,24 +18,20 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
-import { AuthenticatedLayout } from '@/components/layout'
+import { Activate } from '@/features/auth/activate'
 import { useAuthStore } from '@/stores/auth-store'
 
-export const Route = createFileRoute('/_authenticated')({
-  beforeLoad: ({ location }) => {
+export const Route = createFileRoute('/activate')({
+  beforeLoad: () => {
     const { auth } = useAuthStore.getState()
 
-    if (!auth.user || !auth.accessToken) {
-      throw redirect({
-        to: '/sign-in',
-        search: { redirect: location.href },
-      })
+    if (!auth.user) {
+      throw redirect({ to: '/sign-in' })
     }
-
-    // 激活制下未激活（临时）账号只能访问激活页，其余登录态页面一律拦回。
-    if (auth.user && auth.user.activated === false) {
-      throw redirect({ to: '/activate', replace: true })
+    // 已激活账号不应停留在激活页。
+    if (auth.user.activated !== false) {
+      throw redirect({ to: '/dashboard', replace: true })
     }
   },
-  component: AuthenticatedLayout,
+  component: Activate,
 })

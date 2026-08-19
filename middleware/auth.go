@@ -44,6 +44,18 @@ func validUserInfo(username string, role int) bool {
 }
 
 func authHelper(c *gin.Context, minRole int) {
+	authHelperCore(c, minRole, true)
+}
+
+// UserAuthPending 与 UserAuth 相同，但跳过激活检查：激活制下的未激活（待激活）
+// 账号也能访问，供激活页用接口（GET /self、POST /activate）。禁用账号仍被拒绝。
+func UserAuthPending() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		authHelperCore(c, common.RoleCommonUser, false)
+	}
+}
+
+func authHelperCore(c *gin.Context, minRole int, checkActivation bool) {
 	user, identity, useAccessToken, err := authenticateDashboardRequest(c)
 	if err != nil {
 		writeDashboardAuthError(c, err)
@@ -51,6 +63,12 @@ func authHelper(c *gin.Context, minRole int) {
 	}
 	if user.Status != common.UserStatusEnabled {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "code": "AUTH_USER_DISABLED", "message": common.TranslateMessage(c, i18n.MsgAuthUserBanned)})
+		return
+	}
+	// 激活制开启时，未激活（临时）账号只能访问激活页用接口，其余一律 403。
+	// 前端拦截器据此跳转 /activate；UserAuthPending 走 checkActivation=false 放行。
+	if checkActivation && common.InviteCodeRegisterEnabled && user.Activated != 1 {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"success": false, "code": "AUTH_USER_NOT_ACTIVATED", "message": common.TranslateMessage(c, i18n.MsgUserNotActivated)})
 		return
 	}
 	if user.Role < minRole {

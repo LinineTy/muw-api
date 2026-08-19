@@ -128,6 +128,14 @@ api.interceptors.response.use(
       } else if (!skipErrorHandler) {
         toast.error(t('Session expired!'))
       }
+    } else if (
+      status === 403 &&
+      error?.response?.data?.code === 'AUTH_USER_NOT_ACTIVATED'
+    ) {
+      // 激活制：未激活（临时）账号调用被拦，强制跳激活页，不 toast 业务错误。
+      if (window.location.pathname !== '/activate') {
+        window.location.replace('/activate')
+      }
     } else if (!skipErrorHandler) {
       const messageKey = getServerErrorMessageKey(error)
       const message = messageKey

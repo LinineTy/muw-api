@@ -28,6 +28,7 @@ import {
   ShieldAlert,
   Link2,
   CreditCard,
+  UserCheck,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -176,6 +177,15 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
             {t('Disable')}
             <DropdownMenuShortcut>
               <PowerOff size={16} />
+            </DropdownMenuShortcut>
+          </DropdownMenuItem>
+        )}
+
+        {user.activated === 0 && (
+          <DropdownMenuItem onClick={() => handleManage('activate')}>
+            {t('Activate Account')}
+            <DropdownMenuShortcut>
+              <UserCheck size={16} />
             </DropdownMenuShortcut>
           </DropdownMenuItem>
         )}

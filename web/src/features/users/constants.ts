@@ -63,6 +63,20 @@ export const getUserStatusOptions = (t: (key: string) => string) => [
 ]
 
 // ============================================================================
+// User Activation Configuration (激活制：1=已激活 / 0=待激活)
+// ============================================================================
+
+export const USER_ACTIVATION = {
+  ACTIVATED: 1,
+  PENDING: 0,
+} as const
+
+export const getUserActivationOptions = (t: (key: string) => string) => [
+  { label: t('Activated'), value: String(USER_ACTIVATION.ACTIVATED) },
+  { label: t('Pending'), value: String(USER_ACTIVATION.PENDING) },
+]
+
+// ============================================================================
 // User Role Configuration
 // ============================================================================
 
