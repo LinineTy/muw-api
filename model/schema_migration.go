@@ -51,7 +51,16 @@ func (SchemaMigration) TableName() string { return "schema_migrations" }
 // ensureCreditScoreLogReverted）。
 // v13：user_subscriptions 新增 renew_terms 列（续费条款快照，续费走旧条款）。列由
 // AutoMigrate 添加，无需数据转换——存量订阅无快照，续费/估值回退到套餐当前条款。
-const CurrentSchemaVersion = 13
+// v14：redemptions 新增 type（用途：1=兑换额度/2=注册邀请）、max_uses（可用次数）、
+// used_count（已用次数）三列（AutoMigrate 加，带常量默认值）。存量码需保持一次性
+// 语义，此处防御性 backfill：任何 NULL 统一归一为 type=1 / max_uses=1 / used_count=0。
+// 同属 v14：新增 redemption_uses 关联表（redemption_id + user_id 唯一），保证同一
+// 用户不能重复兑换同一码。表由 AutoMigrate（升版本路径）或 ensureRedemptionUsesTable
+// （已最新版本库的跳过路径）创建，无需数据转换——存量已用码 status=3 仍由状态门控。
+// 同属 v14：users 新增 activated 列（激活制：1=正式 / 0=待激活）。存量用户一律视为
+// 已激活（default:1 回填），此处防御性 backfill 归一任何残余 NULL。列由 AutoMigrate
+// 或 ensureUserActivatedColumn（已最新版本库的跳过路径）补建。
+const CurrentSchemaVersion = 14
 
 // Migration 是一个可单独应用、记录版本戳的迁移步骤。Up 按版本升序执行，
 // 用于 AutoMigrate 补不了的结构改造（换类型、删列）与数据迁移/特殊适配。
@@ -122,6 +131,23 @@ var migrations = []Migration{
 	// v13：user_subscriptions.renew_terms 列由 AutoMigrate 添加，无需数据转换；只打
 	// 版本戳推进 shouldSkipMigration，避免 SQLite 每次启动整表重建。
 	{Version: 13, Name: "subscription-renew-terms", Up: func(db *gorm.DB) error { return nil }},
+	// v14：redemptions.type/max_uses/used_count 列由 AutoMigrate 添加（带常量默认值，
+	// 存量行 ALTER 时已回填）。此处防御性 backfill 覆盖软删除行与历史库手工加列的
+	// 边角：NULL 归一为 type=1 / max_uses=1 / used_count=0，保持存量码一次性语义。
+	// Unscoped：默认 scope 附 deleted_at IS NULL 会把软删除行滤掉，必须去掉。
+	{Version: 14, Name: "redemption-type-maxuses-backfill", Up: func(db *gorm.DB) error {
+		if err := db.Unscoped().Model(&Redemption{}).Where("type IS NULL").Update("type", common.RedemptionCodeTypeTopup).Error; err != nil {
+			return err
+		}
+		if err := db.Unscoped().Model(&Redemption{}).Where("max_uses IS NULL").Update("max_uses", 1).Error; err != nil {
+			return err
+		}
+		if err := db.Unscoped().Model(&Redemption{}).Where("used_count IS NULL").Update("used_count", 0).Error; err != nil {
+			return err
+		}
+		// users.activated 列：存量用户一律视为已激活（1），归一任何残余 NULL。
+		return db.Unscoped().Model(&User{}).Where("activated IS NULL").Update("activated", 1).Error
+	}},
 }
 
 // ensureSchemaMigrationsTable 用纯 SQL 建版本表，避免对版本表自身跑 AutoMigrate。

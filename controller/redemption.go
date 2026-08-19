@@ -79,6 +79,24 @@ func AddRedemption(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgRedemptionCountMax)
 		return
 	}
+	if redemption.Type == 0 {
+		redemption.Type = common.RedemptionCodeTypeTopup
+	}
+	if redemption.Type != common.RedemptionCodeTypeTopup && redemption.Type != common.RedemptionCodeTypeInvite {
+		common.ApiErrorI18n(c, i18n.MsgRedemptionTypeInvalid)
+		return
+	}
+	if redemption.MaxUses == 0 {
+		redemption.MaxUses = 1
+	}
+	if redemption.MaxUses < 1 || redemption.MaxUses > 1000 {
+		common.ApiErrorI18n(c, i18n.MsgRedemptionMaxUsesInvalid)
+		return
+	}
+	if redemption.Type == common.RedemptionCodeTypeInvite {
+		// 注册邀请码是纯门禁，不携带额度。
+		redemption.Quota = 0
+	}
 	if valid, msg := validateExpiredTime(c, redemption.ExpiredTime); !valid {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": msg})
 		return
@@ -92,6 +110,8 @@ func AddRedemption(c *gin.Context) {
 			Key:         key,
 			CreatedTime: common.GetTimestamp(),
 			Quota:       redemption.Quota,
+			Type:        redemption.Type,
+			MaxUses:     redemption.MaxUses,
 			ExpiredTime: redemption.ExpiredTime,
 		}
 		err = cleanRedemption.Insert()
@@ -107,9 +127,11 @@ func AddRedemption(c *gin.Context) {
 		keys = append(keys, key)
 	}
 	recordManageAudit(c, "redemption.create", map[string]interface{}{
-		"name":  redemption.Name,
-		"count": redemption.Count,
-		"quota": logger.LogQuota(redemption.Quota),
+		"name":     redemption.Name,
+		"count":    redemption.Count,
+		"quota":    logger.LogQuota(redemption.Quota),
+		"type":     redemption.Type,
+		"max_uses": redemption.MaxUses,
 	})
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
