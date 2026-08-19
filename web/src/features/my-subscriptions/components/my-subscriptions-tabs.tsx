@@ -23,10 +23,7 @@ import { useTranslation } from 'react-i18next'
 import { MobileToggleMenu, ToggleMenuItem, TogglePill } from '@/components/ui/responsive-toggle'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import type {
-  SubscriptionPlan,
-  UserSubscriptionRecord,
-} from '@/features/subscriptions/types'
+import type { UserSubscriptionRecord } from '@/features/subscriptions/types'
 
 import { useMySubscriptions } from './my-subscriptions-provider'
 import { EndedSubscriptionsTable } from './ended-subscriptions-table'
@@ -102,7 +99,7 @@ export function MySubscriptionsTabs({
   onTabChange: (tab: MySubscriptionsTab) => void
 }) {
   const { t } = useTranslation()
-  const { selfData, plans, loading } = useMySubscriptions()
+  const { selfData, planMap, loading } = useMySubscriptions()
   // 套餐目录的「分组显示」开关：默认开（按互斥组聚合成块，无互斥组的套餐单独列出）。
   const [grouped, setGrouped] = useState(true)
 
@@ -126,16 +123,6 @@ export function MySubscriptionsTabs({
     }
     return split
   }, [allSubscriptions])
-
-  const planMap = useMemo(() => {
-    const map = new Map<number, SubscriptionPlan>()
-    for (const p of plans) {
-      if (p?.plan?.id) {
-        map.set(p.plan.id, p.plan)
-      }
-    }
-    return map
-  }, [plans])
 
   if (loading) {
     return (

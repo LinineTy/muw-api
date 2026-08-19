@@ -16,17 +16,23 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
 
 import { getSelf } from '@/lib/api'
 import { getPublicPlans, getSelfSubscriptionFull } from '@/features/subscriptions/api'
 import { useTopupInfo } from '@/features/wallet/hooks'
-import type { PlanRecord, SelfSubscriptionData } from '@/features/subscriptions/types'
+import type {
+  PlanRecord,
+  SelfSubscriptionData,
+  SubscriptionPlan,
+} from '@/features/subscriptions/types'
 import type { TopupInfo } from '@/features/wallet/types'
 
 type MySubscriptionsContextValue = {
   selfData: SelfSubscriptionData | null
   plans: PlanRecord[]
+  // 合并了订阅自带套餐快照的查找表（含已禁用套餐），用户侧所有 planMap.get 统一用它。
+  planMap: Map<number, SubscriptionPlan>
   topupInfo: TopupInfo | null
   userQuota: number
   userGroup: string
@@ -119,11 +125,25 @@ export function MySubscriptionsProvider({
     }
   }, [fetchSelfSubscription, fetchSelf])
 
+  // 公开套餐（enabled-only）为主，订阅记录自带的套餐快照覆盖合并——停售/禁用的
+  // 套餐仍能查到套餐名/周期/限额，避免已订阅卡片退化成 #id、升降配拿不到 oldPlan。
+  const planMap = useMemo(() => {
+    const map = new Map<number, SubscriptionPlan>()
+    for (const p of plans) {
+      if (p?.plan?.id) map.set(p.plan.id, p.plan)
+    }
+    for (const s of selfData?.all_subscriptions ?? []) {
+      if (s?.plan?.id) map.set(s.plan.id, s.plan)
+    }
+    return map
+  }, [plans, selfData])
+
   return (
     <MySubscriptionsContext.Provider
       value={{
         selfData,
         plans,
+        planMap,
         topupInfo,
         userQuota,
         userGroup,

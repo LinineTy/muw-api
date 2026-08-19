@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -288,4 +289,138 @@ func TestCancelAtEndBlocksRenewal(t *testing.T) {
 		StartTime: now - 86400, EndTime: now + 30*86400,
 	})
 	require.NoError(t, ValidateSubscriptionPurchaseGate(720, plan, 7103))
+}
+
+// TestRenewUsesSnapshotTerms 保护"续费走旧条款"：购买时写入续费条款快照，之后套餐
+// 被编辑（改价/改额度）不影响续费——延长时长与累加额度都取快照值。
+func TestRenewUsesSnapshotTerms(t *testing.T) {
+	truncateTables(t)
+
+	now := GetDBTimestamp()
+	seedQuotaPlan(t, 7201, &SubscriptionPlan{
+		Title: "snapshot-terms", PriceAmount: 10,
+		DurationUnit: SubscriptionDurationMonth, DurationValue: 1,
+		TotalAmount: 1000,
+	})
+	plan, err := GetSubscriptionPlanById(7201)
+	require.NoError(t, err)
+
+	// 购买时写入快照（模拟 CreateUserSubscriptionFromPlanTx 的落库路径）。
+	startUnix := now - 10*86400
+	expectedDuration := planDurationSeconds(plan, startUnix)
+	sub := &UserSubscription{
+		UserId: 721, PlanId: 7201, Status: "active",
+		AmountTotal: 1000,
+		StartTime:   startUnix,
+		EndTime:     startUnix + expectedDuration,
+	}
+	sub.SnapshotRenewTerms(plan, startUnix)
+	require.NotEmpty(t, sub.RenewTerms)
+	seedQuotaSub(t, 7202, sub)
+
+	// 管理员事后改条款：$10→$20、单期额度 1000→2000。
+	require.NoError(t, DB.Model(&SubscriptionPlan{}).Where("id = ?", 7201).
+		Updates(map[string]interface{}{"price_amount": 20, "total_amount": 2000}).Error)
+	InvalidateSubscriptionPlanCache(7201)
+
+	// 续费按快照旧条款：累加快照单期额度 1000（非改后的 2000），时长按快照周期。
+	require.NoError(t, DB.Transaction(func(tx *gorm.DB) error {
+		var locked UserSubscription
+		require.NoError(t, tx.Where("id = ?", 7202).First(&locked).Error)
+		plan, err := getSubscriptionPlanByIdTx(tx, 7201)
+		require.NoError(t, err)
+		return RenewSubscriptionTx(tx, &locked, plan, now)
+	}))
+
+	var after UserSubscription
+	require.NoError(t, DB.Where("id = ?", 7202).First(&after).Error)
+	assert.EqualValues(t, 2000, after.AmountTotal, "续费应累加快照单期额度 1000，而非改后的 2000")
+	assert.Equal(t, sub.EndTime+expectedDuration, after.EndTime, "续费应按快照周期时长延长")
+}
+
+// TestRemainingValueUsesSnapshotPeriod 保护升降配估值：按快照周期时长与价格折算，
+// 不被历史续费拉伸的 end-start 分母稀释（升级多扣/降级少退的旧 bug）。
+func TestRemainingValueUsesSnapshotPeriod(t *testing.T) {
+	truncateTables(t)
+
+	now := GetDBTimestamp()
+	seedQuotaPlan(t, 7203, &SubscriptionPlan{
+		Title: "snapshot-value", PriceAmount: 10,
+		DurationUnit: SubscriptionDurationMonth, DurationValue: 1,
+		TotalAmount: 1000,
+	})
+	plan, err := GetSubscriptionPlanById(7203)
+	require.NoError(t, err)
+
+	// 已续费一次的订阅：start 在约 2.3 个月前，剩余 20 天；快照周期 ≈ 30 天、价格 $10。
+	startUnix := now - 70*86400
+	sub := &UserSubscription{
+		UserId: 722, PlanId: 7203, Status: "active",
+		AmountTotal: 2000,
+		StartTime:   startUnix,
+		EndTime:     now + 20*86400,
+	}
+	sub.SnapshotRenewTerms(plan, startUnix)
+
+	value, err := calcSubscriptionRemainingValue(sub, plan)
+	require.NoError(t, err)
+	dur := planDurationSeconds(plan, startUnix)
+	expected := 10.0 * float64(20*86400) / float64(dur)
+	assert.InDelta(t, expected, value, 1e-6)
+	// 旧公式（end-start 当分母）会得到约 2.2，快照公式应显著更高（≈6.5），
+	// 防止稀释回归。
+	assert.Greater(t, value, 5.0)
+}
+
+// TestDisabledPlanAllowsRenewalBlocksNewPurchase 保护禁用套餐语义：存量订阅仍可续费
+// （手动 + 自动都走 renewSubscriptionWithBalanceTx），新购与升降配被拦。
+func TestDisabledPlanAllowsRenewalBlocksNewPurchase(t *testing.T) {
+	truncateTables(t)
+
+	oldQuotaPerUnit := common.QuotaPerUnit
+	common.QuotaPerUnit = 500000
+	t.Cleanup(func() { common.QuotaPerUnit = oldQuotaPerUnit })
+
+	now := GetDBTimestamp()
+	seedQuotaPlan(t, 7204, &SubscriptionPlan{
+		Title: "disabled-renew", PriceAmount: 10,
+		DurationUnit: SubscriptionDurationMonth, DurationValue: 1,
+		TotalAmount: 1000, Enabled: false,
+	})
+	plan, err := GetSubscriptionPlanById(7204)
+	require.NoError(t, err)
+	require.False(t, plan.Enabled)
+
+	// 存量订阅（购买时写入快照）+ 余额 10M（快照价 $10 * 500k = 5M）。
+	startUnix := now - 10*86400
+	sub := &UserSubscription{
+		UserId: 723, PlanId: 7204, Status: "active",
+		AmountTotal: 1000,
+		StartTime:   startUnix,
+		EndTime:     startUnix + planDurationSeconds(plan, startUnix),
+	}
+	sub.SnapshotRenewTerms(plan, startUnix)
+	seedQuotaSub(t, 7205, sub)
+	require.NoError(t, DB.Create(&User{Id: 723, Username: "disabled-renew-user", Quota: 10_000_000}).Error)
+
+	// 禁用套餐的存量续费：成功，按快照价计费。
+	var charged int
+	var chargedPrice float64
+	require.NoError(t, DB.Transaction(func(tx *gorm.DB) error {
+		q, p, rerr := renewSubscriptionWithBalanceTx(tx, 723, plan, 7205, now)
+		charged = q
+		chargedPrice = p
+		return rerr
+	}))
+	assert.Equal(t, 5_000_000, charged, "按快照 $10 计费（500k/$）")
+	assert.Equal(t, 10.0, chargedPrice)
+
+	var after UserSubscription
+	require.NoError(t, DB.Where("id = ?", 7205).First(&after).Error)
+	assert.Greater(t, after.EndTime, now, "续费应延长有效期")
+
+	// 同一禁用套餐的新购（subscriptionId=0）被拦。
+	_, err = PurchaseWithStrategy(723, 7204, 0)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "套餐未启用")
 }
