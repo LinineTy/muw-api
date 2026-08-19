@@ -16,14 +16,28 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { CalendarX, ChevronsUp, Clock, RefreshCw } from 'lucide-react'
+import {
+  CalendarX,
+  CheckCircle2,
+  ChevronsUp,
+  Clock,
+  PackageX,
+  RefreshCw,
+  Star,
+  XCircle,
+  type LucideIcon,
+} from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { StatusBadge } from '@/components/status-badge'
-import { Progress } from '@/components/ui/progress'
+import {
+  StatusBadge,
+  textColorMap,
+  type StatusVariant,
+} from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
+import { Progress } from '@/components/ui/progress'
 import { Switch } from '@/components/ui/switch'
 import {
   Tooltip,
@@ -31,23 +45,25 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { formatTimestamp } from '@/features/subscriptions/lib'
-import { formatQuota } from '@/lib/format'
-
 import type {
   SubscriptionPlan,
   UserSubscriptionRecord,
 } from '@/features/subscriptions/types'
+import { formatQuota } from '@/lib/format'
+import { cn } from '@/lib/utils'
+
 import { setSubscriptionAutoRenew, setSubscriptionPriority } from '../api'
 import {
   classifySubscriptionStatus,
   getRemainingDays,
   getUsagePercent,
 } from '../lib/helpers'
-import { useMySubscriptions } from './my-subscriptions-provider'
 import { CancelSubscriptionDialog } from './dialogs/cancel-subscription-dialog'
 import { RenewSubscriptionDialog } from './dialogs/renew-subscription-dialog'
+import { useMySubscriptions } from './my-subscriptions-provider'
 
-function CycleUsageRow({
+// 周期/周/月限额的紧凑小仪表（并排栅格用）。
+function MiniMeter({
   label,
   used,
   total,
@@ -58,15 +74,43 @@ function CycleUsageRow({
 }) {
   const pct = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0
   return (
-    <div>
-      <div className='text-muted-foreground flex items-center justify-between text-xs'>
-        <span>{label}</span>
-        <span>
-          {formatQuota(used)} / {formatQuota(total)}
-        </span>
+    <div className='min-w-0'>
+      <div className='text-muted-foreground truncate text-[11px]'>{label}</div>
+      <div className='mt-0.5 truncate font-mono text-xs font-medium tabular-nums'>
+        {formatQuota(used)}
+        <span className='text-muted-foreground'>/{formatQuota(total)}</span>
       </div>
-      <Progress value={pct} className='mt-0.5 h-1' />
+      <Progress value={pct} className='mt-1 h-1' />
     </div>
+  )
+}
+
+// 次要徽标：icon-only 小圆点 + hover 提示，避免标题行堆一长串文字。
+function BadgeChip({
+  icon: Icon,
+  label,
+  variant,
+}: {
+  icon: LucideIcon
+  label: string
+  variant: StatusVariant
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            className={cn(
+              'inline-flex size-5 cursor-help items-center justify-center rounded-full bg-muted',
+              textColorMap[variant]
+            )}
+          />
+        }
+      >
+        <Icon className='size-3.5' aria-hidden='true' />
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -98,6 +142,8 @@ function SubscriptionItem({
   const { isActive, isCancelled } = classifySubscriptionStatus(sub)
   // 到期取消后的订阅：续费和自动续费都被后端禁止，操作区只保留取消（可立即取消）。
   const cancelledAtEnd = subscription?.cancel_at_end === true
+  // 订阅的套餐已停售（禁用）：存量仍可用/可续，但给个标识让用户知道不再售卖。
+  const discontinued = plan?.enabled === false
 
   // 独立额度计数器：周期/周/月各自累计，不由 amount_used 快照推演。
   const cycleLimit = Number(plan?.reset_amount_limit || 0)
@@ -109,15 +155,30 @@ function SubscriptionItem({
   const monthUsed = Number(subscription?.month_used || 0)
 
   let statusBadge = (
-    <StatusBadge label={t('Expired')} variant='neutral' copyable={false} />
+    <StatusBadge
+      label={t('Expired')}
+      variant='neutral'
+      icon={Clock}
+      copyable={false}
+    />
   )
   if (isActive) {
     statusBadge = (
-      <StatusBadge label={t('Active')} variant='success' copyable={false} />
+      <StatusBadge
+        label={t('Active')}
+        variant='success'
+        icon={CheckCircle2}
+        copyable={false}
+      />
     )
   } else if (isCancelled) {
     statusBadge = (
-      <StatusBadge label={t('Cancelled')} variant='neutral' copyable={false} />
+      <StatusBadge
+        label={t('Cancelled')}
+        variant='neutral'
+        icon={XCircle}
+        copyable={false}
+      />
     )
   }
 
@@ -134,7 +195,9 @@ function SubscriptionItem({
     try {
       const res = await setSubscriptionAutoRenew(subscription.id, enabled)
       if (res.success) {
-        toast.success(enabled ? t('Auto-renew enabled') : t('Auto-renew disabled'))
+        toast.success(
+          enabled ? t('Auto-renew enabled') : t('Auto-renew disabled')
+        )
       } else {
         toast.error(res.message || t('Request failed'))
       }
@@ -166,61 +229,39 @@ function SubscriptionItem({
 
   return (
     <div className='bg-card flex flex-col overflow-hidden rounded-2xl border shadow-xs'>
-      {/* 顶栏：计划名 + 状态 + 剩余天数 */}
+      {/* 头部：标题 + 订阅 id + 状态，右侧剩余天数 pill */}
       <div className='flex items-center justify-between gap-2 border-b px-4 py-3'>
         <div className='flex min-w-0 items-center gap-2'>
-          <span className='truncate text-sm font-semibold'>
+          <h3 className='truncate text-sm font-semibold'>
             {plan?.title
-              ? `${plan.title} · ${t('Subscription')} #${subscription?.id}`
+              ? plan.title
               : `${t('Subscription')} #${subscription?.id}`}
-          </span>
+          </h3>
+          {plan?.title && subscription?.id ? (
+            <span className='text-muted-foreground shrink-0 text-xs'>
+              #{subscription.id}
+            </span>
+          ) : null}
           {statusBadge}
-          {isPreferred && (
-            <StatusBadge
-              label={t('Preferred')}
-              variant='info'
-              copyable={false}
-            />
-          )}
-          {isActive && subscription?.cancel_at_end && (
-            <StatusBadge
-              label={t('Cancels at end')}
-              variant='neutral'
-              copyable={false}
-            />
-          )}
         </div>
         {isActive && (
-          <span className='text-muted-foreground shrink-0 text-xs'>
-            {t('{{count}} days remaining', {
-              count: remainDays,
-            })}
+          <span className='bg-muted text-muted-foreground shrink-0 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap'>
+            {t('{{count}} days remaining', { count: remainDays })}
           </span>
         )}
       </div>
 
-      {/* 额度主体 */}
-      <div className='flex-1 px-4 py-3'>
+      {/* 额度主体：剩余额度为视觉焦点 */}
+      <div className='flex flex-1 flex-col gap-3 px-4 py-3'>
         {totalAmount > 0 ? (
-          <>
+          <div>
             <div className='flex items-end justify-between gap-2'>
               <div className='min-w-0'>
                 <div className='text-muted-foreground text-[11px] font-medium tracking-wider uppercase'>
-                  {t('Total Quota')}
+                  {t('Remaining')}
                 </div>
-                <div className='text-foreground mt-0.5 truncate font-mono text-xl font-bold tracking-tight tabular-nums sm:text-2xl'>
-                  <Tooltip>
-                    <TooltipTrigger render={<span className='cursor-help' />}>
-                      {formatQuota(usedAmount)}
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {t('Raw Quota')}: {usedAmount}
-                    </TooltipContent>
-                  </Tooltip>
-                  <span className='text-muted-foreground text-sm font-normal'>
-                    {' '}
-                    / {formatQuota(totalAmount)}
-                  </span>
+                <div className='text-foreground mt-0.5 truncate font-mono text-2xl font-bold tracking-tight tabular-nums'>
+                  {formatQuota(remainAmount)}
                 </div>
               </div>
               <span className='text-muted-foreground shrink-0 text-xs'>
@@ -238,12 +279,21 @@ function SubscriptionItem({
               </div>
             )}
             <div className='text-muted-foreground mt-1 text-xs'>
-              {t('Remaining')} {formatQuota(remainAmount)}
+              <Tooltip>
+                <TooltipTrigger render={<span className='cursor-help' />}>
+                  {formatQuota(usedAmount)}
+                </TooltipTrigger>
+                <TooltipContent>
+                  {t('Raw Quota')}: {usedAmount}
+                </TooltipContent>
+              </Tooltip>
+              {' / '}
+              {formatQuota(totalAmount)}
             </div>
-          </>
+          </div>
         ) : (
           <div className='flex items-center gap-2'>
-            <span className='font-mono text-xl font-bold tracking-tight sm:text-2xl'>
+            <span className='font-mono text-2xl font-bold tracking-tight'>
               ∞
             </span>
             <span className='text-muted-foreground text-xs'>
@@ -252,28 +302,53 @@ function SubscriptionItem({
           </div>
         )}
 
-        {/* 周期/周/月限额独立于总额度展示：总额度 0（无限）时仍需显示用量 */}
+        {/* 周期/周/月限额：并排小栅格 */}
         {(hasCycleLimit || weekLimit > 0 || monthLimit > 0) && isActive && (
-          <div className='mt-2 space-y-1.5'>
+          <div className='grid grid-cols-3 gap-3'>
             {hasCycleLimit && (
-              <CycleUsageRow
+              <MiniMeter
                 label={t('This cycle')}
                 used={cycleUsed}
                 total={cycleLimit}
               />
             )}
             {weekLimit > 0 && (
-              <CycleUsageRow
+              <MiniMeter
                 label={t('This week')}
                 used={weekUsed}
                 total={weekLimit}
               />
             )}
             {monthLimit > 0 && (
-              <CycleUsageRow
+              <MiniMeter
                 label={t('This month')}
                 used={monthUsed}
                 total={monthLimit}
+              />
+            )}
+          </div>
+        )}
+
+        {/* 次要徽标：icon-only + hover 提示 */}
+        {(discontinued ||
+          isPreferred ||
+          (isActive && subscription?.cancel_at_end)) && (
+          <div className='flex items-center gap-1.5'>
+            {discontinued && (
+              <BadgeChip
+                icon={PackageX}
+                label={t('Discontinued')}
+                variant='warning'
+              />
+            )}
+            {isPreferred && (
+              <BadgeChip icon={Star} label={t('Preferred')} variant='info' />
+            )}
+            {isActive && subscription?.cancel_at_end && (
+              <BadgeChip
+                icon={CalendarX}
+                label={t('Cancels at end')}
+                variant='neutral'
               />
             )}
           </div>
@@ -305,7 +380,7 @@ function SubscriptionItem({
 
       {/* 操作区 */}
       {isActive && (
-        <div className='space-y-2 border-t px-4 py-2.5'>
+        <div className='border-t px-4 py-2.5'>
           <div className='flex items-center gap-2'>
             {!cancelledAtEnd && (
               <Button
@@ -328,7 +403,7 @@ function SubscriptionItem({
               {t('Cancel')}
             </Button>
           </div>
-          <div className='flex items-center justify-between gap-2 text-xs'>
+          <div className='mt-2 flex items-center justify-between gap-2 text-xs'>
             <label className='flex items-center gap-1.5'>
               <Switch
                 checked={subscription?.auto_renew === true}
@@ -363,16 +438,17 @@ export function SubscriptionList({
 }) {
   const { t } = useTranslation()
   const { refresh } = useMySubscriptions()
-  const [renewTarget, setRenewTarget] =
-    useState<UserSubscriptionRecord | null>(null)
+  const [renewTarget, setRenewTarget] = useState<UserSubscriptionRecord | null>(
+    null
+  )
   const [cancelTarget, setCancelTarget] =
     useState<UserSubscriptionRecord | null>(null)
 
   // A subscription is "preferred" when it has the lowest priority among active
   // ones and priorities actually differ (i.e. the user has chosen a preference).
   const preferredSet = useMemo(() => {
-    const actives = subscriptions.filter((s) =>
-      classifySubscriptionStatus(s).isActive
+    const actives = subscriptions.filter(
+      (s) => classifySubscriptionStatus(s).isActive
     )
     if (actives.length < 2) return new Set<number>()
     const ps = actives.map((s) => Number(s.subscription?.priority || 0))
@@ -416,7 +492,9 @@ export function SubscriptionList({
           if (!open) setRenewTarget(null)
         }}
         subscription={renewTarget}
-        plan={renewTarget ? planMap.get(renewTarget.subscription?.plan_id) : null}
+        plan={
+          renewTarget ? planMap.get(renewTarget.subscription?.plan_id) : null
+        }
         onSuccess={refresh}
       />
       <CancelSubscriptionDialog
@@ -425,10 +503,11 @@ export function SubscriptionList({
           if (!open) setCancelTarget(null)
         }}
         subscription={cancelTarget}
-        plan={cancelTarget ? planMap.get(cancelTarget.subscription?.plan_id) : null}
+        plan={
+          cancelTarget ? planMap.get(cancelTarget.subscription?.plan_id) : null
+        }
         onSuccess={refresh}
       />
     </div>
   )
 }
-
