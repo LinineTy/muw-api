@@ -1109,6 +1109,17 @@ func ValidateSubscriptionPurchaseGate(userId int, plan *SubscriptionPlan, subscr
 	if plan == nil {
 		return errors.New("plan is nil")
 	}
+	// 续费目标（subscriptionId > 0）不得是已到期取消的订阅：epay 在创建订单前就拦下，
+	// 避免订单已支付后回调才发现不能续（RenewSubscriptionTx 的兜底拦截会把它变成坏账）。
+	if subscriptionId > 0 {
+		var target UserSubscription
+		if err := DB.Where("id = ? AND user_id = ?", subscriptionId, userId).First(&target).Error; err != nil {
+			return errors.New("订阅不存在")
+		}
+		if target.CancelAtEnd {
+			return errors.New("订阅已到期取消，无法续费")
+		}
+	}
 	userGroup, err := getUserGroupByIdTx(nil, userId)
 	if err != nil {
 		return err
@@ -1358,6 +1369,11 @@ func RenewSubscriptionTx(tx *gorm.DB, sub *UserSubscription, plan *SubscriptionP
 	}
 	if sub.Status != "active" {
 		return errors.New("订阅已失效，无法续费")
+	}
+	// 到期取消（cancel_at_end）后的订阅不允许任何续费：余额续费、epay 续费回调、
+	// 自动续费任务都汇聚到这里，一处拦截全链路生效。事务回滚保证已扣余额不损失。
+	if sub.CancelAtEnd {
+		return errors.New("订阅已到期取消，无法续费")
 	}
 	start := time.Unix(sub.EndTime, 0)
 	if start.Before(time.Unix(now, 0)) {

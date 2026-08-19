@@ -173,6 +173,12 @@ func SubscriptionUpdateAutoRenew(c *gin.Context) {
 		return
 	}
 	if req.Enabled {
+		// 已到期取消（cancel_at_end）的订阅不允许重开自动续费：否则会静默清掉
+		// cancel_at_end 标记，把用户的"到期取消"悄悄撤销。
+		if sub.CancelAtEnd {
+			common.ApiErrorMsg(c, "订阅已到期取消，无法开启自动续费")
+			return
+		}
 		plan, err := model.GetSubscriptionPlanById(sub.PlanId)
 		if err != nil {
 			common.ApiError(c, err)
