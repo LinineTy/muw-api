@@ -736,6 +736,7 @@
     "Cancel": "取消",
     "Cancel Subscription": "取消订阅",
     "Cancel at period end": "到期取消",
+    "Cancel at period end?": "到期取消？",
     "Cancel immediately": "立即取消",
     "Immediately cancel this subscription?": "立即取消此订阅？",
     "Cancelled": "已取消",
