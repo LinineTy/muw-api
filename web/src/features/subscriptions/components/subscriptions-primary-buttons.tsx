@@ -20,8 +20,7 @@ import { Layers, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
+import { MobileToggleMenu, ToggleMenuItem, TogglePill } from '@/components/ui/responsive-toggle'
 
 import { useSubscriptions } from './subscriptions-provider'
 
@@ -36,24 +35,25 @@ export function SubscriptionsPrimaryButtons() {
 
   return (
     <div className='flex items-center gap-2'>
-      <div className='hidden items-center gap-2 rounded-md border px-3 py-1.5 sm:flex'>
-        <Layers className='text-muted-foreground h-4 w-4' />
-        <Label
-          htmlFor='subscriptions-grouped'
-          className='cursor-pointer text-sm'
-        >
-          {t('Group display')}
-        </Label>
-        <Switch
-          id='subscriptions-grouped'
-          checked={grouped}
-          onCheckedChange={handleGroupedToggle}
-        />
-      </div>
+      <TogglePill
+        id='subscriptions-grouped'
+        label={t('Group display')}
+        icon={<Layers className='text-muted-foreground h-4 w-4' />}
+        checked={grouped}
+        onCheckedChange={handleGroupedToggle}
+      />
       <Button size='sm' onClick={() => setOpen('create')}>
         <Plus className='h-4 w-4' />
         {t('Create Plan')}
       </Button>
+      <MobileToggleMenu>
+        <ToggleMenuItem
+          label={t('Group display')}
+          icon={<Layers className='size-4' />}
+          checked={grouped}
+          onCheckedChange={handleGroupedToggle}
+        />
+      </MobileToggleMenu>
     </div>
   )
 }
