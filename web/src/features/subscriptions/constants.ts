@@ -63,3 +63,26 @@ export function getSubscriptionStatusOptions(t: TFunction) {
     label: t(s.labelKey),
   }))
 }
+
+// ============================================================================
+// Server-side Sortable Columns
+// ============================================================================
+
+// Column ids the admin subscriptions backend accepts for `sort_by`. `usage` is
+// computed (total - used) and `actions` is not data, so both stay unsortable.
+export type SubscriptionSortBy =
+  | 'id'
+  | 'user'
+  | 'plan'
+  | 'status'
+  | 'start_time'
+  | 'end_time'
+
+export const SUBSCRIPTION_SORTABLE_COLUMNS = new Set<SubscriptionSortBy>([
+  'id',
+  'user',
+  'plan',
+  'status',
+  'start_time',
+  'end_time',
+])
