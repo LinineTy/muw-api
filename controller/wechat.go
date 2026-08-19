@@ -107,6 +107,12 @@ func WeChatAuth(c *gin.Context) {
 				})
 				return
 			}
+			// 激活制开启时，微信首次建号为"待激活"临时账号（default:1 吞零值，须显式置 0）。
+			if common.InviteCodeRegisterEnabled {
+				if err := model.DB.Model(&model.User{}).Where("id = ?", user.Id).Update("activated", 0).Error; err != nil {
+					common.SysError("failed to mark wechat user as pending activation: " + err.Error())
+				}
+			}
 		} else {
 			common.ApiErrorLoginDenied(c, common.LoginStatusRegistrationDisabled, i18n.MsgUserRegisterDisabled, "")
 			return

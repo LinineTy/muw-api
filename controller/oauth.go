@@ -547,6 +547,12 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 			if err := user.InsertWithTx(tx, inviterId); err != nil {
 				return err
 			}
+			// 激活制开启时，首次 OAuth 建号为"待激活"临时账号（default:1 吞零值，须显式置 0）。
+			if common.InviteCodeRegisterEnabled {
+				if err := tx.Model(&model.User{}).Where("id = ?", user.Id).Update("activated", 0).Error; err != nil {
+					return err
+				}
+			}
 
 			// Create OAuth binding
 			binding := &model.UserOAuthBinding{
@@ -572,6 +578,12 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 			// Create user
 			if err := user.InsertWithTx(tx, inviterId); err != nil {
 				return err
+			}
+			// 激活制开启时，首次 OAuth 建号为"待激活"临时账号（default:1 吞零值，须显式置 0）。
+			if common.InviteCodeRegisterEnabled {
+				if err := tx.Model(&model.User{}).Where("id = ?", user.Id).Update("activated", 0).Error; err != nil {
+					return err
+				}
 			}
 
 			// Set the provider user ID on the user model and update

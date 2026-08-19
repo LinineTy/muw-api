@@ -41,6 +41,7 @@
   "This permanently removes the subscription record from the database. It cannot be recovered or viewed in History Subscriptions.": "This permanently removes the subscription record from the database. It cannot be recovered or viewed in History Subscriptions.",
   "Enable scheduled channel tests or run a manual test to start collecting health data.": "Enable scheduled channel tests or run a manual test to start collecting health data.",
   "Ends the subscription right away. The user group reverts immediately if applicable.": "Ends the subscription right away. The user group reverts immediately if applicable.",
+  "Ends the subscription right away and reverts the user group if applicable. This cannot be undone.": "Ends the subscription right away and reverts the user group if applicable. This cannot be undone.",
   "Failed to check in": "Failed to check in",
   "Failed to claim quota": "Failed to claim quota",
   "Failed to create quota pool": "Failed to create quota pool",
@@ -50,6 +51,7 @@
   "Failed to fetch subscription records": "Failed to fetch subscription records",
   "Failed to load quota pools": "Failed to load quota pools",
   "Failed to update quota pool": "Failed to update quota pool",
+  "Filter by plan name or subscription ID": "Filter by plan name or subscription ID",
   "SSE parsed: delta.content is the reply delta (joined); delta.reasoning_content is the thinking delta; usage.* is token stats; [DONE] ends the stream.": "SSE parsed: delta.content is the reply delta (joined); delta.reasoning_content is the thinking delta; usage.* is token stats; [DONE] ends the stream.",
   "Filter by username or email": "Filter by username or email",
   "Fixed amount or random amount within a range": "Fixed amount or random amount within a range",
@@ -103,9 +105,11 @@
   "Track per-model success rate and latency trends.": "Track per-model success rate and latency trends.",
   "Unable to load vendors": "Unable to load vendors",
   "Unable to sign in or create an account": "Unable to sign in or create an account",
+  "Up to {{days}} days": "Up to {{days}} days",
   "Reset violation markers to defaults": "Reset violation markers to defaults",
   "Regenerated the internal marker analysis token": "Regenerated the internal marker analysis token",
   "Completed the content-safety pledge (+{{points}} points)": "Completed the content-safety pledge (+{{points}} points)",
+  "Upgrade to {{group}}": "Upgrade to {{group}}",
   "Upper bound of the random amount": "Upper bound of the random amount",
   "Used to decide the payment flow. The value is sent to Epay as the type parameter.": "Used to decide the payment flow. The value is sent to Epay as the type parameter.",
   "This replaces the current vision description prompt with the built-in default. Changes apply immediately.": "This replaces the current vision description prompt with the built-in default. Changes apply immediately.",
@@ -285,5 +289,8 @@
   "Set every user credit score to the saved full score ({{full_score}}) and wipe all credit score logs (deduction, recovery and pledge history). The log table is left fully empty and the next record id restarts from 1 — the whole credit score system starts over.": "Set every user credit score to the saved full score ({{full_score}}) and wipe all credit score logs (deduction, recovery and pledge history). The log table is left fully empty and the next record id restarts from 1 — the whole credit score system starts over.",
   "This resets every user credit score to {{full_score}} and permanently deletes all credit score logs — deduction, recovery and pledge history (pledge read counts reset to zero). The log table is left fully empty and the next record id restarts from 1. This cannot be undone.": "This resets every user credit score to {{full_score}} and permanently deletes all credit score logs — deduction, recovery and pledge history (pledge read counts reset to zero). The log table is left fully empty and the next record id restarts from 1. This cannot be undone.",
   "How often each sensitive word was hit in the selected period (top {{count}}).": "How often each sensitive word was hit in the selected period (top {{count}}).",
-  "Set the default time range for the hit statistics charts.": "Set the default time range for the hit statistics charts."
+  "Set the default time range for the hit statistics charts.": "Set the default time range for the hit statistics charts.",
+  "Require a valid invitation code to register": "Require a valid invitation code to register",
+  "Choose whether this code grants quota or allows registration": "Choose whether this code grants quota or allows registration",
+  "This site requires an invitation code to activate your account": "This site requires an invitation code to activate your account"
 }

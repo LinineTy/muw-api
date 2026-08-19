@@ -177,6 +177,25 @@ export function useUsersColumns({
       meta: { mobileBadge: true },
     },
     {
+      accessorKey: 'activated',
+      header: t('Activation'),
+      meta: { mobileHidden: true },
+      cell: ({ row }) => {
+        const activated = row.getValue('activated') as number | undefined
+        const pending = activated === 0
+        return (
+          <StatusBadge
+            label={pending ? t('Pending') : t('Activated')}
+            variant={pending ? 'warning' : 'success'}
+            copyable={false}
+            className='-ml-1.5'
+          />
+        )
+      },
+      enableSorting: false,
+      size: 110,
+    },
+    {
       id: 'quota',
       accessorKey: 'quota',
       header: t('Quota'),

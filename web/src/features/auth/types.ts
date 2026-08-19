@@ -39,6 +39,7 @@ export interface RegisterPayload {
   email?: string
   verification_code?: string
   aff_code?: string
+  invite_code?: string
   turnstile?: string
 }
 
@@ -135,6 +136,8 @@ export interface SystemStatus {
     register_enabled?: boolean
     password_login_enabled?: boolean
     password_register_enabled?: boolean
+    invite_code_register_enabled?: boolean
+    invite_activation_enabled?: boolean
     custom_oauth_providers?: CustomOAuthProviderInfo[]
     visual_fallback_enabled?: boolean
     [key: string]: unknown
@@ -182,6 +185,8 @@ export interface SystemStatus {
   register_enabled?: boolean
   password_login_enabled?: boolean
   password_register_enabled?: boolean
+  invite_code_register_enabled?: boolean
+  invite_activation_enabled?: boolean
   custom_oauth_providers?: CustomOAuthProviderInfo[]
   visual_fallback_enabled?: boolean
   system_load_enabled?: boolean

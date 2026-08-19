@@ -6353,6 +6353,26 @@
     "Ranking": "排名",
     "Proportion": "占比",
     "API key_other": "API 密钥",
-    "redemption code_other": "兑换码"
+    "redemption code_other": "兑换码",
+    "Redemption": "兑换",
+    "Invitation": "邀请",
+    "Code Type": "码类型",
+    "Max Uses": "可用次数",
+    "Uses": "已用/可用",
+    "Enter invitation code": "请输入邀请码",
+    "Invitation code is required": "注册需要邀请码",
+    "Invitation Code Registration": "邀请码注册",
+    "Require a valid invitation code to register": "注册需要有效的邀请码",
+    "Choose whether this code grants quota or allows registration": "选择该码是用于兑换额度还是允许注册",
+    "How many times this code can be used (1 = single-use)": "该码可使用的次数（1 表示一次性）",
+    "Invalid code type": "无效的码类型",
+    "Activate Account": "激活账号",
+    "Activate": "激活",
+    "Activated": "已激活",
+    "Activation": "激活状态",
+    "This site requires an invitation code to activate your account": "本站需要邀请码激活账号",
+    "Enter your invitation code": "请输入邀请码",
+    "Activated successfully": "激活成功",
+    "Activation failed": "激活失败"
   }
 }

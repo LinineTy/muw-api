@@ -249,3 +249,46 @@ func TestTryUserAuthCredentialClassification(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, databaseFailureResponse.Code)
 	assert.Contains(t, databaseFailureResponse.Body.String(), "AUTH_INTERNAL_ERROR")
 }
+
+func TestUserAuthBlocksPendingActivation(t *testing.T) {
+	setupDashboardAuthMiddlewareTest(t)
+	previousInvite := common.InviteCodeRegisterEnabled
+	common.InviteCodeRegisterEnabled = true
+	t.Cleanup(func() { common.InviteCodeRegisterEnabled = previousInvite })
+
+	user := createMiddlewarePATUser(t, "pending-activation-user", "pending.activation.token")
+	require.NoError(t, model.DB.Model(&model.User{}).Where("id = ?", user.Id).Update("activated", 0).Error)
+
+	router := gin.New()
+	router.GET("/protected", UserAuth(), func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	request := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	request.Header.Set("Authorization", "Bearer pending.activation.token")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	assert.Equal(t, http.StatusForbidden, response.Code)
+	assert.Contains(t, response.Body.String(), "AUTH_USER_NOT_ACTIVATED")
+}
+
+func TestUserAuthPendingAllowsPendingActivation(t *testing.T) {
+	setupDashboardAuthMiddlewareTest(t)
+	previousInvite := common.InviteCodeRegisterEnabled
+	common.InviteCodeRegisterEnabled = true
+	t.Cleanup(func() { common.InviteCodeRegisterEnabled = previousInvite })
+
+	user := createMiddlewarePATUser(t, "pending-activation-user-2", "pending.activation.token2")
+	require.NoError(t, model.DB.Model(&model.User{}).Where("id = ?", user.Id).Update("activated", 0).Error)
+
+	router := gin.New()
+	router.GET("/protected", UserAuthPending(), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"id": c.GetInt("id")})
+	})
+	request := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	request.Header.Set("Authorization", "Bearer pending.activation.token2")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	assert.Equal(t, http.StatusOK, response.Code)
+}

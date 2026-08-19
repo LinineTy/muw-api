@@ -6353,6 +6353,26 @@
     "Ranking": "Ranking",
     "Proportion": "Proportion",
     "API key_other": "API 金鑰",
-    "redemption code_other": "兌換碼"
+    "redemption code_other": "兌換碼",
+    "Redemption": "兌換",
+    "Invitation": "邀請",
+    "Code Type": "碼類型",
+    "Max Uses": "可用次數",
+    "Uses": "已用/可用",
+    "Enter invitation code": "請輸入邀請碼",
+    "Invitation code is required": "註冊需要邀請碼",
+    "Invitation Code Registration": "邀請碼註冊",
+    "Require a valid invitation code to register": "註冊需要有效的邀請碼",
+    "Choose whether this code grants quota or allows registration": "選擇該碼用於兌換額度還是允許註冊",
+    "How many times this code can be used (1 = single-use)": "該碼可使用的次數（1 表示一次性）",
+    "Invalid code type": "無效的碼類型",
+    "Activate Account": "啟動帳號",
+    "Activate": "啟動",
+    "Activated": "已啟動",
+    "Activation": "啟動狀態",
+    "This site requires an invitation code to activate your account": "本站需要邀請碼啟動帳號",
+    "Enter your invitation code": "請輸入邀請碼",
+    "Activated successfully": "啟動成功",
+    "Activation failed": "啟動失敗"
   }
 }

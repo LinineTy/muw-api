@@ -285,6 +285,7 @@ func Register(c *gin.Context) {
 	if affCode != "" && operation_setting.AffiliateProgramEnabled {
 		inviterId, _ = model.GetUserIdByAffCode(affCode)
 	}
+
 	cleanUser := model.User{
 		Username:    user.Username,
 		Password:    user.Password,
@@ -307,6 +308,14 @@ func Register(c *gin.Context) {
 		}
 		common.ApiError(c, err)
 		return
+	}
+
+	// 激活制开启时，新注册账号为"待激活"临时账号：gorm default:1 会吞零值，
+	// 需在 Insert 后显式置 0，登录后由激活页填邀请码转正。
+	if common.InviteCodeRegisterEnabled {
+		if err := model.DB.Model(&model.User{}).Where("id = ?", cleanUser.Id).Update("activated", 0).Error; err != nil {
+			common.SysError("failed to mark new user as pending activation: " + err.Error())
+		}
 	}
 
 	// 获取插入后的用户ID
@@ -349,6 +358,81 @@ func Register(c *gin.Context) {
 		"message": "",
 	})
 	return
+}
+
+type activateInviteRequest struct {
+	InviteCode string `json:"invite_code"`
+}
+
+// ActivateInviteCode 激活制下，待激活账号在专属激活页提交邀请码转正。
+// 复用邀请码占位（OccupyInviteCode）保证并发下名额不超发；成功置 activated=1 并
+// 登记使用记录，任一步失败回滚占位。已激活用户调用直接拒绝。
+func ActivateInviteCode(c *gin.Context) {
+	if !common.InviteCodeRegisterEnabled {
+		common.ApiErrorI18n(c, i18n.MsgUserNotActivated)
+		return
+	}
+	id := c.GetInt("id")
+	if id == 0 {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	var current model.User
+	if err := model.DB.Select("activated").First(&current, "id = ?", id).Error; err != nil {
+		common.ApiErrorI18n(c, i18n.MsgDatabaseError)
+		return
+	}
+	if current.Activated == 1 {
+		common.ApiErrorI18n(c, i18n.MsgUserAlreadyActivated)
+		return
+	}
+	var req activateInviteRequest
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	inviteCode := strings.TrimSpace(req.InviteCode)
+	if inviteCode == "" {
+		common.ApiErrorI18n(c, i18n.MsgInviteCodeRequired)
+		return
+	}
+	codeId, err := model.OccupyInviteCode(inviteCode)
+	if err != nil {
+		switch {
+		case errors.Is(err, model.ErrInviteCodeInvalid):
+			common.ApiErrorI18n(c, i18n.MsgInviteCodeInvalid)
+		case errors.Is(err, model.ErrInviteCodeDisabled):
+			common.ApiErrorI18n(c, i18n.MsgInviteCodeDisabled)
+		case errors.Is(err, model.ErrInviteCodeUsed):
+			common.ApiErrorI18n(c, i18n.MsgInviteCodeUsed)
+		case errors.Is(err, model.ErrInviteCodeExpired):
+			common.ApiErrorI18n(c, i18n.MsgInviteCodeExpired)
+		default:
+			common.SysError("occupy invite code error: " + err.Error())
+			common.ApiErrorI18n(c, i18n.MsgDatabaseError)
+		}
+		return
+	}
+	if err := model.ActivateUserById(id); err != nil {
+		_ = model.ReleaseInviteCode(codeId)
+		common.SysError("activate user failed: " + err.Error())
+		common.ApiErrorI18n(c, i18n.MsgDatabaseError)
+		return
+	}
+	// 登记该用户对邀请码的使用；失败不影响激活（仅影响管理端使用统计）。
+	if err := model.MarkInviteCodeUsed(codeId, id); err != nil {
+		common.SysError("mark invite code used failed: " + err.Error())
+	}
+	updatedUser, err := model.GetUserById(id, false)
+	if err != nil {
+		common.ApiErrorI18n(c, i18n.MsgDatabaseError)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    buildSelfUserData(updatedUser),
+	})
 }
 
 func GetAllUsers(c *gin.Context) {
@@ -413,9 +497,15 @@ func SearchUsers(c *gin.Context) {
 			status = &parsed
 		}
 	}
+	var activated *int
+	if activatedStr := c.Query("activated"); activatedStr != "" {
+		if parsed, err := strconv.Atoi(activatedStr); err == nil {
+			activated = &parsed
+		}
+	}
 	pageInfo := common.GetPageQuery(c)
 	sortOptions := model.NewUserSortOptions(c.Query("sort_by"), c.Query("sort_order"))
-	users, total, err := model.SearchUsers(keyword, group, role, status, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), sortOptions)
+	users, total, err := model.SearchUsers(keyword, group, role, status, activated, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), sortOptions)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -570,6 +660,7 @@ func buildSelfUserData(user *model.User) map[string]interface{} {
 		"display_name":         user.DisplayName,
 		"role":                 user.Role,
 		"status":               user.Status,
+		"activated":            user.Activated == 1,
 		"email":                user.Email,
 		"github_id":            user.GitHubId,
 		"discord_id":           user.DiscordId,
@@ -1242,6 +1333,22 @@ func ManageUser(c *gin.Context) {
 			return
 		}
 		user.Role = common.RoleCommonUser
+	case "activate":
+		// 管理端手动激活账号（激活制下的待激活临时账号）。幂等。
+		if err := model.ActivateUserById(user.Id); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		recordManageAuditFor(c, user.Id, "user.manage", map[string]interface{}{
+			"action":   req.Action,
+			"username": user.Username,
+			"id":       user.Id,
+		})
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "",
+		})
+		return
 	case "add_quota":
 		switch req.Mode {
 		case "add":
@@ -1450,8 +1557,22 @@ func TopUp(c *gin.Context) {
 	}
 	quota, err := model.Redeem(req.Key, id)
 	if err != nil {
-		// 不向用户暴露兑换失败的细分原因，避免攻击者根据错误类型判断兑换码状态。
-		common.ApiErrorI18n(c, i18n.MsgRedeemFailed)
+		// 透出细分原因：兑换码为 32 位 UUID 不可枚举，攻击者无法借错误类型探测/枚举
+		// 有效码，防探测价值低；与注册邀请码的透出行为保持一致，提示对用户更友好。
+		switch {
+		case errors.Is(err, model.ErrRedemptionInvalid):
+			common.ApiErrorI18n(c, i18n.MsgRedemptionInvalid)
+		case errors.Is(err, model.ErrRedemptionUsed):
+			common.ApiErrorI18n(c, i18n.MsgRedemptionUsed)
+		case errors.Is(err, model.ErrRedemptionDisabled):
+			common.ApiErrorI18n(c, i18n.MsgRedemptionDisabled)
+		case errors.Is(err, model.ErrRedemptionExpired):
+			common.ApiErrorI18n(c, i18n.MsgRedemptionExpired)
+		case errors.Is(err, model.ErrRedemptionTypeMismatch):
+			common.ApiErrorI18n(c, i18n.MsgRedemptionTypeMismatch)
+		default:
+			common.ApiErrorI18n(c, i18n.MsgRedeemFailed)
+		}
 		logger.LogError(c, fmt.Sprintf("failed to redeem key %s for user %d: %s", req.Key, id, err.Error()))
 		return
 	}
