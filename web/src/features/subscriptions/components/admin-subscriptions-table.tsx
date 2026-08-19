@@ -16,8 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
+import type { OnChangeFn, SortingState } from '@tanstack/react-table'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -25,7 +28,11 @@ import { DataTablePage, useDataTable } from '@/components/data-table'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 
 import { getAdminAllSubscriptions } from '../api'
-import { getSubscriptionStatusOptions } from '../constants'
+import {
+  SUBSCRIPTION_SORTABLE_COLUMNS,
+  type SubscriptionSortBy,
+  getSubscriptionStatusOptions,
+} from '../constants'
 import { useAdminSubscriptionsColumns } from './admin-subscriptions-columns'
 import { useSubscriptions } from './subscriptions-provider'
 
@@ -35,6 +42,7 @@ export function AdminSubscriptionsTable() {
   const { t } = useTranslation()
   const { refreshTrigger } = useSubscriptions()
   const columns = useAdminSubscriptionsColumns()
+  const [sorting, setSorting] = useState<SortingState>([])
 
   const {
     globalFilter,
@@ -80,6 +88,28 @@ export function AdminSubscriptionsTable() {
     columnFilters.find((f) => f.id === 'status')?.value as string[] | undefined
   )?.[0]
 
+  const sortParams = useMemo(() => {
+    const activeSort = sorting[0]
+    if (
+      !activeSort ||
+      !SUBSCRIPTION_SORTABLE_COLUMNS.has(activeSort.id as SubscriptionSortBy)
+    ) {
+      return {}
+    }
+
+    return {
+      sort_by: activeSort.id as SubscriptionSortBy,
+      sort_order: activeSort.desc ? 'desc' : 'asc',
+    } as const
+  }, [sorting])
+
+  const handleSortingChange: OnChangeFn<SortingState> = (updater) => {
+    setSorting(updater)
+    if (pagination.pageIndex > 0) {
+      onPaginationChange({ ...pagination, pageIndex: 0 })
+    }
+  }
+
   const { data, isLoading, isFetching } = useQuery({
     // eslint-disable-next-line @tanstack/query/exhaustive-deps
     queryKey: [
@@ -88,6 +118,7 @@ export function AdminSubscriptionsTable() {
       pagination.pageSize,
       globalFilter,
       status,
+      sortParams,
       refreshTrigger,
     ],
     queryFn: async () => {
@@ -96,6 +127,7 @@ export function AdminSubscriptionsTable() {
         size: pagination.pageSize,
         status: status || undefined,
         user: globalFilter?.trim() || undefined,
+        ...sortParams,
       })
       if (!result.success) {
         toast.error(result.message || t('Failed to fetch subscription records'))
@@ -113,13 +145,16 @@ export function AdminSubscriptionsTable() {
     columns,
     columnFilters,
     globalFilter,
+    sorting,
     globalFilterFn: () => true,
     manualFiltering: true,
     manualPagination: true,
+    manualSorting: true,
     totalCount: data?.total || 0,
     onPaginationChange,
     onGlobalFilterChange,
     onColumnFiltersChange,
+    onSortingChange: handleSortingChange,
     ensurePageInRange,
   })
 

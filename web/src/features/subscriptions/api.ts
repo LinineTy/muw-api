@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
 
+import type { SubscriptionSortBy } from './constants'
 import type {
   AdminUserSubscriptionSummary,
   ApiResponse,
@@ -90,6 +91,8 @@ export async function getAdminAllSubscriptions(params: {
   size?: number
   status?: string
   user?: string
+  sort_by?: SubscriptionSortBy
+  sort_order?: 'asc' | 'desc'
 }): Promise<
   ApiResponse<{
     items: AdminUserSubscriptionSummary[]
