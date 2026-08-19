@@ -21,16 +21,15 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-
-import { cancelSubscription } from '../../api'
 import type {
   SubscriptionPlan,
   UserSubscriptionRecord,
 } from '@/features/subscriptions/types'
+import { cn } from '@/lib/utils'
+
+import { cancelSubscription } from '../../api'
 
 type CancelMode = 'immediate' | 'end_period'
 
@@ -104,7 +103,6 @@ export function CancelSubscriptionDialog(props: Props) {
   ]
 
   return (
-    <>
     <Dialog
       open={props.open}
       onOpenChange={props.onOpenChange}
@@ -119,61 +117,75 @@ export function CancelSubscriptionDialog(props: Props) {
       contentHeight='auto'
       bodyClassName='space-y-4'
     >
-      <div className='space-y-3'>
-        <div className='bg-muted/50 rounded-lg border px-3 py-2 text-sm'>
-          <span className='text-muted-foreground'>{t('Plan Name')}: </span>
-          <span className='font-medium'>{planLabel}</span>
-        </div>
-        <div className='space-y-2'>
-          {options.map((opt) => (
-            <button
-              key={opt.value}
-              type='button'
-              onClick={() => setMode(opt.value)}
-              className={cn(
-                'w-full rounded-lg border p-3 text-left transition-colors',
-                mode === opt.value
-                  ? 'border-primary bg-primary/5'
-                  : 'bg-card hover:bg-muted/50'
-              )}
+      {confirmingImmediate ? (
+        <div className='flex flex-col gap-3 rounded-md border p-3'>
+          <p className='text-sm font-medium'>
+            {t('Immediately cancel this subscription?')}
+          </p>
+          <p className='text-muted-foreground text-sm'>
+            {t(
+              'Ends the subscription right away and reverts the user group if applicable. This cannot be undone.'
+            )}
+          </p>
+          <div className='flex gap-2'>
+            <Button
+              className='flex-1'
+              variant='outline'
+              disabled={submitting}
+              onClick={() => setConfirmingImmediate(false)}
             >
-              <div className='text-sm font-medium'>{opt.title}</div>
-              <div className='text-muted-foreground mt-0.5 text-xs'>
-                {opt.desc}
-              </div>
-            </button>
-          ))}
+              {t('Cancel')}
+            </Button>
+            <Button
+              className='flex-1'
+              variant='destructive'
+              disabled={submitting}
+              onClick={() => void doCancel('immediate')}
+            >
+              {submitting ? t('Saving...') : t('Cancel immediately')}
+            </Button>
+          </div>
         </div>
-        <div className='flex justify-end gap-2 pt-1'>
-          <Button
-            variant='outline'
-            onClick={() => props.onOpenChange(false)}
-          >
-            {t('Close')}
-          </Button>
-          <Button
-            variant='destructive'
-            onClick={handleConfirm}
-            disabled={submitting || !sub}
-          >
-            {submitting ? t('Saving...') : t('Confirm Cancel')}
-          </Button>
+      ) : (
+        <div className='space-y-3'>
+          <div className='bg-muted/50 rounded-lg border px-3 py-2 text-sm'>
+            <span className='text-muted-foreground'>{t('Plan Name')}: </span>
+            <span className='font-medium'>{planLabel}</span>
+          </div>
+          <div className='space-y-2'>
+            {options.map((opt) => (
+              <button
+                key={opt.value}
+                type='button'
+                onClick={() => setMode(opt.value)}
+                className={cn(
+                  'w-full rounded-lg border p-3 text-left transition-colors',
+                  mode === opt.value
+                    ? 'border-primary bg-primary/5'
+                    : 'bg-card hover:bg-muted/50'
+                )}
+              >
+                <div className='text-sm font-medium'>{opt.title}</div>
+                <div className='text-muted-foreground mt-0.5 text-xs'>
+                  {opt.desc}
+                </div>
+              </button>
+            ))}
+          </div>
+          <div className='flex justify-end gap-2 pt-1'>
+            <Button variant='outline' onClick={() => props.onOpenChange(false)}>
+              {t('Close')}
+            </Button>
+            <Button
+              variant='destructive'
+              onClick={handleConfirm}
+              disabled={submitting || !sub}
+            >
+              {submitting ? t('Saving...') : t('Confirm Cancel')}
+            </Button>
+          </div>
         </div>
-      </div>
-    </Dialog>
-
-    <ConfirmDialog
-      open={confirmingImmediate}
-      onOpenChange={setConfirmingImmediate}
-      title={t('Immediately cancel this subscription?')}
-      desc={t(
-        'Ends the subscription right away and reverts the user group if applicable. This cannot be undone.'
       )}
-      destructive
-      confirmText={t('Cancel immediately')}
-      isLoading={submitting}
-      handleConfirm={() => void doCancel('immediate')}
-    />
-    </>
+    </Dialog>
   )
 }
