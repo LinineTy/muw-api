@@ -96,6 +96,8 @@ function SubscriptionItem({
   const usagePercent = getUsagePercent(sub)
   const nextResetTime = subscription?.next_cycle_reset_at ?? 0
   const { isActive, isCancelled } = classifySubscriptionStatus(sub)
+  // 到期取消后的订阅：续费和自动续费都被后端禁止，操作区只保留取消（可立即取消）。
+  const cancelledAtEnd = subscription?.cancel_at_end === true
 
   // 独立额度计数器：周期/周/月各自累计，不由 amount_used 快照推演。
   const cycleLimit = Number(plan?.reset_amount_limit || 0)
@@ -279,7 +281,7 @@ function SubscriptionItem({
       </div>
 
       {/* 自动续费失败提示 */}
-      {isActive && subscription?.auto_renew_failed && (
+      {isActive && !cancelledAtEnd && subscription?.auto_renew_failed && (
         <div className='bg-destructive/10 text-destructive border-y px-4 py-2 text-xs'>
           {t(
             'Auto-renew failed: insufficient balance or plan unavailable. Please top up or renew manually.'
@@ -305,15 +307,17 @@ function SubscriptionItem({
       {isActive && (
         <div className='space-y-2 border-t px-4 py-2.5'>
           <div className='flex items-center gap-2'>
-            <Button
-              size='sm'
-              variant='outline'
-              className='flex-1'
-              onClick={() => onRenew(sub)}
-            >
-              <RefreshCw className='size-3.5' />
-              {t('Renew')}
-            </Button>
+            {!cancelledAtEnd && (
+              <Button
+                size='sm'
+                variant='outline'
+                className='flex-1'
+                onClick={() => onRenew(sub)}
+              >
+                <RefreshCw className='size-3.5' />
+                {t('Renew')}
+              </Button>
+            )}
             <Button
               size='sm'
               variant='outline'
@@ -329,7 +333,7 @@ function SubscriptionItem({
               <Switch
                 checked={subscription?.auto_renew === true}
                 onCheckedChange={handleAutoRenew}
-                disabled={updating}
+                disabled={updating || cancelledAtEnd}
                 size='sm'
               />
               {t('Auto-renew')}
