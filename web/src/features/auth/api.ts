@@ -193,6 +193,14 @@ export async function register(payload: RegisterPayload): Promise<ApiResponse> {
   return res.data
 }
 
+// 激活制：待激活账号提交邀请码转正，返回更新后的用户对象
+export async function activateAccount(
+  inviteCode: string
+): Promise<ApiResponse> {
+  const res = await api.post('/api/user/activate', { invite_code: inviteCode })
+  return res.data
+}
+
 // Send email verification code
 export async function sendEmailVerification(
   email: string,

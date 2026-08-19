@@ -64,6 +64,7 @@ export async function searchUsers(
     group = '',
     role = '',
     status = '',
+    activated = '',
     p = 1,
     page_size = 10,
     sort_by,
@@ -74,6 +75,7 @@ export async function searchUsers(
   queryParams.set('group', group)
   if (role) queryParams.set('role', role)
   if (status) queryParams.set('status', status)
+  if (activated) queryParams.set('activated', activated)
   queryParams.set('p', String(p))
   queryParams.set('page_size', String(page_size))
   if (sort_by) queryParams.set('sort_by', sort_by)

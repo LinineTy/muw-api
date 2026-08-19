@@ -67,6 +67,11 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
 
   const navigateAway = () => {
     if (isSuccess) {
+      // 激活制兜底：登录结果页上用户仍未激活时，改去激活页而非 dashboard。
+      if (user?.activated === false) {
+        navigate({ to: '/activate', replace: true })
+        return
+      }
       navigate({ href: successTarget ?? '/dashboard', replace: true })
       return
     }

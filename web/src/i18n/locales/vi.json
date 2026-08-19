@@ -6353,6 +6353,26 @@
     "Ranking": "Ranking",
     "Proportion": "Proportion",
     "API key_other": "Khóa API",
-    "redemption code_other": "mã đổi thưởng"
+    "redemption code_other": "mã đổi thưởng",
+    "Redemption": "Redemption",
+    "Invitation": "Invitation",
+    "Code Type": "Code Type",
+    "Max Uses": "Max Uses",
+    "Uses": "Uses",
+    "Enter invitation code": "Enter invitation code",
+    "Invitation code is required": "Invitation code is required",
+    "Invitation Code Registration": "Invitation Code Registration",
+    "Require a valid invitation code to register": "Require a valid invitation code to register",
+    "Choose whether this code grants quota or allows registration": "Choose whether this code grants quota or allows registration",
+    "How many times this code can be used (1 = single-use)": "How many times this code can be used (1 = single-use)",
+    "Invalid code type": "Invalid code type",
+    "Activate Account": "Activate Account",
+    "Activate": "Activate",
+    "Activated": "Activated",
+    "Activation": "Activation",
+    "This site requires an invitation code to activate your account": "This site requires an invitation code to activate your account",
+    "Enter your invitation code": "Enter your invitation code",
+    "Activated successfully": "Activated successfully",
+    "Activation failed": "Activation failed"
   }
 }

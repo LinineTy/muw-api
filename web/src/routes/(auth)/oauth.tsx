@@ -46,6 +46,11 @@ function OAuthComponent() {
           const res = await wechatLoginByCode(search.code)
           if (res?.success && isAuthBundle(res.data)) {
             applyAuthBundle(res.data)
+            // 激活制：未激活（临时）账号直接去专属激活页，不经过登录结果页。
+            if (res.data.user.activated === false) {
+              navigate({ to: '/activate', replace: true })
+              return
+            }
             const target =
               sanitizeAuthRedirect(search?.redirect, window.location.origin) ??
               undefined

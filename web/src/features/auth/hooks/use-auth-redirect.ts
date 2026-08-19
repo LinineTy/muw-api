@@ -42,6 +42,11 @@ export function useAuthRedirect() {
     redirectTo?: string
   ) => {
     applyAuthBundle(bundle)
+    // 激活制：未激活（临时）账号直接去专属激活页，不经过登录结果页。
+    if (bundle.user.activated === false) {
+      navigate({ to: '/activate', replace: true })
+      return
+    }
     const savedLang = getSavedLanguage(bundle.user)
     if (savedLang && savedLang !== i18n.language) {
       await i18n.changeLanguage(savedLang)

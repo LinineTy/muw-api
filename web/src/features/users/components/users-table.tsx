@@ -37,6 +37,7 @@ import {
   USER_STATUS,
   getUserStatusOptions,
   getUserRoleOptions,
+  getUserActivationOptions,
   isUserDeleted,
 } from '../constants'
 import type { User, UserSortBy } from '../types'
@@ -83,6 +84,7 @@ export function UsersTable({ batchMode }: { batchMode: boolean }) {
       { columnId: 'status', searchKey: 'status', type: 'array' },
       { columnId: 'role', searchKey: 'role', type: 'array' },
       { columnId: 'group', searchKey: 'group', type: 'string' },
+      { columnId: 'activated', searchKey: 'activated', type: 'array' },
     ],
   })
   const statusFilter =
@@ -96,6 +98,10 @@ export function UsersTable({ batchMode }: { batchMode: boolean }) {
   const groupFilter =
     (columnFilters.find((filter) => filter.id === 'group')?.value as string) ??
     ''
+  const activatedFilter =
+    (columnFilters.find((filter) => filter.id === 'activated')?.value as
+      | string[]
+      | undefined) ?? []
 
   const sortParams = useMemo(() => {
     const activeSort = sorting[0]
@@ -129,13 +135,17 @@ export function UsersTable({ batchMode }: { batchMode: boolean }) {
       statusFilter,
       roleFilter,
       groupFilter,
+      activatedFilter,
       sortParams,
       refreshTrigger,
     ],
     queryFn: async () => {
       const hasFilter = globalFilter?.trim()
       const hasColumnFilter =
-        statusFilter.length > 0 || roleFilter.length > 0 || Boolean(groupFilter)
+        statusFilter.length > 0 ||
+        roleFilter.length > 0 ||
+        Boolean(groupFilter) ||
+        activatedFilter.length > 0
       const params = {
         p: pagination.pageIndex + 1,
         page_size: pagination.pageSize,
@@ -150,6 +160,7 @@ export function UsersTable({ batchMode }: { batchMode: boolean }) {
               status: statusFilter[0] ?? '',
               role: roleFilter[0] ?? '',
               group: groupFilter,
+              activated: activatedFilter[0] ?? '',
             })
           : await getUsers(params)
 
@@ -233,6 +244,12 @@ export function UsersTable({ batchMode }: { batchMode: boolean }) {
             columnId: 'role',
             title: t('Role'),
             options: getUserRoleOptions(t),
+            singleSelect: true,
+          },
+          {
+            columnId: 'activated',
+            title: t('Activation'),
+            options: getUserActivationOptions(t),
             singleSelect: true,
           },
         ],
