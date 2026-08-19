@@ -235,3 +235,57 @@ func TestRenewPreservesResetSchedule(t *testing.T) {
 	assert.Greater(t, after.EndTime, nextReset, "续费应延长订阅有效期")
 	assert.EqualValues(t, 2000, after.AmountTotal)
 }
+
+// TestCancelAtEndBlocksRenewal 保护到期取消语义：cancel_at_end 的订阅禁止任何续费。
+// RenewSubscriptionTx 是余额/自动/epay 回调的公共咽喉，ValidateSubscriptionPurchaseGate
+// 是 epay 创建订单前的网关，两处都必须拒绝续费目标，且被拒后订阅有效期不得改变。
+func TestCancelAtEndBlocksRenewal(t *testing.T) {
+	truncateTables(t)
+
+	now := GetDBTimestamp()
+	seedQuotaPlan(t, 7101, &SubscriptionPlan{
+		Title: "cancel-at-end", PriceAmount: 10,
+		DurationUnit: SubscriptionDurationMonth, DurationValue: 1,
+		TotalAmount: 1000,
+	})
+	seedQuotaSub(t, 7102, &UserSubscription{
+		UserId: 720, PlanId: 7101, Status: "active",
+		AmountTotal: 1000, CancelAtEnd: true,
+		StartTime: now - 86400, EndTime: now + 30*86400,
+	})
+
+	// 公共续费咽喉直接拒绝。
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var sub UserSubscription
+		if err := tx.Where("id = ?", 7102).First(&sub).Error; err != nil {
+			return err
+		}
+		plan, err := getSubscriptionPlanByIdTx(tx, 7101)
+		if err != nil {
+			return err
+		}
+		return RenewSubscriptionTx(tx, &sub, plan, now)
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "到期取消")
+
+	var after UserSubscription
+	require.NoError(t, DB.Where("id = ?", 7102).First(&after).Error)
+	assert.Equal(t, now+30*86400, after.EndTime, "续费被拒后订阅有效期不得改变")
+
+	// epay 网关：创建订单前拒绝续费目标（否则订单已支付后回调才发现不能续，变成坏账）。
+	require.NoError(t, DB.Create(&User{Id: 720, Username: "cancel-at-end-user"}).Error)
+	plan, err := GetSubscriptionPlanById(7101)
+	require.NoError(t, err)
+	err = ValidateSubscriptionPurchaseGate(720, plan, 7102)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "到期取消")
+
+	// 对照组：非 cancel_at_end 的订阅可通过续费目标检查，不被误伤。
+	seedQuotaSub(t, 7103, &UserSubscription{
+		UserId: 720, PlanId: 7101, Status: "active",
+		AmountTotal: 1000,
+		StartTime: now - 86400, EndTime: now + 30*86400,
+	})
+	require.NoError(t, ValidateSubscriptionPurchaseGate(720, plan, 7103))
+}
