@@ -49,7 +49,9 @@ func (SchemaMigration) TableName() string { return "schema_migrations" }
 // v11：credit_marker_analysis_logs 新增 prompt_used 列（本次运行用的默认/自定义提示词标识）。
 // v12：credit_score_logs 新增 reverted_at 列（管理端打回误判扣分的标记，补列见
 // ensureCreditScoreLogReverted）。
-const CurrentSchemaVersion = 12
+// v13：user_subscriptions 新增 renew_terms 列（续费条款快照，续费走旧条款）。列由
+// AutoMigrate 添加，无需数据转换——存量订阅无快照，续费/估值回退到套餐当前条款。
+const CurrentSchemaVersion = 13
 
 // Migration 是一个可单独应用、记录版本戳的迁移步骤。Up 按版本升序执行，
 // 用于 AutoMigrate 补不了的结构改造（换类型、删列）与数据迁移/特殊适配。
@@ -117,6 +119,9 @@ var migrations = []Migration{
 	{Version: 12, Name: "credit-score-log-reverted", Up: func(db *gorm.DB) error {
 		return db.Model(&CreditScoreLog{}).Where("reverted_at IS NULL").Update("reverted_at", 0).Error
 	}},
+	// v13：user_subscriptions.renew_terms 列由 AutoMigrate 添加，无需数据转换；只打
+	// 版本戳推进 shouldSkipMigration，避免 SQLite 每次启动整表重建。
+	{Version: 13, Name: "subscription-renew-terms", Up: func(db *gorm.DB) error { return nil }},
 }
 
 // ensureSchemaMigrationsTable 用纯 SQL 建版本表，避免对版本表自身跑 AutoMigrate。

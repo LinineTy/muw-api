@@ -21,12 +21,16 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 import { cancelSubscription } from '../../api'
-import type { UserSubscriptionRecord } from '@/features/subscriptions/types'
+import type {
+  SubscriptionPlan,
+  UserSubscriptionRecord,
+} from '@/features/subscriptions/types'
 
 type CancelMode = 'immediate' | 'end_period'
 
@@ -34,6 +38,7 @@ interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
   subscription: UserSubscriptionRecord | null
+  plan?: SubscriptionPlan | null
   onSuccess?: () => void | Promise<void>
 }
 
@@ -41,14 +46,22 @@ export function CancelSubscriptionDialog(props: Props) {
   const { t } = useTranslation()
   const [mode, setMode] = useState<CancelMode>('end_period')
   const [submitting, setSubmitting] = useState(false)
+  const [confirmingImmediate, setConfirmingImmediate] = useState(false)
 
   const sub = props.subscription?.subscription
+  // 套餐名优先取套餐快照（含已禁用套餐）；缺失时回退到订阅 id。
+  let planLabel = ''
+  if (props.plan?.title) {
+    planLabel = props.plan.title
+  } else if (sub?.plan_id) {
+    planLabel = `${t('Subscription')} #${sub.plan_id}`
+  }
 
-  const handleConfirm = async () => {
+  const doCancel = async (targetMode: CancelMode) => {
     if (!sub) return
     setSubmitting(true)
     try {
-      const res = await cancelSubscription(sub.id, mode)
+      const res = await cancelSubscription(sub.id, targetMode)
       if (res.success) {
         toast.success(res.data?.message || t('Subscription cancelled'))
         props.onOpenChange(false)
@@ -60,6 +73,16 @@ export function CancelSubscriptionDialog(props: Props) {
       toast.error(t('Request failed'))
     } finally {
       setSubmitting(false)
+      setConfirmingImmediate(false)
+    }
+  }
+
+  // 立即取消是毁损性操作（结束订阅 + 回退分组），先弹二次确认；到期取消直接执行。
+  const handleConfirm = () => {
+    if (mode === 'immediate') {
+      setConfirmingImmediate(true)
+    } else {
+      void doCancel('end_period')
     }
   }
 
@@ -81,6 +104,7 @@ export function CancelSubscriptionDialog(props: Props) {
   ]
 
   return (
+    <>
     <Dialog
       open={props.open}
       onOpenChange={props.onOpenChange}
@@ -98,7 +122,7 @@ export function CancelSubscriptionDialog(props: Props) {
       <div className='space-y-3'>
         <div className='bg-muted/50 rounded-lg border px-3 py-2 text-sm'>
           <span className='text-muted-foreground'>{t('Plan Name')}: </span>
-          <span className='font-medium'>{sub?.plan_id ? `#${sub.plan_id}` : ''}</span>
+          <span className='font-medium'>{planLabel}</span>
         </div>
         <div className='space-y-2'>
           {options.map((opt) => (
@@ -137,5 +161,19 @@ export function CancelSubscriptionDialog(props: Props) {
         </div>
       </div>
     </Dialog>
+
+    <ConfirmDialog
+      open={confirmingImmediate}
+      onOpenChange={setConfirmingImmediate}
+      title={t('Immediately cancel this subscription?')}
+      desc={t(
+        'Ends the subscription right away and reverts the user group if applicable. This cannot be undone.'
+      )}
+      destructive
+      confirmText={t('Cancel immediately')}
+      isLoading={submitting}
+      handleConfirm={() => void doCancel('immediate')}
+    />
+    </>
   )
 }

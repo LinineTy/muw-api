@@ -38,7 +38,11 @@ import { formatQuota } from '@/lib/format'
 import { DEFAULT_CURRENCY_CONFIG } from '@/stores/system-config-store'
 
 import { renewSubscriptionBalance, paySubscriptionEpay } from '../../api'
-import { formatDuration } from '@/features/subscriptions/lib'
+import {
+  formatDuration,
+  formatDurationSeconds,
+  parseRenewTerms,
+} from '@/features/subscriptions/lib'
 import { getEpayMethods } from '../../lib/helpers'
 import type { SubscriptionPlan, UserSubscriptionRecord } from '@/features/subscriptions/types'
 import { useMySubscriptions } from '../my-subscriptions-provider'
@@ -57,6 +61,7 @@ export function RenewSubscriptionDialog(props: Props) {
   const { topupInfo, userQuota } = useMySubscriptions()
   const [paying, setPaying] = useState(false)
   const [selectedEpayMethod, setSelectedEpayMethod] = useState('')
+  const [confirming, setConfirming] = useState(false)
 
   const sub = props.subscription?.subscription
   const plan = props.plan
@@ -74,15 +79,17 @@ export function RenewSubscriptionDialog(props: Props) {
 
   if (!sub || !plan) return null
 
-  const price = Number(plan.price_amount || 0).toFixed(2)
+  // 续费价格/时长走订阅的条款快照（旧条款），后端实际扣款按它；无快照回退当前套餐。
+  const renewTerms = parseRenewTerms(sub.renew_terms)
+  const effectivePrice =
+    renewTerms?.price_amount ?? Number(plan.price_amount || 0)
+
+  const price = effectivePrice.toFixed(2)
   const quotaPerUnit =
     currency?.quotaPerUnit && currency.quotaPerUnit > 0
       ? currency.quotaPerUnit
       : DEFAULT_CURRENCY_CONFIG.quotaPerUnit
-  const balanceCost = Math.max(
-    0,
-    Math.ceil(Number(plan.price_amount || 0) * quotaPerUnit)
-  )
+  const balanceCost = Math.max(0, Math.ceil(effectivePrice * quotaPerUnit))
   const available = Math.max(0, Number(userQuota || 0))
   const insufficientBalance = available < balanceCost
   const allowBalancePay = plan.allow_balance_pay !== false
@@ -107,6 +114,7 @@ export function RenewSubscriptionDialog(props: Props) {
       toast.error(t('Payment request failed'))
     } finally {
       setPaying(false)
+      setConfirming(false)
     }
   }
 
@@ -158,7 +166,12 @@ export function RenewSubscriptionDialog(props: Props) {
   return (
     <Dialog
       open={props.open}
-      onOpenChange={props.onOpenChange}
+      onOpenChange={(open) => {
+        props.onOpenChange(open)
+        if (!open) {
+          setConfirming(false)
+        }
+      }}
       title={
         <>
           <RefreshCw className='h-5 w-5' />
@@ -186,7 +199,9 @@ export function RenewSubscriptionDialog(props: Props) {
             </span>
             <span className='flex items-center gap-1 text-sm'>
               <CalendarClock className='h-3.5 w-3.5' />
-              {formatDuration(plan, t)}
+              {renewTerms
+                ? formatDurationSeconds(renewTerms.duration_seconds, t)
+                : formatDuration(plan, t)}
             </span>
           </div>
           <div className='flex items-center justify-between'>
@@ -218,11 +233,43 @@ export function RenewSubscriptionDialog(props: Props) {
           </div>
           <Button
             variant='outline'
-            onClick={handleRenewBalance}
+            onClick={() => setConfirming(true)}
             disabled={paying || insufficientBalance || !allowBalancePay}
           >
             {t('Renew with Balance')}
           </Button>
+          {confirming && (
+            <div className='flex flex-col gap-3 rounded-md border p-3'>
+              <p className='text-sm font-medium'>{t('Confirm renewal?')}</p>
+              <p className='text-muted-foreground text-sm'>
+                {t(
+                  'Renew {{plan}} for {{cost}} quota. Your balance is {{balance}}.',
+                  {
+                    plan: plan.title,
+                    cost: formatQuota(balanceCost),
+                    balance: formatQuota(available),
+                  }
+                )}
+              </p>
+              <div className='flex gap-2'>
+                <Button
+                  className='flex-1'
+                  variant='outline'
+                  disabled={paying}
+                  onClick={() => setConfirming(false)}
+                >
+                  {t('Cancel')}
+                </Button>
+                <Button
+                  className='flex-1'
+                  disabled={paying}
+                  onClick={() => void handleRenewBalance()}
+                >
+                  {t('Renew with Balance')}
+                </Button>
+              </div>
+            </div>
+          )}
           {!allowBalancePay ? (
             <Alert variant='destructive'>
               <AlertDescription>

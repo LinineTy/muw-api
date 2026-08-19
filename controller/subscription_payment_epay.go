@@ -34,7 +34,7 @@ func SubscriptionRequestEpay(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	if !plan.Enabled {
+	if !plan.Enabled && req.SubscriptionId <= 0 {
 		common.ApiErrorMsg(c, "套餐未启用")
 		return
 	}
@@ -74,6 +74,7 @@ func SubscriptionRequestEpay(c *gin.Context) {
 			return
 		}
 	}
+	renewPrice := plan.PriceAmount
 	if req.SubscriptionId > 0 {
 		// Renewal target must belong to the user and be active.
 		var target model.UserSubscription
@@ -81,6 +82,13 @@ func SubscriptionRequestEpay(c *gin.Context) {
 			common.ApiErrorMsg(c, "订阅不存在或已失效")
 			return
 		}
+		// 续费按订阅快照的旧条款计价（价格来自购买时的套餐），订单金额对齐实际扣款。
+		terms := target.RenewTermsOrPlan(plan)
+		if terms.DurationSeconds <= 0 {
+			common.ApiErrorMsg(c, "套餐时长配置错误")
+			return
+		}
+		renewPrice = terms.PriceAmount
 	}
 
 	callBackAddress := service.GetCallbackAddress()
@@ -107,7 +115,7 @@ func SubscriptionRequestEpay(c *gin.Context) {
 	order := &model.SubscriptionOrder{
 		UserId:               userId,
 		PlanId:               plan.Id,
-		Money:                plan.PriceAmount,
+		Money:                renewPrice,
 		TradeNo:              tradeNo,
 		PaymentMethod:        req.PaymentMethod,
 		PaymentProvider:      model.PaymentProviderEpay,
@@ -123,7 +131,7 @@ func SubscriptionRequestEpay(c *gin.Context) {
 		Type:           req.PaymentMethod,
 		ServiceTradeNo: tradeNo,
 		Name:           fmt.Sprintf("SUB:%s", plan.Title),
-		Money:          strconv.FormatFloat(plan.PriceAmount, 'f', 2, 64),
+		Money:          strconv.FormatFloat(renewPrice, 'f', 2, 64),
 		Device:         epay.PC,
 		NotifyUrl:      notifyUrl,
 		ReturnUrl:      returnUrl,

@@ -345,6 +345,11 @@ type UserSubscription struct {
 	// stable even if the plan's Priority is edited later.
 	TierPriority int `json:"tier_priority" gorm:"type:int;not null;default:0"`
 
+	// 续费条款快照（购买时写入、续费不刷新，JSON 文本）。续费价格/周期时长/单期额度/
+	// 累计上限都取快照，保证"续费走旧条款"，不受套餐后续编辑影响。空 = 无快照（存量
+	// 订阅），续费与升降配估值回退到套餐当前条款。
+	RenewTerms string `json:"renew_terms" gorm:"type:text"`
+
 	CreatedAt int64 `json:"created_at" gorm:"bigint"`
 	UpdatedAt int64 `json:"updated_at" gorm:"bigint"`
 }
@@ -363,6 +368,9 @@ func (s *UserSubscription) BeforeUpdate(tx *gorm.DB) error {
 
 type SubscriptionSummary struct {
 	Subscription *UserSubscription `json:"subscription"`
+	// 套餐快照（含已禁用套餐）：用户侧列表据此渲染套餐名/限额等详情，即使套餐被停售
+	// 也不会退化成 #id。未命中（套餐已被删除）时省略。
+	Plan *SubscriptionPlan `json:"plan,omitempty"`
 }
 
 type SubscriptionResetResult struct {
@@ -399,6 +407,70 @@ func calcPlanEndTime(start time.Time, plan *SubscriptionPlan) (int64, error) {
 	default:
 		return 0, fmt.Errorf("invalid duration_unit: %s", plan.DurationUnit)
 	}
+}
+
+// RenewTermsSnapshot 记录购买时的套餐条款。续费价格、周期时长、单期额度、累计上限
+// 均取快照，保证"续费走旧条款"，不受套餐后续编辑影响。
+type RenewTermsSnapshot struct {
+	DurationSeconds      int64   `json:"duration_seconds"`
+	PriceAmount          float64 `json:"price_amount"`
+	TotalAmount          int64   `json:"total_amount"`
+	MaxCumulativeSeconds int64   `json:"max_cumulative_seconds"`
+}
+
+// planDurationSeconds 返回套餐单个周期从 startUnix 起的时长（秒）。月/年按日历算术，
+// 时长依赖起始日期，快照落地时按购买时刻精确计算。
+func planDurationSeconds(plan *SubscriptionPlan, startUnix int64) int64 {
+	if plan == nil {
+		return 0
+	}
+	endUnix, err := calcPlanEndTime(time.Unix(startUnix, 0), plan)
+	if err != nil {
+		return 0
+	}
+	return endUnix - startUnix
+}
+
+// SnapshotRenewTerms 把当前套餐条款写入订阅快照（购买时调用）。续费/升降配估值据此
+// 使用旧条款；计算失败时清空快照，让后续回退到套餐当前条款。
+func (s *UserSubscription) SnapshotRenewTerms(plan *SubscriptionPlan, startUnix int64) {
+	if s == nil || plan == nil {
+		return
+	}
+	terms := RenewTermsSnapshot{
+		DurationSeconds:      planDurationSeconds(plan, startUnix),
+		PriceAmount:          plan.PriceAmount,
+		TotalAmount:          plan.TotalAmount,
+		MaxCumulativeSeconds: plan.MaxCumulativeSeconds,
+	}
+	data, err := common.Marshal(terms)
+	if err != nil || terms.DurationSeconds <= 0 {
+		s.RenewTerms = ""
+		return
+	}
+	s.RenewTerms = string(data)
+}
+
+// RenewTermsOrPlan 返回订阅的续费条款快照；无快照（存量订阅）时回退到套餐当前条款，
+// 周期时长按订阅的 StartTime 估算。
+func (s *UserSubscription) RenewTermsOrPlan(plan *SubscriptionPlan) RenewTermsSnapshot {
+	fallback := RenewTermsSnapshot{
+		PriceAmount:          plan.PriceAmount,
+		TotalAmount:          plan.TotalAmount,
+		MaxCumulativeSeconds: plan.MaxCumulativeSeconds,
+	}
+	if s == nil {
+		fallback.DurationSeconds = planDurationSeconds(plan, 0)
+		return fallback
+	}
+	if s.RenewTerms != "" {
+		var terms RenewTermsSnapshot
+		if err := common.UnmarshalJsonStr(s.RenewTerms, &terms); err == nil && terms.DurationSeconds > 0 {
+			return terms
+		}
+	}
+	fallback.DurationSeconds = planDurationSeconds(plan, s.StartTime)
+	return fallback
 }
 
 func NormalizeResetPeriod(period string) string {
@@ -733,6 +805,8 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 		CreatedAt:        common.GetTimestamp(),
 		UpdatedAt:        common.GetTimestamp(),
 	}
+	// 快照当前套餐条款：续费/升降配估值后续都按"旧条款"走，不受套餐编辑影响。
+	sub.SnapshotRenewTerms(plan, nowUnixAtCreate)
 	if err := tx.Create(sub).Error; err != nil {
 		return nil, err
 	}
@@ -1001,18 +1075,18 @@ func calcSubscriptionRemainingValue(sub *UserSubscription, plan *SubscriptionPla
 	if sub == nil || plan == nil {
 		return 0, errors.New("invalid subscription or plan")
 	}
-	total := sub.EndTime - sub.StartTime
-	if total <= 0 {
+	// 用续费条款快照的周期时长和价格估值：续费只延长 end_time 不更新 start_time，
+	// 若用 end-start 当分母会被历史续费拉伸、稀释当前套餐价值（升级多扣/降级少退）。
+	// 存量订阅（无快照）回退到套餐当前条款。
+	terms := sub.RenewTermsOrPlan(plan)
+	if terms.DurationSeconds <= 0 {
 		return 0, nil
 	}
 	remain := sub.EndTime - GetDBTimestamp()
 	if remain < 0 {
 		remain = 0
 	}
-	if remain > total {
-		remain = total
-	}
-	return plan.PriceAmount * float64(remain) / float64(total), nil
+	return terms.PriceAmount * float64(remain) / float64(terms.DurationSeconds), nil
 }
 
 // userGroupAllowed reports whether a user group may subscribe to a plan. An empty
@@ -1178,9 +1252,6 @@ func PurchaseWithStrategy(userId int, planId int, subscriptionId int) (string, e
 		if err != nil {
 			return err
 		}
-		if !plan.Enabled {
-			return errors.New("套餐未启用")
-		}
 		if plan.PriceAmount < 0 {
 			return errors.New("套餐价格不能为负数")
 		}
@@ -1211,21 +1282,26 @@ func PurchaseWithStrategy(userId int, planId int, subscriptionId int) (string, e
 				}
 			}
 		}
+		// 禁用套餐：存量订阅仍可续费（subscriptionId > 0），但禁止新购与升降配
+		// （subscriptionId == 0，含互斥组内切换）。同组判定在前，确保升降配也被拦。
+		if !plan.Enabled && subscriptionId == 0 {
+			return errors.New("套餐未启用")
+		}
 		nowUnix := common.GetTimestamp()
 		if subscriptionId > 0 {
 			// Renewal of an explicit subscription.
 			if sameGroup.Id > 0 && sameGroup.Id != subscriptionId {
 				return errors.New("目标订阅与互斥组冲突，请先处理同组其他订阅")
 			}
-			quota, err := renewSubscriptionWithBalanceTx(tx, userId, plan, subscriptionId, now)
+			quota, chargedPrice, err := renewSubscriptionWithBalanceTx(tx, userId, plan, subscriptionId, now)
 			if err != nil {
 				return err
 			}
 			chargedQuota = quota
 			logTitle = plan.Title
-			logMoney = plan.PriceAmount
+			logMoney = chargedPrice
 			message = "续费成功"
-			return createBalanceOrderTx(tx, userId, planId, subscriptionId, plan.PriceAmount, quota, "SUBREN", nowUnix)
+			return createBalanceOrderTx(tx, userId, planId, subscriptionId, chargedPrice, quota, "SUBREN", nowUnix)
 		}
 		if sameGroup.Id > 0 {
 			// Prorated switch: upgrade (pay difference) or downgrade (refund difference).
@@ -1375,21 +1451,23 @@ func RenewSubscriptionTx(tx *gorm.DB, sub *UserSubscription, plan *SubscriptionP
 	if sub.CancelAtEnd {
 		return errors.New("订阅已到期取消，无法续费")
 	}
+	// 续费条款取购买时的快照（旧条款），不受套餐后续编辑影响。
+	terms := sub.RenewTermsOrPlan(plan)
+	if terms.DurationSeconds <= 0 {
+		return errors.New("套餐时长配置错误")
+	}
 	start := time.Unix(sub.EndTime, 0)
 	if start.Before(time.Unix(now, 0)) {
 		start = time.Unix(now, 0)
 	}
-	endUnix, err := calcPlanEndTime(start, plan)
-	if err != nil {
-		return err
-	}
+	endUnix := start.Unix() + terms.DurationSeconds
 	// Prevent stacking subscription time indefinitely: the total remaining time
-	// (end_time - now) after renewal must not exceed the plan cap.
-	if plan.MaxCumulativeSeconds > 0 && endUnix-now > plan.MaxCumulativeSeconds {
+	// (end_time - now) after renewal must not exceed the snapshot cap.
+	if terms.MaxCumulativeSeconds > 0 && endUnix-now > terms.MaxCumulativeSeconds {
 		return errors.New("已达该套餐最长可续时长，无法继续续费")
 	}
 	sub.EndTime = endUnix
-	sub.AmountTotal += plan.TotalAmount
+	sub.AmountTotal += terms.TotalAmount
 	// 注意：不改 CycleStartAt/NextCycleResetAt——续费只延长订阅，重置周期照常按
 	// 自然日历推进；若在此重新武装下次重置，会吞掉已排期的下一次重置（用户损失
 	// 一个周期的重置额度）。
@@ -1400,48 +1478,61 @@ func RenewSubscriptionTx(tx *gorm.DB, sub *UserSubscription, plan *SubscriptionP
 	return tx.Save(sub).Error
 }
 
-// renewSubscriptionWithBalanceTx deducts the plan price from the user's wallet and
-// renews the target subscription inside the given transaction.
-func renewSubscriptionWithBalanceTx(tx *gorm.DB, userId int, plan *SubscriptionPlan, subscriptionId int, now int64) (int, error) {
+// renewSubscriptionWithBalanceTx deducts the snapshot (old-terms) price from the
+// user's wallet and renews the target subscription inside the given transaction.
+// Returns the charged quota and the price actually used.
+func renewSubscriptionWithBalanceTx(tx *gorm.DB, userId int, plan *SubscriptionPlan, subscriptionId int, now int64) (int, float64, error) {
 	if plan == nil {
-		return 0, errors.New("plan is nil")
+		return 0, 0, errors.New("plan is nil")
 	}
-	if !plan.Enabled {
-		return 0, errors.New("套餐未启用")
+	// 先读订阅（无锁）拿续费条款快照：价格/时长/总额度取快照而非套餐当前值。
+	// 快照购买时写入且续费不刷新，正常流程下不变；无锁读避免调整 user→sub 锁序。
+	var snapshotSub UserSubscription
+	if err := tx.Where("id = ? AND user_id = ?", subscriptionId, userId).First(&snapshotSub).Error; err != nil {
+		return 0, 0, errors.New("订阅不存在")
 	}
-	if plan.PriceAmount < 0 {
-		return 0, errors.New("套餐价格不能为负数")
+	// 订阅必须属于该套餐，防手工构造 plan_id 用其他套餐条款续费。
+	if snapshotSub.PlanId != plan.Id {
+		return 0, 0, errors.New("订阅与套餐不匹配")
 	}
+	terms := snapshotSub.RenewTermsOrPlan(plan)
+	if terms.DurationSeconds <= 0 {
+		return 0, 0, errors.New("套餐时长配置错误")
+	}
+	if terms.PriceAmount < 0 {
+		return 0, 0, errors.New("套餐价格不能为负数")
+	}
+	// 余额支付门沿用套餐当前配置（策略性开关，不算续费条款）。
 	if plan.AllowBalancePay != nil && !*plan.AllowBalancePay {
-		return 0, errors.New("该套餐不允许使用余额兑换")
+		return 0, 0, errors.New("该套餐不允许使用余额兑换")
 	}
-	requiredQuota, err := calcSubscriptionBalanceQuota(plan.PriceAmount)
+	requiredQuota, err := calcSubscriptionBalanceQuota(terms.PriceAmount)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	var user User
 	if err := lockForUpdate(tx).Where("id = ?", userId).First(&user).Error; err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	if requiredQuota > 0 && user.Quota < requiredQuota {
-		return 0, errors.New("余额不足")
+		return 0, 0, errors.New("余额不足")
 	}
 	if requiredQuota > 0 {
 		if err := tx.Model(&User{}).Where("id = ?", userId).
 			Update("quota", gorm.Expr("quota - ?", requiredQuota)).Error; err != nil {
-			return 0, err
+			return 0, 0, err
 		}
 	}
 	var sub UserSubscription
 	if err := lockForUpdate(tx).
 		Where("id = ? AND user_id = ?", subscriptionId, userId).
 		First(&sub).Error; err != nil {
-		return 0, errors.New("订阅不存在")
+		return 0, 0, errors.New("订阅不存在")
 	}
 	if err := RenewSubscriptionTx(tx, &sub, plan, now); err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	return requiredQuota, nil
+	return requiredQuota, terms.PriceAmount, nil
 }
 
 // UserCancelSubscription cancels a user subscription in one of two modes:
@@ -1616,7 +1707,7 @@ func AutoRenewDueSubscriptions(limit int) (int, error) {
 				flagAutoRenewFailed(tx, locked.Id)
 				return nil
 			}
-			quota, rerr := renewSubscriptionWithBalanceTx(tx, locked.UserId, plan, locked.Id, now)
+			quota, chargedPrice, rerr := renewSubscriptionWithBalanceTx(tx, locked.UserId, plan, locked.Id, now)
 			if rerr != nil {
 				// Flag the failure so the task stops retrying until the user acts.
 				flagAutoRenewFailed(tx, locked.Id)
@@ -1624,7 +1715,7 @@ func AutoRenewDueSubscriptions(limit int) (int, error) {
 			}
 			charged = quota
 			renewed = true
-			return createBalanceOrderTx(tx, locked.UserId, plan.Id, locked.Id, plan.PriceAmount, quota, "SUBAUTO", common.GetTimestamp())
+			return createBalanceOrderTx(tx, locked.UserId, plan.Id, locked.Id, chargedPrice, quota, "SUBAUTO", common.GetTimestamp())
 		})
 		if err != nil {
 			return len(successes), err
@@ -1734,12 +1825,27 @@ func buildSubscriptionSummaries(subs []UserSubscription) []SubscriptionSummary {
 	if len(subs) == 0 {
 		return []SubscriptionSummary{}
 	}
+	planIds := make([]int, 0, len(subs))
+	for _, sub := range subs {
+		planIds = append(planIds, sub.PlanId)
+	}
+	// 一条 IN 查询把所有订阅的套餐（不过滤 enabled）取出来，含已停售/禁用套餐。
+	plans := make(map[int]*SubscriptionPlan, len(planIds))
+	var found []SubscriptionPlan
+	if err := DB.Where("id IN ?", planIds).Find(&found).Error; err == nil {
+		for i := range found {
+			found[i].NormalizeDefaults()
+			plans[found[i].Id] = &found[i]
+		}
+	}
 	result := make([]SubscriptionSummary, 0, len(subs))
 	for _, sub := range subs {
 		subCopy := sub
-		result = append(result, SubscriptionSummary{
-			Subscription: &subCopy,
-		})
+		summary := SubscriptionSummary{Subscription: &subCopy}
+		if p, ok := plans[sub.PlanId]; ok {
+			summary.Plan = p
+		}
+		result = append(result, summary)
 	}
 	return result
 }

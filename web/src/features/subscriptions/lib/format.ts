@@ -20,7 +20,7 @@ import type { TFunction } from 'i18next'
 
 import dayjs from '@/lib/dayjs'
 
-import type { SubscriptionPlan } from '../types'
+import type { RenewTermsSnapshot, SubscriptionPlan } from '../types'
 
 export function formatDuration(
   plan: Partial<SubscriptionPlan>,
@@ -65,4 +65,56 @@ export function formatResetPeriod(
 export function formatTimestamp(ts: number): string {
   if (!ts) return '-'
   return dayjs(ts * 1000).format('YYYY-MM-DD HH:mm:ss')
+}
+
+// 续费条款快照解析：快照存在且周期时长有效时返回，否则返回 null（存量订阅回退当前套餐）。
+export function parseRenewTerms(raw?: string): RenewTermsSnapshot | null {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as RenewTermsSnapshot
+    if (
+      typeof parsed.duration_seconds === 'number' &&
+      parsed.duration_seconds > 0
+    ) {
+      return parsed
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+// 秒数 → 人类可读时长（快照周期时长展示用）。
+export function formatDurationSeconds(seconds: number, t: TFunction): string {
+  if (seconds >= 86400) {
+    const days = seconds / 86400
+    return Number.isInteger(days)
+      ? `${days} ${t('days')}`
+      : `${days.toFixed(1)} ${t('days')}`
+  }
+  if (seconds >= 3600) return `${Math.round(seconds / 3600)} ${t('hours')}`
+  if (seconds >= 60) return `${Math.round(seconds / 60)} ${t('minutes')}`
+  return `${seconds} ${t('seconds')}`
+}
+
+// 套餐单周期时长（秒），用于无快照时升降配估值的回退。月按 30 天近似。
+export function planDurationSeconds(
+  plan?: Partial<SubscriptionPlan> | null
+): number {
+  const unit = plan?.duration_unit || 'month'
+  const value = Number(plan?.duration_value || 0)
+  switch (unit) {
+    case 'year':
+      return value * 365 * 86400
+    case 'month':
+      return value * 30 * 86400
+    case 'day':
+      return value * 86400
+    case 'hour':
+      return value * 3600
+    case 'custom':
+      return Number(plan?.custom_seconds || 0)
+    default:
+      return value * 30 * 86400
+  }
 }

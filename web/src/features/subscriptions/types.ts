@@ -87,12 +87,25 @@ export const userSubscriptionSchema = z.object({
   month_used: z.number().optional().default(0),
   exclusive_group: z.string().optional().default(''),
   tier_priority: z.number().optional().default(0),
+  // 续费条款快照（JSON 文本，购买时写入）：续费价格/周期时长/单期额度/累计上限走旧条款。
+  renew_terms: z.string().optional().default(''),
 })
 
 export type UserSubscription = z.infer<typeof userSubscriptionSchema>
 
+// 续费条款快照（购买时写入，续费走旧条款）。与后端 model.RenewTermsSnapshot 对应。
+export interface RenewTermsSnapshot {
+  duration_seconds: number
+  price_amount: number
+  total_amount: number
+  max_cumulative_seconds: number
+}
+
 export interface UserSubscriptionRecord {
   subscription: UserSubscription
+  // 订阅对应的套餐快照（含已禁用套餐）。后端 self 接口随订阅附带，用于停售套餐
+  // 下架后仍能渲染套餐名/周期/限额等详情。
+  plan?: SubscriptionPlan
 }
 
 // Admin global subscriptions list item (enriched with owner + plan info).
