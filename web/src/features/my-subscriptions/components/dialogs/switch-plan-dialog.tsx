@@ -27,7 +27,11 @@ import { Separator } from '@/components/ui/separator'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { formatQuota } from '@/lib/format'
 import { DEFAULT_CURRENCY_CONFIG } from '@/stores/system-config-store'
-import { formatDuration } from '@/features/subscriptions/lib'
+import {
+  formatDuration,
+  parseRenewTerms,
+  planDurationSeconds,
+} from '@/features/subscriptions/lib'
 
 import { paySubscriptionBalance } from '../../api'
 import type {
@@ -49,13 +53,15 @@ export function calcSubscriptionRemainingValue(
   sub: UserSubscription,
   plan: SubscriptionPlan
 ): number {
-  const total = Number(sub.end_time || 0) - Number(sub.start_time || 0)
-  if (total <= 0) return 0
-  const remain = Math.max(
-    0,
-    Math.min(Number(sub.end_time || 0) - Date.now() / 1000, total)
-  )
-  return Number(plan.price_amount || 0) * (remain / total)
+  // 用续费条款快照的周期时长与价格估值：续费只延长 end_time 不更新 start_time，
+  // 用 end-start 当分母会被历史续费拉伸、稀释当前套餐价值。无快照回退当前套餐。
+  const renewTerms = parseRenewTerms(sub?.renew_terms)
+  const periodSeconds = renewTerms?.duration_seconds ?? planDurationSeconds(plan)
+  if (!periodSeconds || periodSeconds <= 0) return 0
+  const price = renewTerms?.price_amount ?? Number(plan.price_amount || 0)
+  const remain = Math.max(0, Number(sub.end_time || 0) - Date.now() / 1000)
+  // 剩余多期时价值按多期计（用户为多期付过费），不封顶到单期。
+  return price * (remain / periodSeconds)
 }
 
 export function SwitchPlanDialog(props: Props) {

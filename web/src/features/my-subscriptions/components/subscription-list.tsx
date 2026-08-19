@@ -425,6 +425,7 @@ export function SubscriptionList({
           if (!open) setCancelTarget(null)
         }}
         subscription={cancelTarget}
+        plan={cancelTarget ? planMap.get(cancelTarget.subscription?.plan_id) : null}
         onSuccess={refresh}
       />
     </div>

@@ -318,7 +318,7 @@ function CatalogPlanCard({
 
 export function PlanCatalogSection({ grouped }: { grouped: boolean }) {
   const { t } = useTranslation()
-  const { plans, selfData, topupInfo, userQuota, userGroup, refresh } =
+  const { plans, planMap, selfData, topupInfo, userQuota, userGroup, refresh } =
     useMySubscriptions()
 
   const [purchaseOpen, setPurchaseOpen] = useState(false)
@@ -344,16 +344,6 @@ export function PlanCatalogSection({ grouped }: { grouped: boolean }) {
     }
     return map
   }, [allSubscriptions])
-
-  const planMap = useMemo(() => {
-    const map = new Map<number, SubscriptionPlan>()
-    for (const p of plans) {
-      if (p?.plan?.id) {
-        map.set(p.plan.id, p.plan)
-      }
-    }
-    return map
-  }, [plans])
 
   const findSameGroupSub = useCallback(
     (targetPlan?: SubscriptionPlan | null) => {
