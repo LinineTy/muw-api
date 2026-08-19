@@ -564,15 +564,17 @@ func AdminListUserSubscriptions(c *gin.Context) {
 	common.ApiSuccess(c, subs)
 }
 
-// AdminListAllSubscriptions returns a paginated, filterable list of every user
-// subscription across all users. Query params: p, page_size, status, user, plan_id.
+// AdminListAllSubscriptions returns a paginated, filterable, sortable list of
+// every user subscription across all users. Query params: p, page_size, status,
+// user, plan_id, sort_by, sort_order.
 func AdminListAllSubscriptions(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	status := c.Query("status")
 	userKeyword := c.Query("user")
 	planId, _ := strconv.Atoi(c.Query("plan_id"))
+	sortOptions := model.NewSubscriptionSortOptions(c.Query("sort_by"), c.Query("sort_order"))
 	items, total, err := model.GetAllSubscriptionsByAdmin(status, userKeyword, planId,
-		pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+		pageInfo.GetStartIdx(), pageInfo.GetPageSize(), sortOptions)
 	if err != nil {
 		common.ApiError(c, err)
 		return

@@ -16,13 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+
 import type { ColumnDef } from '@tanstack/react-table'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Progress } from '@/components/ui/progress'
 import { StatusBadge } from '@/components/status-badge'
 import { TableId } from '@/components/table-id'
+import { Progress } from '@/components/ui/progress'
 import {
   Tooltip,
   TooltipContent,
@@ -33,8 +34,8 @@ import { cn } from '@/lib/utils'
 
 import { formatTimestamp } from '../lib'
 import type { AdminUserSubscriptionSummary } from '../types'
-import { HistoryPurgeAction } from './subscription-history-purge-action'
 import { SubscriptionAdminActions } from './subscription-admin-actions'
+import { HistoryPurgeAction } from './subscription-history-purge-action'
 
 function getSubscriptionStatusBadge(
   subscription: { status: string; end_time: number },
@@ -47,7 +48,8 @@ function getSubscriptionStatusBadge(
   }
   const isExpired =
     subscription.status !== 'cancelled' &&
-    (subscription.status === 'expired' || subscription.end_time <= Date.now() / 1000)
+    (subscription.status === 'expired' ||
+      subscription.end_time <= Date.now() / 1000)
   const isActive = subscription.status === 'active' && !isExpired
   const isCancelled = subscription.status === 'cancelled'
 
@@ -61,9 +63,7 @@ function getSubscriptionStatusBadge(
       <StatusBadge label={t('Cancelled')} variant='neutral' copyable={false} />
     )
   }
-  return (
-    <StatusBadge label={t('Expired')} variant='neutral' copyable={false} />
-  )
+  return <StatusBadge label={t('Expired')} variant='neutral' copyable={false} />
 }
 
 function getUsageProgressColor(percentage: number): string {
@@ -82,9 +82,8 @@ export function useAdminSubscriptionsColumns(options?: {
   const { t } = useTranslation()
   const actions = options?.actions ?? 'standard'
 
-  return useMemo(
-    (): ColumnDef<AdminUserSubscriptionSummary>[] => {
-      const columns: ColumnDef<AdminUserSubscriptionSummary>[] = [
+  return useMemo((): ColumnDef<AdminUserSubscriptionSummary>[] => {
+    const columns: ColumnDef<AdminUserSubscriptionSummary>[] = [
       {
         accessorFn: (row) => row.subscription.id,
         id: 'id',
@@ -165,6 +164,7 @@ export function useAdminSubscriptionsColumns(options?: {
       {
         id: 'usage',
         header: t('Usage'),
+        enableSorting: false,
         meta: { mobileHidden: true },
         cell: ({ row }) => {
           const { amount_total: total, amount_used: used } =
@@ -190,7 +190,10 @@ export function useAdminSubscriptionsColumns(options?: {
                     {formatQuota(totalNum)}
                   </span>
                 </div>
-                <Progress value={percentage} className={cn('h-1.5', progressColor)} />
+                <Progress
+                  value={percentage}
+                  className={cn('h-1.5', progressColor)}
+                />
               </TooltipTrigger>
               <TooltipContent>
                 <div className='space-y-1 text-xs'>
@@ -211,23 +214,22 @@ export function useAdminSubscriptionsColumns(options?: {
         },
         size: 160,
       },
-      ];
-      if (actions !== false) {
-        columns.push({
-          id: 'actions',
-          header: t('Actions'),
-          meta: { mobileHidden: true },
-          cell: ({ row }) =>
-            actions === 'purge' ? (
-              <HistoryPurgeAction summary={row.original} />
-            ) : (
-              <SubscriptionAdminActions summary={row.original} />
-            ),
-          size: 90,
-        })
-      }
-      return columns
-    },
-    [t, actions]
-  )
+    ]
+    if (actions !== false) {
+      columns.push({
+        id: 'actions',
+        header: t('Actions'),
+        enableSorting: false,
+        meta: { mobileHidden: true },
+        cell: ({ row }) =>
+          actions === 'purge' ? (
+            <HistoryPurgeAction summary={row.original} />
+          ) : (
+            <SubscriptionAdminActions summary={row.original} />
+          ),
+        size: 90,
+      })
+    }
+    return columns
+  }, [t, actions])
 }

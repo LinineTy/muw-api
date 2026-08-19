@@ -15,6 +15,7 @@ import (
 	"github.com/samber/hot"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Subscription duration units
@@ -1860,12 +1861,63 @@ type AdminUserSubscriptionSummary struct {
 	PlanTitle    string            `json:"plan_title"`
 }
 
+// subscriptionSortColumns maps the admin subscriptions table's sortable column
+// ids (frontend column ids) to their physical columns. `usage` is computed
+// (total - used) and deliberately excluded.
+var subscriptionSortColumns = map[string]string{
+	"id":         "id",
+	"user":       "user_id",
+	"plan":       "plan_id",
+	"status":     "status",
+	"start_time": "start_time",
+	"end_time":   "end_time",
+}
+
+type SubscriptionSortOptions struct {
+	SortBy    string
+	SortOrder string
+}
+
+func NewSubscriptionSortOptions(sortBy string, sortOrder string) SubscriptionSortOptions {
+	normalizedSortBy := strings.ToLower(strings.TrimSpace(sortBy))
+	normalizedSortOrder := strings.ToLower(strings.TrimSpace(sortOrder))
+	if _, ok := subscriptionSortColumns[normalizedSortBy]; !ok {
+		normalizedSortBy = "end_time"
+		normalizedSortOrder = "desc"
+	} else if normalizedSortOrder != "asc" {
+		normalizedSortOrder = "desc"
+	}
+
+	return SubscriptionSortOptions{
+		SortBy:    normalizedSortBy,
+		SortOrder: normalizedSortOrder,
+	}
+}
+
+func (options SubscriptionSortOptions) Apply(query *gorm.DB) *gorm.DB {
+	columnName, ok := subscriptionSortColumns[options.SortBy]
+	if !ok {
+		columnName = "end_time"
+	}
+	q := query.Order(clause.OrderByColumn{
+		Column: clause.Column{Name: columnName},
+		Desc:   options.SortOrder != "asc",
+	})
+	if columnName != "id" {
+		q = q.Order(clause.OrderByColumn{
+			Column: clause.Column{Name: "id"},
+			Desc:   true,
+		})
+	}
+	return q
+}
+
 // GetAllSubscriptionsByAdmin returns a paginated, filterable list of all user
 // subscriptions across all users. Filters: status (active/expired/cancelled),
 // userKeyword (username/email/display_name substring or user id), planId.
 // Keeps the {subscription:{...}} wrapper convention so existing frontend types
 // (UserSubscriptionRecord) can be reused alongside the enriched fields.
-func GetAllSubscriptionsByAdmin(status string, userKeyword string, planId int, startIdx int, num int) ([]AdminUserSubscriptionSummary, int64, error) {
+func GetAllSubscriptionsByAdmin(status string, userKeyword string, planId int, startIdx int, num int, sortOptions SubscriptionSortOptions) ([]AdminUserSubscriptionSummary, int64, error) {
 	if num <= 0 || num > searchHardLimit {
 		num = searchHardLimit
 	}
@@ -1899,7 +1951,7 @@ func GetAllSubscriptionsByAdmin(status string, userKeyword string, planId int, s
 	}
 
 	var subs []UserSubscription
-	if err := base.Order("end_time desc, id desc").Limit(num).Offset(startIdx).Find(&subs).Error; err != nil {
+	if err := sortOptions.Apply(base).Limit(num).Offset(startIdx).Find(&subs).Error; err != nil {
 		return nil, 0, err
 	}
 	if len(subs) == 0 {
