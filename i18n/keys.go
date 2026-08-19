@@ -73,10 +73,14 @@ const (
 	MsgRedemptionCreateFailed      = "redemption.create_failed"
 	MsgRedemptionInvalid           = "redemption.invalid"
 	MsgRedemptionUsed              = "redemption.used"
+	MsgRedemptionDisabled          = "redemption.disabled"
 	MsgRedemptionExpired           = "redemption.expired"
 	MsgRedemptionFailed            = "redemption.failed"
 	MsgRedemptionNotProvided       = "redemption.not_provided"
 	MsgRedemptionExpireTimeInvalid = "redemption.expire_time_invalid"
+	MsgRedemptionTypeInvalid       = "redemption.type_invalid"
+	MsgRedemptionTypeMismatch      = "redemption.type_mismatch"
+	MsgRedemptionMaxUsesInvalid    = "redemption.max_uses_invalid"
 )
 
 // User related messages
@@ -126,6 +130,13 @@ const (
 	MsgUserTelegramNotBound          = "user.telegram_not_bound"
 	MsgUserLinuxDOIdEmpty            = "user.linux_do_id_empty"
 	MsgUserQuotaChangeZero           = "user.quota_change_zero"
+	MsgInviteCodeRequired            = "user.invite_code_required"
+	MsgInviteCodeInvalid             = "user.invite_code_invalid"
+	MsgInviteCodeDisabled            = "user.invite_code_disabled"
+	MsgInviteCodeUsed                = "user.invite_code_used"
+	MsgInviteCodeExpired             = "user.invite_code_expired"
+	MsgUserNotActivated              = "user.not_activated"
+	MsgUserAlreadyActivated          = "user.already_activated"
 )
 
 // Quota related messages

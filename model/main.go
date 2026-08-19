@@ -295,6 +295,12 @@ func migrateDB() error {
 		if err := ensureCreditMarkerAnalyzedLogTable(DB); err != nil {
 			return err
 		}
+		if err := ensureRedemptionUsesTable(DB); err != nil {
+			return err
+		}
+		if err := ensureUserActivatedColumn(DB); err != nil {
+			return err
+		}
 		if err := ensureCreditMarkerAnalysisLogRetried(DB); err != nil {
 			return err
 		}
@@ -343,6 +349,9 @@ func migrateDB() error {
 	if err := ensureCreditScoreLogReverted(DB); err != nil {
 		return err
 	}
+	if err := ensureUserActivatedColumn(DB); err != nil {
+		return err
+	}
 	if err := applyPendingMigrations(DB, applied, migrations); err != nil {
 		return err
 	}
@@ -363,6 +372,7 @@ func autoMigrateAll() error {
 		&PasskeyCredential{},
 		&Option{},
 		&Redemption{},
+		&RedemptionUse{},
 		&Ability{},
 		&Log{},
 		&Midjourney{},
@@ -504,6 +514,28 @@ func ensureCreditMarkerAnalyzedLogTable(db *gorm.DB) error {
 		return nil
 	}
 	return db.Migrator().CreateTable(&CreditMarkerAnalyzedLog{})
+}
+
+// ensureRedemptionUsesTable 幂等建 redemption_uses 关联表（每用户每码一次的去重
+// 记录）。AutoMigrate 只在 schema 版本变化时执行；已最新版本库走"跳过迁移"路径
+// 不会重跑，需在这里显式建表，否则 used_count 去重逻辑引用该表会报表不存在。
+func ensureRedemptionUsesTable(db *gorm.DB) error {
+	if db.Migrator().HasTable(&RedemptionUse{}) {
+		return nil
+	}
+	return db.Migrator().CreateTable(&RedemptionUse{})
+}
+
+// ensureUserActivatedColumn 幂等补 users.activated 列（激活制：1=正式 / 0=待激活）
+// 并把存量行归一为已激活。AutoMigrate 只在 schema 版本变化时执行；已最新版本库走
+// "跳过迁移"路径不会重跑，需在这里显式补列，否则激活检查引用该列会报表不存在。
+func ensureUserActivatedColumn(db *gorm.DB) error {
+	if !db.Migrator().HasColumn(&User{}, "activated") {
+		if err := db.Migrator().AddColumn(&User{}, "activated"); err != nil {
+			return err
+		}
+	}
+	return db.Model(&User{}).Where("activated IS NULL").Update("activated", 1).Error
 }
 
 // ensureCreditMarkerAnalysisLogRetried 幂等补 credit_marker_analysis_logs.retried 列

@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 
 import { MaskedValueDisplay } from '@/components/masked-value-display'
@@ -30,9 +30,13 @@ import {
 } from '@/components/ui/tooltip'
 import { formatQuota, formatTimestampToDate } from '@/lib/format'
 
-import { REDEMPTION_FILTER_EXPIRED, REDEMPTION_STATUSES } from '../constants'
+import {
+  REDEMPTION_FILTER_EXPIRED,
+  REDEMPTION_STATUSES,
+  REDEMPTION_TYPES,
+} from '../constants'
 import { isRedemptionExpired, isTimestampExpired } from '../lib'
-import { type Redemption } from '../types'
+import type { Redemption } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
 
 export function useRedemptionsColumns({
@@ -141,6 +145,40 @@ export function useRedemptionsColumns({
       size: 120,
     },
     {
+      accessorKey: 'type',
+      header: t('Type'),
+      meta: { mobileBadge: true },
+      cell: ({ row }) => {
+        const typeConfig = REDEMPTION_TYPES[row.getValue('type') as number]
+        if (!typeConfig) {
+          return null
+        }
+        return (
+          <StatusBadge
+            label={t(typeConfig.labelKey)}
+            variant={typeConfig.variant}
+            copyable={false}
+            className='-ml-1.5'
+          />
+        )
+      },
+      size: 110,
+    },
+    {
+      id: 'uses',
+      header: t('Uses'),
+      meta: { mobileHidden: true },
+      cell: ({ row }) => {
+        const redemption = row.original
+        return (
+          <span className='font-mono text-sm tabular-nums'>
+            {redemption.used_count} / {redemption.max_uses}
+          </span>
+        )
+      },
+      size: 90,
+    },
+    {
       id: 'code',
       accessorKey: 'key',
       header: t('Code'),
@@ -241,7 +279,7 @@ export function useRedemptionsColumns({
                   className='cursor-help'
                 />
               }
-            ></TooltipTrigger>
+            />
             <TooltipContent>
               <div className='space-y-1 text-xs'>
                 <div>

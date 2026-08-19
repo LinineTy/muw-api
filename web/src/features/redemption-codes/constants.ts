@@ -63,6 +63,42 @@ export const REDEMPTION_STATUSES: Record<
 // Note: "Expired" is not a real DB status, it's computed from expired_time
 export const REDEMPTION_FILTER_EXPIRED = 'expired'
 
+// ============================================================================
+// Redemption Type Configuration (purpose of a code)
+// ============================================================================
+
+export const REDEMPTION_TYPE = {
+  TOPUP: 1,
+  INVITE: 2,
+} as const
+
+// labelKey values are i18n keys; use t(config.labelKey) in components
+export const REDEMPTION_TYPES: Record<
+  number,
+  Pick<StatusBadgeProps, 'variant'> & {
+    labelKey: string
+    value: number
+  }
+> = {
+  [REDEMPTION_TYPE.TOPUP]: {
+    labelKey: 'Redemption',
+    variant: 'neutral',
+    value: REDEMPTION_TYPE.TOPUP,
+  },
+  [REDEMPTION_TYPE.INVITE]: {
+    labelKey: 'Invitation',
+    variant: 'info',
+    value: REDEMPTION_TYPE.INVITE,
+  },
+} as const
+
+export function getRedemptionTypeOptions(t: TFunction) {
+  return Object.values(REDEMPTION_TYPES).map((config) => ({
+    label: t(config.labelKey),
+    value: String(config.value),
+  }))
+}
+
 export const REDEMPTION_FILTER_VALUES = [
   String(REDEMPTION_STATUS.ENABLED),
   String(REDEMPTION_STATUS.DISABLED),
@@ -92,6 +128,8 @@ export const REDEMPTION_VALIDATION = {
   NAME_MAX_LENGTH: 20,
   COUNT_MIN: 1,
   COUNT_MAX: 100,
+  MAX_USES_MIN: 1,
+  MAX_USES_MAX: 1000,
 } as const
 
 // ============================================================================
@@ -111,6 +149,7 @@ export const ERROR_MESSAGES = {
   NAME_LENGTH_INVALID: 'Name must be between {{min}} and {{max}} characters',
   COUNT_INVALID: 'Count must be between {{min}} and {{max}}',
   EXPIRED_TIME_INVALID: 'Expired time cannot be earlier than current time',
+  MAX_USES_INVALID: 'Max uses must be between {{min}} and {{max}}',
 } as const
 
 /** For form schema only: returns translated messages with interpolation. */
@@ -125,6 +164,10 @@ export function getRedemptionFormErrorMessages(t: TFunction) {
       max: REDEMPTION_VALIDATION.COUNT_MAX,
     }),
     EXPIRED_TIME_INVALID: t(ERROR_MESSAGES.EXPIRED_TIME_INVALID),
+    MAX_USES_INVALID: t(ERROR_MESSAGES.MAX_USES_INVALID, {
+      min: REDEMPTION_VALIDATION.MAX_USES_MIN,
+      max: REDEMPTION_VALIDATION.MAX_USES_MAX,
+    }),
   } as const
 }
 

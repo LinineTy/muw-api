@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 
@@ -11,10 +12,11 @@ import (
 )
 
 func TestSearchRedemptionsFiltersAndPaginates(t *testing.T) {
-	require.NoError(t, DB.AutoMigrate(&Redemption{}))
+	require.NoError(t, DB.AutoMigrate(&Redemption{}, &RedemptionUse{}))
 	require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Unscoped().Delete(&Redemption{}).Error)
 	t.Cleanup(func() {
 		require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Unscoped().Delete(&Redemption{}).Error)
+		DB.Exec("DELETE FROM redemption_uses")
 	})
 
 	now := common.GetTimestamp()
@@ -102,10 +104,11 @@ func TestSearchRedemptionsFiltersAndPaginates(t *testing.T) {
 
 func setupRedeemFixture(t *testing.T, quota int) (userId int, key string) {
 	t.Helper()
-	require.NoError(t, DB.AutoMigrate(&Redemption{}))
+	require.NoError(t, DB.AutoMigrate(&Redemption{}, &RedemptionUse{}))
 	require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Unscoped().Delete(&Redemption{}).Error)
 	t.Cleanup(func() {
 		require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Unscoped().Delete(&Redemption{}).Error)
+		DB.Exec("DELETE FROM redemption_uses")
 		DB.Exec("DELETE FROM users")
 		DB.Exec("DELETE FROM logs")
 	})
@@ -178,4 +181,223 @@ func TestRedeemConcurrentSingleSuccess(t *testing.T) {
 	var user User
 	require.NoError(t, DB.First(&user, "id = ?", userId).Error)
 	assert.Equal(t, 300, user.Quota, "quota must be credited exactly once")
+}
+
+func TestRedeemMultiUse(t *testing.T) {
+	userId1, key := setupRedeemFixture(t, 100)
+	require.NoError(t, DB.Model(&Redemption{}).Where("key = ?", key).Update("max_uses", 3).Error)
+
+	// max_uses=3：三个不同用户各可兑换一次。
+	users := []int{userId1}
+	for i := 2; i <= 3; i++ {
+		u := &User{
+			Username: fmt.Sprintf("redeem-user-%d", i),
+			Password: "password",
+			Status:   common.UserStatusEnabled,
+			Quota:    0,
+			AffCode:  fmt.Sprintf("aff%d", i),
+		}
+		require.NoError(t, DB.Create(u).Error)
+		users = append(users, u.Id)
+	}
+	for _, uid := range users {
+		quota, err := Redeem(key, uid)
+		require.NoError(t, err)
+		assert.Equal(t, 100, quota)
+	}
+
+	var redemption Redemption
+	require.NoError(t, DB.First(&redemption, "key = ?", key).Error)
+	assert.Equal(t, 3, redemption.UsedCount)
+	assert.Equal(t, common.RedemptionCodeStatusUsed, redemption.Status)
+
+	// 第 4 个用户已用满，必须失败且不加额度。
+	u4 := &User{
+		Username: "redeem-user-4",
+		Password: "password",
+		Status:   common.UserStatusEnabled,
+		Quota:    0,
+		AffCode:  "aff4",
+	}
+	require.NoError(t, DB.Create(u4).Error)
+	_, err := Redeem(key, u4.Id)
+	require.Error(t, err)
+	require.NoError(t, DB.First(&u4, "id = ?", u4.Id).Error)
+	assert.Equal(t, 0, u4.Quota)
+
+	// 用过的用户即使码未满也不能再兑。
+	_, err = Redeem(key, userId1)
+	require.Error(t, err)
+}
+
+func TestRedeemSameUserOnlyOnce(t *testing.T) {
+	userId, key := setupRedeemFixture(t, 100)
+	require.NoError(t, DB.Model(&Redemption{}).Where("key = ?", key).Update("max_uses", 3).Error)
+
+	quota, err := Redeem(key, userId)
+	require.NoError(t, err)
+	assert.Equal(t, 100, quota)
+
+	// 同一用户重复兑换同一码必须被拒，即使 max_uses 尚未用满。
+	for i := 0; i < 3; i++ {
+		_, err := Redeem(key, userId)
+		require.Error(t, err)
+	}
+
+	var user User
+	require.NoError(t, DB.First(&user, "id = ?", userId).Error)
+	assert.Equal(t, 100, user.Quota, "quota must not be credited twice to the same user")
+
+	var redemption Redemption
+	require.NoError(t, DB.First(&redemption, "key = ?", key).Error)
+	assert.Equal(t, 1, redemption.UsedCount)
+}
+
+func TestRedeemRejectsInviteType(t *testing.T) {
+	userId, key := setupRedeemFixture(t, 100)
+	require.NoError(t, DB.Model(&Redemption{}).Where("key = ?", key).Update("type", common.RedemptionCodeTypeInvite).Error)
+
+	_, err := Redeem(key, userId)
+	require.Error(t, err)
+
+	var user User
+	require.NoError(t, DB.First(&user, "id = ?", userId).Error)
+	assert.Equal(t, 0, user.Quota, "invite-type code must not credit quota")
+}
+
+func TestRedeemRejectsDisabled(t *testing.T) {
+	userId, key := setupRedeemFixture(t, 100)
+	require.NoError(t, DB.Model(&Redemption{}).Where("key = ?", key).Update("status", common.RedemptionCodeStatusDisabled).Error)
+
+	_, err := Redeem(key, userId)
+	require.ErrorIs(t, err, ErrRedemptionDisabled)
+
+	var user User
+	require.NoError(t, DB.First(&user, "id = ?", userId).Error)
+	assert.Equal(t, 0, user.Quota, "disabled code must not credit quota")
+}
+
+func TestOccupyInviteCodeLifecycle(t *testing.T) {
+	require.NoError(t, DB.AutoMigrate(&Redemption{}, &RedemptionUse{}))
+	require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Unscoped().Delete(&Redemption{}).Error)
+	t.Cleanup(func() {
+		require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Unscoped().Delete(&Redemption{}).Error)
+		DB.Exec("DELETE FROM redemption_uses")
+	})
+
+	key := "20000000000000000000000000000001"
+	invite := &Redemption{
+		Name:        "invite-test",
+		Key:         key,
+		Status:      common.RedemptionCodeStatusEnabled,
+		Type:        common.RedemptionCodeTypeInvite,
+		MaxUses:     2,
+		CreatedTime: common.GetTimestamp(),
+	}
+	require.NoError(t, DB.Create(invite).Error)
+
+	// 第一次占位成功，返回码 id。
+	codeId, err := OccupyInviteCode(key)
+	require.NoError(t, err)
+	assert.Equal(t, invite.Id, codeId)
+
+	// 释放回滚：名额恢复、状态回可注册。
+	require.NoError(t, ReleaseInviteCode(codeId))
+	var r Redemption
+	require.NoError(t, DB.First(&r, "id = ?", codeId).Error)
+	assert.Equal(t, 0, r.UsedCount)
+	assert.Equal(t, common.RedemptionCodeStatusEnabled, r.Status)
+
+	// 连续占满（max_uses=2）后置为已用，再占失败。
+	_, err = OccupyInviteCode(key)
+	require.NoError(t, err)
+	_, err = OccupyInviteCode(key)
+	require.NoError(t, err)
+	require.NoError(t, DB.First(&r, "id = ?", codeId).Error)
+	assert.Equal(t, 2, r.UsedCount)
+	assert.Equal(t, common.RedemptionCodeStatusUsed, r.Status)
+	_, err = OccupyInviteCode(key)
+	require.ErrorIs(t, err, ErrInviteCodeUsed)
+
+	// 普通兑换码（type=1）不能当作注册邀请码。
+	topupKey := "20000000000000000000000000000002"
+	require.NoError(t, DB.Create(&Redemption{
+		Name:        "topup-test",
+		Key:         topupKey,
+		Status:      common.RedemptionCodeStatusEnabled,
+		Type:        common.RedemptionCodeTypeTopup,
+		MaxUses:     1,
+		CreatedTime: common.GetTimestamp(),
+	}).Error)
+	_, err = OccupyInviteCode(topupKey)
+	require.ErrorIs(t, err, ErrInviteCodeInvalid)
+
+	// 已用完的兑换码（type=1, status=Used）同样报"无效的邀请码"，而不是"已被使用"：
+	// 类型不符优先于状态判断。
+	usedTopupKey := "20000000000000000000000000000003"
+	require.NoError(t, DB.Create(&Redemption{
+		Name:        "used-topup-test",
+		Key:         usedTopupKey,
+		Status:      common.RedemptionCodeStatusUsed,
+		Type:        common.RedemptionCodeTypeTopup,
+		MaxUses:     1,
+		CreatedTime: common.GetTimestamp(),
+	}).Error)
+	_, err = OccupyInviteCode(usedTopupKey)
+	require.ErrorIs(t, err, ErrInviteCodeInvalid)
+}
+
+// 并发占位恰好 max_uses 次成功（镜像 TestRedeemConcurrentSingleSuccess）。
+func TestOccupyInviteCodeConcurrent(t *testing.T) {
+	require.NoError(t, DB.AutoMigrate(&Redemption{}, &RedemptionUse{}))
+	require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Unscoped().Delete(&Redemption{}).Error)
+	t.Cleanup(func() {
+		require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Unscoped().Delete(&Redemption{}).Error)
+		DB.Exec("DELETE FROM redemption_uses")
+	})
+
+	key := "20000000000000000000000000000003"
+	require.NoError(t, DB.Create(&Redemption{
+		Name:        "invite-concurrent",
+		Key:         key,
+		Status:      common.RedemptionCodeStatusEnabled,
+		Type:        common.RedemptionCodeTypeInvite,
+		MaxUses:     3,
+		CreatedTime: common.GetTimestamp(),
+	}).Error)
+
+	const goroutines = 8
+	successes := make([]bool, goroutines)
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for i := 0; i < goroutines; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			if _, err := OccupyInviteCode(key); err == nil {
+				successes[idx] = true
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	successCount := 0
+	for _, ok := range successes {
+		if ok {
+			successCount++
+		}
+	}
+	assert.Equal(t, 3, successCount, "exactly max_uses concurrent occupies should succeed")
+}
+
+func TestActivateUserById(t *testing.T) {
+	userId, _ := setupRedeemFixture(t, 0)
+	require.NoError(t, DB.Model(&User{}).Where("id = ?", userId).Update("activated", 0).Error)
+
+	require.NoError(t, ActivateUserById(userId))
+	var u User
+	require.NoError(t, DB.First(&u, "id = ?", userId).Error)
+	assert.Equal(t, 1, u.Activated, "user must become activated")
+
+	// 幂等：已激活再激活不报错。
+	require.NoError(t, ActivateUserById(userId))
 }
