@@ -10,6 +10,7 @@
   "Applies to web page assets and fallback routes": "Applies to web page assets and fallback routes",
   "Are you sure you want to delete \"{{name}}\"? Users who authenticated with this provider will no longer be able to log in.": "Are you sure you want to delete \"{{name}}\"? Users who authenticated with this provider will no longer be able to log in.",
   "Are you sure you want to delete vendor \"{{name}}\"? This action cannot be undone.": "Are you sure you want to delete vendor \"{{name}}\"? This action cannot be undone.",
+  "Are you sure you want to manually complete this subscription order? The user will receive the corresponding subscription.": "Are you sure you want to manually complete this subscription order? The user will receive the corresponding subscription.",
   "When enabled, the group is re-synced from the LinuxDO trust level on every login.": "When enabled, the group is re-synced from the LinuxDO trust level on every login.",
   "Auto-renew failed: insufficient balance or plan unavailable. Please top up or renew manually.": "Auto-renew failed: insufficient balance or plan unavailable. Please top up or renew manually.",
   "Back to sign in": "Back to sign in",
@@ -74,6 +75,7 @@
   "Maximum total quota issued to all users this period. 0 = unlimited": "Maximum total quota issued to all users this period. 0 = unlimited",
   "Models that already support vision, one per line. Requests to these models skip the fallback. Matching is case-insensitive and matches model names containing the entry.": "Models that already support vision, one per line. Requests to these models skip the fallback. Matching is case-insensitive and matches model names containing the entry.",
   "Mutual exclusion: plans in the same group cannot be held at the same time. Buying another plan in the group triggers a prorated upgrade/downgrade switch. Different from the purchase-gate group below.": "Mutual exclusion: plans in the same group cannot be held at the same time. Buying another plan in the group triggers a prorated upgrade/downgrade switch. Different from the purchase-gate group below.",
+  "No reset within the subscription period": "No reset within the subscription period",
   "Not available in the current time window": "Not available in the current time window",
   "Not redirected automatically? Back to sign in": "Not redirected automatically? Back to sign in",
   "Not redirected automatically? Continue to the dashboard": "Not redirected automatically? Continue to the dashboard",
@@ -292,5 +294,11 @@
   "Set the default time range for the hit statistics charts.": "Set the default time range for the hit statistics charts.",
   "Require a valid invitation code to register": "Require a valid invitation code to register",
   "Choose whether this code grants quota or allows registration": "Choose whether this code grants quota or allows registration",
-  "This site requires an invitation code to activate your account": "This site requires an invitation code to activate your account"
+  "This site requires an invitation code to activate your account": "This site requires an invitation code to activate your account",
+  "Covers the whole validity · acts as the subscription total cap": "Covers the whole validity · acts as the subscription total cap",
+  "Each window (e.g. every 5 hours / every 30 days) caps its own quota. Windows longer than the validity act as the subscription total cap.": "Each window (e.g. every 5 hours / every 30 days) caps its own quota. Windows longer than the validity act as the subscription total cap.",
+  "How many units the window spans before refreshing. E.g. 5 hours = refreshes every 5 hours.": "How many units the window spans before refreshing. E.g. 5 hours = refreshes every 5 hours.",
+  "Saving these quota changes will reset the quotas of all active subscriptions under this plan (usage counters restart from zero). Continue?": "Saving these quota changes will reset the quotas of all active subscriptions under this plan (usage counters restart from zero). Continue?",
+  "Windows must be ordered by duration: each window must be strictly longer than the previous one.": "Windows must be ordered by duration: each window must be strictly longer than the previous one.",
+  "At least one window is required in the dynamic window model.": "At least one window is required in the dynamic window model."
 }
