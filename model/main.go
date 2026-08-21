@@ -313,6 +313,12 @@ func migrateDB() error {
 		if err := ensureCreditScoreLogReverted(DB); err != nil {
 			return err
 		}
+		if err := ensureSubscriptionPlanResetWindows(DB); err != nil {
+			return err
+		}
+		if err := ensureUserSubscriptionWindowState(DB); err != nil {
+			return err
+		}
 		common.SysLog(fmt.Sprintf("schema already at version %d, skipping migration", applied))
 		return nil
 	}
@@ -350,6 +356,12 @@ func migrateDB() error {
 		return err
 	}
 	if err := ensureUserActivatedColumn(DB); err != nil {
+		return err
+	}
+	if err := ensureSubscriptionPlanResetWindows(DB); err != nil {
+		return err
+	}
+	if err := ensureUserSubscriptionWindowState(DB); err != nil {
 		return err
 	}
 	if err := applyPendingMigrations(DB, applied, migrations); err != nil {
@@ -603,6 +615,35 @@ func ensureSubscriptionPlanRecommendedBackfill(db *gorm.DB) error {
 		Update("is_recommended", 0).Error
 }
 
+// ensureSubscriptionPlanResetWindows 幂等补 subscription_plans.reset_windows 列（动态重置
+// 窗口列表，JSON 文本）。SQLite 走手工 DDL（migrateDB 每次启动执行）；MySQL/PG 在升版本
+// 路径由 AutoMigrate 加列；存量库（已最新版本）走"跳过迁移"路径，需在这里显式补列。
+// 无默认值的列在存量行上是 NULL，统一归一空串（= legacy，走老路径）。
+func ensureSubscriptionPlanResetWindows(db *gorm.DB) error {
+	if !db.Migrator().HasColumn(&SubscriptionPlan{}, "reset_windows") {
+		if err := db.Migrator().AddColumn(&SubscriptionPlan{}, "reset_windows"); err != nil {
+			return err
+		}
+	}
+	return db.Model(&SubscriptionPlan{}).
+		Where("reset_windows IS NULL").
+		Update("reset_windows", "").Error
+}
+
+// ensureUserSubscriptionWindowState 幂等补 user_subscriptions.window_state 列（动态窗口
+// 消费状态，JSON 文本）。列由 AutoMigrate（升版本路径）或此处（已最新版本库的跳过路径）
+// 添加；存量订阅无动态窗口状态，统一归一空串（= legacy 语义）。
+func ensureUserSubscriptionWindowState(db *gorm.DB) error {
+	if !db.Migrator().HasColumn(&UserSubscription{}, "window_state") {
+		if err := db.Migrator().AddColumn(&UserSubscription{}, "window_state"); err != nil {
+			return err
+		}
+	}
+	return db.Model(&UserSubscription{}).
+		Where("window_state IS NULL").
+		Update("window_state", "").Error
+}
+
 // ensureQuotaClaimLockSeeded 确保额度池全局锁行存在（id=1），供 MySQL/PG 并发领取串行化
 func ensureQuotaClaimLockSeeded(db *gorm.DB) error {
 	var count int64
@@ -825,6 +866,7 @@ func ensureSubscriptionPlanTableSQLite() error {
 ` + "`max_cumulative_seconds`" + ` bigint NOT NULL DEFAULT 0,
 ` + "`exclusive_group`" + ` varchar(64) DEFAULT '',
 ` + "`allowed_groups`" + ` text DEFAULT '',
+` + "`reset_windows`" + ` text DEFAULT '',
 ` + "`created_at`" + ` bigint,
 ` + "`updated_at`" + ` bigint,
 PRIMARY KEY (` + "`id`" + `)
@@ -867,6 +909,7 @@ PRIMARY KEY (` + "`id`" + `)
 		{Name: "max_cumulative_seconds", DDL: "`max_cumulative_seconds` bigint NOT NULL DEFAULT 0"},
 		{Name: "exclusive_group", DDL: "`exclusive_group` varchar(64) DEFAULT ''"},
 		{Name: "allowed_groups", DDL: "`allowed_groups` text DEFAULT ''"},
+		{Name: "reset_windows", DDL: "`reset_windows` text DEFAULT ''"},
 		{Name: "created_at", DDL: "`created_at` bigint"},
 		{Name: "updated_at", DDL: "`updated_at` bigint"},
 	}

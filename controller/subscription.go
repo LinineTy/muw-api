@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -24,6 +25,92 @@ type BillingPreferenceRequest struct {
 
 type SubscriptionBalancePayRequest struct {
 	PlanId int `json:"plan_id"`
+}
+
+// validateResetWindows 校验动态重置窗口列表：单位白名单、时长 > 0、额度 >= 0、无重复定义。
+func validateResetWindows(raw string) error {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var windows []model.ResetWindow
+	if err := common.UnmarshalJsonStr(raw, &windows); err != nil {
+		return errors.New("重置窗口格式错误，应为 JSON 数组")
+	}
+	seen := make(map[string]struct{}, len(windows))
+	prevSeconds := int64(-1)
+	for i, w := range windows {
+		switch w.Unit {
+		case model.SubscriptionWindowUnitHour, model.SubscriptionWindowUnitDay,
+			model.SubscriptionWindowUnitWeek, model.SubscriptionWindowUnitMonth:
+		default:
+			return fmt.Errorf("第 %d 个窗口时长单位无效", i+1)
+		}
+		if w.Value <= 0 {
+			return fmt.Errorf("第 %d 个窗口时长数值必须大于 0", i+1)
+		}
+		if w.Limit < 0 {
+			return fmt.Errorf("第 %d 个窗口额度不能为负数", i+1)
+		}
+		key := fmt.Sprintf("%s:%d", w.Unit, w.Value)
+		if _, ok := seen[key]; ok {
+			return fmt.Errorf("存在重复窗口定义（第 %d 个）：每%s %d 已配置", i+1, w.Unit, w.Value)
+		}
+		seen[key] = struct{}{}
+		// 严格递增：后一个窗口时长必须大于前一个（月按 30 天估，与前端校验一致），
+		// 保证窗口列表天然按时长升序，展示与状态索引不依赖顺序调整。
+		secs := int64(0)
+		switch w.Unit {
+		case model.SubscriptionWindowUnitHour:
+			secs = int64(w.Value) * 3600
+		case model.SubscriptionWindowUnitDay:
+			secs = int64(w.Value) * 86400
+		case model.SubscriptionWindowUnitWeek:
+			secs = int64(w.Value) * 7 * 86400
+		case model.SubscriptionWindowUnitMonth:
+			secs = int64(w.Value) * 30 * 86400
+		}
+		if i > 0 && secs <= prevSeconds {
+			return fmt.Errorf("第 %d 个窗口时长必须严格大于前一个（窗口列表需按时长递增排列）", i+1)
+		}
+		prevSeconds = secs
+	}
+	return nil
+}
+
+// resetWindowsConflictsWithLegacy 动态窗口与 legacy 上限字段是否互斥。
+func resetWindowsConflictsWithLegacy(p model.SubscriptionPlan) bool {
+	return (p.QuotaResetPeriod != "" && p.QuotaResetPeriod != model.SubscriptionResetNever) ||
+		p.ResetAmountLimit > 0 || p.WeeklyAmountLimit > 0 || p.MonthlyAmountLimit > 0
+}
+
+// validatePlanResetWindows 对套餐的 reset_windows 做校验；非空时校验格式、非空列表、
+// 至少一个有效额度与互斥。空串 = legacy（合法）。
+func validatePlanResetWindows(p model.SubscriptionPlan) error {
+	if strings.TrimSpace(p.ResetWindowsRaw) == "" {
+		return nil
+	}
+	if err := validateResetWindows(p.ResetWindowsRaw); err != nil {
+		return err
+	}
+	windows := p.ResetWindows()
+	if len(windows) == 0 {
+		return errors.New("动态窗口至少需要配置一个窗口")
+	}
+	hasLimit := false
+	for _, w := range windows {
+		if w.Limit > 0 {
+			hasLimit = true
+			break
+		}
+	}
+	if !hasLimit {
+		return errors.New("至少一个窗口额度必须大于 0（全部为 0 等于无上限，应改用 legacy 的无限额度）")
+	}
+	if resetWindowsConflictsWithLegacy(p) {
+		return errors.New("动态窗口与周期/周/月上限互斥，不能同时配置")
+	}
+	return nil
 }
 
 // ---- User APIs ----
@@ -235,6 +322,25 @@ func GetSubscriptionExpiring(c *gin.Context) {
 	common.ApiSuccess(c, items)
 }
 
+// GetUserSubscriptionOrders 当前用户的订阅订单（分页 + 可选 trade_no 搜索 + status/payment_method 过滤）。
+// 订阅购买/续费的支付记录在此列表，与充值记录分离展示。
+func GetUserSubscriptionOrders(c *gin.Context) {
+	userId := c.GetInt("id")
+	if userId <= 0 {
+		common.ApiErrorMsg(c, "无效的用户")
+		return
+	}
+	pageInfo := common.GetPageQuery(c)
+	orders, total, err := model.GetUserSubscriptionOrders(userId, pageInfo, c.Query("keyword"), c.Query("status"), c.Query("method"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(orders)
+	common.ApiSuccess(c, pageInfo)
+}
+
 // ---- Admin APIs ----
 
 func AdminListSubscriptionPlans(c *gin.Context) {
@@ -341,6 +447,10 @@ func AdminCreateSubscriptionPlan(c *gin.Context) {
 		}
 	}
 	req.Plan.AllowedGroups = model.NormalizeSubscriptionPlanAllowedGroups(req.Plan.AllowedGroups)
+	if err := validatePlanResetWindows(req.Plan); err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
 	err := model.DB.Create(&req.Plan).Error
 	if err != nil {
 		common.ApiError(c, err)
@@ -433,8 +543,18 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 		}
 	}
 	req.Plan.AllowedGroups = model.NormalizeSubscriptionPlanAllowedGroups(req.Plan.AllowedGroups)
+	if err := validatePlanResetWindows(req.Plan); err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
 
 	err := model.DB.Transaction(func(tx *gorm.DB) error {
+		// 读取旧 reset_windows，判断窗口列表是否变化（转换/编辑 → 重置活跃订阅）。
+		var oldResetWindows string
+		if err := tx.Model(&model.SubscriptionPlan{}).Where("id = ?", id).
+			Select("reset_windows").Scan(&oldResetWindows).Error; err != nil {
+			return err
+		}
 		// update plan (allow zero values updates with map)
 		updateMap := map[string]interface{}{
 			"title":                      req.Plan.Title,
@@ -446,8 +566,8 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 			"custom_seconds":             req.Plan.CustomSeconds,
 			"enabled":                    req.Plan.Enabled,
 			"sort_order":                 req.Plan.SortOrder,
-			"is_recommended":          req.Plan.IsRecommended,
-			"max_purchase_per_user":   req.Plan.MaxPurchasePerUser,
+			"is_recommended":             req.Plan.IsRecommended,
+			"max_purchase_per_user":      req.Plan.MaxPurchasePerUser,
 			"total_amount":               req.Plan.TotalAmount,
 			"upgrade_group":              req.Plan.UpgradeGroup,
 			"downgrade_group":            req.Plan.DowngradeGroup,
@@ -460,7 +580,16 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 			"exclusive_group":            req.Plan.ExclusiveGroup,
 			"allowed_groups":             req.Plan.AllowedGroups,
 			"priority":                   req.Plan.Priority,
+			"reset_windows":              req.Plan.ResetWindowsRaw,
 			"updated_at":                 common.GetTimestamp(),
+		}
+		// 动态窗口模型下强制清空 legacy 上限字段，避免双轨语义歧义。
+		if req.Plan.ResetWindowsRaw != "" {
+			updateMap["quota_reset_period"] = model.SubscriptionResetNever
+			updateMap["quota_reset_custom_seconds"] = int64(0)
+			updateMap["reset_amount_limit"] = int64(0)
+			updateMap["weekly_amount_limit"] = int64(0)
+			updateMap["monthly_amount_limit"] = int64(0)
 		}
 		if req.Plan.AllowBalancePay != nil {
 			updateMap["allow_balance_pay"] = *req.Plan.AllowBalancePay
@@ -470,6 +599,29 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 		}
 		if err := tx.Model(&model.SubscriptionPlan{}).Where("id = ?", id).Updates(updateMap).Error; err != nil {
 			return err
+		}
+		// 窗口列表变化 → 重置该套餐活跃订阅的窗口计数（"改动即重置"，管理端主动重定义额度）。
+		if req.Plan.ResetWindowsRaw != "" && req.Plan.ResetWindowsRaw != oldResetWindows {
+			planForReset := &model.SubscriptionPlan{Id: id, ResetWindowsRaw: req.Plan.ResetWindowsRaw}
+			if _, err := model.ApplyPlanWindowsToActiveSubscriptions(tx, planForReset, common.GetTimestamp()); err != nil {
+				return err
+			}
+		} else if req.Plan.ResetWindowsRaw == "" && oldResetWindows != "" {
+			// 动态 → legacy：同样"改动即重置"，重授 legacy 计数（总额度/周期/周/月清零重锚）。
+			// 对称于上方，避免转回老模型后冻结的旧计数复活造成"白嫖"或"卡死"。
+			planForReset := &model.SubscriptionPlan{
+				Id:                      id,
+				TotalAmount:             req.Plan.TotalAmount,
+				QuotaResetPeriod:        req.Plan.QuotaResetPeriod,
+				QuotaResetCustomSeconds: req.Plan.QuotaResetCustomSeconds,
+				ResetAmountLimit:        req.Plan.ResetAmountLimit,
+				WeeklyAmountLimit:       req.Plan.WeeklyAmountLimit,
+				MonthlyAmountLimit:      req.Plan.MonthlyAmountLimit,
+				MaxCumulativeSeconds:    req.Plan.MaxCumulativeSeconds,
+			}
+			if _, err := model.ApplyPlanLegacyToActiveSubscriptions(tx, planForReset, common.GetTimestamp()); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
@@ -752,5 +904,67 @@ func AdminPurgeUserSubscription(c *gin.Context) {
 		common.ApiSuccess(c, gin.H{"message": msg})
 		return
 	}
+	common.ApiSuccess(c, nil)
+}
+
+// AdminListSubscriptionOrders 管理员查看全平台订阅订单（分页 + 可选 trade_no 搜索 + status/payment_method 过滤）。
+func AdminListSubscriptionOrders(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	orders, total, err := model.GetAllSubscriptionOrders(pageInfo, c.Query("keyword"), c.Query("status"), c.Query("method"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(orders)
+	common.ApiSuccess(c, pageInfo)
+}
+
+type AdminCompleteSubscriptionOrderRequest struct {
+	TradeNo string `json:"trade_no"`
+}
+
+// AdminCompleteSubscriptionOrder 管理员补单订阅订单（pending → 已支付并创建/续期订阅）。
+// 用于 epay 回调丢失/失败、或订阅购买卡单时的人工处置，与充值补单对齐。
+func AdminCompleteSubscriptionOrder(c *gin.Context) {
+	var req AdminCompleteSubscriptionOrderRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.TradeNo == "" {
+		common.ApiErrorMsg(c, "参数错误")
+		return
+	}
+	// 订单级互斥，防止并发补单。
+	LockOrder(req.TradeNo)
+	defer UnlockOrder(req.TradeNo)
+	// 管理员补单不校验支付网关（ExpectedPaymentProvider 传空跳过校验），
+	// ProviderPayload 覆盖为补单来源，便于追溯。
+	payload := fmt.Sprintf("admin_complete:%s", c.ClientIP())
+	if err := model.CompleteSubscriptionOrder(req.TradeNo, payload, "", ""); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	// 资金处置高危操作：补单留管理审计。
+	recordManageAudit(c, "subscription.order_complete", map[string]interface{}{
+		"trade_no": req.TradeNo,
+	})
+	common.ApiSuccess(c, nil)
+}
+
+// AdminRejectSubscriptionOrder 管理员关闭待支付订阅订单（pending → expired）。
+// 用于无法完成的订单的人工收尾。
+func AdminRejectSubscriptionOrder(c *gin.Context) {
+	var req AdminCompleteSubscriptionOrderRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.TradeNo == "" {
+		common.ApiErrorMsg(c, "参数错误")
+		return
+	}
+	LockOrder(req.TradeNo)
+	defer UnlockOrder(req.TradeNo)
+	if err := model.ExpireSubscriptionOrder(req.TradeNo, ""); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	recordManageAudit(c, "subscription.order_reject", map[string]interface{}{
+		"trade_no": req.TradeNo,
+	})
 	common.ApiSuccess(c, nil)
 }

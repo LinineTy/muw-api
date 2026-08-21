@@ -425,50 +425,33 @@ func GetUserTopUps(c *gin.Context) {
 	status := c.Query("status")
 	method := c.Query("method")
 
-	var (
-		topups []*model.TopUp
-		total  int64
-		err    error
-	)
-	if keyword != "" {
-		topups, total, err = model.SearchUserTopUps(userId, keyword, pageInfo, status, method)
-	} else {
-		topups, total, err = model.GetUserTopUps(userId, pageInfo, status, method)
-	}
+	// 充值记录 + 订阅订单合并返回（订单中心「充值记录」Tab），按时间倒序分页。
+	records, total, err := model.GetUserBillingRecords(userId, pageInfo, keyword, status, method, c.Query("type"))
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
 
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(topups)
+	pageInfo.SetItems(records)
 	common.ApiSuccess(c, pageInfo)
 }
 
-// GetAllTopUps 管理员获取全平台充值记录
+// GetAllTopUps 管理员获取全平台充值记录 + 订阅订单
 func GetAllTopUps(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	keyword := c.Query("keyword")
 	status := c.Query("status")
 	method := c.Query("method")
 
-	var (
-		topups []*model.TopUp
-		total  int64
-		err    error
-	)
-	if keyword != "" {
-		topups, total, err = model.SearchAllTopUps(keyword, pageInfo, status, method)
-	} else {
-		topups, total, err = model.GetAllTopUps(pageInfo, status, method)
-	}
+	records, total, err := model.GetAllBillingRecords(pageInfo, keyword, status, method, c.Query("type"))
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
 
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(topups)
+	pageInfo.SetItems(records)
 	common.ApiSuccess(c, pageInfo)
 }
 
