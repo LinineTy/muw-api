@@ -56,7 +56,7 @@ export function TwoFACard({ loading: pageLoading }: TwoFACardProps) {
     return (
       <Card data-card-hover='false' className='gap-0 overflow-hidden py-0'>
         <CardHeader className='p-3 sm:p-5'>
-          <Skeleton className='h-6 w-48' />
+          <Skeleton className='h-5 w-48' />
           <Skeleton className='mt-2 h-4 w-64' />
         </CardHeader>
         <CardContent className='p-3 sm:p-5'>
@@ -70,7 +70,7 @@ export function TwoFACard({ loading: pageLoading }: TwoFACardProps) {
     <>
       <Card data-card-hover='false' className='gap-0 overflow-hidden py-0'>
         <CardHeader className='p-3 sm:p-5'>
-          <CardTitle className='text-lg tracking-tight sm:text-xl'>
+          <CardTitle className='text-sm font-semibold'>
             {t('Two-Factor Authentication')}
           </CardTitle>
           <CardDescription className='text-xs sm:text-sm'>

@@ -77,10 +77,7 @@ export function TitledCard({
             )}
             <div className='min-w-0'>
               <CardTitle
-                className={cn(
-                  'text-lg tracking-tight sm:text-xl',
-                  titleClassName
-                )}
+                className={cn('text-sm font-semibold', titleClassName)}
               >
                 {title}
               </CardTitle>

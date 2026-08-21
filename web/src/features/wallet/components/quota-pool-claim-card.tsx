@@ -18,7 +18,6 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 import {
-  CalendarDays,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -32,7 +31,6 @@ import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { IconBadge } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Tooltip,
@@ -40,7 +38,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { formatQuota } from '@/lib/format'
+import { formatQuotaWithCurrency } from '@/lib/currency'
 import dayjs from '@/lib/dayjs'
 import { cn } from '@/lib/utils'
 
@@ -67,6 +65,9 @@ export function QuotaPoolClaimCard({
   onBalanceChange,
 }: QuotaPoolClaimCardProps) {
   const { t } = useTranslation()
+  // 额度池金额显示统一 2 位小数（大值保留 K/M 缩写）
+  const fmtQuota = (v: number) =>
+    formatQuotaWithCurrency(v, { digitsLarge: 2, digitsSmall: 2, abbreviate: true })
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date()
     return new Date(now.getFullYear(), now.getMonth(), 1)
@@ -196,7 +197,7 @@ export function QuotaPoolClaimCard({
       if (res.success && res.data) {
         toast.success(
           t('Claimed {{quota}} from the quota pool', {
-            quota: formatQuota(res.data.quota),
+            quota: fmtQuota(res.data.quota),
           })
         )
         onBalanceChange?.()
@@ -291,12 +292,12 @@ export function QuotaPoolClaimCard({
     if (!statusData) return ''
     if (statusData.amount_type === 'fixed') {
       return t('Each claim awards {{quota}}', {
-        quota: formatQuota(statusData.amount),
+        quota: fmtQuota(statusData.amount),
       })
     }
     return t('Each claim awards a random {{min}} – {{max}}', {
-      min: formatQuota(statusData.min_amount),
-      max: formatQuota(statusData.max_amount),
+      min: fmtQuota(statusData.min_amount),
+      max: fmtQuota(statusData.max_amount),
     })
   }, [statusData, t])
 
@@ -341,7 +342,7 @@ export function QuotaPoolClaimCard({
   }
 
   const headerSubtitle = claimedToday
-    ? `${t('Today')} +${formatQuota(todayRecord.quota)}${
+    ? `${t('Today')} +${fmtQuota(todayRecord.quota)}${
         (todayRecord.count || 0) > 1 ? ` (${todayRecord.count})` : ''
       }`
     : checkedInToday
@@ -359,15 +360,9 @@ export function QuotaPoolClaimCard({
               className='flex min-w-0 flex-1 items-start gap-3 rounded-lg text-left whitespace-normal outline-none'
               onClick={() => setCollapsed((v) => !v)}
             >
-              <IconBadge tone='neutral' size='lg' className='sm:size-11'>
-                <CalendarDays
-                  className='h-4 w-4 sm:h-5 sm:w-5'
-                  strokeWidth={2}
-                />
-              </IconBadge>
               <div className='min-w-0 flex-1'>
                 <div className='flex flex-wrap items-center gap-1.5 sm:gap-2'>
-                  <h3 className='text-base font-semibold tracking-tight sm:text-lg'>
+                  <h3 className='text-sm font-semibold tracking-tight'>
                     {t('Quota Pool')}
                   </h3>
                   {claimedToday && (
@@ -418,7 +413,7 @@ export function QuotaPoolClaimCard({
               </div>
               <div className='bg-card p-3 text-center sm:p-5'>
                 <div className='text-xl font-semibold tracking-tight tabular-nums sm:text-2xl'>
-                  {formatQuota(status?.user_granted || 0)}
+                  {fmtQuota(status?.user_granted || 0)}
                 </div>
                 <div className='text-muted-foreground mt-0.5 text-[10px] font-medium sm:mt-1 sm:text-xs'>
                   {t('Earned this period')}
@@ -426,7 +421,7 @@ export function QuotaPoolClaimCard({
               </div>
               <div className='bg-card p-3 text-center sm:p-5'>
                 <div className='text-xl font-semibold tracking-tight tabular-nums sm:text-2xl'>
-                  {formatQuota(status?.global_granted || 0)}
+                  {fmtQuota(status?.global_granted || 0)}
                 </div>
                 <div className='text-muted-foreground mt-0.5 text-[10px] font-medium sm:mt-1 sm:text-xs'>
                   {t('Global issued this period')}
@@ -550,7 +545,7 @@ export function QuotaPoolClaimCard({
                                     })}
                                   </div>
                                   <div className='text-muted-foreground mt-0.5'>
-                                    +{formatQuota(dayRecord.quota)}
+                                    +{fmtQuota(dayRecord.quota)}
                                   </div>
                                 </>
                               )}
@@ -577,21 +572,21 @@ export function QuotaPoolClaimCard({
                     </li>
                     <li>
                       {t('This month {{quota}} claimed', {
-                        quota: formatQuota(monthQuota),
+                        quota: fmtQuota(monthQuota),
                       })}
                     </li>
                     <li>{amountSummary}</li>
                     {statusData && statusData.pool_period_cap > 0 && (
                       <li>
                         {t('Global cap: {{quota}} per period', {
-                          quota: formatQuota(statusData.pool_period_cap),
+                          quota: fmtQuota(statusData.pool_period_cap),
                         })}
                       </li>
                     )}
                     {statusData && statusData.user_period_cap > 0 && (
                       <li>
                         {t('User cap: {{quota}} per period', {
-                          quota: formatQuota(statusData.user_period_cap),
+                          quota: fmtQuota(statusData.user_period_cap),
                         })}
                       </li>
                     )}

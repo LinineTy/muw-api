@@ -51,7 +51,7 @@ export function ProfileSettingsCard({
     return (
       <Card data-card-hover='false' className='gap-0 overflow-hidden py-0'>
         <CardHeader className='border-b p-3 !pb-3 sm:p-5 sm:!pb-5'>
-          <Skeleton className='h-6 w-32' />
+          <Skeleton className='h-5 w-32' />
           <Skeleton className='mt-2 h-4 w-48' />
         </CardHeader>
         <CardContent className='space-y-4 p-3 sm:p-5'>
@@ -68,8 +68,6 @@ export function ProfileSettingsCard({
     <TitledCard
       title={t('Settings')}
       description={t('Configure your account preferences and integrations')}
-      icon={<Settings className='h-4 w-4' />}
-      iconTone='info'
       disableHoverEffect
     >
       <Tabs value={activeTab} onValueChange={setActiveTab}>

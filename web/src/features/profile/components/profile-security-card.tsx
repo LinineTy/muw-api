@@ -52,7 +52,7 @@ export function ProfileSecurityCard({
     return (
       <Card data-card-hover='false' className='gap-0 overflow-hidden py-0'>
         <CardHeader className='border-b p-3 !pb-3 sm:p-5 sm:!pb-5'>
-          <Skeleton className='h-6 w-32' />
+          <Skeleton className='h-5 w-32' />
           <Skeleton className='mt-2 h-4 w-48' />
         </CardHeader>
         <CardContent className='space-y-3 p-3 sm:p-5'>
@@ -95,8 +95,6 @@ export function ProfileSecurityCard({
       <TitledCard
         title={t('Security')}
         description={t('Manage your security settings and account access')}
-        icon={<Shield className='h-4 w-4' />}
-        iconTone='success'
         disableHoverEffect
       >
         <div className='grid grid-cols-1 gap-2.5 sm:gap-3 md:grid-cols-3'>

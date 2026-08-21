@@ -109,14 +109,15 @@ export async function transferAffiliateQuota(
 }
 
 /**
- * Get billing history for current user
+ * Get billing history for current user (充值记录 + 订阅订单合并，可加 type 筛选)
  */
 export async function getUserBillingHistory(
   page: number,
   pageSize: number,
   keyword?: string,
   status?: string,
-  method?: string
+  method?: string,
+  type?: string
 ): Promise<ApiResponse<BillingHistoryResponse>> {
   const params = new URLSearchParams({
     p: page.toString(),
@@ -130,6 +131,9 @@ export async function getUserBillingHistory(
   }
   if (method) {
     params.append('method', method)
+  }
+  if (type) {
+    params.append('type', type)
   }
   const res = await api.get(`/api/user/topup/self?${params.toString()}`)
   return res.data
@@ -143,7 +147,8 @@ export async function getAllBillingHistory(
   pageSize: number,
   keyword?: string,
   status?: string,
-  method?: string
+  method?: string,
+  type?: string
 ): Promise<ApiResponse<BillingHistoryResponse>> {
   const params = new URLSearchParams({
     p: page.toString(),
@@ -158,6 +163,9 @@ export async function getAllBillingHistory(
   if (method) {
     params.append('method', method)
   }
+  if (type) {
+    params.append('type', type)
+  }
   const res = await api.get(`/api/user/topup?${params.toString()}`)
   return res.data
 }
@@ -170,6 +178,32 @@ export async function completeOrder(
 ): Promise<ApiResponse> {
   const res = await api.post('/api/user/topup/complete', request)
   return res.data
+}
+
+/**
+ * 管理员补单订阅订单（epay 回调丢失/失败时人工完成并创建/续期订阅）。
+ */
+export async function completeSubscriptionOrder(
+  tradeNo: string
+): Promise<boolean> {
+  const res = await api.post(
+    '/api/subscription/admin/orders/complete',
+    { trade_no: tradeNo },
+    { skipErrorHandler: true } as Record<string, unknown>
+  )
+  return isApiSuccess(res.data)
+}
+
+/**
+ * 管理员驳回/关闭待支付订阅订单（pending → expired）。
+ */
+export async function rejectSubscriptionOrder(tradeNo: string): Promise<boolean> {
+  const res = await api.post(
+    '/api/subscription/admin/orders/reject',
+    { trade_no: tradeNo },
+    { skipErrorHandler: true } as Record<string, unknown>
+  )
+  return isApiSuccess(res.data)
 }
 
 /**

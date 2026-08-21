@@ -173,8 +173,10 @@ export function LoginSessionsCard() {
     <>
       <Card data-card-hover='false'>
         <CardHeader>
-          <CardTitle>{t('Login sessions')}</CardTitle>
-          <CardDescription>
+          <CardTitle className='text-sm font-semibold'>
+            {t('Login sessions')}
+          </CardTitle>
+          <CardDescription className='text-xs'>
             {t('Review and sign out devices currently using your account.')}
           </CardDescription>
           <CardAction>

@@ -27,6 +27,8 @@ import {
   getUserBillingHistory,
   getAllBillingHistory,
   completeOrder,
+  completeSubscriptionOrder,
+  rejectSubscriptionOrder,
   isApiSuccess,
 } from '../api'
 import type { TopupRecord } from '../types'
@@ -46,6 +48,8 @@ interface UseBillingHistoryOptions {
   status?: string
   /** Server-side payment method filter ('' = all) */
   method?: string
+  /** Server-side order type filter ('' = all, topup / subscription) */
+  type?: string
 }
 
 export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
@@ -55,6 +59,7 @@ export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
     keyword = '',
     status,
     method,
+    type,
   } = options
   const isAdmin = useIsAdmin()
 
@@ -66,6 +71,7 @@ export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
   const requestIdRef = useRef(0)
   const [loading, setLoading] = useState(false)
   const [completing, setCompleting] = useState(false)
+  const [completingSub, setCompletingSub] = useState<string | null>(null)
 
   /**
    * Fetch billing history
@@ -75,8 +81,22 @@ export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
     setLoading(true)
     try {
       const response = isAdmin
-        ? await getAllBillingHistory(page, pageSize, debouncedKeyword, status, method)
-        : await getUserBillingHistory(page, pageSize, debouncedKeyword, status, method)
+        ? await getAllBillingHistory(
+            page,
+            pageSize,
+            debouncedKeyword,
+            status,
+            method,
+            type
+          )
+        : await getUserBillingHistory(
+            page,
+            pageSize,
+            debouncedKeyword,
+            status,
+            method,
+            type
+          )
 
       if (requestId !== requestIdRef.current) return
 
@@ -103,7 +123,7 @@ export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
         setLoading(false)
       }
     }
-  }, [debouncedKeyword, isAdmin, page, pageSize, status, method])
+  }, [debouncedKeyword, isAdmin, page, pageSize, status, method, type])
 
   /**
    * Complete a pending order (admin only)
@@ -139,6 +159,60 @@ export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
     [isAdmin, fetchBillingHistory]
   )
 
+  // 管理员补单订阅订单（pending → 创建/续期订阅）。
+  const handleCompleteSubscriptionOrder = useCallback(
+    async (tradeNo: string): Promise<boolean> => {
+      if (!isAdmin) {
+        toast.error(i18next.t('Admin access required'))
+        return false
+      }
+      setCompletingSub(tradeNo)
+      try {
+        const ok = await completeSubscriptionOrder(tradeNo)
+        if (ok) {
+          toast.success(i18next.t('Order completed'))
+          await fetchBillingHistory()
+        } else {
+          toast.error(i18next.t('Failed to complete order'))
+        }
+        return ok
+      } catch {
+        toast.error(i18next.t('Failed to complete order'))
+        return false
+      } finally {
+        setCompletingSub(null)
+      }
+    },
+    [isAdmin, fetchBillingHistory]
+  )
+
+  // 管理员驳回/关闭待支付订阅订单（pending → expired）。
+  const handleRejectSubscriptionOrder = useCallback(
+    async (tradeNo: string): Promise<boolean> => {
+      if (!isAdmin) {
+        toast.error(i18next.t('Admin access required'))
+        return false
+      }
+      setCompletingSub(tradeNo)
+      try {
+        const ok = await rejectSubscriptionOrder(tradeNo)
+        if (ok) {
+          toast.success(i18next.t('Order rejected'))
+          await fetchBillingHistory()
+        } else {
+          toast.error(i18next.t('Failed to reject order'))
+        }
+        return ok
+      } catch {
+        toast.error(i18next.t('Failed to reject order'))
+        return false
+      } finally {
+        setCompletingSub(null)
+      }
+    },
+    [isAdmin, fetchBillingHistory]
+  )
+
   /**
    * Change page
    */
@@ -168,10 +242,13 @@ export function useBillingHistory(options: UseBillingHistoryOptions = {}) {
     pageSize,
     loading,
     completing,
+    completingSub,
     isAdmin,
     handlePageChange,
     handlePageSizeChange,
     handleCompleteOrder,
+    handleCompleteSubscriptionOrder,
+    handleRejectSubscriptionOrder,
     refresh: fetchBillingHistory,
   }
 }

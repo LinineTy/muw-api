@@ -16,13 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Share2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { IconBadge } from '@/components/ui/icon-badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatQuota } from '@/lib/format'
@@ -63,20 +61,15 @@ export function AffiliateRewardsCard({
   return (
     <Card data-card-hover='false' className='py-0'>
       <CardContent className='flex flex-col gap-3 p-3 sm:gap-4 sm:p-4'>
-        <div className='flex min-w-0 items-center gap-2.5'>
-          <IconBadge tone='chart-3'>
-            <Share2 />
-          </IconBadge>
-          <div className='min-w-0'>
-            <h3 className='truncate text-sm font-semibold'>
-              {t('Referral Program')}
-            </h3>
-            <p className='text-muted-foreground line-clamp-1 text-xs'>
-              {t(
-                'Earn rewards when users join through your referral link. Transfer accumulated rewards to your balance anytime.'
-              )}
-            </p>
-          </div>
+        <div className='min-w-0'>
+          <h3 className='truncate text-sm font-semibold'>
+            {t('Referral Program')}
+          </h3>
+          <p className='text-muted-foreground line-clamp-1 text-xs'>
+            {t(
+              'Earn rewards when users join through your referral link. Transfer accumulated rewards to your balance anytime.'
+            )}
+          </p>
         </div>
 
         <div className='grid grid-cols-3 gap-1.5 text-center'>
