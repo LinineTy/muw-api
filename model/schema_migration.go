@@ -60,7 +60,11 @@ func (SchemaMigration) TableName() string { return "schema_migrations" }
 // 同属 v14：users 新增 activated 列（激活制：1=正式 / 0=待激活）。存量用户一律视为
 // 已激活（default:1 回填），此处防御性 backfill 归一任何残余 NULL。列由 AutoMigrate
 // 或 ensureUserActivatedColumn（已最新版本库的跳过路径）补建。
-const CurrentSchemaVersion = 14
+// v15：subscription_plans 新增 reset_windows 列、user_subscriptions 新增 window_state 列
+// （动态重置窗口模型：多级独立额度窗口，订阅相对刷新；窗口 ≥ 有效期为封顶上限）。
+// 列由 AutoMigrate（user_subscriptions）/SQLite 手工 DDL 或 ensure*（subscription_plans）
+// 添加，无需数据转换——存量套餐 reset_windows 为空走 legacy 路径。
+const CurrentSchemaVersion = 15
 
 // Migration 是一个可单独应用、记录版本戳的迁移步骤。Up 按版本升序执行，
 // 用于 AutoMigrate 补不了的结构改造（换类型、删列）与数据迁移/特殊适配。
@@ -148,6 +152,10 @@ var migrations = []Migration{
 		// users.activated 列：存量用户一律视为已激活（1），归一任何残余 NULL。
 		return db.Unscoped().Model(&User{}).Where("activated IS NULL").Update("activated", 1).Error
 	}},
+	// v15：subscription_plans.reset_windows / user_subscriptions.window_state 列由
+	// AutoMigrate（user_subscriptions）或 SQLite 手工 DDL / ensure*（subscription_plans）
+	// 添加，无需数据转换；只打版本戳推进 shouldSkipMigration，避免 SQLite 每次启动整表重建。
+	{Version: 15, Name: "subscription-reset-windows", Up: func(db *gorm.DB) error { return nil }},
 }
 
 // ensureSchemaMigrationsTable 用纯 SQL 建版本表，避免对版本表自身跑 AutoMigrate。

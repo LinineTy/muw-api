@@ -53,8 +53,8 @@ func TestAdminResetUserSubscriptionsByPlanResetsAllActiveMatchesAndAdvancesTime(
 
 	activeEnd := now + 30*24*3600
 	expiredEnd := now - 1
-	seedSubscriptionResetSub(t, &UserSubscription{Id: 9201, UserId: 101, PlanId: plan.Id, AmountTotal: 1000, AmountUsed: 300, CycleStartAt: now - 3600, CycleUsed: 150, NextCycleResetAt: now + 120, StartTime: now - 3600, EndTime: activeEnd, Status: "active"})
-	seedSubscriptionResetSub(t, &UserSubscription{Id: 9202, UserId: 101, PlanId: plan.Id, AmountTotal: 1000, AmountUsed: 500, CycleStartAt: now - 3600, CycleUsed: 250, NextCycleResetAt: now + 120, StartTime: now - 3600, EndTime: activeEnd, Status: "active"})
+	seedSubscriptionResetSub(t, &UserSubscription{Id: 9201, UserId: 101, PlanId: plan.Id, AmountTotal: 1000, AmountUsed: 300, CycleStartAt: now - 3600, CycleUsed: 150, NextCycleResetAt: now + 120, StartTime: now - 3600, EndTime: activeEnd, Status: "active", WeekStartAt: now - 2*86400, WeekUsed: 40, MonthStartAt: now - 5*86400, MonthUsed: 90})
+	seedSubscriptionResetSub(t, &UserSubscription{Id: 9202, UserId: 101, PlanId: plan.Id, AmountTotal: 1000, AmountUsed: 500, CycleStartAt: now - 3600, CycleUsed: 250, NextCycleResetAt: now + 120, StartTime: now - 3600, EndTime: activeEnd, Status: "active", WeekStartAt: now - 2*86400, WeekUsed: 60, MonthStartAt: now - 5*86400, MonthUsed: 120})
 	seedSubscriptionResetSub(t, &UserSubscription{Id: 9203, UserId: 101, PlanId: otherPlan.Id, AmountTotal: 100, AmountUsed: 60, CycleStartAt: now - 3600, CycleUsed: 30, NextCycleResetAt: now + 120, StartTime: now - 3600, EndTime: activeEnd, Status: "active"})
 	seedSubscriptionResetSub(t, &UserSubscription{Id: 9204, UserId: 101, PlanId: plan.Id, AmountTotal: 1000, AmountUsed: 700, CycleStartAt: now - 7200, CycleUsed: 400, NextCycleResetAt: now - 10, StartTime: now - 7200, EndTime: expiredEnd, Status: "active"})
 	seedSubscriptionResetSub(t, &UserSubscription{Id: 9205, UserId: 102, PlanId: plan.Id, AmountTotal: 1000, AmountUsed: 800, CycleStartAt: now - 3600, CycleUsed: 450, NextCycleResetAt: now + 120, StartTime: now - 3600, EndTime: activeEnd, Status: "active"})
@@ -81,6 +81,11 @@ func TestAdminResetUserSubscriptionsByPlanResetsAllActiveMatchesAndAdvancesTime(
 		assert.GreaterOrEqual(t, sub.CycleStartAt, beforeReset)
 		assert.LessOrEqual(t, sub.CycleStartAt, afterReset)
 		assert.Equal(t, calcNextResetTime(time.Unix(sub.CycleStartAt, 0), plan, sub.EndTime), sub.NextCycleResetAt)
+		// 手动重置必须同时清零自然周/月上限（历史缺口：只清周期、周/月仍卡着用户）。
+		assert.Zero(t, sub.WeekUsed, "重置后周上限必须清零")
+		assert.Zero(t, sub.MonthUsed, "重置后月上限必须清零")
+		assert.GreaterOrEqual(t, sub.WeekStartAt, beforeReset, "周窗口应重置起点")
+		assert.GreaterOrEqual(t, sub.MonthStartAt, beforeReset, "月窗口应重置起点")
 	}
 	assert.EqualValues(t, 30, getSubscriptionResetSub(t, 9203).CycleUsed)
 	assert.EqualValues(t, 400, getSubscriptionResetSub(t, 9204).CycleUsed)

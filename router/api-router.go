@@ -163,6 +163,7 @@ func SetApiRouter(router *gin.Engine) {
 			subscriptionRoute.POST("/auto-renew", middleware.SubscriptionActionRateLimit(), controller.SubscriptionUpdateAutoRenew)
 			subscriptionRoute.POST("/priority", middleware.SubscriptionActionRateLimit(), controller.SubscriptionUpdatePriority)
 			subscriptionRoute.GET("/expiring", controller.GetSubscriptionExpiring)
+			subscriptionRoute.GET("/orders", middleware.DisableCache(), controller.GetUserSubscriptionOrders)
 		}
 		subscriptionAdminRoute := apiRouter.Group("/subscription/admin")
 		subscriptionAdminRoute.Use(middleware.AdminAuth())
@@ -183,6 +184,9 @@ func SetApiRouter(router *gin.Engine) {
 			subscriptionAdminRoute.POST("/user_subscriptions/:id/invalidate", controller.AdminInvalidateUserSubscription)
 			subscriptionAdminRoute.DELETE("/user_subscriptions/:id", controller.AdminDeleteUserSubscription)
 			subscriptionAdminRoute.POST("/user_subscriptions/:id/purge", controller.AdminPurgeUserSubscription)
+			subscriptionAdminRoute.GET("/orders", middleware.DisableCache(), controller.AdminListSubscriptionOrders)
+			subscriptionAdminRoute.POST("/orders/complete", middleware.DisableCache(), controller.AdminCompleteSubscriptionOrder)
+			subscriptionAdminRoute.POST("/orders/reject", middleware.DisableCache(), controller.AdminRejectSubscriptionOrder)
 		}
 
 		// Subscription payment callbacks (no auth)
