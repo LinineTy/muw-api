@@ -208,15 +208,21 @@ export interface QuotaPoolRecordsResponse {
 export type TopupStatus = 'success' | 'pending' | 'expired'
 
 /**
- * Topup billing record
+ * Topup billing record (充值记录 + 订阅订单合并视图)
  */
 export interface TopupRecord {
   /** Record ID */
   id: number
   /** User ID */
   user_id: number
-  /** Topup amount (quota) */
-  amount: number
+  /** Order type: 充值记录 / 订阅订单 */
+  type: 'topup' | 'subscription'
+  /** Topup amount (quota); subscription orders omit this */
+  amount?: number
+  /** Plan id for subscription orders */
+  plan_id?: number
+  /** Plan title snapshot for subscription orders */
+  plan_title?: string
   /** Payment amount (actual money paid) */
   money: number
   /** Trade/order number */

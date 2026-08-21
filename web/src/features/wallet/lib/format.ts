@@ -23,7 +23,8 @@ import { DEFAULT_DISCOUNT_RATE } from '../constants'
 // ============================================================================
 
 /**
- * Format large quota numbers with K/M suffix
+ * Format large quota numbers with K/M suffix.
+ * Small values round to 2 decimals (trailing zeros stripped).
  */
 export function formatQuotaShort(quota: number): string {
   if (quota >= 1000000) {
@@ -32,7 +33,7 @@ export function formatQuotaShort(quota: number): string {
   if (quota >= 1000) {
     return `${(quota / 1000).toFixed(1)}K`
   }
-  return quota.toString()
+  return Number(quota.toFixed(2)).toString()
 }
 
 /**

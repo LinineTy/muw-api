@@ -16,7 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { LayoutDashboard } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -29,7 +28,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { IconBadge } from '@/components/ui/icon-badge'
 import { Switch } from '@/components/ui/switch'
 import { api } from '@/lib/api'
 import { ROLE } from '@/lib/roles'
@@ -137,11 +135,6 @@ export function SidebarModulesCard() {
           key: 'personal',
           title: t('Personal Settings'),
           description: t('Personal info settings'),
-        },
-        {
-          key: 'my_subscriptions',
-          title: t('My Subscriptions'),
-          description: t('Manage your own subscription plans and billing.'),
         },
       ],
     },
@@ -294,19 +287,12 @@ export function SidebarModulesCard() {
   return (
     <Card data-card-hover='false' className='gap-0 overflow-hidden py-0'>
       <CardHeader className='border-b p-3 !pb-3 sm:p-5 sm:!pb-5'>
-        <div className='flex items-center gap-3'>
-          <IconBadge tone='info' size='title'>
-            <LayoutDashboard />
-          </IconBadge>
-          <div className='min-w-0'>
-            <CardTitle className='text-lg tracking-tight sm:text-xl'>
-              {t('Sidebar Personal Settings')}
-            </CardTitle>
-            <CardDescription className='text-xs sm:text-sm'>
-              {t('Customize sidebar display content')}
-            </CardDescription>
-          </div>
-        </div>
+        <CardTitle className='text-sm font-semibold'>
+          {t('Sidebar Personal Settings')}
+        </CardTitle>
+        <CardDescription className='text-xs sm:text-sm'>
+          {t('Customize sidebar display content')}
+        </CardDescription>
       </CardHeader>
       <CardContent className='space-y-4 p-3 sm:space-y-5 sm:p-5'>
         {sectionDefs.map((section) => {

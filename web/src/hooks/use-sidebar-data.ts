@@ -20,7 +20,6 @@ import {
   Activity,
   Box,
   CreditCard,
-  Crown,
   Database,
   FileText,
   FlaskConical,
@@ -128,11 +127,6 @@ export function useSidebarData(): SidebarData {
             title: t('Cloud Space'),
             url: '/space',
             icon: Database,
-          },
-          {
-            title: t('My Subscriptions'),
-            url: '/my-subscriptions',
-            icon: Crown,
           },
           {
             title: t('Profile'),

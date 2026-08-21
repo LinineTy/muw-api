@@ -116,7 +116,6 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/usage-logs/drawing': { section: 'console', module: 'midjourney' },
   '/usage-logs/task': { section: 'console', module: 'task' },
   '/wallet': { section: 'personal', module: 'topup' },
-  '/my-subscriptions': { section: 'personal', module: 'my_subscriptions' },
   '/space': { section: 'personal', module: 'space' },
   '/orders': { section: 'personal', module: 'orders' },
   '/profile': { section: 'personal', module: 'personal' },

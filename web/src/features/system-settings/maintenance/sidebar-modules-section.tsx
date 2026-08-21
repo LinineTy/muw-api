@@ -136,10 +136,6 @@ export function SidebarModulesSection({
         title: t('Profile'),
         description: t('Personal settings and profile management.'),
       },
-      my_subscriptions: {
-        title: t('My Subscriptions'),
-        description: t('Manage your own subscription plans and billing.'),
-      },
       space: {
         title: t('Cloud Space'),
         description: t('Manage your cloud storage and synced conversations.'),

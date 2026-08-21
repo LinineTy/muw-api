@@ -231,8 +231,10 @@ export function CreditScoreCard() {
     <Card>
       <CardHeader className='flex flex-row items-start justify-between space-y-0'>
         <div>
-          <CardTitle>{t('Credit Score')}</CardTitle>
-          <CardDescription>
+          <CardTitle className='text-sm font-semibold'>
+            {t('Credit Score')}
+          </CardTitle>
+          <CardDescription className='text-xs'>
             {t(
               'Deducted on content-safety violations. Frozen accounts cannot call the API.'
             )}

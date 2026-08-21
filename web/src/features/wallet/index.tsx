@@ -24,9 +24,11 @@ import { SectionPageLayout } from '@/components/layout'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { getSelf } from '@/lib/api'
+import { MySubscriptionsProvider } from '@/features/my-subscriptions/components/my-subscriptions-provider'
 
 import { AffiliateRewardsCard } from './components/affiliate-rewards-card'
 import { PaymentConfirmDialog } from './components/dialogs/payment-confirm-dialog'
+import { RedemptionDialog } from './components/dialogs/redemption-dialog'
 import { TransferDialog } from './components/dialogs/transfer-dialog'
 import { QuotaPoolClaimCard } from './components/quota-pool-claim-card'
 import { RechargeFormCard } from './components/recharge-form-card'
@@ -66,7 +68,7 @@ export function Wallet(props: WalletProps) {
   const [paymentLoading, setPaymentLoading] = useState<string | null>(null)
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
   const [transferDialogOpen, setTransferDialogOpen] = useState(false)
-  const [redemptionCode, setRedemptionCode] = useState('')
+  const [redemptionDialogOpen, setRedemptionDialogOpen] = useState(false)
 
   const { status } = useStatus()
   const { currency } = useSystemConfig()
@@ -121,9 +123,9 @@ export function Wallet(props: WalletProps) {
 
   useEffect(() => {
     if (props.initialShowHistory) {
-      // 旧 /wallet?show_history=true 深链 → 跳订单中心（跳转由 navigate 改变 URL，
-      // 无需再 replaceState）。
-      navigate({ to: '/orders' })
+      // 旧 /wallet?show_history=true 深链 → 跳订单中心充值记录 Tab（跳转由 navigate
+      // 改变 URL，无需再 replaceState）。
+      navigate({ to: '/orders', search: { tab: 'billing' } })
     }
   }, [props.initialShowHistory, navigate])
 
@@ -199,14 +201,12 @@ export function Wallet(props: WalletProps) {
   }
 
   // Handle redemption
-  const handleRedeem = async () => {
-    if (!redemptionCode) return
-
-    const success = await redeemCode(redemptionCode)
+  const handleRedeem = async (code: string) => {
+    const success = await redeemCode(code)
     if (success) {
-      setRedemptionCode('')
       await fetchUser()
     }
+    return success
   }
 
   // Handle transfer
@@ -236,34 +236,35 @@ export function Wallet(props: WalletProps) {
         <SectionPageLayout.Title>{t('Wallet')}</SectionPageLayout.Title>
         <SectionPageLayout.Content>
           <div className='mx-auto flex w-full max-w-7xl flex-col gap-4 sm:gap-5'>
-            <div className='grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] xl:items-start'>
-              <div className='flex min-w-0 flex-col gap-4 sm:gap-5'>
-                <WalletStatsCard user={user} loading={userLoading} />
-                <div id='wallet-add-funds' className='scroll-mt-4'>
-                  <RechargeFormCard
-                    topupInfo={topupInfo}
-                    presetAmounts={presetAmounts}
-                    selectedPreset={selectedPreset}
-                    onSelectPreset={handleSelectPreset}
-                    topupAmount={topupAmount}
-                    onTopupAmountChange={handleTopupAmountChange}
-                    paymentAmount={paymentAmount}
-                    calculating={calculating}
-                    onPaymentMethodSelect={handlePaymentMethodSelect}
-                    paymentLoading={paymentLoading}
-                    redemptionCode={redemptionCode}
-                    onRedemptionCodeChange={setRedemptionCode}
-                    onRedeem={handleRedeem}
-                    redeeming={redeeming}
-                    topupLink={topupInfo?.topup_link}
-                    loading={topupLoading}
-                    priceRatio={(status?.price as number) || 1}
-                    usdExchangeRate={effectiveUsdExchangeRate}
-                    onOpenBilling={() => navigate({ to: '/orders' })}
+            {/* 布局比例与个人资料页一致：左 1fr / 右 minmax(360px, 0.46fr) */}
+            <div className='grid gap-4 sm:gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.46fr)] xl:items-start'>
+              <MySubscriptionsProvider>
+                <div className='flex min-w-0 flex-col gap-4 sm:gap-5'>
+                  <WalletStatsCard
+                    user={user}
+                    loading={userLoading}
+                    onOpenRedemption={() => setRedemptionDialogOpen(true)}
                   />
+                  <SubscriptionSummaryCard />
+                  <div id='wallet-add-funds' className='scroll-mt-4'>
+                    <RechargeFormCard
+                      topupInfo={topupInfo}
+                      presetAmounts={presetAmounts}
+                      selectedPreset={selectedPreset}
+                      onSelectPreset={handleSelectPreset}
+                      topupAmount={topupAmount}
+                      onTopupAmountChange={handleTopupAmountChange}
+                      paymentAmount={paymentAmount}
+                      calculating={calculating}
+                      onPaymentMethodSelect={handlePaymentMethodSelect}
+                      paymentLoading={paymentLoading}
+                      loading={topupLoading}
+                      priceRatio={(status?.price as number) || 1}
+                      usdExchangeRate={effectiveUsdExchangeRate}
+                    />
+                  </div>
                 </div>
-                <SubscriptionSummaryCard />
-              </div>
+              </MySubscriptionsProvider>
 
               <div className='flex min-w-0 flex-col gap-4 sm:gap-5'>
                 {quotaPoolEnabled && (
@@ -302,6 +303,14 @@ export function Wallet(props: WalletProps) {
         onConfirm={handleTransfer}
         availableQuota={user?.aff_quota ?? 0}
         transferring={transferring}
+      />
+
+      <RedemptionDialog
+        open={redemptionDialogOpen}
+        onOpenChange={setRedemptionDialogOpen}
+        onRedeem={handleRedeem}
+        redeeming={redeeming}
+        topupLink={topupInfo?.topup_link}
       />
     </>
   )
