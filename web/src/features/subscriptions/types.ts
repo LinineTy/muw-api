@@ -51,9 +51,26 @@ export const subscriptionPlanSchema = z.object({
   total_amount: z.number(),
   upgrade_group: z.string().optional(),
   downgrade_group: z.string().optional(),
+  // 动态重置窗口列表（后端 wire 格式：JSON 数组文本）。非空 = 动态模型；空 = legacy。
+  reset_windows: z.string().optional().default(''),
 })
 
 export type SubscriptionPlan = z.infer<typeof subscriptionPlanSchema>
+
+// 动态重置窗口定义（与后端 model.ResetWindow 对应）。unit: hour/day/week/month。
+export interface ResetWindow {
+  unit: 'hour' | 'day' | 'week' | 'month'
+  value: number
+  limit: number
+}
+
+// 动态窗口在订阅上的独立消费状态（与后端 model.WindowState 对应）。
+export interface WindowState {
+  idx: number
+  cycle_used: number
+  cycle_start_at: number
+  next_reset_at: number
+}
 
 export interface PlanRecord {
   plan: SubscriptionPlan
@@ -89,6 +106,8 @@ export const userSubscriptionSchema = z.object({
   tier_priority: z.number().optional().default(0),
   // 续费条款快照（JSON 文本，购买时写入）：续费价格/周期时长/单期额度/累计上限走旧条款。
   renew_terms: z.string().optional().default(''),
+  // 动态窗口消费状态（后端 wire 格式：JSON 数组文本）。仅动态模型订阅使用。
+  window_state: z.string().optional().default(''),
 })
 
 export type UserSubscription = z.infer<typeof userSubscriptionSchema>

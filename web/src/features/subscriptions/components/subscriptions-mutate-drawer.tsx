@@ -17,11 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { CalendarClock, Plus, RefreshCw, Settings2 } from 'lucide-react'
+import { CalendarClock, Plus, RefreshCw, Settings2, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useForm, type Resolver } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+
+import { ConfirmDialog } from '@/components/confirm-dialog'
 
 import {
   SideDrawerSection,
@@ -62,6 +64,12 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Switch } from '@/components/ui/switch'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
 
 import {
@@ -72,11 +80,15 @@ import {
 } from '../api'
 import { getDurationUnitOptions, getResetPeriodOptions } from '../constants'
 import {
+  deriveWindowsFromLegacy,
   getPlanFormSchema,
   PLAN_FORM_DEFAULTS,
   planToFormValues,
   formValuesToPlanPayload,
+  planValiditySeconds,
+  windowRowDurationSeconds,
   type PlanFormValues,
+  type ResetWindowFormRow,
 } from '../lib'
 import type { PlanRecord } from '../types'
 import { useSubscriptions } from './subscriptions-provider'
@@ -141,8 +153,76 @@ export function SubscriptionsMutateDrawer({
 
   const durationUnit = form.watch('duration_unit')
   const resetPeriod = form.watch('quota_reset_period')
+  const quotaModel = form.watch('quota_model')
+  const resetWindows = form.watch('reset_windows')
 
-  const onSubmit = async (values: PlanFormValues) => {
+  // 严格递增校验的违规行索引（用于红色高亮与错误提示）。
+  const windowOrderBad = (() => {
+    const bad = new Set<number>()
+    let prev = -1
+    for (const [i, row] of (resetWindows || []).entries()) {
+      const secs = windowRowDurationSeconds(row)
+      if (i > 0 && secs <= prev) bad.add(i)
+      prev = secs
+    }
+    return bad
+  })()
+
+  // "改动即重置"：编辑模式且窗口列表有变化时，保存前弹确认。
+  const originalWindowsRaw = currentRow?.plan?.reset_windows || ''
+  const [confirmResetSave, setConfirmResetSave] = useState(false)
+  const [pendingSubmit, setPendingSubmit] = useState<PlanFormValues | null>(null)
+
+  const windowUnitOpts = [
+    { value: 'hour', label: t('Hours') },
+    { value: 'day', label: t('Days') },
+    { value: 'week', label: t('Weeks') },
+    { value: 'month', label: t('Months') },
+  ]
+
+  const handleQuotaModelChange = (model: 'legacy' | 'windows') => {
+    if (model === 'windows') {
+      const rows = form.getValues('reset_windows')
+      if (!rows || rows.length === 0) {
+        form.setValue('reset_windows', deriveWindowsFromLegacy(form.getValues()), {
+          shouldValidate: true,
+        })
+      }
+    }
+    form.setValue('quota_model', model, { shouldValidate: true })
+  }
+
+  const addWindow = () => {
+    const rows = form.getValues('reset_windows') || []
+    form.setValue('reset_windows', [...rows, { unit: 'day', value: 1, limit: 0 }], {
+      shouldValidate: true,
+    })
+  }
+
+  const updateWindow = (index: number, patch: Partial<ResetWindowFormRow>) => {
+    const rows = [...(form.getValues('reset_windows') || [])]
+    rows[index] = { ...rows[index], ...patch }
+    form.setValue('reset_windows', rows, { shouldValidate: true })
+  }
+
+  const removeWindow = (index: number) => {
+    const rows = form.getValues('reset_windows') || []
+    form.setValue('reset_windows', rows.filter((_, i) => i !== index), {
+      shouldValidate: true,
+    })
+  }
+
+  const doSubmit = async (values: PlanFormValues) => {
+    // 动态窗口模式不允许空列表（"[]" 落库会分裂成无限 legacy，见后端校验）。
+    if (
+      values.quota_model === 'windows' &&
+      (!values.reset_windows || values.reset_windows.length === 0)
+    ) {
+      toast.error(
+        t('At least one window is required in the dynamic window model.')
+      )
+      return
+    }
     setIsSubmitting(true)
     try {
       const payload = formValuesToPlanPayload(values)
@@ -166,6 +246,27 @@ export function SubscriptionsMutateDrawer({
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const onSubmit = async (values: PlanFormValues) => {
+    // 编辑模式且额度模型相关配置有变化 → 先弹"改动即重置"确认（后端转换/编辑都会
+    // 重置该套餐全部活跃订阅的配额计数）：
+    //  - windows 模式增删改窗口列表；
+    //  - 动态 → legacy 转换（后端重授 legacy 计数）。
+    if (isEdit) {
+      const payload = formValuesToPlanPayload(values)
+      const newRaw = payload.plan.reset_windows
+      const isWindowsNow = values.quota_model === 'windows'
+      const windowsChanged =
+        isWindowsNow && newRaw !== originalWindowsRaw
+      const dynamicToLegacy = !isWindowsNow && originalWindowsRaw !== ''
+      if (windowsChanged || dynamicToLegacy) {
+        setPendingSubmit(values)
+        setConfirmResetSave(true)
+        return
+      }
+    }
+    await doSubmit(values)
   }
 
   const durationUnitOpts = getDurationUnitOptions(t)
@@ -270,43 +371,48 @@ export function SubscriptionsMutateDrawer({
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name='total_amount'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        {t('Quota ({{currency}})', { currency: currencyLabel })}
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type='number'
-                          min={0}
-                          step={tokensOnly ? 1 : 0.01}
-                          placeholder={
-                            tokensOnly
-                              ? t('Enter quota in tokens')
-                              : t('Enter quota in {{currency}}', {
-                                  currency: currencyLabel,
-                                })
-                          }
-                          onChange={(e) =>
-                            field.onChange(
-                              Number.parseFloat(e.target.value) || 0
-                            )
-                          }
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        {t(
-                          'Total quota included in the plan, usable per billing period. 0 means unlimited.'
-                        )}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {/* 动态窗口模型下总额度无意义（额度由各窗口定义，落库强制 0），隐藏 */}
+                {quotaModel !== 'windows' && (
+                  <FormField
+                    control={form.control}
+                    name='total_amount'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          {t('Quota ({{currency}})', {
+                            currency: currencyLabel,
+                          })}
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type='number'
+                            min={0}
+                            step={tokensOnly ? 1 : 0.01}
+                            placeholder={
+                              tokensOnly
+                                ? t('Enter quota in tokens')
+                                : t('Enter quota in {{currency}}', {
+                                    currency: currencyLabel,
+                                  })
+                            }
+                            onChange={(e) =>
+                              field.onChange(
+                                Number.parseFloat(e.target.value) || 0
+                              )
+                            }
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'Total quota included in the plan, usable per billing period. 0 means unlimited.'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
               </div>
 
               <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
@@ -652,6 +758,57 @@ export function SubscriptionsMutateDrawer({
                 {t('Quota Reset')}
               </h3>
 
+              {/* 额度模型切换：经典周期/周/月 vs 动态窗口 */}
+              <div className='flex items-center justify-between gap-3 rounded-md border px-3 py-2'>
+                <div className='min-w-0'>
+                  <div className='text-sm font-medium'>
+                    {t('Dynamic window model')}
+                  </div>
+                  <div className='text-muted-foreground text-xs'>
+                    {t(
+                      'Each window (e.g. every 5 hours / every 30 days) caps its own quota. Windows longer than the validity act as the subscription total cap.'
+                    )}
+                  </div>
+                </div>
+                <Switch
+                  checked={quotaModel === 'windows'}
+                  onCheckedChange={(checked) =>
+                    handleQuotaModelChange(checked ? 'windows' : 'legacy')
+                  }
+                />
+              </div>
+
+              {/* 续费时间上限：与额度模型无关，两种模型都可用 */}
+              <FormField
+                control={form.control}
+                name='max_cumulative_days'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Max Cumulative Duration (days)')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type='number'
+                        min={0}
+                        onChange={(e) =>
+                          field.onChange(
+                            Number.parseInt(e.target.value, 10) || 0
+                          )
+                        }
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'The total remaining time cannot exceed this after renewal. Prevents stacking time indefinitely. 0 means unlimited.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {quotaModel === 'legacy' ? (
+                <>
               <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
                 <FormField
                   control={form.control}
@@ -831,36 +988,175 @@ export function SubscriptionsMutateDrawer({
                       <FormMessage />
                     </FormItem>
                   )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name='max_cumulative_days'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('Max Cumulative Duration (days)')}</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type='number'
-                          min={0}
-                          onChange={(e) =>
-                            field.onChange(
-                              Number.parseInt(e.target.value, 10) || 0
-                            )
-                          }
-                        />
-                      </FormControl>
-                      <FormDescription>
+                />              </div>
+                </>
+              ) : (
+                <>
+                  {/* 动态窗口编辑器 */}
+                  <TooltipProvider delay={100}>
+                    <div className='space-y-2'>
+                      {(resetWindows || []).map((row, index) => {
+                        const isCap =
+                          windowRowDurationSeconds(row) >=
+                          planValiditySeconds(form.getValues())
+                        return (
+                          <div key={index} className='space-y-1'>
+                            <div className='grid grid-cols-[minmax(0,80px)_minmax(0,64px)_minmax(0,1fr)_auto] items-center gap-2'>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={<div className='min-w-0' />}
+                                >
+                                  <Select
+                                    items={windowUnitOpts}
+                                    value={row.unit}
+                                    onValueChange={(v) =>
+                                      v !== null &&
+                                      updateWindow(index, {
+                                        unit: v as ResetWindowFormRow['unit'],
+                                      })
+                                    }
+                                  >
+                                    <SelectTrigger className='w-full'>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent alignItemWithTrigger={false}>
+                                      <SelectGroup>
+                                        {windowUnitOpts.map((o) => (
+                                          <SelectItem
+                                            key={o.value}
+                                            value={o.value}
+                                          >
+                                            {o.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectGroup>
+                                    </SelectContent>
+                                  </Select>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {t(
+                                    'Window period unit. E.g. hour / day / week / month.'
+                                  )}
+                                </TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={<div className='min-w-0' />}
+                                >
+                                  <Input
+                                    type='number'
+                                    min={1}
+                                    value={row.value}
+                                    aria-invalid={windowOrderBad.has(index)}
+                                    onChange={(e) =>
+                                      updateWindow(index, {
+                                        value:
+                                          Number.parseInt(
+                                            e.target.value,
+                                            10
+                                          ) || 1,
+                                      })
+                                    }
+                                  />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {t(
+                                    'How many units the window spans before refreshing. E.g. 5 hours = refreshes every 5 hours.'
+                                  )}
+                                </TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={<div className='min-w-0' />}
+                                >
+                                  <Input
+                                    type='number'
+                                    min={0}
+                                    step={tokensOnly ? 1 : 0.01}
+                                    value={row.limit}
+                                    placeholder={
+                                      tokensOnly
+                                        ? t('Enter quota in tokens')
+                                        : t('Enter quota in {{currency}}', {
+                                            currency: currencyLabel,
+                                          })
+                                    }
+                                    onChange={(e) =>
+                                      updateWindow(index, {
+                                        limit:
+                                          Number.parseFloat(
+                                            e.target.value
+                                          ) || 0,
+                                      })
+                                    }
+                                  />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {t(
+                                    'Quota usable inside this window; refreshes at each window boundary. 0 means no cap for this window.'
+                                  )}
+                                </TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger render={<div />}>
+                                  <Button
+                                    type='button'
+                                    variant='ghost'
+                                    size='icon-sm'
+                                    className='text-destructive hover:text-destructive'
+                                    onClick={() => removeWindow(index)}
+                                    aria-label={t('Delete')}
+                                  >
+                                    <Trash2 />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>{t('Delete')}</TooltipContent>
+                              </Tooltip>
+                            </div>
+                            {isCap && (
+                              <span className='text-amber-700 dark:text-amber-300 text-xs'>
+                                {t(
+                                  'Covers the whole validity · acts as the subscription total cap'
+                                )}
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                    {windowOrderBad.size > 0 && (
+                      <p className='text-destructive text-xs'>
                         {t(
-                          'The total remaining time cannot exceed this after renewal. Prevents stacking time indefinitely. 0 means unlimited.'
+                          'Windows must be ordered by duration: each window must be strictly longer than the previous one.'
                         )}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+                      </p>
+                    )}
+                    <Tooltip>
+                      <TooltipTrigger render={<div className='w-fit' />}>
+                        <Button
+                          type='button'
+                          variant='outline'
+                          size='sm'
+                          onClick={addWindow}
+                        >
+                          <Plus className='size-3.5' />
+                          {t('Add window')}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {t(
+                          'Add a new window. Each window caps its own quota independently.'
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <p className='text-muted-foreground text-xs'>
+                    {t(
+                      'Renewal only extends time; each window refreshes on its own schedule.'
+                    )}
+                  </p>
+                </>
+              )}
             </SideDrawerSection>
 
             {/* Plan Strategy */}
@@ -1038,6 +1334,25 @@ export function SubscriptionsMutateDrawer({
           </Button>
         </SheetFooter>
       </SheetContent>
+
+      <ConfirmDialog
+        open={confirmResetSave}
+        onOpenChange={(v) => {
+          setConfirmResetSave(v)
+          if (!v) setPendingSubmit(null)
+        }}
+        title={t('Reset active subscription quotas?')}
+        desc={t(
+          'Saving these quota changes will reset the quotas of all active subscriptions under this plan (usage counters restart from zero). Continue?'
+        )}
+        confirmText={t('Save & reset')}
+        isLoading={isSubmitting}
+        handleConfirm={async () => {
+          if (pendingSubmit) await doSubmit(pendingSubmit)
+          setConfirmResetSave(false)
+          setPendingSubmit(null)
+        }}
+      />
     </Sheet>
   )
 }

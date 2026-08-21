@@ -16,12 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { RefreshCw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { Button } from '@/components/ui/button'
 import {
   Select,
   SelectContent,
@@ -37,7 +35,7 @@ import { getBillingPreferenceLabel } from '../lib/helpers'
 
 export function BillingPreferenceSelect() {
   const { t } = useTranslation()
-  const { selfData, refreshing, refresh } = useMySubscriptions()
+  const { selfData } = useMySubscriptions()
   const [preference, setPreference] = useState(
     selfData?.billing_preference || 'subscription_first'
   )
@@ -83,47 +81,34 @@ export function BillingPreferenceSelect() {
   ]
 
   return (
-    <div className='flex items-center gap-2'>
-      <Select
-        items={prefOptions.map((opt) => ({
-          value: opt.value,
-          label: (
-            <>
+    <Select
+      items={prefOptions.map((opt) => ({
+        value: opt.value,
+        label: (
+          <>
+            {getBillingPreferenceLabel(opt.value, t)}
+            {opt.disabled ? ` (${t('No Active')})` : ''}
+          </>
+        ),
+      }))}
+      value={displayPref}
+      onValueChange={(v) => v !== null && handlePreferenceChange(v)}
+    >
+      <SelectTrigger className='h-8 flex-1 text-xs sm:w-[140px] sm:flex-none'>
+        <SelectValue>
+          {getBillingPreferenceLabel(displayPref, t)}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent alignItemWithTrigger={false}>
+        <SelectGroup>
+          {prefOptions.map((opt) => (
+            <SelectItem key={opt.value} value={opt.value} disabled={opt.disabled}>
               {getBillingPreferenceLabel(opt.value, t)}
               {opt.disabled ? ` (${t('No Active')})` : ''}
-            </>
-          ),
-        }))}
-        value={displayPref}
-        onValueChange={(v) => v !== null && handlePreferenceChange(v)}
-      >
-        <SelectTrigger className='h-8 flex-1 text-xs sm:w-[140px] sm:flex-none'>
-          <SelectValue>
-            {getBillingPreferenceLabel(displayPref, t)}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent alignItemWithTrigger={false}>
-          <SelectGroup>
-            {prefOptions.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value} disabled={opt.disabled}>
-                {getBillingPreferenceLabel(opt.value, t)}
-                {opt.disabled ? ` (${t('No Active')})` : ''}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
-      <Button
-        variant='ghost'
-        size='icon'
-        className='h-8 w-8'
-        onClick={() => refresh()}
-        disabled={refreshing}
-      >
-        <RefreshCw
-          className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`}
-        />
-      </Button>
-    </div>
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
   )
 }

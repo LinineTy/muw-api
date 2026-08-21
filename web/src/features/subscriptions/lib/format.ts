@@ -20,7 +20,7 @@ import type { TFunction } from 'i18next'
 
 import dayjs from '@/lib/dayjs'
 
-import type { RenewTermsSnapshot, SubscriptionPlan } from '../types'
+import type { RenewTermsSnapshot, ResetWindow, SubscriptionPlan, WindowState } from '../types'
 
 export function formatDuration(
   plan: Partial<SubscriptionPlan>,
@@ -65,6 +65,12 @@ export function formatResetPeriod(
 export function formatTimestamp(ts: number): string {
   if (!ts) return '-'
   return dayjs(ts * 1000).format('YYYY-MM-DD HH:mm:ss')
+}
+
+// 紧凑时间（窗口重置时间等小尺寸展示用）：如 "08-24 18:00"。
+export function formatCompactTimestamp(ts: number): string {
+  if (!ts) return '-'
+  return dayjs(ts * 1000).format('MM-DD HH:mm')
 }
 
 // 续费条款快照解析：快照存在且周期时长有效时返回，否则返回 null（存量订阅回退当前套餐）。
@@ -117,4 +123,95 @@ export function planDurationSeconds(
     default:
       return value * 30 * 86400
   }
+}
+
+// 解析套餐的动态窗口定义（wire JSON 文本 → 数组）；空/损坏返回 []。
+export function parsePlanResetWindows(raw?: string): ResetWindow[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw) as ResetWindow[]
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+// 解析订阅的动态窗口消费状态（wire JSON 文本 → 数组）；空/损坏返回 []。
+export function parseWindowStates(raw?: string): WindowState[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw) as WindowState[]
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+// 窗口时长 → 人类可读（如 "5 hours" / "30 days" / "1 month"）。value===1 用单数词形。
+export function formatWindowDuration(
+  w: { unit?: string; value?: number },
+  t: TFunction
+): string {
+  const v = Number(w?.value || 0)
+  switch (w?.unit) {
+    case 'month':
+      return `${v} ${t(v === 1 ? 'month' : 'months')}`
+    case 'week':
+      return `${v} ${t(v === 1 ? 'week' : 'weeks')}`
+    case 'day':
+      return `${v} ${t(v === 1 ? 'day' : 'days')}`
+    case 'hour':
+      return `${v} ${t(v === 1 ? 'hour' : 'hours')}`
+    default:
+      return ''
+  }
+}
+
+// 窗口周期的裸标签（不带"每"前缀），value===1 省略数字：如 "个月" / "天" / "周" / "2 小时"。
+// 供 "每{{period}}" 与目录/弹窗摘要共用，保证 value===1 不再显示 "1 个月"。
+export function formatWindowPeriodLabel(
+  w: { unit?: string; value?: number },
+  t: TFunction
+): string {
+  const full = formatWindowDuration(w, t)
+  if (!full) return ''
+  return Number(w?.value || 0) === 1 ? full.replace(/^1 /, '') : full
+}
+
+// 窗口周期的紧凑标签（订阅卡进度条用）："每周" / "每5 小时" / "每个月"。value=1 省略数字。
+export function formatWindowPeriod(
+  w: { unit?: string; value?: number },
+  t: TFunction
+): string {
+  const period = formatWindowPeriodLabel(w, t)
+  if (!period) return ''
+  return t('every {{period}}', { period })
+}
+
+// 动态窗口是否作为本订阅封顶上限（时长 ≥ 套餐有效期）。
+export function isCapWindow(
+  w: ResetWindow,
+  plan?: Partial<SubscriptionPlan> | null
+): boolean {
+  const validity = planDurationSeconds(plan)
+  if (validity <= 0) return false
+  let duration = 0
+  const v = Number(w?.value || 0)
+  switch (w?.unit) {
+    case 'month':
+      duration = v * 30 * 86400
+      break
+    case 'week':
+      duration = v * 7 * 86400
+      break
+    case 'day':
+      duration = v * 86400
+      break
+    case 'hour':
+      duration = v * 3600
+      break
+    default:
+      return false
+  }
+  return duration >= validity
 }

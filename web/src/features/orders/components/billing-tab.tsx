@@ -22,7 +22,7 @@ import type {
   OnChangeFn,
   PaginationState,
 } from '@tanstack/react-table'
-import { Check, CheckCheck, Copy } from 'lucide-react'
+import { Ban, Check, CheckCheck, Copy } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -55,14 +55,16 @@ import {
 import type { TopupRecord } from '@/features/wallet/types'
 
 /**
- * 充值/订阅订单列表：服务端分页 + 搜索/状态/支付方式筛选 + 视图切换 + 管理员补单。
- * 工具栏能力与渠道页对齐；筛选 options 与渠道页一致在渲染时内联构建。
+ * 充值记录 / 订阅订单合并列表：服务端分页 + 搜索 + 类型/状态/支付方式筛选 + 视图切换。
+ * 管理员可补单（充值 pending → 补 quota；订阅 pending → 补单创建订阅 / 驳回关闭）。
  */
 export function BillingTab() {
   const { t } = useTranslation()
   const [globalFilter, setGlobalFilter] = useState('')
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [confirmTradeNo, setConfirmTradeNo] = useState<string | null>(null)
+  const [completeTarget, setCompleteTarget] = useState<string | null>(null)
+  const [completeSubTarget, setCompleteSubTarget] = useState<string | null>(null)
+  const [rejectTarget, setRejectTarget] = useState<string | null>(null)
   const { copyToClipboard, copiedText } = useCopyToClipboard({ notify: false })
 
   const statusFilter = useMemo(
@@ -79,6 +81,13 @@ export function BillingTab() {
         | undefined)?.[0] ?? '',
     [columnFilters]
   )
+  const typeFilter = useMemo(
+    () =>
+      (columnFilters.find((f) => f.id === 'type')?.value as
+        | string[]
+        | undefined)?.[0] ?? '',
+    [columnFilters]
+  )
 
   const {
     records,
@@ -87,14 +96,18 @@ export function BillingTab() {
     pageSize,
     loading,
     completing,
+    completingSub,
     isAdmin,
     handlePageChange,
     handlePageSizeChange,
     handleCompleteOrder,
+    handleCompleteSubscriptionOrder,
+    handleRejectSubscriptionOrder,
   } = useBillingHistory({
     keyword: globalFilter,
     status: statusFilter === 'all' ? '' : statusFilter,
     method: methodFilter === 'all' ? '' : methodFilter,
+    type: typeFilter === 'all' ? '' : typeFilter,
   })
 
   const pagination = useMemo<PaginationState>(
@@ -161,6 +174,42 @@ export function BillingTab() {
 
     cols.push(
       {
+        accessorKey: 'type',
+        header: t('Type'),
+        cell: ({ row }) =>
+          row.original.type === 'subscription' ? (
+            <StatusBadge
+              label={t('Subscription')}
+              variant='info'
+              showDot
+              copyable={false}
+            />
+          ) : (
+            <StatusBadge
+              label={t('Recharge')}
+              variant='neutral'
+              showDot
+              copyable={false}
+            />
+          ),
+        size: 110,
+      },
+      {
+        accessorKey: 'plan_id',
+        header: t('Plan'),
+        cell: ({ row }) => {
+          const record = row.original
+          return record.type === 'subscription' ? (
+            <span className='text-sm font-medium'>
+              {record.plan_title || `#${record.plan_id}`}
+            </span>
+          ) : (
+            <span className='text-muted-foreground text-sm'>-</span>
+          )
+        },
+        size: 140,
+      },
+      {
         accessorKey: 'payment_method',
         header: t('Payment Method'),
         cell: ({ row }) => (
@@ -173,20 +222,28 @@ export function BillingTab() {
       {
         accessorKey: 'amount',
         header: t('Amount'),
-        cell: ({ row }) =>
-          formatCurrencyFromUSD(row.original.amount, {
-            digitsLarge: 2,
-            digitsSmall: 2,
-            abbreviate: false,
-          }),
-        size: 110,
+        cell: ({ row }) => {
+          const record = row.original
+          return record.type === 'topup' ? (
+            <span className='font-mono text-sm font-medium tabular-nums'>
+              {formatNumber(record.amount || 0)}
+            </span>
+          ) : (
+            <span className='text-muted-foreground text-sm'>-</span>
+          )
+        },
+        size: 100,
       },
       {
         accessorKey: 'money',
         header: t('Payment'),
         cell: ({ row }) => (
           <span className='text-sm font-semibold text-red-600'>
-            {formatNumber(row.original.money)}
+            {formatCurrencyFromUSD(row.original.money, {
+              digitsLarge: 2,
+              digitsSmall: 2,
+              abbreviate: false,
+            })}
           </span>
         ),
         size: 90,
@@ -212,25 +269,59 @@ export function BillingTab() {
         id: 'actions',
         header: t('Actions'),
         cell: ({ row }) => {
-          if (!isAdmin || row.original.status !== 'pending') return null
+          const record = row.original
+          if (!isAdmin || record.status !== 'pending') return null
+          const busy = completing || completingSub !== null
+          // 订阅订单：补单 / 驳回；充值订单：补单。
+          if (record.type === 'subscription') {
+            return (
+              <div className='flex items-center gap-0.5'>
+                <Button
+                  variant='ghost'
+                  size='icon-sm'
+                  onClick={() => setRejectTarget(record.trade_no)}
+                  disabled={busy}
+                  aria-label={t('Reject')}
+                >
+                  <Ban />
+                </Button>
+                <Button
+                  variant='ghost'
+                  size='icon-sm'
+                  onClick={() => setCompleteSubTarget(record.trade_no)}
+                  disabled={busy}
+                  aria-label={t('Complete Order')}
+                >
+                  <CheckCheck />
+                </Button>
+              </div>
+            )
+          }
           return (
             <Button
               variant='ghost'
               size='icon-sm'
-              onClick={() => setConfirmTradeNo(row.original.trade_no)}
-              disabled={completing}
+              onClick={() => setCompleteTarget(record.trade_no)}
+              disabled={busy}
               aria-label={t('Complete Order')}
             >
               <CheckCheck />
             </Button>
           )
         },
-        size: 60,
+        size: 70,
       }
     )
 
     return cols
-  }, [t, isAdmin, completing, copiedText, copyToClipboard])
+  }, [
+    t,
+    isAdmin,
+    completing,
+    completingSub,
+    copiedText,
+    copyToClipboard,
+  ])
 
   const resetPage = useCallback(() => {
     if (page > 1) {
@@ -289,10 +380,10 @@ export function BillingTab() {
   })
 
   const handleConfirmComplete = async () => {
-    if (confirmTradeNo) {
-      const success = await handleCompleteOrder(confirmTradeNo)
+    if (completeTarget) {
+      const success = await handleCompleteOrder(completeTarget)
       if (success) {
-        setConfirmTradeNo(null)
+        setCompleteTarget(null)
       }
     }
   }
@@ -321,6 +412,16 @@ export function BillingTab() {
           searchDebounceMs: 500,
           filters: [
             {
+              columnId: 'type',
+              title: t('Type'),
+              options: [
+                { label: 'All Types', value: 'all' },
+                { label: 'Recharge', value: 'topup' },
+                { label: 'Subscription', value: 'subscription' },
+              ],
+              singleSelect: true,
+            },
+            {
               columnId: 'status',
               title: t('Status'),
               options: [
@@ -338,6 +439,7 @@ export function BillingTab() {
                 { label: 'All Payment Methods', value: 'all' },
                 { label: 'Alipay', value: 'alipay' },
                 { label: 'WeChat Pay', value: 'wxpay' },
+                { label: 'Balance', value: 'balance' },
               ],
               singleSelect: true,
             },
@@ -345,10 +447,10 @@ export function BillingTab() {
         }}
       />
 
-      {/* Confirm Complete Order Dialog */}
+      {/* Confirm Complete Topup Order */}
       <AlertDialog
-        open={!!confirmTradeNo}
-        onOpenChange={(open) => !open && setConfirmTradeNo(null)}
+        open={!!completeTarget}
+        onOpenChange={(open) => !open && setCompleteTarget(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -368,6 +470,82 @@ export function BillingTab() {
               disabled={completing}
             >
               {completing ? t('Processing...') : t('Confirm')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirm Complete Subscription Order */}
+      <AlertDialog
+        open={!!completeSubTarget}
+        onOpenChange={(open) => !open && setCompleteSubTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('Complete Order')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t(
+                'Are you sure you want to manually complete this subscription order? The user will receive the corresponding subscription.'
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={completingSub !== null}>
+              {t('Cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (completeSubTarget) {
+                  void handleCompleteSubscriptionOrder(completeSubTarget).then(
+                    (ok) => {
+                      if (ok) {
+                        setCompleteSubTarget(null)
+                      }
+                    }
+                  )
+                }
+              }}
+              disabled={completingSub !== null}
+            >
+              {completingSub !== null ? t('Processing...') : t('Confirm')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirm Reject Subscription Order */}
+      <AlertDialog
+        open={!!rejectTarget}
+        onOpenChange={(open) => !open && setRejectTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('Reject Order')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t(
+                'Are you sure you want to reject this order? The user will not be charged for it.'
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={completingSub !== null}>
+              {t('Cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (rejectTarget) {
+                  void handleRejectSubscriptionOrder(rejectTarget).then(
+                    (ok) => {
+                      if (ok) {
+                        setRejectTarget(null)
+                      }
+                    }
+                  )
+                }
+              }}
+              disabled={completingSub !== null}
+            >
+              {completingSub !== null ? t('Processing...') : t('Confirm')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
