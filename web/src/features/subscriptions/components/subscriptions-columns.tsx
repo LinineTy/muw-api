@@ -27,7 +27,12 @@ import { TableId } from '@/components/table-id'
 import { getCurrencyDisplay } from '@/lib/currency'
 import { formatQuota } from '@/lib/format'
 
-import { formatDuration, formatResetPeriod } from '../lib'
+import {
+  formatDuration,
+  formatResetPeriod,
+  formatWindowDuration,
+  parsePlanResetWindows,
+} from '../lib'
 import type { PlanRecord } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
 
@@ -105,11 +110,22 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
         id: 'reset',
         header: t('Quota Reset'),
         meta: { mobileHidden: true },
-        cell: ({ row }) => (
-          <span className='text-muted-foreground'>
-            {formatResetPeriod(row.original.plan, t)}
-          </span>
-        ),
+        cell: ({ row }) => {
+          const p = row.original.plan
+          const windows = parsePlanResetWindows(p.reset_windows)
+          if (windows.length > 0) {
+            return (
+              <span className='text-muted-foreground'>
+                {t('Rolling windows')}
+              </span>
+            )
+          }
+          return (
+            <span className='text-muted-foreground'>
+              {formatResetPeriod(p, t)}
+            </span>
+          )
+        },
         size: 100,
       },
       {
@@ -224,6 +240,21 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
         meta: { mobileHidden: true },
         cell: ({ row }) => {
           const p = row.original.plan
+          const windows = parsePlanResetWindows(p.reset_windows)
+          if (windows.length > 0) {
+            return (
+              <span className='text-muted-foreground'>
+                {windows
+                  .map(
+                    (w) =>
+                      `${formatWindowDuration(w, t)} ${formatQuota(
+                        w.limit || 0
+                      )}`
+                  )
+                  .join(' / ')}
+              </span>
+            )
+          }
           const parts: string[] = []
           if (Number(p.weekly_amount_limit || 0) > 0) {
             parts.push(

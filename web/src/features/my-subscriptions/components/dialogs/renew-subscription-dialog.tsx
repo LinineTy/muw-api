@@ -36,6 +36,9 @@ import { Separator } from '@/components/ui/separator'
 import {
   formatDuration,
   formatDurationSeconds,
+  formatWindowPeriod,
+  isCapWindow,
+  parsePlanResetWindows,
   parseRenewTerms,
 } from '@/features/subscriptions/lib'
 import type {
@@ -88,6 +91,24 @@ export function RenewSubscriptionDialog(props: Props) {
     renewTerms?.price_amount ?? Number(plan.price_amount || 0)
 
   const price = effectivePrice.toFixed(2)
+  // 套餐额度展示：动态窗口 = 各窗口摘要；legacy = 总额度或 Unlimited。
+  const planQuotaLabel = (() => {
+    const windows = parsePlanResetWindows(plan.reset_windows)
+    if (windows.length > 0) {
+      return windows
+        .map((w) =>
+          // 封顶窗口（周期 >= 有效期）只显示总额度，不暴露周期（如 "12 个月"）。
+          isCapWindow(w, plan)
+            ? t('{{amount}} total', { amount: formatQuota(w.limit || 0) })
+            : `${formatWindowPeriod(w, t)} ${formatQuota(w.limit || 0)}`
+        )
+        .join(' / ')
+    }
+    if (Number(plan.total_amount || 0) > 0) {
+      return formatQuota(Number(plan.total_amount || 0))
+    }
+    return t('Unlimited')
+  })()
   const quotaPerUnit =
     currency?.quotaPerUnit && currency.quotaPerUnit > 0
       ? currency.quotaPerUnit
@@ -241,15 +262,15 @@ export function RenewSubscriptionDialog(props: Props) {
                   : formatDuration(plan, t)}
               </span>
             </div>
-            <div className='flex items-center justify-between'>
-              <span className='text-muted-foreground text-sm'>
+            <div className='flex items-center justify-between gap-2'>
+              <span className='text-muted-foreground shrink-0 text-sm'>
                 {t('Plan Quota')}
               </span>
-              <span className='flex items-center gap-1 text-sm'>
-                <Package className='h-3.5 w-3.5' />
-                {Number(plan.total_amount || 0) > 0
-                  ? formatQuota(Number(plan.total_amount || 0))
-                  : t('Unlimited')}
+              <span className='flex items-center gap-1 text-right text-sm'>
+                <Package className='h-3.5 w-3.5 shrink-0' />
+                <span className='max-w-[220px] truncate'>
+                  {planQuotaLabel}
+                </span>
               </span>
             </div>
             <Separator />

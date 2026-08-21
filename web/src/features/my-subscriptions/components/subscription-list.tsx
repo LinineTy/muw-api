@@ -37,14 +37,21 @@ import {
   type StatusVariant,
 } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
 import { Switch } from '@/components/ui/switch'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { formatTimestamp } from '@/features/subscriptions/lib'
+import {
+  formatCompactTimestamp,
+  formatTimestamp,
+  formatWindowPeriod,
+  isCapWindow,
+  parsePlanResetWindows,
+  parseWindowStates,
+  windowRowDurationSeconds,
+} from '@/features/subscriptions/lib'
 import type {
   SubscriptionPlan,
   UserSubscriptionRecord,
@@ -56,37 +63,64 @@ import { setSubscriptionAutoRenew, setSubscriptionPriority } from '../api'
 import {
   classifySubscriptionStatus,
   getRemainingDays,
-  getUsagePercent,
 } from '../lib/helpers'
 import { CancelSubscriptionDialog } from './dialogs/cancel-subscription-dialog'
 import { RenewSubscriptionDialog } from './dialogs/renew-subscription-dialog'
 import { useMySubscriptions } from './my-subscriptions-provider'
 
-// 周期/周/月限额的紧凑小仪表（并排栅格用）。
-function MiniMeter({
+// 每限额一张独立小卡（动态窗口与 legacy 统一）。外壳带边框；进度条按使用率阈值变色
+// （>=90 红 / >=70 琥珀 / 其余主色）；动态窗口底部显示下次重置时间或封顶标注。
+function LimitMiniCard({
   label,
   used,
   total,
+  resetAt,
+  noReset,
+  isCap,
 }: {
   label: string
   used: number
   total: number
+  resetAt?: number
+  noReset?: boolean
+  // 封顶窗口：label 已是 "Total cap"，不再重复底部提示行。
+  isCap?: boolean
 }) {
+  const { t } = useTranslation()
   const pct = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0
+  let barClass = 'bg-primary'
+  if (pct >= 90) {
+    barClass = 'bg-destructive'
+  } else if (pct >= 70) {
+    barClass = 'bg-warning'
+  }
+  const showResetLine = noReset || (!!resetAt && resetAt > 0)
   return (
-    <div className='min-w-0'>
+    <div className='bg-background/60 rounded-lg border px-2.5 py-2 sm:rounded-xl sm:p-3'>
       <div className='text-muted-foreground truncate text-[11px]'>{label}</div>
-      <div className='mt-0.5 truncate font-mono text-xs font-medium tabular-nums'>
+      <div className='mt-1 truncate font-mono text-sm font-semibold tabular-nums'>
         {formatQuota(used)}
         <span className='text-muted-foreground'>/{formatQuota(total)}</span>
       </div>
-      <Progress value={pct} className='mt-1 h-1' />
+      <div className='bg-muted mt-1.5 h-1.5 overflow-hidden rounded-full'>
+        <div
+          className={`${barClass} h-full rounded-full`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      {!isCap && showResetLine && (
+        <div className='text-muted-foreground mt-1 truncate text-[10px]'>
+          {noReset
+            ? t('Total cap')
+            : `${t('Reset')} ${formatCompactTimestamp(resetAt || 0)}`}
+        </div>
+      )}
     </div>
   )
 }
 
 // 次要徽标：icon-only 小圆点 + hover 提示，避免标题行堆一长串文字。
-function BadgeChip({
+export function BadgeChip({
   icon: Icon,
   label,
   variant,
@@ -133,11 +167,25 @@ function SubscriptionItem({
 
   const subscription = sub.subscription
   const totalAmount = Number(subscription?.amount_total || 0)
-  const usedAmount = Number(subscription?.amount_used || 0)
-  const remainAmount =
-    totalAmount > 0 ? Math.max(0, totalAmount - usedAmount) : 0
+  // 动态窗口模型：每窗口一张独立限额小卡（各窗口剩余取最小即当前可用）。
+  const resetWindows = parsePlanResetWindows(plan?.reset_windows)
+  const windowStates = parseWindowStates(subscription?.window_state)
+  const isDynamic = resetWindows.length > 0
+  // 动态窗口按周期时长升序展示（最短在前）；窗口状态按原索引对齐，排序只影响展示顺序。
+  const windowPairs = isDynamic
+    ? resetWindows
+        .map((w, i) => ({ w, state: windowStates[i] }))
+        .sort(
+          (a, b) =>
+            windowRowDurationSeconds(a.w) - windowRowDurationSeconds(b.w)
+        )
+    : []
+  // 无上限 = 无限额度：legacy 的 total_amount<=0，或动态窗口全部 limit=0（后端视为
+  // 无限，后端已拒绝全 0 保存，此处防御手改库/旧数据）。
+  const unlimited = isDynamic
+    ? resetWindows.every((w) => (w.limit || 0) <= 0)
+    : totalAmount <= 0
   const remainDays = getRemainingDays(sub)
-  const usagePercent = getUsagePercent(sub)
   const nextResetTime = subscription?.next_cycle_reset_at ?? 0
   const { isActive, isCancelled } = classifySubscriptionStatus(sub)
   // 到期取消后的订阅：续费和自动续费都被后端禁止，操作区只保留取消（可立即取消）。
@@ -251,108 +299,105 @@ function SubscriptionItem({
         )}
       </div>
 
-      {/* 额度主体：剩余额度为视觉焦点 */}
+      {/* 限额主体：每个限额一张独立小卡（动态窗口与 legacy 统一）；无上限时显示 ∞ */}
       <div className='flex flex-1 flex-col gap-3 px-4 py-3'>
-        {totalAmount > 0 ? (
-          <div>
-            <div className='flex items-end justify-between gap-2'>
-              <div className='min-w-0'>
-                <div className='text-muted-foreground text-[11px] font-medium tracking-wider uppercase'>
-                  {t('Remaining')}
-                </div>
-                <div className='text-foreground mt-0.5 truncate font-mono text-2xl font-bold tracking-tight tabular-nums'>
-                  {formatQuota(remainAmount)}
-                </div>
-              </div>
-              <span className='text-muted-foreground shrink-0 text-xs'>
-                {t('Used')} {usagePercent}%
-              </span>
-            </div>
-            {isActive ? (
-              <Progress value={usagePercent} className='mt-2 h-1.5' />
-            ) : (
-              <div className='bg-muted/50 mt-2 h-1.5 overflow-hidden rounded-full'>
-                <div
-                  className='bg-muted h-full rounded-full'
-                  style={{ width: `${usagePercent}%` }}
-                />
-              </div>
-            )}
-            <div className='text-muted-foreground mt-1 text-xs'>
-              <Tooltip>
-                <TooltipTrigger render={<span className='cursor-help' />}>
-                  {formatQuota(usedAmount)}
-                </TooltipTrigger>
-                <TooltipContent>
-                  {t('Raw Quota')}: {usedAmount}
-                </TooltipContent>
-              </Tooltip>
-              {' / '}
-              {formatQuota(totalAmount)}
-            </div>
-          </div>
-        ) : (
+        {unlimited ? (
           <div className='flex items-center gap-2'>
-            <span className='font-mono text-2xl font-bold tracking-tight'>
-              ∞
-            </span>
+            <span className='font-mono text-3xl font-bold tracking-tight'>∞</span>
             <span className='text-muted-foreground text-xs'>
               {t('Unlimited')}
             </span>
           </div>
-        )}
-
-        {/* 周期/周/月限额：并排小栅格 */}
-        {(hasCycleLimit || weekLimit > 0 || monthLimit > 0) && isActive && (
-          <div className='grid grid-cols-3 gap-3'>
-            {hasCycleLimit && (
-              <MiniMeter
-                label={t('This cycle')}
-                used={cycleUsed}
-                total={cycleLimit}
-              />
-            )}
-            {weekLimit > 0 && (
-              <MiniMeter
-                label={t('This week')}
-                used={weekUsed}
-                total={weekLimit}
-              />
-            )}
-            {monthLimit > 0 && (
-              <MiniMeter
-                label={t('This month')}
-                used={monthUsed}
-                total={monthLimit}
-              />
-            )}
+        ) : (
+          <div className='grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 xl:grid-cols-3'>
+            {isDynamic
+              ? windowPairs.map(({ w, state }) => {
+                  // 周期 >= 有效期的窗口是封顶上限：只显示额度，不暴露周期（如 "12 个月"）。
+                  const isCap = isCapWindow(w, plan)
+                  return (
+                    <LimitMiniCard
+                      key={`${w.unit}-${w.value}`}
+                      label={
+                        isCap ? t('Total cap') : formatWindowPeriod(w, t)
+                      }
+                      used={state?.cycle_used || 0}
+                      total={w.limit || 0}
+                      resetAt={state?.next_reset_at || 0}
+                      noReset={!!(
+                        state &&
+                        state.next_reset_at === 0 &&
+                        state.cycle_start_at > 0
+                      )}
+                      isCap={isCap}
+                    />
+                  )
+                })
+              : (
+                  <>
+                    {hasCycleLimit && (
+                      <LimitMiniCard
+                        label={t('This cycle')}
+                        used={cycleUsed}
+                        total={cycleLimit}
+                      />
+                    )}
+                    {weekLimit > 0 && (
+                      <LimitMiniCard
+                        label={t('This week')}
+                        used={weekUsed}
+                        total={weekLimit}
+                      />
+                    )}
+                    {monthLimit > 0 && (
+                      <LimitMiniCard
+                        label={t('This month')}
+                        used={monthUsed}
+                        total={monthLimit}
+                      />
+                    )}
+                  </>
+                )}
           </div>
         )}
 
-        {/* 次要徽标：icon-only + hover 提示 */}
-        {(discontinued ||
-          isPreferred ||
-          (isActive && subscription?.cancel_at_end)) && (
-          <div className='flex items-center gap-1.5'>
-            {discontinued && (
-              <BadgeChip
-                icon={PackageX}
-                label={t('Discontinued')}
-                variant='warning'
-              />
+        {/* 副信息：到期时间（legacy 追加周期重置）+ 状态标签（停售/优先/到期取消） */}
+        <div className='text-muted-foreground flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs'>
+          <span className='flex flex-wrap items-center gap-x-4 gap-y-1'>
+            <span className='flex items-center gap-1.5'>
+              <Clock className='size-3.5 shrink-0' aria-hidden='true' />
+              {endTimeLabel} {formatTimestamp(subscription?.end_time ?? 0)}
+            </span>
+            {isActive && !isDynamic && nextResetTime > 0 && (
+              <span className='flex items-center gap-1.5'>
+                <RefreshCw className='size-3.5 shrink-0' aria-hidden='true' />
+                {t('Reset')} {formatTimestamp(nextResetTime)}
+              </span>
             )}
-            {isPreferred && (
-              <BadgeChip icon={Star} label={t('Preferred')} variant='info' />
-            )}
-            {isActive && subscription?.cancel_at_end && (
-              <BadgeChip
-                icon={CalendarX}
-                label={t('Cancels at end')}
-                variant='neutral'
-              />
-            )}
-          </div>
-        )}
+          </span>
+          {(discontinued ||
+            isPreferred ||
+            (isActive && subscription?.cancel_at_end)) && (
+            <span className='flex items-center gap-1.5'>
+              {discontinued && (
+                <BadgeChip
+                  icon={PackageX}
+                  label={t('Discontinued')}
+                  variant='warning'
+                />
+              )}
+              {isPreferred && (
+                <BadgeChip icon={Star} label={t('Preferred')} variant='info' />
+              )}
+              {isActive && subscription?.cancel_at_end && (
+                <BadgeChip
+                  icon={CalendarX}
+                  label={t('Cancels at end')}
+                  variant='neutral'
+                />
+              )}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* 自动续费失败提示 */}
@@ -363,20 +408,6 @@ function SubscriptionItem({
           )}
         </div>
       )}
-
-      {/* 时间信息条 */}
-      <div className='bg-muted/40 text-muted-foreground flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t px-4 py-2.5 text-xs'>
-        <span className='flex items-center gap-1.5'>
-          <Clock className='size-3.5 shrink-0' aria-hidden='true' />
-          {endTimeLabel} {formatTimestamp(subscription?.end_time ?? 0)}
-        </span>
-        {isActive && nextResetTime > 0 && (
-          <span className='flex items-center gap-1.5'>
-            <RefreshCw className='size-3.5 shrink-0' aria-hidden='true' />
-            {t('Reset')} {formatTimestamp(nextResetTime)}
-          </span>
-        )}
-      </div>
 
       {/* 操作区 */}
       {isActive && (
@@ -471,7 +502,12 @@ export function SubscriptionList({
   }
 
   return (
-    <div className='grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3'>
+    // 单个订阅时全宽大卡片（一般只同时持有一个，规则多也不怕）；多个时才并排。
+    <div
+      className={`grid grid-cols-1 gap-3 sm:gap-4 ${
+        subscriptions.length > 1 ? 'md:grid-cols-2 xl:grid-cols-3' : ''
+      }`}
+    >
       {subscriptions.map((sub) => {
         const subscription = sub.subscription
         return (

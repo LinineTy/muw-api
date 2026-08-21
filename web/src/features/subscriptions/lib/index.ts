@@ -21,7 +21,14 @@ export {
   formatDurationSeconds,
   formatResetPeriod,
   formatTimestamp,
+  formatCompactTimestamp,
+  formatWindowDuration,
+  formatWindowPeriod,
+  formatWindowPeriodLabel,
+  isCapWindow,
+  parsePlanResetWindows,
   parseRenewTerms,
+  parseWindowStates,
   planDurationSeconds,
 } from './format'
 export {
@@ -29,5 +36,10 @@ export {
   PLAN_FORM_DEFAULTS,
   planToFormValues,
   formValuesToPlanPayload,
+  deriveWindowsFromLegacy,
+  parseResetWindowsRaw,
+  planValiditySeconds,
+  windowRowDurationSeconds,
   type PlanFormValues,
+  type ResetWindowFormRow,
 } from './plan-form'

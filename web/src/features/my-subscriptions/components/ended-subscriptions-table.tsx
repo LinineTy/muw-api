@@ -44,6 +44,8 @@ export function EndedSubscriptionsTable({
   const { table } = useDataTable({
     data: subscriptions,
     columns,
+    // 历史订阅默认每页 5 条（默认 20 条太长）。
+    initialPagination: { pageIndex: 0, pageSize: 5 },
     // 搜索只按套餐名(ID 列)与订阅 ID 匹配，不搜时间/用量/状态列。
     globalFilterFn: (row, columnId, filterValue) => {
       if (columnId !== 'plan' && columnId !== 'id') {
@@ -77,6 +79,8 @@ export function EndedSubscriptionsTable({
       skeletonKeyPrefix='ended-subscriptions-skeleton'
       applyHeaderSize
       fixedHeight={false}
+      // 分页内联渲染在表格正下方，不注入页面底部 footer 栏。
+      paginationInFooter={false}
       className='min-h-0'
     />
   )

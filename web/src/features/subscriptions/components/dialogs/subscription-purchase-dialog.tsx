@@ -40,7 +40,13 @@ import { formatQuota } from '@/lib/format'
 import { DEFAULT_CURRENCY_CONFIG } from '@/stores/system-config-store'
 
 import { paySubscriptionEpay, paySubscriptionBalance } from '../../api'
-import { formatDuration, formatResetPeriod } from '../../lib'
+import {
+  formatDuration,
+  formatResetPeriod,
+  formatWindowPeriod,
+  isCapWindow,
+  parsePlanResetWindows,
+} from '../../lib'
 import type { PlanRecord } from '../../types'
 
 interface PaymentMethod {
@@ -91,6 +97,24 @@ export function SubscriptionPurchaseDialog(props: Props) {
     t('Select payment method')
   const totalAmount = Number(plan.total_amount || 0)
   const price = Number(plan.price_amount || 0).toFixed(2)
+  // 动态窗口套餐：额度由各窗口定义（total_amount=0），展示窗口摘要而非 "Unlimited"。
+  const resetWindows = parsePlanResetWindows(plan.reset_windows)
+  const isDynamic = resetWindows.length > 0
+  let planQuotaLabel: string
+  if (isDynamic) {
+    planQuotaLabel = resetWindows
+      .map((w) =>
+        // 封顶窗口（周期 >= 有效期）只显示总额度，不暴露周期（如 "12 个月"）。
+        isCapWindow(w, plan)
+          ? t('{{amount}} total', { amount: formatQuota(w.limit || 0) })
+          : `${formatWindowPeriod(w, t)} ${formatQuota(w.limit || 0)}`
+      )
+      .join(' / ')
+  } else if (totalAmount > 0) {
+    planQuotaLabel = formatQuota(totalAmount)
+  } else {
+    planQuotaLabel = t('Unlimited')
+  }
   const quotaPerUnit =
     currency?.quotaPerUnit && currency.quotaPerUnit > 0
       ? currency.quotaPerUnit
@@ -252,21 +276,32 @@ export function SubscriptionPurchaseDialog(props: Props) {
                 {formatDuration(plan, t)}
               </span>
             </div>
-            {formatResetPeriod(plan, t) !== t('No Reset') && (
+            {isDynamic ? (
               <div className='flex justify-between'>
                 <span className='text-muted-foreground text-sm'>
                   {t('Reset Period')}
                 </span>
-                <span className='text-sm'>{formatResetPeriod(plan, t)}</span>
+                <span className='text-sm'>{t('Rolling windows')}</span>
               </div>
+            ) : (
+              formatResetPeriod(plan, t) !== t('No Reset') && (
+                <div className='flex justify-between'>
+                  <span className='text-muted-foreground text-sm'>
+                    {t('Reset Period')}
+                  </span>
+                  <span className='text-sm'>{formatResetPeriod(plan, t)}</span>
+                </div>
+              )
             )}
-            <div className='flex items-center justify-between'>
+            <div className='flex items-center justify-between gap-2'>
               <span className='text-muted-foreground text-sm'>
                 {t('Plan Quota')}
               </span>
-              <span className='flex items-center gap-1 text-sm'>
-                <Package className='h-3.5 w-3.5' />
-                {totalAmount > 0 ? formatQuota(totalAmount) : t('Unlimited')}
+              <span className='flex items-center gap-1 text-right text-sm'>
+                <Package className='h-3.5 w-3.5 shrink-0' />
+                <span className='max-w-[220px] truncate'>
+                  {planQuotaLabel}
+                </span>
               </span>
             </div>
             {plan.upgrade_group && (

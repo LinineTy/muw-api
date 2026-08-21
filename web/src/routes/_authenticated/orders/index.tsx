@@ -17,9 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute, redirect } from '@tanstack/react-router'
+import { z } from 'zod'
 
 import { Orders } from '@/features/orders'
 import { isSidebarModuleEnabled } from '@/lib/nav-modules'
+
+const ordersSearchSchema = z.object({
+  tab: z.string().optional(),
+})
 
 export const Route = createFileRoute('/_authenticated/orders/')({
   beforeLoad: () => {
@@ -28,8 +33,10 @@ export const Route = createFileRoute('/_authenticated/orders/')({
     }
   },
   component: OrdersPage,
+  validateSearch: ordersSearchSchema,
 })
 
 function OrdersPage() {
-  return <Orders />
+  const { tab } = Route.useSearch()
+  return <Orders initialTab={tab} />
 }
