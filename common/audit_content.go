@@ -73,6 +73,8 @@ var auditContentTemplates = map[string]string{
 	"subscription.plan_create":                  "Created a subscription plan",
 	"subscription.plan_update":                  "Updated a subscription plan",
 	"subscription.bind":                         "Bound a subscription",
+	"subscription.order_complete":               "Completed subscription order (trade no: ${trade_no})",
+	"subscription.order_reject":                 "Rejected subscription order (trade no: ${trade_no})",
 
 	"performance.reset_stats":            "Reset performance statistics",
 	"performance.clear_disk_cache":       "Cleared disk cache",
