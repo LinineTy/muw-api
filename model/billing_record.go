@@ -125,100 +125,142 @@ func collectSubscriptionPlanIds(subs []*SubscriptionOrder) map[int]struct{} {
 	return ids
 }
 
+// billingMergePage 在内存合并排序后的记录上按 pageInfo 取页。分页参数带下界防护：
+// 负的 p / page_size 会得到负的 start 或 end < start，直接切片会 panic。
+func billingMergePage(topups []*TopUp, subs []*SubscriptionOrder, planTitles map[int]string, pageInfo *common.PageInfo) ([]*BillingRecord, error) {
+	merged := mergeBillingRecords(topups, subs, planTitles)
+	start := pageInfo.GetStartIdx()
+	if start < 0 {
+		start = 0
+	}
+	if start > len(merged) {
+		start = len(merged)
+	}
+	pageSize := pageInfo.GetPageSize()
+	if pageSize < 1 {
+		pageSize = common.ItemsPerPage
+	}
+	end := start + pageSize
+	if end > len(merged) {
+		end = len(merged)
+	}
+	if end < start {
+		end = start
+	}
+	return merged[start:end], nil
+}
+
 // GetUserBillingRecords 合并查询某用户的充值记录 + 订阅订单（30 天窗口，与充值记录一致），
-// 按 create_time 倒序分页。typ 为空查两者，否则只查对应类型。过滤后记录量级可控，
-// 拉全量后内存合并排序分页，避免 UNION 的跨库方言差异。
+// 按 create_time 倒序分页。typ 为空查两者，否则只查对应类型。每张表的 Find 用
+// LIMIT 截到当前页的结束偏移（start+pageSize）：合并排序后当前页的记录必然落在各表
+// 各自的该偏移内，无需把整表拉进内存；两表查询包在同一个只读事务里，total 与 items
+// 不会因并发写入而错位。
 func GetUserBillingRecords(userId int, pageInfo *common.PageInfo, keyword, status, method, typ string) (records []*BillingRecord, total int64, err error) {
 	cutoff := topUpQueryCutoff()
+	start := pageInfo.GetStartIdx()
+	if start < 0 {
+		start = 0
+	}
+	pageSize := pageInfo.GetPageSize()
+	if pageSize < 1 {
+		pageSize = common.ItemsPerPage
+	}
+	limit := start + pageSize
 	var topups []*TopUp
 	var subs []*SubscriptionOrder
 	var topupTotal, subTotal int64
 
-	if typ == "" || typ == "topup" {
-		topupQuery, qerr := billingQueryFilter(
-			DB.Model(&TopUp{}).Where("user_id = ? AND create_time >= ?", userId, cutoff),
-			keyword, status, method,
-		)
-		if qerr != nil {
-			return nil, 0, qerr
+	err = DB.Transaction(func(tx *gorm.DB) error {
+		if typ == "" || typ == "topup" {
+			topupQuery, qerr := billingQueryFilter(
+				tx.Model(&TopUp{}).Where("user_id = ? AND create_time >= ?", userId, cutoff),
+				keyword, status, method,
+			)
+			if qerr != nil {
+				return qerr
+			}
+			if err = topupQuery.Count(&topupTotal).Error; err != nil {
+				return err
+			}
+			if err = topupQuery.Order("create_time desc").Limit(limit).Find(&topups).Error; err != nil {
+				return err
+			}
 		}
-		if err = topupQuery.Count(&topupTotal).Error; err != nil {
-			return nil, 0, err
+		if typ == "" || typ == "subscription" {
+			subQuery, qerr := billingQueryFilter(
+				tx.Model(&SubscriptionOrder{}).Where("user_id = ? AND create_time >= ?", userId, cutoff),
+				keyword, status, method,
+			)
+			if qerr != nil {
+				return qerr
+			}
+			if err = subQuery.Count(&subTotal).Error; err != nil {
+				return err
+			}
+			if err = subQuery.Order("create_time desc").Limit(limit).Find(&subs).Error; err != nil {
+				return err
+			}
 		}
-		if err = topupQuery.Order("create_time desc").Find(&topups).Error; err != nil {
-			return nil, 0, err
-		}
-	}
-	if typ == "" || typ == "subscription" {
-		subQuery, qerr := billingQueryFilter(
-			DB.Model(&SubscriptionOrder{}).Where("user_id = ? AND create_time >= ?", userId, cutoff),
-			keyword, status, method,
-		)
-		if qerr != nil {
-			return nil, 0, qerr
-		}
-		if err = subQuery.Count(&subTotal).Error; err != nil {
-			return nil, 0, err
-		}
-		if err = subQuery.Order("create_time desc").Find(&subs).Error; err != nil {
-			return nil, 0, err
-		}
+		return nil
+	})
+	if err != nil {
+		return nil, 0, err
 	}
 
-	merged := mergeBillingRecords(topups, subs, resolvePlanTitles(collectSubscriptionPlanIds(subs)))
 	total = topupTotal + subTotal
-	start := pageInfo.GetStartIdx()
-	if start > len(merged) {
-		start = len(merged)
-	}
-	end := start + pageInfo.GetPageSize()
-	if end > len(merged) {
-		end = len(merged)
-	}
-	return merged[start:end], total, nil
+	records, err = billingMergePage(topups, subs, resolvePlanTitles(collectSubscriptionPlanIds(subs)), pageInfo)
+	return records, total, err
 }
 
 // GetAllBillingRecords 管理员合并查询全平台充值记录 + 订阅订单（不限制时间窗口）。
-// typ 为空查两者，否则只查对应类型。
+// typ 为空查两者，否则只查对应类型。同样按页偏移限量拉取并包只读事务，避免每请求
+// 全表加载。
 func GetAllBillingRecords(pageInfo *common.PageInfo, keyword, status, method, typ string) (records []*BillingRecord, total int64, err error) {
+	start := pageInfo.GetStartIdx()
+	if start < 0 {
+		start = 0
+	}
+	pageSize := pageInfo.GetPageSize()
+	if pageSize < 1 {
+		pageSize = common.ItemsPerPage
+	}
+	limit := start + pageSize
 	var topups []*TopUp
 	var subs []*SubscriptionOrder
 	var topupTotal, subTotal int64
 
-	if typ == "" || typ == "topup" {
-		topupQuery, qerr := billingQueryFilter(DB.Model(&TopUp{}), keyword, status, method)
-		if qerr != nil {
-			return nil, 0, qerr
+	err = DB.Transaction(func(tx *gorm.DB) error {
+		if typ == "" || typ == "topup" {
+			topupQuery, qerr := billingQueryFilter(tx.Model(&TopUp{}), keyword, status, method)
+			if qerr != nil {
+				return qerr
+			}
+			if err = topupQuery.Count(&topupTotal).Error; err != nil {
+				return err
+			}
+			if err = topupQuery.Order("create_time desc").Limit(limit).Find(&topups).Error; err != nil {
+				return err
+			}
 		}
-		if err = topupQuery.Count(&topupTotal).Error; err != nil {
-			return nil, 0, err
+		if typ == "" || typ == "subscription" {
+			subQuery, qerr := billingQueryFilter(tx.Model(&SubscriptionOrder{}), keyword, status, method)
+			if qerr != nil {
+				return qerr
+			}
+			if err = subQuery.Count(&subTotal).Error; err != nil {
+				return err
+			}
+			if err = subQuery.Order("create_time desc").Limit(limit).Find(&subs).Error; err != nil {
+				return err
+			}
 		}
-		if err = topupQuery.Order("create_time desc").Find(&topups).Error; err != nil {
-			return nil, 0, err
-		}
-	}
-	if typ == "" || typ == "subscription" {
-		subQuery, qerr := billingQueryFilter(DB.Model(&SubscriptionOrder{}), keyword, status, method)
-		if qerr != nil {
-			return nil, 0, qerr
-		}
-		if err = subQuery.Count(&subTotal).Error; err != nil {
-			return nil, 0, err
-		}
-		if err = subQuery.Order("create_time desc").Find(&subs).Error; err != nil {
-			return nil, 0, err
-		}
+		return nil
+	})
+	if err != nil {
+		return nil, 0, err
 	}
 
-	merged := mergeBillingRecords(topups, subs, resolvePlanTitles(collectSubscriptionPlanIds(subs)))
 	total = topupTotal + subTotal
-	start := pageInfo.GetStartIdx()
-	if start > len(merged) {
-		start = len(merged)
-	}
-	end := start + pageInfo.GetPageSize()
-	if end > len(merged) {
-		end = len(merged)
-	}
-	return merged[start:end], total, nil
+	records, err = billingMergePage(topups, subs, resolvePlanTitles(collectSubscriptionPlanIds(subs)), pageInfo)
+	return records, total, err
 }
