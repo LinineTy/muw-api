@@ -43,7 +43,7 @@ import { paySubscriptionEpay, paySubscriptionBalance } from '../../api'
 import {
   formatDuration,
   formatResetPeriod,
-  formatWindowPeriod,
+  formatWindowPeriodLabel,
   isCapWindow,
   parsePlanResetWindows,
 } from '../../lib'
@@ -107,7 +107,10 @@ export function SubscriptionPurchaseDialog(props: Props) {
         // 封顶窗口（周期 >= 有效期）只显示总额度，不暴露周期（如 "12 个月"）。
         isCapWindow(w, plan)
           ? t('{{amount}} total', { amount: formatQuota(w.limit || 0) })
-          : `${formatWindowPeriod(w, t)} ${formatQuota(w.limit || 0)}`
+          : t('{{amount}} every {{period}}', {
+              amount: formatQuota(w.limit || 0),
+              period: formatWindowPeriodLabel(w, t),
+            })
       )
       .join(' / ')
   } else if (totalAmount > 0) {

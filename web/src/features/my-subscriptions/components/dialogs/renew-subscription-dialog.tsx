@@ -36,7 +36,7 @@ import { Separator } from '@/components/ui/separator'
 import {
   formatDuration,
   formatDurationSeconds,
-  formatWindowPeriod,
+  formatWindowPeriodLabel,
   isCapWindow,
   parsePlanResetWindows,
   parseRenewTerms,
@@ -100,7 +100,10 @@ export function RenewSubscriptionDialog(props: Props) {
           // 封顶窗口（周期 >= 有效期）只显示总额度，不暴露周期（如 "12 个月"）。
           isCapWindow(w, plan)
             ? t('{{amount}} total', { amount: formatQuota(w.limit || 0) })
-            : `${formatWindowPeriod(w, t)} ${formatQuota(w.limit || 0)}`
+            : t('{{amount}} every {{period}}', {
+                amount: formatQuota(w.limit || 0),
+                period: formatWindowPeriodLabel(w, t),
+              })
         )
         .join(' / ')
     }

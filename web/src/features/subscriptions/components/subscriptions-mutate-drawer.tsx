@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { zodResolver } from '@hookform/resolvers/zod'
 import { CalendarClock, Plus, RefreshCw, Settings2, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { useForm, type Resolver } from 'react-hook-form'
+import { useForm, type FieldErrors, type Resolver } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -86,6 +86,7 @@ import {
   planToFormValues,
   formValuesToPlanPayload,
   planValiditySeconds,
+  resetWindowsRawEqual,
   windowRowDurationSeconds,
   type PlanFormValues,
   type ResetWindowFormRow,
@@ -253,12 +254,13 @@ export function SubscriptionsMutateDrawer({
     // 重置该套餐全部活跃订阅的配额计数）：
     //  - windows 模式增删改窗口列表；
     //  - 动态 → legacy 转换（后端重授 legacy 计数）。
+    // 判等用语义比较（resetWindowsRawEqual），键序/浮点往返差异不算变化。
     if (isEdit) {
       const payload = formValuesToPlanPayload(values)
-      const newRaw = payload.plan.reset_windows
+      const newRaw = payload.plan.reset_windows || ''
       const isWindowsNow = values.quota_model === 'windows'
       const windowsChanged =
-        isWindowsNow && newRaw !== originalWindowsRaw
+        isWindowsNow && !resetWindowsRawEqual(newRaw, originalWindowsRaw)
       const dynamicToLegacy = !isWindowsNow && originalWindowsRaw !== ''
       if (windowsChanged || dynamicToLegacy) {
         setPendingSubmit(values)
@@ -267,6 +269,16 @@ export function SubscriptionsMutateDrawer({
       }
     }
     await doSubmit(values)
+  }
+
+  // zod 对 reset_windows 的 superRefine（全 0 额度 / 非严格递增）在自定义窗口编辑器上
+  // 没有可挂靠的 FormMessage，handleSubmit 静默拦截提交会"点了没反应"——这里把该字段
+  // 的校验错误以 toast 显式反馈。
+  const onInvalid = (errors: FieldErrors<PlanFormValues>) => {
+    const message = errors.reset_windows?.message
+    if (message) {
+      toast.error(String(message))
+    }
   }
 
   const durationUnitOpts = getDurationUnitOptions(t)
@@ -298,7 +310,7 @@ export function SubscriptionsMutateDrawer({
         <Form {...form}>
           <form
             id='subscription-form'
-            onSubmit={form.handleSubmit(onSubmit)}
+            onSubmit={form.handleSubmit(onSubmit, onInvalid)}
             className={sideDrawerFormClassName()}
           >
             {/* Basic Info */}
@@ -997,10 +1009,13 @@ export function SubscriptionsMutateDrawer({
                     <div className='space-y-2'>
                       {(resetWindows || []).map((row, index) => {
                         const isCap =
-                          windowRowDurationSeconds(row) >=
+                          windowRowDurationSeconds(row) >
                           planValiditySeconds(form.getValues())
                         return (
-                          <div key={index} className='space-y-1'>
+                          <div
+                            key={`${row.unit}-${row.value}`}
+                            className='space-y-1'
+                          >
                             <div className='grid grid-cols-[minmax(0,80px)_minmax(0,64px)_minmax(0,1fr)_auto] items-center gap-2'>
                               <Tooltip>
                                 <TooltipTrigger
