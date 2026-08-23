@@ -277,7 +277,7 @@ export function SubscriptionSummaryCard() {
         {/* 限额单列列表 */}
         <div className='flex flex-col px-4 sm:px-5'>
           {limitRows.length > 0 ? (
-            limitRows.map((row) => <LimitRow key={row.label} {...row} />)
+            limitRows.map((row) => <LimitRow key={row.rowKey} {...row} />)
           ) : (
             <div className='text-muted-foreground py-2 text-xs'>
               {t('Unlimited')}

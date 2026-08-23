@@ -188,7 +188,10 @@ export function formatWindowPeriod(
   return t('every {{period}}', { period })
 }
 
-// 动态窗口是否作为本订阅封顶上限（时长 ≥ 套餐有效期）。
+// 动态窗口是否作为本订阅封顶上限（时长 > 套餐有效期）。
+// 与后端 calcWindowNextReset 语义对齐：后端在 next_reset 超出 EndTime（严格大于）
+// 时返回 0 = 封顶；边界相等（如 1 天窗口 + 1 天套餐）不封顶。时长估算：月按 30 天
+// 近似（无订阅锚点，无法用日历 AddDate），仅影响边界月份的展示标签。
 export function isCapWindow(
   w: ResetWindow,
   plan?: Partial<SubscriptionPlan> | null
@@ -213,5 +216,5 @@ export function isCapWindow(
     default:
       return false
   }
-  return duration >= validity
+  return duration > validity
 }

@@ -37,17 +37,21 @@ import { BillingTab } from './components/billing-tab'
 import { SpaceOrdersTab } from './components/space-orders-tab'
 import { SubscriptionTab } from './components/subscription-tab'
 
+export type OrderTab = 'subscription' | 'billing' | 'space'
+
 interface OrdersProps {
-  initialTab?: string
+  // tab 由路由 search 驱动（URL 即数据源），切换时通过 onTabChange 回写 URL。
+  tab: OrderTab
+  onTabChange: (value: OrderTab) => void
 }
 
 /**
  * 订单中心：订阅（套餐购买 + 历史订阅 + 订阅订单）/ 充值记录 / 云空间订单，
- * 分 tab 展示。用户看本人，管理员看全平台。可通过 ?tab= 指定初始 tab。
+ * 分 tab 展示。用户看本人，管理员看全平台。tab 受控于 URL ?tab=（枚举校验，非法值
+ * 落回订阅 tab）。
  */
-export function Orders({ initialTab }: OrdersProps) {
+export function Orders({ tab, onTabChange }: OrdersProps) {
   const { t } = useTranslation()
-  const [tab, setTab] = useState(initialTab || 'subscription')
   // 套餐目录「分组显示」开关：状态提升到页面级，按钮放页面头部右上角，仅订阅 tab 可见。
   const [grouped, setGrouped] = useState(true)
 
@@ -77,7 +81,10 @@ export function Orders({ initialTab }: OrdersProps) {
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
         <div className='mx-auto flex w-full max-w-7xl flex-col gap-4 sm:gap-5'>
-          <Tabs value={tab} onValueChange={setTab}>
+          <Tabs
+            value={tab}
+            onValueChange={(value) => onTabChange(value as OrderTab)}
+          >
             <TabsList>
               <TabsTrigger value='subscription'>
                 {t('Subscription')}

@@ -252,6 +252,27 @@ export function parseResetWindowsRaw(raw: string): ResetWindowFormRow[] {
   }
 }
 
+// resetWindowsRawEqual 语义比较两份 reset_windows 原始文本是否表示相同窗口列表
+// （unit/value/limit 逐项，limit 为额度整数）。配合后端 ResetWindowsEqual，避免因
+// 重新序列化的键序/浮点往返差异，把"只改标题"误判成窗口变化而弹「改动即重置」确认。
+export function resetWindowsRawEqual(a: string, b: string): boolean {
+  if (!a && !b) return true
+  try {
+    const pa = a ? JSON.parse(a) : []
+    const pb = b ? JSON.parse(b) : []
+    if (!Array.isArray(pa) || !Array.isArray(pb)) return a === b
+    if (pa.length !== pb.length) return false
+    return pa.every(
+      (wa: ResetWindowFormRow, i: number) =>
+        wa.unit === pb[i].unit &&
+        Number(wa.value) === Number(pb[i].value) &&
+        Number(wa.limit) === Number(pb[i].limit)
+    )
+  } catch {
+    return a === b
+  }
+}
+
 // legacy 上限字段 → 窗口行（"切换到动态窗口模型"时预填，尽力而为，管理员可再调整）。
 export function deriveWindowsFromLegacy(
   values: Pick<

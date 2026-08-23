@@ -38,6 +38,7 @@ export {
   formValuesToPlanPayload,
   deriveWindowsFromLegacy,
   parseResetWindowsRaw,
+  resetWindowsRawEqual,
   planValiditySeconds,
   windowRowDurationSeconds,
   type PlanFormValues,

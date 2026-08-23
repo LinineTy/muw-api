@@ -33,6 +33,7 @@ export function buildLimitRows(
   record: UserSubscriptionRecord,
   t: TFunction
 ): {
+  rowKey: string
   label: string
   used: number
   total: number
@@ -53,28 +54,35 @@ export function buildLimitRows(
           windowRowDurationSeconds(a.w) - windowRowDurationSeconds(b.w)
       )
       .map(({ w, state }) => {
-        // 周期 >= 有效期的窗口是封顶上限：只显示额度，不暴露周期（如 "12 个月"）。
-        const isCap = isCapWindow(w, plan)
+        // 封顶判定优先用后端实际窗口状态（next_reset_at==0 && cycle_start_at>0 = 订阅内
+        // 不再刷新，limit 即本订阅总上限）；状态缺失（新购/数据异常）才回退到套餐时长估算。
+        const backendCapped =
+          !!state && state.next_reset_at === 0 && state.cycle_start_at > 0
+        const isCap = backendCapped || (state ? false : isCapWindow(w, plan))
         return {
+          // 窗口定义唯一键：多个封顶窗口 label 都是 "Total cap"，行 key 不能只用 label。
+          rowKey: `${w.unit}-${w.value}`,
           label: isCap ? t('Total cap') : formatWindowPeriod(w, t),
           used: state?.cycle_used || 0,
           total: w.limit || 0,
           resetAt: state?.next_reset_at || 0,
-          noReset: !!(
-            state &&
-            state.next_reset_at === 0 &&
-            state.cycle_start_at > 0
-          ),
+          noReset: backendCapped,
           isCap,
         }
       })
   }
-  const rows: { label: string; used: number; total: number }[] = []
+  const rows: {
+    rowKey: string
+    label: string
+    used: number
+    total: number
+  }[] = []
   const cycleLimit = Number(plan.reset_amount_limit || 0)
   const weekLimit = Number(plan.weekly_amount_limit || 0)
   const monthLimit = Number(plan.monthly_amount_limit || 0)
   if (cycleLimit > 0) {
     rows.push({
+      rowKey: 'cycle',
       label: t('This cycle'),
       used: Number(sub.cycle_used || 0),
       total: cycleLimit,
@@ -82,6 +90,7 @@ export function buildLimitRows(
   }
   if (weekLimit > 0) {
     rows.push({
+      rowKey: 'week',
       label: t('This week'),
       used: Number(sub.week_used || 0),
       total: weekLimit,
@@ -89,6 +98,7 @@ export function buildLimitRows(
   }
   if (monthLimit > 0) {
     rows.push({
+      rowKey: 'month',
       label: t('This month'),
       used: Number(sub.month_used || 0),
       total: monthLimit,
