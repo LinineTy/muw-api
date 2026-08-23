@@ -55,7 +55,6 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
     enabled: true,
     topup: true,
     personal: true,
-    my_subscriptions: true,
     space: true,
     orders: true,
   },
