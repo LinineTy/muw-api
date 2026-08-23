@@ -70,6 +70,11 @@ func validateResetWindows(raw string) error {
 		case model.SubscriptionWindowUnitMonth:
 			secs = int64(w.Value) * 30 * 86400
 		}
+		// 上界：窗口时长 ≤ 一年（约 366 天）。既保证 calcWindowNextReset 的
+		// time.Duration(w.Value)*unit 不溢出（int64 纳秒），也避免管理端误配巨大窗口。
+		if secs > 366*86400 {
+			return fmt.Errorf("第 %d 个窗口时长不能超过一年（约 366 天）", i+1)
+		}
 		if i > 0 && secs <= prevSeconds {
 			return fmt.Errorf("第 %d 个窗口时长必须严格大于前一个（窗口列表需按时长递增排列）", i+1)
 		}
@@ -601,7 +606,9 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 			return err
 		}
 		// 窗口列表变化 → 重置该套餐活跃订阅的窗口计数（"改动即重置"，管理端主动重定义额度）。
-		if req.Plan.ResetWindowsRaw != "" && req.Plan.ResetWindowsRaw != oldResetWindows {
+		// 判等用语义比较（ResetWindowsEqual）：前端保存会重新序列化 JSON，字节差异不算变化。
+		windowsChanged := !model.ResetWindowsEqual(oldResetWindows, req.Plan.ResetWindowsRaw)
+		if req.Plan.ResetWindowsRaw != "" && windowsChanged {
 			planForReset := &model.SubscriptionPlan{Id: id, ResetWindowsRaw: req.Plan.ResetWindowsRaw}
 			if _, err := model.ApplyPlanWindowsToActiveSubscriptions(tx, planForReset, common.GetTimestamp()); err != nil {
 				return err
@@ -950,7 +957,7 @@ func AdminCompleteSubscriptionOrder(c *gin.Context) {
 }
 
 // AdminRejectSubscriptionOrder 管理员关闭待支付订阅订单（pending → expired）。
-// 用于无法完成的订单的人工收尾。
+// 用于无法完成的订单的人工收尾。非 pending 订单显式提示当前状态，避免"点了没反应"。
 func AdminRejectSubscriptionOrder(c *gin.Context) {
 	var req AdminCompleteSubscriptionOrderRequest
 	if err := c.ShouldBindJSON(&req); err != nil || req.TradeNo == "" {
@@ -959,6 +966,15 @@ func AdminRejectSubscriptionOrder(c *gin.Context) {
 	}
 	LockOrder(req.TradeNo)
 	defer UnlockOrder(req.TradeNo)
+	order := model.GetSubscriptionOrderByTradeNo(req.TradeNo)
+	if order == nil {
+		common.ApiErrorMsg(c, "订单不存在")
+		return
+	}
+	if order.Status != common.TopUpStatusPending {
+		common.ApiErrorMsg(c, fmt.Sprintf("订单当前状态为 %s，无需驳回", order.Status))
+		return
+	}
 	if err := model.ExpireSubscriptionOrder(req.TradeNo, ""); err != nil {
 		common.ApiError(c, err)
 		return
