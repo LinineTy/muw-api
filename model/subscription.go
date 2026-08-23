@@ -314,6 +314,37 @@ func (s *UserSubscription) SetWindowStates(states []WindowState) {
 	s.WindowState = string(data)
 }
 
+// ResetWindowsEqual 判断两份 reset_windows 原始文本是否表示相同的窗口列表。
+// 语义比较（解析后逐项比对）而非字节比较：管理端保存套餐时前端会重新序列化
+// （键序/空白/美元额度浮点往返都可能造成字节差异），若用字符串判等，仅改标题也会
+// 误触发「改动即重置」清空该套餐全部活跃订阅的窗口计数。解析失败时退回字节比较，
+// 保守不判等，避免畸形数据误重置。
+func ResetWindowsEqual(a, b string) bool {
+	a = strings.TrimSpace(a)
+	b = strings.TrimSpace(b)
+	if a == "" && b == "" {
+		return true
+	}
+	aw, aok := parseResetWindowsStrict(a)
+	bw, bok := parseResetWindowsStrict(b)
+	if !aok || !bok {
+		return a == b
+	}
+	return slices.Equal(aw, bw)
+}
+
+func parseResetWindowsStrict(raw string) ([]ResetWindow, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, true
+	}
+	var windows []ResetWindow
+	if err := common.UnmarshalJsonStr(raw, &windows); err != nil {
+		return nil, false
+	}
+	return windows, true
+}
+
 // Subscription order (payment -> webhook -> create UserSubscription)
 type SubscriptionOrder struct {
 	Id     int     `json:"id"`
@@ -623,12 +654,13 @@ func advanceSubscriptionWindows(sub *UserSubscription, plan *SubscriptionPlan, n
 		return false
 	}
 	windows := plan.ResetWindows()
+	changed := false
 	if len(windows) > 0 {
 		// 动态窗口模型：多级独立窗口各自推进（含续费后重算/封顶语义）。
-		return advanceDynamicWindows(sub, windows, now)
-	}
-	changed := false
-	if period := NormalizeResetPeriod(plan.QuotaResetPeriod); period != SubscriptionResetNever {
+		if advanceDynamicWindows(sub, windows, now) {
+			changed = true
+		}
+	} else if period := NormalizeResetPeriod(plan.QuotaResetPeriod); period != SubscriptionResetNever {
 		if sub.NextCycleResetAt > 0 && sub.NextCycleResetAt <= now {
 			sub.CycleUsed = 0
 			sub.CycleStartAt = now
@@ -643,6 +675,8 @@ func advanceSubscriptionWindows(sub *UserSubscription, plan *SubscriptionPlan, n
 			changed = true
 		}
 	}
+	// 自然日历周/月窗口（legacy 与动态模型共用）：动态模型下 week_used/month_used 仅作
+	// 展示统计（钱包卡「订阅抵扣」），不作额度上限——动态上限只来自 reset_windows。
 	nowT := time.Unix(now, 0)
 	weekStart := weekStartUnix(nowT)
 	if sub.WeekStartAt < weekStart {
@@ -2890,8 +2924,11 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 			}
 			sub.AmountUsed += amount
 			if len(windows) > 0 {
-				// 动态：累加到全部窗口计数（AmountUsed 仅保留作累计展示）。
+				// 动态：累加到全部窗口计数（AmountUsed 仅保留作累计展示）；
+				// 自然周/月计数同步累加，供钱包卡「订阅抵扣」按日历月统计（不作上限）。
 				addWindowUsage(&sub, windows, amount)
+				sub.WeekUsed += amount
+				sub.MonthUsed += amount
 			} else {
 				sub.CycleUsed += amount
 				sub.WeekUsed += amount
@@ -3071,6 +3108,9 @@ func PostConsumeUserSubscriptionDelta(db *gorm.DB, userSubscriptionId int, delta
 			if changed {
 				sub.SetWindowStates(states)
 			}
+			// 自然周/月展示计数同步按差额修正（与 legacy 结算一致，保持日历月统计准确）。
+			sub.WeekUsed = clampNonNegative(sub.WeekUsed + delta)
+			sub.MonthUsed = clampNonNegative(sub.MonthUsed + delta)
 			return tx.Save(&sub).Error
 		}
 		// AmountTotal is a cumulative cap only when the plan has no reset period or

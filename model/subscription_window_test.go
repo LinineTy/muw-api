@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -393,6 +394,74 @@ func TestWindowResetClearsAllWindows(t *testing.T) {
 		assert.Zero(t, s.CycleUsed, "重置后窗口计数必须清零")
 		assert.GreaterOrEqual(t, s.CycleStartAt, now, "重置后窗口应从 now 锚定")
 	}
+}
+
+// ResetWindowsEqual 是「改动即重置」的判等基础：语义比较而非字节比较，
+// 键序/空白/空串与空数组都视为相同，仅窗口定义真实变化才判不等。
+func TestResetWindowsEqual(t *testing.T) {
+	cases := []struct {
+		name string
+		a, b string
+		want bool
+	}{
+		{"both empty", "", "", true},
+		{"empty vs empty array", "", "[]", true},
+		{"identical", `[{"unit":"hour","value":5,"limit":100}]`, `[{"unit":"hour","value":5,"limit":100}]`, true},
+		{"key order differs", `[{"unit":"hour","value":5,"limit":100}]`, `[{"limit":100,"unit":"hour","value":5}]`, true},
+		{"whitespace differs", `[{"unit":"hour","value":5,"limit":100}]`, `[ { "unit": "hour", "value": 5, "limit": 100 } ]`, true},
+		{"limit changed", `[{"unit":"hour","value":5,"limit":100}]`, `[{"unit":"hour","value":5,"limit":200}]`, false},
+		{"value changed", `[{"unit":"hour","value":5,"limit":100}]`, `[{"unit":"hour","value":6,"limit":100}]`, false},
+		{"extra window", `[{"unit":"hour","value":5,"limit":100}]`, `[{"unit":"hour","value":5,"limit":100},{"unit":"day","value":1,"limit":200}]`, false},
+		{"dynamic to empty", `[{"unit":"hour","value":5,"limit":100}]`, "", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, ResetWindowsEqual(c.a, c.b))
+		})
+	}
+}
+
+// 动态订阅也维护自然周/月展示计数（钱包卡「订阅抵扣」按 month_used 统计）：
+// 预扣累加、结算差额修正、日历月边界清零——与 legacy 一致，仅作统计不作上限。
+func TestWindowDynamicMaintainsCalendarMonthCounter(t *testing.T) {
+	truncateTables(t)
+
+	now := GetDBTimestamp()
+	seedQuotaPlan(t, 7824, &SubscriptionPlan{
+		Title: "cal-stat", PriceAmount: 10,
+		DurationUnit: SubscriptionDurationMonth, DurationValue: 1,
+		ResetWindowsRaw: `[{"unit":"hour","value":5,"limit":100}]`,
+	})
+	// 上月已用 50（模拟跨月）：预扣时先按日历月边界清零再累加。
+	seedQuotaSub(t, 7825, &UserSubscription{
+		UserId: 792, PlanId: 7824, Status: "active",
+		StartTime: now - 3600, EndTime: now + 30*86400,
+		MonthStartAt: monthStartUnix(time.Unix(now, 0)) - 86400, MonthUsed: 50,
+		WeekStartAt: weekStartUnix(time.Unix(now, 0)) - 7*86400, WeekUsed: 20,
+		WindowState: windowStateJSON(windowEntry(0, 0, now, now+5*3600)),
+	})
+
+	res, err := PreConsumeUserSubscription("req-cal-1", 792, "gpt-4", 1, 10)
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	require.EqualValues(t, 10, res.PreConsumed)
+
+	// 上月残留被日历边界清零：本月只计 10，不是 60。
+	after := getSubByID(t, 7825)
+	assert.EqualValues(t, 10, after.MonthUsed, "日历月边界应清零上月计数后再累加本月")
+	assert.EqualValues(t, 10, after.WeekUsed, "日历周边界应清零上周计数后再累加本周")
+
+	// 结算差额 +5 → 计数 15。
+	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, 7825, 5))
+	after = getSubByID(t, 7825)
+	assert.EqualValues(t, 15, after.MonthUsed)
+	assert.EqualValues(t, 15, after.WeekUsed)
+
+	// 退款负差额超过计数 → clamp 到 0。
+	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, 7825, -1000))
+	after = getSubByID(t, 7825)
+	assert.Zero(t, after.MonthUsed)
+	assert.Zero(t, after.WeekUsed)
 }
 
 // 动态 → legacy 转换（ApplyPlanLegacyToActiveSubscriptions）：总额度重授为新套餐
