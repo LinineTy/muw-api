@@ -31,7 +31,6 @@ import { SubscriptionPurchaseDialog } from '@/features/subscriptions/components/
 import { GroupCollapsibleSection } from '@/features/subscriptions/components/group-collapsible-section'
 import {
   formatDuration,
-  formatResetPeriod,
   formatWindowPeriodLabel,
   isCapWindow,
   parsePlanResetWindows,
@@ -202,20 +201,19 @@ function CatalogPlanCard({
   const { meta: currencyMeta } = getCurrencyDisplay()
   const currencySymbol =
     currencyMeta.kind === 'tokens' ? '$' : currencyMeta.symbol
-  const totalAmount = Number(plan.total_amount || 0)
   const price = Number(plan.price_amount || 0).toFixed(2)
   const isPopular = plan.is_recommended === true
 
-  const cycleLimit = Number(plan.reset_amount_limit || 0)
-  const weekLimit = Number(plan.weekly_amount_limit || 0)
-  const monthLimit = Number(plan.monthly_amount_limit || 0)
   const maxDays = Math.floor(Number(plan.max_cumulative_seconds || 0) / 86400)
   const resetWindows = parsePlanResetWindows(plan.reset_windows)
-  const isDynamic = resetWindows.length > 0
+  const unlimited =
+    resetWindows.length > 0 && resetWindows.every((w) => Number(w.limit) <= 0)
 
-  // 权益清单：动态窗口 = 每个窗口一条（封顶窗口单独标注）；legacy 维持原逻辑。
+  // 权益清单：动态窗口 = 每个窗口一条（封顶窗口单独标注）；全部窗口额度 0 = 无限额度。
   const benefits: string[] = []
-  if (isDynamic) {
+  if (unlimited) {
+    benefits.push(t('Unlimited'))
+  } else {
     resetWindows.forEach((w) => {
       const period = formatWindowPeriodLabel(w, t)
       const amount = formatQuota(w.limit || 0)
@@ -226,38 +224,9 @@ function CatalogPlanCard({
           : t('{{amount}} every {{period}}', { amount, period })
       )
     })
-    if (maxDays > 0) {
-      benefits.push(t('Up to {{days}} days', { days: maxDays }))
-    }
-  } else {
-    benefits.push(
-      t('Quota: {{amount}}', {
-        amount: totalAmount > 0 ? formatQuota(totalAmount) : t('Unlimited'),
-      })
-    )
-    if (formatResetPeriod(plan, t) !== t('No Reset')) {
-      benefits.push(
-        t('{{period}} reset', { period: formatResetPeriod(plan, t) })
-      )
-    }
-    if (cycleLimit > 0) {
-      benefits.push(
-        t('{{amount}} per cycle', { amount: formatQuota(cycleLimit) })
-      )
-    }
-    if (weekLimit > 0) {
-      benefits.push(
-        t('{{amount}} per week', { amount: formatQuota(weekLimit) })
-      )
-    }
-    if (monthLimit > 0) {
-      benefits.push(
-        t('{{amount}} per month', { amount: formatQuota(monthLimit) })
-      )
-    }
-    if (maxDays > 0) {
-      benefits.push(t('Up to {{days}} days', { days: maxDays }))
-    }
+  }
+  if (maxDays > 0) {
+    benefits.push(t('Up to {{days}} days', { days: maxDays }))
   }
   if (plan.upgrade_group) {
     benefits.push(t('Upgrade to {{group}}', { group: plan.upgrade_group }))

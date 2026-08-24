@@ -53,7 +53,6 @@ function PlanCardComponent({
   const priceCell = renderCell('price')
   const durationCell = renderCell('duration')
   const resetCell = renderCell('reset')
-  const quotaCell = renderCell('total_amount')
   const statusCell = renderCell('enabled')
   const paymentCell = renderCell('payment')
   const upgradeCell = renderCell('upgrade_group')
@@ -98,14 +97,8 @@ function PlanCardComponent({
         <span className='text-muted-foreground text-sm'>{durationCell}</span>
       </div>
 
-      {/* 元信息：配额 / 重置 / 支付渠道 / 升级分组 */}
+      {/* 元信息：重置 / 支付渠道 / 升级分组 */}
       <div className='grid grid-cols-2 gap-x-4 gap-y-2'>
-        <div className='min-w-0'>
-          <div className={labelClass}>{t('Plan Quota')}</div>
-          <div className='text-muted-foreground min-w-0 overflow-hidden text-sm'>
-            {quotaCell}
-          </div>
-        </div>
         <div className='min-w-0'>
           <div className={labelClass}>{t('Quota Reset')}</div>
           <div className='text-muted-foreground min-w-0 overflow-hidden text-sm'>

@@ -26,7 +26,10 @@ import type {
   SubscriptionPlan,
   UserSubscriptionRecord,
 } from '@/features/subscriptions/types'
-import { formatTimestamp } from '@/features/subscriptions/lib'
+import {
+  buildLimitRows,
+  formatTimestamp,
+} from '@/features/subscriptions/lib'
 import { formatQuota } from '@/lib/format'
 
 import { classifySubscriptionStatus } from '../lib/helpers'
@@ -106,25 +109,30 @@ export function useEndedSubscriptionsColumns(
       },
       {
         id: 'usage',
-        accessorFn: (row) => row.subscription.amount_used,
         header: t('Usage'),
+        enableSorting: false,
         meta: { mobileHidden: true },
         cell: ({ row }) => {
-          const { amount_total: total, amount_used: used } =
-            row.original.subscription
-          const totalNum = Number(total || 0)
-          if (totalNum <= 0) {
+          const subscription = row.original.subscription
+          const plan = planMap.get(subscription.plan_id)
+          // 滚动窗口模型：逐窗口渲染 used/total；全部窗口额度 0 = 无限。
+          const rows = buildLimitRows({ subscription, plan }, t)
+          if (rows.length === 0) {
             return (
               <span className='text-muted-foreground'>{t('Unlimited')}</span>
             )
           }
           return (
-            <span className='text-muted-foreground'>
-              {formatQuota(Number(used || 0))} / {formatQuota(totalNum)}
-            </span>
+            <div className='space-y-0.5'>
+              {rows.map((r) => (
+                <div key={r.rowKey} className='text-xs text-muted-foreground'>
+                  {r.label}: {formatQuota(r.used)}/{formatQuota(r.total)}
+                </div>
+              ))}
+            </div>
           )
         },
-        size: 140,
+        size: 150,
       },
     ],
     [t, planMap]

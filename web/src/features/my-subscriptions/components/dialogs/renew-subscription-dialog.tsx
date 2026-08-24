@@ -91,26 +91,23 @@ export function RenewSubscriptionDialog(props: Props) {
     renewTerms?.price_amount ?? Number(plan.price_amount || 0)
 
   const price = effectivePrice.toFixed(2)
-  // 套餐额度展示：动态窗口 = 各窗口摘要；legacy = 总额度或 Unlimited。
+  // 套餐额度展示：动态窗口 = 各窗口摘要；全部窗口额度 0 = 无限额度。
   const planQuotaLabel = (() => {
     const windows = parsePlanResetWindows(plan.reset_windows)
-    if (windows.length > 0) {
-      return windows
-        .map((w) =>
-          // 封顶窗口（周期 >= 有效期）只显示总额度，不暴露周期（如 "12 个月"）。
-          isCapWindow(w, plan)
-            ? t('{{amount}} total', { amount: formatQuota(w.limit || 0) })
-            : t('{{amount}} every {{period}}', {
-                amount: formatQuota(w.limit || 0),
-                period: formatWindowPeriodLabel(w, t),
-              })
-        )
-        .join(' / ')
+    if (windows.length > 0 && windows.every((w) => Number(w.limit) <= 0)) {
+      return t('Unlimited')
     }
-    if (Number(plan.total_amount || 0) > 0) {
-      return formatQuota(Number(plan.total_amount || 0))
-    }
-    return t('Unlimited')
+    return windows
+      .map((w) =>
+        // 封顶窗口（周期 >= 有效期）只显示总额度，不暴露周期（如 "12 个月"）。
+        isCapWindow(w, plan)
+          ? t('{{amount}} total', { amount: formatQuota(w.limit || 0) })
+          : t('{{amount}} every {{period}}', {
+              amount: formatQuota(w.limit || 0),
+              period: formatWindowPeriodLabel(w, t),
+            })
+      )
+      .join(' / ')
   })()
   const quotaPerUnit =
     currency?.quotaPerUnit && currency.quotaPerUnit > 0

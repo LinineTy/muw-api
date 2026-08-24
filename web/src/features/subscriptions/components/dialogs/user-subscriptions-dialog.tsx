@@ -65,7 +65,7 @@ import {
   deleteUserSubscription,
   resetUserSubscriptionsByPlan,
 } from '../../api'
-import { formatTimestamp } from '../../lib'
+import { formatTimestamp, buildLimitRows } from '../../lib'
 import type { PlanRecord, UserSubscriptionRecord } from '../../types'
 
 interface Props {
@@ -342,12 +342,30 @@ export function UserSubscriptionsDialog(props: Props) {
                   id: 'quota',
                   header: t('Total Quota'),
                   cell: (record) => {
-                    const sub = record.subscription
-                    const total = Number(sub.amount_total || 0)
-                    const used = Number(sub.amount_used || 0)
-                    return total > 0
-                      ? `${formatQuota(used)}/${formatQuota(total)}`
-                      : t('Unlimited')
+                    const { subscription, plan } = record
+                    // 滚动窗口模型：逐窗口渲染 used/total；全部窗口额度 0 = 无限。
+                    const rows = buildLimitRows({ subscription, plan }, t)
+                    if (rows.length === 0) {
+                      return (
+                        <span className='text-muted-foreground'>
+                          {t('Unlimited')}
+                        </span>
+                      )
+                    }
+                    return (
+                      <div className='space-y-0.5'>
+                        {rows.map((r) => (
+                          <div key={r.rowKey} className='text-xs'>
+                            <span className='text-muted-foreground'>
+                              {r.label}:
+                            </span>{' '}
+                            <span className='font-medium tabular-nums'>
+                              {formatQuota(r.used)}/{formatQuota(r.total)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )
                   },
                 },
                 {

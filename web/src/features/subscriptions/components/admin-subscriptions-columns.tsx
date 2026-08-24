@@ -23,16 +23,9 @@ import { useTranslation } from 'react-i18next'
 
 import { StatusBadge } from '@/components/status-badge'
 import { TableId } from '@/components/table-id'
-import { Progress } from '@/components/ui/progress'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
 import { formatQuota } from '@/lib/format'
-import { cn } from '@/lib/utils'
 
-import { formatTimestamp } from '../lib'
+import { buildLimitRows, formatTimestamp } from '../lib'
 import type { AdminUserSubscriptionSummary } from '../types'
 import { SubscriptionAdminActions } from './subscription-admin-actions'
 import { HistoryPurgeAction } from './subscription-history-purge-action'
@@ -64,16 +57,6 @@ function getSubscriptionStatusBadge(
     )
   }
   return <StatusBadge label={t('Expired')} variant='neutral' copyable={false} />
-}
-
-function getUsageProgressColor(percentage: number): string {
-  if (percentage >= 90) {
-    return '[&_[data-slot=progress-indicator]]:bg-rose-500'
-  }
-  if (percentage >= 70) {
-    return '[&_[data-slot=progress-indicator]]:bg-amber-500'
-  }
-  return '[&_[data-slot=progress-indicator]]:bg-emerald-500'
 }
 
 export function useAdminSubscriptionsColumns(options?: {
@@ -167,49 +150,45 @@ export function useAdminSubscriptionsColumns(options?: {
         enableSorting: false,
         meta: { mobileHidden: true },
         cell: ({ row }) => {
-          const { amount_total: total, amount_used: used } =
-            row.original.subscription
-          const totalNum = Number(total || 0)
-          if (totalNum <= 0) {
+          const { subscription, plan } = row.original
+          // 滚动窗口模型：每窗口一个胶囊（横排换行）；全部窗口额度 0 = 无限。
+          const limitRows = buildLimitRows({ subscription, plan }, t)
+          if (limitRows.length === 0) {
             return (
               <span className='text-muted-foreground'>{t('Unlimited')}</span>
             )
           }
-          const usedNum = Number(used || 0)
-          const remainNum = Math.max(0, totalNum - usedNum)
-          const percentage = Math.min(100, (usedNum / totalNum) * 100)
-          const progressColor = getUsageProgressColor(percentage)
           return (
-            <Tooltip>
-              <TooltipTrigger render={<div className='w-[130px] space-y-1' />}>
-                <div className='flex justify-between text-xs'>
-                  <span className='font-medium tabular-nums'>
-                    {formatQuota(usedNum)}
+            <div className='flex max-w-[320px] flex-wrap gap-x-1.5 gap-y-1'>
+              {limitRows.map((r) => {
+                const pct = Math.min(
+                  100,
+                  Math.round((r.used / r.total) * 100)
+                )
+                // 用量级着色：>=90 红 / >=70 琥珀 / 其余中性，无进度条也一眼可见。
+                let tone = 'border-border bg-muted/50 text-foreground'
+                if (pct >= 90) {
+                  tone =
+                    'border-destructive/30 bg-destructive/10 text-destructive'
+                } else if (pct >= 70) {
+                  tone = 'border-warning/30 bg-warning/10 text-warning'
+                }
+                return (
+                  <span
+                    key={r.rowKey}
+                    title={`${r.label}: ${formatQuota(r.used)} / ${formatQuota(r.total)}`}
+                    className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] leading-none whitespace-nowrap ${tone}`}
+                  >
+                    <span className='font-medium'>
+                      {r.period ?? r.label}
+                    </span>
+                    <span className='tabular-nums opacity-80'>
+                      {formatQuota(r.used)}/{formatQuota(r.total)}
+                    </span>
                   </span>
-                  <span className='text-muted-foreground tabular-nums'>
-                    {formatQuota(totalNum)}
-                  </span>
-                </div>
-                <Progress
-                  value={percentage}
-                  className={cn('h-1.5', progressColor)}
-                />
-              </TooltipTrigger>
-              <TooltipContent>
-                <div className='space-y-1 text-xs'>
-                  <div>
-                    {t('Used:')} {formatQuota(usedNum)}
-                  </div>
-                  <div>
-                    {t('Remaining:')} {formatQuota(remainNum)} (
-                    {percentage.toFixed(1)}%)
-                  </div>
-                  <div>
-                    {t('Total:')} {formatQuota(totalNum)}
-                  </div>
-                </div>
-              </TooltipContent>
-            </Tooltip>
+                )
+              })}
+            </div>
           )
         },
         size: 160,

@@ -29,7 +29,6 @@ import { formatQuota } from '@/lib/format'
 
 import {
   formatDuration,
-  formatResetPeriod,
   formatWindowDuration,
   parsePlanResetWindows,
 } from '../lib'
@@ -110,22 +109,9 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
         id: 'reset',
         header: t('Quota Reset'),
         meta: { mobileHidden: true },
-        cell: ({ row }) => {
-          const p = row.original.plan
-          const windows = parsePlanResetWindows(p.reset_windows)
-          if (windows.length > 0) {
-            return (
-              <span className='text-muted-foreground'>
-                {t('Rolling windows')}
-              </span>
-            )
-          }
-          return (
-            <span className='text-muted-foreground'>
-              {formatResetPeriod(p, t)}
-            </span>
-          )
-        },
+        cell: () => (
+          <span className='text-muted-foreground'>{t('Rolling windows')}</span>
+        ),
         size: 100,
       },
       {
@@ -188,20 +174,6 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
         size: 140,
       },
       {
-        id: 'total_amount',
-        header: t('Plan Quota'),
-        meta: { mobileHidden: true },
-        cell: ({ row }) => {
-          const total = Number(row.original.plan.total_amount || 0)
-          return (
-            <span className='text-muted-foreground'>
-              {total > 0 ? formatQuota(total) : t('Unlimited')}
-            </span>
-          )
-        },
-        size: 150,
-      },
-      {
         id: 'upgrade_group',
         header: t('Upgrade Group'),
         meta: { mobileHidden: true },
@@ -241,39 +213,20 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
         cell: ({ row }) => {
           const p = row.original.plan
           const windows = parsePlanResetWindows(p.reset_windows)
-          if (windows.length > 0) {
-            return (
-              <span className='text-muted-foreground'>
-                {windows
-                  .map(
-                    (w) =>
-                      `${formatWindowDuration(w, t)} ${formatQuota(
-                        w.limit || 0
-                      )}`
-                  )
-                  .join(' / ')}
-              </span>
-            )
-          }
-          const parts: string[] = []
-          if (Number(p.weekly_amount_limit || 0) > 0) {
-            parts.push(
-              `${t('Weekly')} ${formatQuota(Number(p.weekly_amount_limit))}`
-            )
-          }
-          if (Number(p.monthly_amount_limit || 0) > 0) {
-            parts.push(
-              `${t('Monthly')} ${formatQuota(Number(p.monthly_amount_limit))}`
-            )
-          }
-          if (Number(p.reset_amount_limit || 0) > 0) {
-            parts.push(
-              `${t('Per-Cycle')} ${formatQuota(Number(p.reset_amount_limit))}`
-            )
+          // 全部窗口额度为 0 = 无限额度。
+          if (windows.length > 0 && windows.every((w) => Number(w.limit) <= 0)) {
+            return <span className='text-muted-foreground'>{t('Unlimited')}</span>
           }
           return (
             <span className='text-muted-foreground'>
-              {parts.length > 0 ? parts.join(' / ') : '—'}
+              {windows
+                .map(
+                  (w) =>
+                    `${formatWindowDuration(w, t)} ${formatQuota(
+                      w.limit || 0
+                    )}`
+                )
+                .join(' / ')}
             </span>
           )
         },
