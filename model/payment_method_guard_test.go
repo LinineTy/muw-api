@@ -31,7 +31,6 @@ func insertSubscriptionPlanForPaymentGuardTest(t *testing.T, id int) *Subscripti
 		DurationUnit:  SubscriptionDurationMonth,
 		DurationValue: 1,
 		Enabled:       true,
-		TotalAmount:   1000,
 	}
 	require.NoError(t, DB.Create(plan).Error)
 	return plan

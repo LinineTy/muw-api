@@ -482,6 +482,19 @@ func TokenAuth() func(c *gin.Context) {
 			return
 		}
 
+		// 惰性订阅过期：缓存中的订阅到期标记（SubsEndAt）已过时则当场把到期订阅标记
+		// expired 并回退分组，使降级在到期后的下一次请求即生效。维护任务（10s tick）
+		// 仍作无请求场景的兜底。标记缺失/陈旧时此处直接跳过，不影响正确性。
+		if userCache.SubsEndAt > 0 && userCache.SubsEndAt <= common.GetTimestamp() {
+			if _, lerr := model.LazyExpireUserSubscriptions(token.UserId); lerr != nil {
+				common.SysLog(fmt.Sprintf("TokenAuth lazy subscription expiry failed for user %d: %v", token.UserId, lerr))
+			} else if refreshed, rerr := model.GetUserCache(token.UserId); rerr == nil {
+				userCache = refreshed
+			} else {
+				common.SysLog(fmt.Sprintf("TokenAuth refresh user cache after subscription expiry failed for user %d: %v", token.UserId, rerr))
+			}
+		}
+
 		userCache.WriteContext(c)
 
 		userGroup := userCache.Group

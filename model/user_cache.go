@@ -24,6 +24,10 @@ type UserBase struct {
 	Setting     string `json:"setting"`
 	CreditScore int    `json:"credit_score"`
 	Activated   int    `json:"activated"`
+	// SubsEndAt 缓存该用户全部活跃订阅中最大的 end_time（0 = 无活跃订阅/无标记）。
+	// TokenAuth 据此惰性触发到期订阅的分组回退；由 refreshSubscriptionStamp 在订阅
+	// 生命周期事件后维护。缺失/陈旧时退化为维护任务（10s tick）兜底，正确性不受影响。
+	SubsEndAt   int64  `json:"subs_end_at"`
 	AuthVersion int64  `json:"-"`
 	CacheSchema int    `json:"-"`
 }

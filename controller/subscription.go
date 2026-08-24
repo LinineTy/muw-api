@@ -83,37 +83,18 @@ func validateResetWindows(raw string) error {
 	return nil
 }
 
-// resetWindowsConflictsWithLegacy 动态窗口与 legacy 上限字段是否互斥。
-func resetWindowsConflictsWithLegacy(p model.SubscriptionPlan) bool {
-	return (p.QuotaResetPeriod != "" && p.QuotaResetPeriod != model.SubscriptionResetNever) ||
-		p.ResetAmountLimit > 0 || p.WeeklyAmountLimit > 0 || p.MonthlyAmountLimit > 0
-}
-
-// validatePlanResetWindows 对套餐的 reset_windows 做校验；非空时校验格式、非空列表、
-// 至少一个有效额度与互斥。空串 = legacy（合法）。
+// validatePlanResetWindows 对套餐的 reset_windows 做校验：动态窗口是唯一额度模型，
+// 列表必须非空；全部窗口额度为 0 = 无限额度（合法）。
 func validatePlanResetWindows(p model.SubscriptionPlan) error {
 	if strings.TrimSpace(p.ResetWindowsRaw) == "" {
-		return nil
+		return errors.New("动态窗口至少需要配置一个窗口（全部额度为 0 即无限额度）")
 	}
 	if err := validateResetWindows(p.ResetWindowsRaw); err != nil {
 		return err
 	}
 	windows := p.ResetWindows()
 	if len(windows) == 0 {
-		return errors.New("动态窗口至少需要配置一个窗口")
-	}
-	hasLimit := false
-	for _, w := range windows {
-		if w.Limit > 0 {
-			hasLimit = true
-			break
-		}
-	}
-	if !hasLimit {
-		return errors.New("至少一个窗口额度必须大于 0（全部为 0 等于无上限，应改用 legacy 的无限额度）")
-	}
-	if resetWindowsConflictsWithLegacy(p) {
-		return errors.New("动态窗口与周期/周/月上限互斥，不能同时配置")
+		return errors.New("动态窗口至少需要配置一个窗口（全部额度为 0 即无限额度）")
 	}
 	return nil
 }
@@ -408,10 +389,6 @@ func AdminCreateSubscriptionPlan(c *gin.Context) {
 		common.ApiErrorMsg(c, "购买上限不能为负数")
 		return
 	}
-	if req.Plan.TotalAmount < 0 {
-		common.ApiErrorMsg(c, "总额度不能为负数")
-		return
-	}
 	req.Plan.UpgradeGroup = strings.TrimSpace(req.Plan.UpgradeGroup)
 	if req.Plan.UpgradeGroup != "" {
 		if _, ok := ratio_setting.GetGroupRatioCopy()[req.Plan.UpgradeGroup]; !ok {
@@ -426,17 +403,8 @@ func AdminCreateSubscriptionPlan(c *gin.Context) {
 			return
 		}
 	}
-	req.Plan.QuotaResetPeriod = model.NormalizeResetPeriod(req.Plan.QuotaResetPeriod)
-	if req.Plan.QuotaResetPeriod == model.SubscriptionResetCustom && req.Plan.QuotaResetCustomSeconds <= 0 {
-		common.ApiErrorMsg(c, "自定义重置周期需大于0秒")
-		return
-	}
-	if req.Plan.ResetAmountLimit < 0 {
-		common.ApiErrorMsg(c, "每周期配额上限不能为负数")
-		return
-	}
-	if req.Plan.WeeklyAmountLimit < 0 || req.Plan.MonthlyAmountLimit < 0 || req.Plan.MaxCumulativeSeconds < 0 {
-		common.ApiErrorMsg(c, "配额上限或累计时长上限不能为负数")
+	if req.Plan.MaxCumulativeSeconds < 0 {
+		common.ApiErrorMsg(c, "累计时长上限不能为负数")
 		return
 	}
 	req.Plan.ExclusiveGroup = strings.TrimSpace(req.Plan.ExclusiveGroup)
@@ -504,10 +472,6 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 		common.ApiErrorMsg(c, "购买上限不能为负数")
 		return
 	}
-	if req.Plan.TotalAmount < 0 {
-		common.ApiErrorMsg(c, "总额度不能为负数")
-		return
-	}
 	req.Plan.UpgradeGroup = strings.TrimSpace(req.Plan.UpgradeGroup)
 	if req.Plan.UpgradeGroup != "" {
 		if _, ok := ratio_setting.GetGroupRatioCopy()[req.Plan.UpgradeGroup]; !ok {
@@ -522,17 +486,8 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 			return
 		}
 	}
-	req.Plan.QuotaResetPeriod = model.NormalizeResetPeriod(req.Plan.QuotaResetPeriod)
-	if req.Plan.QuotaResetPeriod == model.SubscriptionResetCustom && req.Plan.QuotaResetCustomSeconds <= 0 {
-		common.ApiErrorMsg(c, "自定义重置周期需大于0秒")
-		return
-	}
-	if req.Plan.ResetAmountLimit < 0 {
-		common.ApiErrorMsg(c, "每周期配额上限不能为负数")
-		return
-	}
-	if req.Plan.WeeklyAmountLimit < 0 || req.Plan.MonthlyAmountLimit < 0 || req.Plan.MaxCumulativeSeconds < 0 {
-		common.ApiErrorMsg(c, "配额上限或累计时长上限不能为负数")
+	if req.Plan.MaxCumulativeSeconds < 0 {
+		common.ApiErrorMsg(c, "累计时长上限不能为负数")
 		return
 	}
 	req.Plan.ExclusiveGroup = strings.TrimSpace(req.Plan.ExclusiveGroup)
@@ -573,28 +528,14 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 			"sort_order":                 req.Plan.SortOrder,
 			"is_recommended":             req.Plan.IsRecommended,
 			"max_purchase_per_user":      req.Plan.MaxPurchasePerUser,
-			"total_amount":               req.Plan.TotalAmount,
 			"upgrade_group":              req.Plan.UpgradeGroup,
 			"downgrade_group":            req.Plan.DowngradeGroup,
-			"quota_reset_period":         req.Plan.QuotaResetPeriod,
-			"quota_reset_custom_seconds": req.Plan.QuotaResetCustomSeconds,
-			"reset_amount_limit":         req.Plan.ResetAmountLimit,
-			"weekly_amount_limit":        req.Plan.WeeklyAmountLimit,
-			"monthly_amount_limit":       req.Plan.MonthlyAmountLimit,
 			"max_cumulative_seconds":     req.Plan.MaxCumulativeSeconds,
 			"exclusive_group":            req.Plan.ExclusiveGroup,
 			"allowed_groups":             req.Plan.AllowedGroups,
 			"priority":                   req.Plan.Priority,
 			"reset_windows":              req.Plan.ResetWindowsRaw,
 			"updated_at":                 common.GetTimestamp(),
-		}
-		// 动态窗口模型下强制清空 legacy 上限字段，避免双轨语义歧义。
-		if req.Plan.ResetWindowsRaw != "" {
-			updateMap["quota_reset_period"] = model.SubscriptionResetNever
-			updateMap["quota_reset_custom_seconds"] = int64(0)
-			updateMap["reset_amount_limit"] = int64(0)
-			updateMap["weekly_amount_limit"] = int64(0)
-			updateMap["monthly_amount_limit"] = int64(0)
 		}
 		if req.Plan.AllowBalancePay != nil {
 			updateMap["allow_balance_pay"] = *req.Plan.AllowBalancePay
@@ -607,26 +548,11 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 		}
 		// 窗口列表变化 → 重置该套餐活跃订阅的窗口计数（"改动即重置"，管理端主动重定义额度）。
 		// 判等用语义比较（ResetWindowsEqual）：前端保存会重新序列化 JSON，字节差异不算变化。
+		// 空列表已在 validatePlanResetWindows 拒绝，此处 reset_windows 必非空。
 		windowsChanged := !model.ResetWindowsEqual(oldResetWindows, req.Plan.ResetWindowsRaw)
-		if req.Plan.ResetWindowsRaw != "" && windowsChanged {
+		if windowsChanged {
 			planForReset := &model.SubscriptionPlan{Id: id, ResetWindowsRaw: req.Plan.ResetWindowsRaw}
 			if _, err := model.ApplyPlanWindowsToActiveSubscriptions(tx, planForReset, common.GetTimestamp()); err != nil {
-				return err
-			}
-		} else if req.Plan.ResetWindowsRaw == "" && oldResetWindows != "" {
-			// 动态 → legacy：同样"改动即重置"，重授 legacy 计数（总额度/周期/周/月清零重锚）。
-			// 对称于上方，避免转回老模型后冻结的旧计数复活造成"白嫖"或"卡死"。
-			planForReset := &model.SubscriptionPlan{
-				Id:                      id,
-				TotalAmount:             req.Plan.TotalAmount,
-				QuotaResetPeriod:        req.Plan.QuotaResetPeriod,
-				QuotaResetCustomSeconds: req.Plan.QuotaResetCustomSeconds,
-				ResetAmountLimit:        req.Plan.ResetAmountLimit,
-				WeeklyAmountLimit:       req.Plan.WeeklyAmountLimit,
-				MonthlyAmountLimit:      req.Plan.MonthlyAmountLimit,
-				MaxCumulativeSeconds:    req.Plan.MaxCumulativeSeconds,
-			}
-			if _, err := model.ApplyPlanLegacyToActiveSubscriptions(tx, planForReset, common.GetTimestamp()); err != nil {
 				return err
 			}
 		}

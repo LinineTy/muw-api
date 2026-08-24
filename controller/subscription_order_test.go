@@ -80,7 +80,6 @@ func insertSubscriptionPlanForEndpointTest(t *testing.T, id int) *model.Subscrip
 		DurationUnit:  model.SubscriptionDurationMonth,
 		DurationValue: 1,
 		Enabled:       true,
-		TotalAmount:   1000,
 	}
 	require.NoError(t, model.DB.Create(plan).Error)
 	return plan

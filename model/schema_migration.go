@@ -64,7 +64,11 @@ func (SchemaMigration) TableName() string { return "schema_migrations" }
 // （动态重置窗口模型：多级独立额度窗口，订阅相对刷新；窗口 ≥ 有效期为封顶上限）。
 // 列由 AutoMigrate（user_subscriptions）/SQLite 手工 DDL 或 ensure*（subscription_plans）
 // 添加，无需数据转换——存量套餐 reset_windows 为空走 legacy 路径。
-const CurrentSchemaVersion = 15
+// v16：移除 legacy 订阅配额模型（计划 total_amount/quota_reset_*/reset_amount_limit/
+// weekly/monthly_amount_limit 六列 + 订阅 cycle_start_at/cycle_used/next_cycle_reset_at 三列）。
+// 删列由 ensureDropLegacySubscriptionPlanColumns / ensureDropLegacyUserSubscriptionColumns
+// 幂等执行（挂在 migrateDB 两条分支，每次启动自检）；此处只打版本戳记录 schema 变更。
+const CurrentSchemaVersion = 16
 
 // Migration 是一个可单独应用、记录版本戳的迁移步骤。Up 按版本升序执行，
 // 用于 AutoMigrate 补不了的结构改造（换类型、删列）与数据迁移/特殊适配。
@@ -156,6 +160,9 @@ var migrations = []Migration{
 	// AutoMigrate（user_subscriptions）或 SQLite 手工 DDL / ensure*（subscription_plans）
 	// 添加，无需数据转换；只打版本戳推进 shouldSkipMigration，避免 SQLite 每次启动整表重建。
 	{Version: 15, Name: "subscription-reset-windows", Up: func(db *gorm.DB) error { return nil }},
+	// v16：移除 legacy 订阅配额模型（9 个 legacy 列）。删列由幂等 ensureDropLegacy* 在
+	// migrateDB 两条分支每次启动自检执行（跨 SQLite/MySQL/PostgreSQL）；本条目只打版本戳。
+	{Version: 16, Name: "subscription-remove-legacy-columns", Up: func(db *gorm.DB) error { return nil }},
 }
 
 // ensureSchemaMigrationsTable 用纯 SQL 建版本表，避免对版本表自身跑 AutoMigrate。
