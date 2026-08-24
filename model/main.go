@@ -630,7 +630,7 @@ func ensureSubscriptionPlanRecommendedBackfill(db *gorm.DB) error {
 // ensureSubscriptionPlanResetWindows 幂等补 subscription_plans.reset_windows 列（动态重置
 // 窗口列表，JSON 文本）。SQLite 走手工 DDL（migrateDB 每次启动执行）；MySQL/PG 在升版本
 // 路径由 AutoMigrate 加列；存量库（已最新版本）走"跳过迁移"路径，需在这里显式补列。
-// 无默认值的列在存量行上是 NULL，统一归一空串（= legacy，走老路径）。
+// 无默认值的列在存量行上是 NULL，统一归一空串（空 reset_windows = 无限额度）。
 func ensureSubscriptionPlanResetWindows(db *gorm.DB) error {
 	if !db.Migrator().HasColumn(&SubscriptionPlan{}, "reset_windows") {
 		if err := db.Migrator().AddColumn(&SubscriptionPlan{}, "reset_windows"); err != nil {
@@ -644,7 +644,7 @@ func ensureSubscriptionPlanResetWindows(db *gorm.DB) error {
 
 // ensureUserSubscriptionWindowState 幂等补 user_subscriptions.window_state 列（动态窗口
 // 消费状态，JSON 文本）。列由 AutoMigrate（升版本路径）或此处（已最新版本库的跳过路径）
-// 添加；存量订阅无动态窗口状态，统一归一空串（= legacy 语义）。
+// 添加；存量订阅无窗口状态，统一归一空串（状态缺失由 advance 按满额补齐）。
 func ensureUserSubscriptionWindowState(db *gorm.DB) error {
 	if !db.Migrator().HasColumn(&UserSubscription{}, "window_state") {
 		if err := db.Migrator().AddColumn(&UserSubscription{}, "window_state"); err != nil {

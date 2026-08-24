@@ -68,7 +68,7 @@ import { CancelSubscriptionDialog } from './dialogs/cancel-subscription-dialog'
 import { RenewSubscriptionDialog } from './dialogs/renew-subscription-dialog'
 import { useMySubscriptions } from './my-subscriptions-provider'
 
-// 每限额一张独立小卡（动态窗口与 legacy 统一）。外壳带边框；进度条按使用率阈值变色
+// 每限额一张独立小卡。外壳带边框；进度条按使用率阈值变色
 // （>=90 红 / >=70 琥珀 / 其余主色）；动态窗口底部显示下次重置时间或封顶标注。
 function LimitMiniCard({
   label,
@@ -282,7 +282,7 @@ function SubscriptionItem({
         )}
       </div>
 
-      {/* 限额主体：每个限额一张独立小卡（动态窗口与 legacy 统一）；无上限时显示 ∞ */}
+      {/* 限额主体：每个限额一张独立小卡；无上限时显示 ∞ */}
       <div className='flex flex-1 flex-col gap-3 px-4 py-3'>
         {unlimited ? (
           <div className='flex items-center gap-2'>

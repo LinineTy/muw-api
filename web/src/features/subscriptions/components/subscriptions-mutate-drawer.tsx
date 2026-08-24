@@ -236,11 +236,9 @@ export function SubscriptionsMutateDrawer({
   }
 
   const onSubmit = async (values: PlanFormValues) => {
-    // 编辑模式且额度模型相关配置有变化 → 先弹"改动即重置"确认（后端转换/编辑都会
-    // 重置该套餐全部活跃订阅的配额计数）：
-    //  - windows 模式增删改窗口列表；
-    //  - 动态 → legacy 转换（后端重授 legacy 计数）。
-    // 判等用语义比较（resetWindowsRawEqual），键序/浮点往返差异不算变化。
+    // 编辑模式且窗口列表有变化 → 先弹"改动即重置"确认（后端会重置该套餐全部活跃
+    // 订阅的窗口计数）。判等用语义比较（resetWindowsRawEqual），键序/浮点往返差异
+    // 不算变化。
     if (isEdit) {
       const payload = formValuesToPlanPayload(values)
       const newRaw = payload.plan.reset_windows || ''
