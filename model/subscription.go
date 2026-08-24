@@ -2512,9 +2512,13 @@ func AdminResetPlanSubscriptions(planId int, advanceResetTime bool) (*Subscripti
 type SubscriptionPreConsumeResult struct {
 	UserSubscriptionId int
 	PreConsumed        int64
-	AmountTotal        int64
-	AmountUsedBefore   int64
-	AmountUsedAfter    int64
+	// AmountTotal / AmountUsedBefore / AmountUsedAfter 仅作展示（动态模型下 AmountTotal 恒 0）。
+	AmountTotal      int64
+	AmountUsedBefore int64
+	AmountUsedAfter  int64
+	// Remaining 是预扣后的窗口剩余额度（subscriptionRemaining 的 min-over-windows；
+	// 无限额度 = math.MaxInt64）。告警/消费日志据此展示真实剩余，替代已移除的总额模型。
+	Remaining int64
 }
 
 // expireUserSubscriptionsTx marks all of a user's due active subscriptions as
@@ -2759,6 +2763,8 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 			returnValue.AmountTotal = sub.AmountTotal
 			returnValue.AmountUsedBefore = sub.AmountUsed
 			returnValue.AmountUsedAfter = sub.AmountUsed
+			plan, _ := getSubscriptionPlanByIdTx(tx, sub.PlanId)
+			returnValue.Remaining = subscriptionRemaining(&sub, plan)
 			return nil
 		}
 
@@ -2806,6 +2812,8 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 					returnValue.AmountTotal = sub.AmountTotal
 					returnValue.AmountUsedBefore = sub.AmountUsed
 					returnValue.AmountUsedAfter = sub.AmountUsed
+					plan, _ := getSubscriptionPlanByIdTx(tx, sub.PlanId)
+					returnValue.Remaining = subscriptionRemaining(&sub, plan)
 					return nil
 				}
 				return err
@@ -2824,6 +2832,7 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 			returnValue.AmountTotal = sub.AmountTotal
 			returnValue.AmountUsedBefore = usedBefore
 			returnValue.AmountUsedAfter = sub.AmountUsed
+			returnValue.Remaining = subscriptionRemaining(&sub, plan)
 			return nil
 		}
 		return fmt.Errorf("subscription quota insufficient, need=%d", amount)

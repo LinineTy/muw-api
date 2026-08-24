@@ -517,7 +517,9 @@ func checkAndSendSubscriptionQuotaNotify(relayInfo *relaycommon.RelayInfo) {
 		if relayInfo == nil {
 			return
 		}
-		if relayInfo.SubscriptionId == 0 || relayInfo.SubscriptionAmountTotal <= 0 {
+		// 动态窗口模型：剩余额度 = 预扣后窗口剩余；全部窗口 limit<=0（无限）时为
+		// math.MaxInt64，不告警。
+		if relayInfo.SubscriptionId == 0 || relayInfo.SubscriptionRemaining >= math.MaxInt64 {
 			return
 		}
 
@@ -527,8 +529,7 @@ func checkAndSendSubscriptionQuotaNotify(relayInfo *relaycommon.RelayInfo) {
 			threshold = int(userSetting.QuotaWarningThreshold)
 		}
 
-		usedAfter := relayInfo.SubscriptionAmountUsedAfterPreConsume + relayInfo.SubscriptionPostDelta
-		remaining := relayInfo.SubscriptionAmountTotal - usedAfter
+		remaining := relayInfo.SubscriptionRemaining
 		if remaining >= int64(threshold) {
 			return
 		}
