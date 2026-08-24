@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { CalendarClock, Plus, RefreshCw, Settings2, Trash2 } from 'lucide-react'
+import { nanoid } from 'nanoid'
 import { useEffect, useState } from 'react'
 import { useForm, type FieldErrors, type Resolver } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -78,9 +79,8 @@ import {
   getGroups,
   getAdminPlans,
 } from '../api'
-import { getDurationUnitOptions, getResetPeriodOptions } from '../constants'
+import { getDurationUnitOptions } from '../constants'
 import {
-  deriveWindowsFromLegacy,
   getPlanFormSchema,
   PLAN_FORM_DEFAULTS,
   planToFormValues,
@@ -153,8 +153,6 @@ export function SubscriptionsMutateDrawer({
   }, [open, currentRow, form])
 
   const durationUnit = form.watch('duration_unit')
-  const resetPeriod = form.watch('quota_reset_period')
-  const quotaModel = form.watch('quota_model')
   const resetWindows = form.watch('reset_windows')
 
   // 严格递增校验的违规行索引（用于红色高亮与错误提示）。
@@ -181,23 +179,14 @@ export function SubscriptionsMutateDrawer({
     { value: 'month', label: t('Months') },
   ]
 
-  const handleQuotaModelChange = (model: 'legacy' | 'windows') => {
-    if (model === 'windows') {
-      const rows = form.getValues('reset_windows')
-      if (!rows || rows.length === 0) {
-        form.setValue('reset_windows', deriveWindowsFromLegacy(form.getValues()), {
-          shouldValidate: true,
-        })
-      }
-    }
-    form.setValue('quota_model', model, { shouldValidate: true })
-  }
-
   const addWindow = () => {
     const rows = form.getValues('reset_windows') || []
-    form.setValue('reset_windows', [...rows, { unit: 'day', value: 1, limit: 0 }], {
-      shouldValidate: true,
-    })
+    // id 为表单内稳定行 key，编辑期间不变，避免"每次按键重挂载导致输入框失焦"。
+    form.setValue(
+      'reset_windows',
+      [...rows, { id: nanoid(), unit: 'day', value: 1, limit: 0 }],
+      { shouldValidate: true }
+    )
   }
 
   const updateWindow = (index: number, patch: Partial<ResetWindowFormRow>) => {
@@ -214,11 +203,8 @@ export function SubscriptionsMutateDrawer({
   }
 
   const doSubmit = async (values: PlanFormValues) => {
-    // 动态窗口模式不允许空列表（"[]" 落库会分裂成无限 legacy，见后端校验）。
-    if (
-      values.quota_model === 'windows' &&
-      (!values.reset_windows || values.reset_windows.length === 0)
-    ) {
+    // 动态窗口是唯一额度模型：不允许空列表（全部额度 0 = 无限额度，仍须至少一个窗口）。
+    if (!values.reset_windows || values.reset_windows.length === 0) {
       toast.error(
         t('At least one window is required in the dynamic window model.')
       )
@@ -258,11 +244,8 @@ export function SubscriptionsMutateDrawer({
     if (isEdit) {
       const payload = formValuesToPlanPayload(values)
       const newRaw = payload.plan.reset_windows || ''
-      const isWindowsNow = values.quota_model === 'windows'
-      const windowsChanged =
-        isWindowsNow && !resetWindowsRawEqual(newRaw, originalWindowsRaw)
-      const dynamicToLegacy = !isWindowsNow && originalWindowsRaw !== ''
-      if (windowsChanged || dynamicToLegacy) {
+      const windowsChanged = !resetWindowsRawEqual(newRaw, originalWindowsRaw)
+      if (windowsChanged) {
         setPendingSubmit(values)
         setConfirmResetSave(true)
         return
@@ -282,7 +265,6 @@ export function SubscriptionsMutateDrawer({
   }
 
   const durationUnitOpts = getDurationUnitOptions(t)
-  const resetPeriodOpts = getResetPeriodOptions(t)
 
   return (
     <Sheet
@@ -382,49 +364,6 @@ export function SubscriptionsMutateDrawer({
                     </FormItem>
                   )}
                 />
-
-                {/* 动态窗口模型下总额度无意义（额度由各窗口定义，落库强制 0），隐藏 */}
-                {quotaModel !== 'windows' && (
-                  <FormField
-                    control={form.control}
-                    name='total_amount'
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>
-                          {t('Quota ({{currency}})', {
-                            currency: currencyLabel,
-                          })}
-                        </FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            type='number'
-                            min={0}
-                            step={tokensOnly ? 1 : 0.01}
-                            placeholder={
-                              tokensOnly
-                                ? t('Enter quota in tokens')
-                                : t('Enter quota in {{currency}}', {
-                                    currency: currencyLabel,
-                                  })
-                            }
-                            onChange={(e) =>
-                              field.onChange(
-                                Number.parseFloat(e.target.value) || 0
-                              )
-                            }
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          {t(
-                            'Total quota included in the plan, usable per billing period. 0 means unlimited.'
-                          )}
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
               </div>
 
               <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
@@ -770,26 +709,6 @@ export function SubscriptionsMutateDrawer({
                 {t('Quota Reset')}
               </h3>
 
-              {/* 额度模型切换：经典周期/周/月 vs 动态窗口 */}
-              <div className='flex items-center justify-between gap-3 rounded-md border px-3 py-2'>
-                <div className='min-w-0'>
-                  <div className='text-sm font-medium'>
-                    {t('Dynamic window model')}
-                  </div>
-                  <div className='text-muted-foreground text-xs'>
-                    {t(
-                      'Each window (e.g. every 5 hours / every 30 days) caps its own quota. Windows longer than the validity act as the subscription total cap.'
-                    )}
-                  </div>
-                </div>
-                <Switch
-                  checked={quotaModel === 'windows'}
-                  onCheckedChange={(checked) =>
-                    handleQuotaModelChange(checked ? 'windows' : 'legacy')
-                  }
-                />
-              </div>
-
               {/* 续费时间上限：与额度模型无关，两种模型都可用 */}
               <FormField
                 control={form.control}
@@ -819,191 +738,8 @@ export function SubscriptionsMutateDrawer({
                 )}
               />
 
-              {quotaModel === 'legacy' ? (
-                <>
-              <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
-                <FormField
-                  control={form.control}
-                  name='quota_reset_period'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('Reset Cycle')}</FormLabel>
-                      <Select
-                        items={resetPeriodOpts.map((o) => ({
-                          value: o.value,
-                          label: o.label,
-                        }))}
-                        onValueChange={field.onChange}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent alignItemWithTrigger={false}>
-                          <SelectGroup>
-                            {resetPeriodOpts.map((o) => (
-                              <SelectItem key={o.value} value={o.value}>
-                                {o.label}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name='quota_reset_custom_seconds'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('Custom Seconds')}</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type='number'
-                          min={0}
-                          disabled={resetPeriod !== 'custom'}
-                          onChange={(e) =>
-                            field.onChange(
-                              Number.parseInt(e.target.value, 10) || 0
-                            )
-                          }
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <FormField
-                control={form.control}
-                name='reset_amount_limit'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      {t('Per-Cycle Quota Limit ({{currency}})', {
-                        currency: currencyLabel,
-                      })}
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        type='number'
-                        min={0}
-                        step={tokensOnly ? 1 : 0.01}
-                        placeholder={
-                          tokensOnly
-                            ? t('Enter quota in tokens')
-                            : t('Enter quota in {{currency}}', {
-                                currency: currencyLabel,
-                              })
-                        }
-                        onChange={(e) =>
-                          field.onChange(
-                            Number.parseFloat(e.target.value) || 0
-                          )
-                        }
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {t(
-                        'Max quota usable within each reset cycle, separate from the total quota. 0 means no per-cycle cap. Requires a reset cycle to take effect.'
-                      )}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
-                <FormField
-                  control={form.control}
-                  name='weekly_amount_limit'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        {t('Weekly Quota Limit ({{currency}})', {
-                          currency: currencyLabel,
-                        })}
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type='number'
-                          min={0}
-                          step={tokensOnly ? 1 : 0.01}
-                          placeholder={
-                            tokensOnly
-                              ? t('Enter quota in tokens')
-                              : t('Enter quota in {{currency}}', {
-                                  currency: currencyLabel,
-                                })
-                          }
-                          onChange={(e) =>
-                            field.onChange(
-                              Number.parseFloat(e.target.value) || 0
-                            )
-                          }
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        {t(
-                          'Calendar week cap (resets every Monday). Works alongside the monthly cap. 0 means no weekly cap.'
-                        )}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name='monthly_amount_limit'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        {t('Monthly Quota Limit ({{currency}})', {
-                          currency: currencyLabel,
-                        })}
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type='number'
-                          min={0}
-                          step={tokensOnly ? 1 : 0.01}
-                          placeholder={
-                            tokensOnly
-                              ? t('Enter quota in tokens')
-                              : t('Enter quota in {{currency}}', {
-                                  currency: currencyLabel,
-                                })
-                          }
-                          onChange={(e) =>
-                            field.onChange(
-                              Number.parseFloat(e.target.value) || 0
-                            )
-                          }
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        {t(
-                          'Calendar month cap (resets on the 1st). Works alongside the weekly cap. 0 means no monthly cap.'
-                        )}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />              </div>
-                </>
-              ) : (
-                <>
+              <>
+                  {/* 动态窗口编辑器 */}
                   {/* 动态窗口编辑器 */}
                   <TooltipProvider delay={100}>
                     <div className='space-y-2'>
@@ -1013,7 +749,7 @@ export function SubscriptionsMutateDrawer({
                           planValiditySeconds(form.getValues())
                         return (
                           <div
-                            key={`${row.unit}-${row.value}`}
+                            key={row.id}
                             className='space-y-1'
                           >
                             <div className='grid grid-cols-[minmax(0,80px)_minmax(0,64px)_minmax(0,1fr)_auto] items-center gap-2'>
@@ -1165,13 +901,20 @@ export function SubscriptionsMutateDrawer({
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
+                  {resetWindows.length > 0 &&
+                    resetWindows.every((w) => Number(w.limit || 0) <= 0) && (
+                      <p className='text-emerald-700 dark:text-emerald-300 text-xs'>
+                        {t(
+                          'All windows have zero quota: this plan is unlimited until it expires.'
+                        )}
+                      </p>
+                    )}
                   <p className='text-muted-foreground text-xs'>
                     {t(
                       'Renewal only extends time; each window refreshes on its own schedule.'
                     )}
                   </p>
                 </>
-              )}
             </SideDrawerSection>
 
             {/* Plan Strategy */}

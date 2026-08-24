@@ -31,11 +31,6 @@ export const subscriptionPlanSchema = z.object({
   duration_unit: z.enum(['year', 'month', 'day', 'hour', 'custom']),
   duration_value: z.number(),
   custom_seconds: z.number().optional(),
-  quota_reset_period: z.enum(['never', 'daily', 'weekly', 'monthly', 'custom']),
-  quota_reset_custom_seconds: z.number().optional(),
-  reset_amount_limit: z.number().optional().default(0),
-  weekly_amount_limit: z.number().optional().default(0),
-  monthly_amount_limit: z.number().optional().default(0),
   max_cumulative_seconds: z.number().optional().default(0),
   exclusive_group: z.string().optional().default(''),
   // JSON array string of allowed user groups (backend wire format), empty = any group.
@@ -48,10 +43,10 @@ export const subscriptionPlanSchema = z.object({
   allow_balance_pay: z.boolean().optional().default(true),
   allow_wallet_overflow: z.boolean().optional().default(true),
   max_purchase_per_user: z.number(),
-  total_amount: z.number(),
   upgrade_group: z.string().optional(),
   downgrade_group: z.string().optional(),
-  // 动态重置窗口列表（后端 wire 格式：JSON 数组文本）。非空 = 动态模型；空 = legacy。
+  // 动态重置窗口列表（后端 wire 格式：JSON 数组文本）。唯一额度模型：非空、至少一个
+  // 窗口；全部窗口额度为 0 = 无限额度。
   reset_windows: z.string().optional().default(''),
 })
 
@@ -94,10 +89,7 @@ export const userSubscriptionSchema = z.object({
   auto_renew_failed: z.boolean().optional().default(false),
   priority: z.number().optional().default(0),
   cancel_at_end: z.boolean().optional().default(false),
-  // Independent quota window counters (no snapshot derivation).
-  cycle_start_at: z.number().optional().default(0),
-  cycle_used: z.number().optional().default(0),
-  next_cycle_reset_at: z.number().optional().default(0),
+  // 自然日历周/月展示计数（钱包卡「订阅抵扣」按日历月统计，不作额度上限）。
   week_start_at: z.number().optional().default(0),
   week_used: z.number().optional().default(0),
   month_start_at: z.number().optional().default(0),
@@ -116,7 +108,6 @@ export type UserSubscription = z.infer<typeof userSubscriptionSchema>
 export interface RenewTermsSnapshot {
   duration_seconds: number
   price_amount: number
-  total_amount: number
   max_cumulative_seconds: number
 }
 
@@ -134,6 +125,8 @@ export interface AdminUserSubscriptionSummary {
   email?: string
   display_name?: string
   plan_title?: string
+  // 完整套餐快照（含 reset_windows），供管理端逐窗口渲染滚动用量；套餐被删时缺省。
+  plan?: SubscriptionPlan
 }
 
 // ============================================================================

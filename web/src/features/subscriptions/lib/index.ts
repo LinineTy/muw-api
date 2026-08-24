@@ -19,7 +19,6 @@ For commercial licensing, please contact support@quantumnous.com
 export {
   formatDuration,
   formatDurationSeconds,
-  formatResetPeriod,
   formatTimestamp,
   formatCompactTimestamp,
   formatWindowDuration,
@@ -36,7 +35,6 @@ export {
   PLAN_FORM_DEFAULTS,
   planToFormValues,
   formValuesToPlanPayload,
-  deriveWindowsFromLegacy,
   parseResetWindowsRaw,
   resetWindowsRawEqual,
   planValiditySeconds,
@@ -44,3 +42,7 @@ export {
   type PlanFormValues,
   type ResetWindowFormRow,
 } from './plan-form'
+export {
+  buildLimitRows,
+  type WindowUsageRow,
+} from './window-usage'

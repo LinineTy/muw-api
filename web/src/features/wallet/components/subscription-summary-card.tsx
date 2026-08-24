@@ -51,7 +51,10 @@ import {
   setSubscriptionAutoRenew,
   setSubscriptionPriority,
 } from '@/features/subscriptions/api'
-import { formatTimestamp } from '@/features/subscriptions/lib'
+import {
+  buildLimitRows,
+  formatTimestamp,
+} from '@/features/subscriptions/lib'
 import type { UserSubscriptionRecord } from '@/features/subscriptions/types'
 import { CancelSubscriptionDialog } from '@/features/my-subscriptions/components/dialogs/cancel-subscription-dialog'
 import { RenewSubscriptionDialog } from '@/features/my-subscriptions/components/dialogs/renew-subscription-dialog'
@@ -62,7 +65,6 @@ import {
 } from '@/features/my-subscriptions/lib/helpers'
 import { cn } from '@/lib/utils'
 
-import { buildLimitRows } from '../lib/subscription-limits'
 import { LimitRow } from './subscription-limit-row'
 
 // 钱包页的「生效订阅」面板（A 形态单列限额列表）。封闭卡片，与钱包其他卡同构、

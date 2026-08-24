@@ -42,7 +42,6 @@ import { DEFAULT_CURRENCY_CONFIG } from '@/stores/system-config-store'
 import { paySubscriptionEpay, paySubscriptionBalance } from '../../api'
 import {
   formatDuration,
-  formatResetPeriod,
   formatWindowPeriodLabel,
   isCapWindow,
   parsePlanResetWindows,
@@ -95,13 +94,16 @@ export function SubscriptionPurchaseDialog(props: Props) {
       ?.name ||
     selectedEpayMethod ||
     t('Select payment method')
-  const totalAmount = Number(plan.total_amount || 0)
   const price = Number(plan.price_amount || 0).toFixed(2)
-  // 动态窗口套餐：额度由各窗口定义（total_amount=0），展示窗口摘要而非 "Unlimited"。
+  // 动态窗口套餐：额度由各窗口定义，展示窗口摘要；全部窗口额度 0 = 无限额度。
   const resetWindows = parsePlanResetWindows(plan.reset_windows)
-  const isDynamic = resetWindows.length > 0
+  const unlimited =
+    resetWindows.length > 0 &&
+    resetWindows.every((w) => Number(w.limit) <= 0)
   let planQuotaLabel: string
-  if (isDynamic) {
+  if (unlimited) {
+    planQuotaLabel = t('Unlimited')
+  } else {
     planQuotaLabel = resetWindows
       .map((w) =>
         // 封顶窗口（周期 >= 有效期）只显示总额度，不暴露周期（如 "12 个月"）。
@@ -113,10 +115,6 @@ export function SubscriptionPurchaseDialog(props: Props) {
             })
       )
       .join(' / ')
-  } else if (totalAmount > 0) {
-    planQuotaLabel = formatQuota(totalAmount)
-  } else {
-    planQuotaLabel = t('Unlimited')
   }
   const quotaPerUnit =
     currency?.quotaPerUnit && currency.quotaPerUnit > 0
@@ -279,23 +277,12 @@ export function SubscriptionPurchaseDialog(props: Props) {
                 {formatDuration(plan, t)}
               </span>
             </div>
-            {isDynamic ? (
-              <div className='flex justify-between'>
-                <span className='text-muted-foreground text-sm'>
-                  {t('Reset Period')}
-                </span>
-                <span className='text-sm'>{t('Rolling windows')}</span>
-              </div>
-            ) : (
-              formatResetPeriod(plan, t) !== t('No Reset') && (
-                <div className='flex justify-between'>
-                  <span className='text-muted-foreground text-sm'>
-                    {t('Reset Period')}
-                  </span>
-                  <span className='text-sm'>{formatResetPeriod(plan, t)}</span>
-                </div>
-              )
-            )}
+            <div className='flex justify-between'>
+              <span className='text-muted-foreground text-sm'>
+                {t('Reset Period')}
+              </span>
+              <span className='text-sm'>{t('Rolling windows')}</span>
+            </div>
             <div className='flex items-center justify-between gap-2'>
               <span className='text-muted-foreground text-sm'>
                 {t('Plan Quota')}

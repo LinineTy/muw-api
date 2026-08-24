@@ -166,41 +166,24 @@ function SubscriptionItem({
   const [updating, setUpdating] = useState(false)
 
   const subscription = sub.subscription
-  const totalAmount = Number(subscription?.amount_total || 0)
   // 动态窗口模型：每窗口一张独立限额小卡（各窗口剩余取最小即当前可用）。
   const resetWindows = parsePlanResetWindows(plan?.reset_windows)
   const windowStates = parseWindowStates(subscription?.window_state)
-  const isDynamic = resetWindows.length > 0
   // 动态窗口按周期时长升序展示（最短在前）；窗口状态按原索引对齐，排序只影响展示顺序。
-  const windowPairs = isDynamic
-    ? resetWindows
-        .map((w, i) => ({ w, state: windowStates[i] }))
-        .sort(
-          (a, b) =>
-            windowRowDurationSeconds(a.w) - windowRowDurationSeconds(b.w)
-        )
-    : []
-  // 无上限 = 无限额度：legacy 的 total_amount<=0，或动态窗口全部 limit=0（后端视为
-  // 无限，后端已拒绝全 0 保存，此处防御手改库/旧数据）。
-  const unlimited = isDynamic
-    ? resetWindows.every((w) => (w.limit || 0) <= 0)
-    : totalAmount <= 0
+  const windowPairs = resetWindows
+    .map((w, i) => ({ w, state: windowStates[i] }))
+    .sort(
+      (a, b) => windowRowDurationSeconds(a.w) - windowRowDurationSeconds(b.w)
+    )
+  // 无上限 = 无限额度：动态窗口全部 limit=0（后端视为无限，此处防御手改库/旧数据）。
+  const unlimited =
+    resetWindows.length > 0 && resetWindows.every((w) => (w.limit || 0) <= 0)
   const remainDays = getRemainingDays(sub)
-  const nextResetTime = subscription?.next_cycle_reset_at ?? 0
   const { isActive, isCancelled } = classifySubscriptionStatus(sub)
   // 到期取消后的订阅：续费和自动续费都被后端禁止，操作区只保留取消（可立即取消）。
   const cancelledAtEnd = subscription?.cancel_at_end === true
   // 订阅的套餐已停售（禁用）：存量仍可用/可续，但给个标识让用户知道不再售卖。
   const discontinued = plan?.enabled === false
-
-  // 独立额度计数器：周期/周/月各自累计，不由 amount_used 快照推演。
-  const cycleLimit = Number(plan?.reset_amount_limit || 0)
-  const cycleUsed = Number(subscription?.cycle_used || 0)
-  const hasCycleLimit = cycleLimit > 0
-  const weekLimit = Number(plan?.weekly_amount_limit || 0)
-  const monthLimit = Number(plan?.monthly_amount_limit || 0)
-  const weekUsed = Number(subscription?.week_used || 0)
-  const monthUsed = Number(subscription?.month_used || 0)
 
   let statusBadge = (
     <StatusBadge
@@ -310,69 +293,37 @@ function SubscriptionItem({
           </div>
         ) : (
           <div className='grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 xl:grid-cols-3'>
-            {isDynamic
-              ? windowPairs.map(({ w, state }) => {
-                  // 周期 >= 有效期的窗口是封顶上限：只显示额度，不暴露周期（如 "12 个月"）。
-                  const isCap = isCapWindow(w, plan)
-                  return (
-                    <LimitMiniCard
-                      key={`${w.unit}-${w.value}`}
-                      label={
-                        isCap ? t('Total cap') : formatWindowPeriod(w, t)
-                      }
-                      used={state?.cycle_used || 0}
-                      total={w.limit || 0}
-                      resetAt={state?.next_reset_at || 0}
-                      noReset={!!(
-                        state &&
-                        state.next_reset_at === 0 &&
-                        state.cycle_start_at > 0
-                      )}
-                      isCap={isCap}
-                    />
-                  )
-                })
-              : (
-                  <>
-                    {hasCycleLimit && (
-                      <LimitMiniCard
-                        label={t('This cycle')}
-                        used={cycleUsed}
-                        total={cycleLimit}
-                      />
-                    )}
-                    {weekLimit > 0 && (
-                      <LimitMiniCard
-                        label={t('This week')}
-                        used={weekUsed}
-                        total={weekLimit}
-                      />
-                    )}
-                    {monthLimit > 0 && (
-                      <LimitMiniCard
-                        label={t('This month')}
-                        used={monthUsed}
-                        total={monthLimit}
-                      />
-                    )}
-                  </>
-                )}
+            {windowPairs.map(({ w, state }) => {
+              // 周期 >= 有效期的窗口是封顶上限：只显示额度，不暴露周期（如 "12 个月"）。
+              const isCap = isCapWindow(w, plan)
+              return (
+                <LimitMiniCard
+                  key={`${w.unit}-${w.value}`}
+                  label={
+                    isCap ? t('Total cap') : formatWindowPeriod(w, t)
+                  }
+                  used={state?.cycle_used || 0}
+                  total={w.limit || 0}
+                  resetAt={state?.next_reset_at || 0}
+                  noReset={!!(
+                    state &&
+                    state.next_reset_at === 0 &&
+                    state.cycle_start_at > 0
+                  )}
+                  isCap={isCap}
+                />
+              )
+            })}
           </div>
         )}
 
-        {/* 副信息：到期时间（legacy 追加周期重置）+ 状态标签（停售/优先/到期取消） */}
+        {/* 副信息：到期时间 + 状态标签（停售/优先/到期取消） */}
         <div className='text-muted-foreground flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs'>
           <span className='flex flex-wrap items-center gap-x-4 gap-y-1'>
             <span className='flex items-center gap-1.5'>
               <Clock className='size-3.5 shrink-0' aria-hidden='true' />
               {endTimeLabel} {formatTimestamp(subscription?.end_time ?? 0)}
             </span>
-            {isActive && !isDynamic && nextResetTime > 0 && (
-              <span className='flex items-center gap-1.5'>
-                <RefreshCw className='size-3.5 shrink-0' aria-hidden='true' />
-                {t('Reset')} {formatTimestamp(nextResetTime)}
-              </span>
-            )}
           </span>
           {(discontinued ||
             isPreferred ||

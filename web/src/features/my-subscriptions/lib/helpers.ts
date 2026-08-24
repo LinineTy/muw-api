@@ -48,13 +48,6 @@ export function getRemainingDays(sub: UserSubscriptionRecord): number {
   return Math.max(0, Math.ceil((endTime - now) / 86400))
 }
 
-export function getUsagePercent(sub: UserSubscriptionRecord): number {
-  const total = Number(sub?.subscription?.amount_total || 0)
-  const used = Number(sub?.subscription?.amount_used || 0)
-  if (total <= 0) return 0
-  return Math.round((used / total) * 100)
-}
-
 // Client-side status classification, mirroring the previous wallet card logic.
 export function classifySubscriptionStatus(sub: UserSubscriptionRecord): {
   isActive: boolean
