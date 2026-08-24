@@ -200,8 +200,8 @@ type SubscriptionPlan struct {
 	// by the application layer.
 	AllowedGroups string `json:"allowed_groups" gorm:"type:text"`
 
-	// 动态重置窗口列表（JSON 数组文本）。非空 = 动态模型（窗口消费路径）；空 = legacy
-	// （quota_reset_period / weekly / monthly 老路径）。TEXT 列不带字面 DEFAULT。
+	// 动态重置窗口列表（JSON 数组文本），唯一额度模型：必须非空（全部窗口额度 0 = 无限），
+	// 空串由校验层拒绝。TEXT 列不带字面 DEFAULT。
 	ResetWindowsRaw string `json:"reset_windows" gorm:"column:reset_windows;type:text"`
 
 	CreatedAt int64 `json:"created_at" gorm:"bigint"`
@@ -248,9 +248,9 @@ type WindowState struct {
 	NextResetAt  int64 `json:"next_reset_at"`
 }
 
-// ResetWindows 动态重置窗口列表（JSON 数组）。非空 = 动态模型（走窗口消费路径）；空 =
-// legacy（走 quota_reset_period / weekly / monthly 老路径）。TEXT 列不能带字面 DEFAULT
-// （MySQL error 1101），零值（空串）由应用层处理，参照 AllowedGroups。
+// ResetWindows 解析套餐的动态重置窗口列表（JSON 数组）；空串或损坏数据返回 nil
+// （调用方按无窗口 = 无限额度处理）。TEXT 列不能带字面 DEFAULT（MySQL error 1101），
+// 零值（空串）由应用层处理，参照 AllowedGroups。
 func (p *SubscriptionPlan) ResetWindows() []ResetWindow {
 	if p == nil || strings.TrimSpace(p.ResetWindowsRaw) == "" {
 		return nil
@@ -274,7 +274,7 @@ func (s *UserSubscription) WindowStates() []WindowState {
 	return states
 }
 
-// SetWindowStates 序列化窗口状态并写回（nil 写空串 = 恢复 legacy 语义）。
+// SetWindowStates 序列化窗口状态并写回（nil/空列表写空串）。
 func (s *UserSubscription) SetWindowStates(states []WindowState) {
 	if len(states) == 0 {
 		s.WindowState = ""
@@ -408,10 +408,7 @@ type UserSubscription struct {
 	UserId int `json:"user_id" gorm:"index;index:idx_user_sub_active,priority:1"`
 	PlanId int `json:"plan_id" gorm:"index"`
 
-	// Quota windows use independent monotonic counters — no snapshot derivation.
-	// Each counter is only reset by its own window boundary, so the calendar
-	// week/month caps survive the subscription-relative reset period and no cap
-	// silently disables the others.
+	// 动态模型下仅作展示（额度全部来自窗口）：AmountTotal 恒为 0，AmountUsed 为累计消费。
 	AmountTotal int64 `json:"amount_total" gorm:"type:bigint;not null;default:0"`
 	AmountUsed  int64 `json:"amount_used" gorm:"type:bigint;not null;default:0"`
 
@@ -429,7 +426,7 @@ type UserSubscription struct {
 	MonthUsed    int64 `json:"month_used" gorm:"type:bigint;not null;default:0"`
 
 	// 动态窗口消费状态（JSON 数组文本，与套餐 reset_windows 按 index 对应）。
-	// 仅动态模型订阅使用；legacy 订阅保持空串。
+	// 每个订阅都是动态窗口订阅（唯一模型）；状态缺失时按满额处理，由 advance 补齐。
 	WindowState string `json:"window_state" gorm:"type:text"`
 
 	UpgradeGroup  string `json:"upgrade_group" gorm:"type:varchar(64);default:''"`
@@ -1624,10 +1621,9 @@ func PurchaseWithStrategy(userId int, planId int, subscriptionId int) (string, e
 
 // RenewSubscriptionTx extends an existing active subscription by one plan period.
 // The subscription must already be locked by the caller. Renewal appends the plan
-// duration to EndTime (from the later of EndTime/now) and accumulates TotalAmount.
-// The quota reset cycle is deliberately left untouched: it continues on its natural
-// calendar schedule (advanceSubscriptionWindows resets CycleUsed when the boundary
-// arrives), so renewing before a reset never swallows that reset.
+// duration to EndTime (from the later of EndTime/now). 各窗口 next_reset_at 刻意不动：
+// 续费只延长订阅，窗口照常按各自 cadence 推进（advanceSubscriptionWindows 在到期边界
+// 清零重武装），提前续费不会吞掉已排期的下一次重置。
 func RenewSubscriptionTx(tx *gorm.DB, sub *UserSubscription, plan *SubscriptionPlan, now int64) error {
 	if tx == nil || sub == nil || plan == nil {
 		return errors.New("invalid renew args")
