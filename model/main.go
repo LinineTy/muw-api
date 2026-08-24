@@ -319,6 +319,12 @@ func migrateDB() error {
 		if err := ensureUserSubscriptionWindowState(DB); err != nil {
 			return err
 		}
+		if err := ensureDropLegacySubscriptionPlanColumns(DB); err != nil {
+			return err
+		}
+		if err := ensureDropLegacyUserSubscriptionColumns(DB); err != nil {
+			return err
+		}
 		common.SysLog(fmt.Sprintf("schema already at version %d, skipping migration", applied))
 		return nil
 	}
@@ -362,6 +368,12 @@ func migrateDB() error {
 		return err
 	}
 	if err := ensureUserSubscriptionWindowState(DB); err != nil {
+		return err
+	}
+	if err := ensureDropLegacySubscriptionPlanColumns(DB); err != nil {
+		return err
+	}
+	if err := ensureDropLegacyUserSubscriptionColumns(DB); err != nil {
 		return err
 	}
 	if err := applyPendingMigrations(DB, applied, migrations); err != nil {
@@ -711,6 +723,86 @@ func dropLegacyQuotaClaimColumns(db *gorm.DB) error {
 	return db.Exec("ALTER TABLE quota_claim_records DROP COLUMN pool_id, DROP COLUMN period_key").Error
 }
 
+// legacySubscriptionPlanColumns / legacyUserSubscriptionColumns 是随 legacy 订阅配额模型
+// 移除而要删除的列（legacy 从早期版本就存在，删列逻辑版本无关：每次启动检测自检）。
+var legacySubscriptionPlanColumns = []string{
+	"total_amount", "quota_reset_period", "quota_reset_custom_seconds",
+	"reset_amount_limit", "weekly_amount_limit", "monthly_amount_limit",
+}
+
+var legacyUserSubscriptionColumns = []string{
+	"cycle_start_at", "cycle_used", "next_cycle_reset_at",
+}
+
+// existingColumnsOf 返回 table 中实际存在的目标列（跨 SQLite/MySQL/PostgreSQL）。
+// table 与列名来自上方固定清单（非用户输入），直接拼接 SQL 与 dropLegacyQuotaClaimColumns 一致。
+func existingColumnsOf(db *gorm.DB, table string, columns []string) ([]string, error) {
+	var present []string
+	for _, col := range columns {
+		var count int64
+		var err error
+		switch {
+		case common.UsingMainDatabase(common.DatabaseTypeSQLite):
+			err = db.Raw("SELECT COUNT(*) FROM pragma_table_info('" + table + "') WHERE name = '" + col + "'").Scan(&count).Error
+		case common.UsingMainDatabase(common.DatabaseTypePostgreSQL):
+			err = db.Raw("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE table_schema = current_schema() AND table_name = '" + table + "' AND column_name = '" + col + "'").Scan(&count).Error
+		default:
+			err = db.Raw("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE table_schema = DATABASE() AND table_name = '" + table + "' AND column_name = '" + col + "'").Scan(&count).Error
+		}
+		if err != nil {
+			return nil, err
+		}
+		if count > 0 {
+			present = append(present, col)
+		}
+	}
+	return present, nil
+}
+
+// dropLegacySubscriptionColumns 幂等删除指定表上的 legacy 列。SQLite 逐列 DROP（且先删
+// 仍引用该列的索引——DROP COLUMN 不允许列被索引引用），MySQL/PostgreSQL 一条 ALTER 多列。
+func dropLegacySubscriptionColumns(db *gorm.DB, table string, columns []string, sqliteIndexes []string) error {
+	present, err := existingColumnsOf(db, table, columns)
+	if err != nil {
+		return err
+	}
+	if len(present) == 0 {
+		return nil
+	}
+	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
+		for _, idx := range sqliteIndexes {
+			if err := db.Exec("DROP INDEX IF EXISTS " + idx).Error; err != nil {
+				return err
+			}
+		}
+		for _, col := range present {
+			if err := db.Exec("ALTER TABLE " + table + " DROP COLUMN " + col).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	drops := make([]string, 0, len(present))
+	for _, col := range present {
+		drops = append(drops, "DROP COLUMN "+col)
+	}
+	return db.Exec("ALTER TABLE " + table + " " + strings.Join(drops, ", ")).Error
+}
+
+// ensureDropLegacySubscriptionPlanColumns 删除 subscription_plans 上随 legacy 模型移除的
+// 6 列（total_amount / quota_reset_* / reset_amount_limit / weekly / monthly）。
+func ensureDropLegacySubscriptionPlanColumns(db *gorm.DB) error {
+	return dropLegacySubscriptionColumns(db, "subscription_plans", legacySubscriptionPlanColumns, nil)
+}
+
+// ensureDropLegacyUserSubscriptionColumns 删除 user_subscriptions 上随 legacy 模型移除的
+// 3 列（cycle_start_at / cycle_used / next_cycle_reset_at）。next_cycle_reset_at 建有 GORM
+// 单列索引 idx_user_subscriptions_next_cycle_reset_at，SQLite 需先删索引再删列。
+func ensureDropLegacyUserSubscriptionColumns(db *gorm.DB) error {
+	return dropLegacySubscriptionColumns(db, "user_subscriptions", legacyUserSubscriptionColumns,
+		[]string{"idx_user_subscriptions_next_cycle_reset_at"})
+}
+
 func migrateLOGDB() error {
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		return migrateClickHouseLogDB()
@@ -857,12 +949,6 @@ func ensureSubscriptionPlanTableSQLite() error {
 ` + "`max_purchase_per_user`" + ` integer DEFAULT 0,
 ` + "`upgrade_group`" + ` varchar(64) DEFAULT '',
 ` + "`downgrade_group`" + ` varchar(64) DEFAULT '',
-` + "`total_amount`" + ` bigint NOT NULL DEFAULT 0,
-` + "`quota_reset_period`" + ` varchar(16) DEFAULT 'never',
-` + "`quota_reset_custom_seconds`" + ` bigint DEFAULT 0,
-` + "`reset_amount_limit`" + ` bigint NOT NULL DEFAULT 0,
-` + "`weekly_amount_limit`" + ` bigint NOT NULL DEFAULT 0,
-` + "`monthly_amount_limit`" + ` bigint NOT NULL DEFAULT 0,
 ` + "`max_cumulative_seconds`" + ` bigint NOT NULL DEFAULT 0,
 ` + "`exclusive_group`" + ` varchar(64) DEFAULT '',
 ` + "`allowed_groups`" + ` text DEFAULT '',
@@ -900,12 +986,6 @@ PRIMARY KEY (` + "`id`" + `)
 		{Name: "max_purchase_per_user", DDL: "`max_purchase_per_user` integer DEFAULT 0"},
 		{Name: "upgrade_group", DDL: "`upgrade_group` varchar(64) DEFAULT ''"},
 		{Name: "downgrade_group", DDL: "`downgrade_group` varchar(64) DEFAULT ''"},
-		{Name: "total_amount", DDL: "`total_amount` bigint NOT NULL DEFAULT 0"},
-		{Name: "quota_reset_period", DDL: "`quota_reset_period` varchar(16) DEFAULT 'never'"},
-		{Name: "quota_reset_custom_seconds", DDL: "`quota_reset_custom_seconds` bigint DEFAULT 0"},
-		{Name: "reset_amount_limit", DDL: "`reset_amount_limit` bigint NOT NULL DEFAULT 0"},
-		{Name: "weekly_amount_limit", DDL: "`weekly_amount_limit` bigint NOT NULL DEFAULT 0"},
-		{Name: "monthly_amount_limit", DDL: "`monthly_amount_limit` bigint NOT NULL DEFAULT 0"},
 		{Name: "max_cumulative_seconds", DDL: "`max_cumulative_seconds` bigint NOT NULL DEFAULT 0"},
 		{Name: "exclusive_group", DDL: "`exclusive_group` varchar(64) DEFAULT ''"},
 		{Name: "allowed_groups", DDL: "`allowed_groups` text DEFAULT ''"},

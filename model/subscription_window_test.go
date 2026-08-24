@@ -182,7 +182,6 @@ func TestWindowDynamicIgnoresAmountTotalGuard(t *testing.T) {
 	seedQuotaPlan(t, 7807, &SubscriptionPlan{
 		Title: "hole-d", PriceAmount: 10,
 		DurationUnit: SubscriptionDurationMonth, DurationValue: 1,
-		TotalAmount:     1000,
 		ResetWindowsRaw: `[{"unit":"hour","value":5,"limit":100}]`,
 	})
 	seedQuotaSub(t, 7808, &UserSubscription{
@@ -242,7 +241,6 @@ func TestWindowRenewDoesNotAccumulateAmountTotal(t *testing.T) {
 	seedQuotaPlan(t, 7811, &SubscriptionPlan{
 		Title: "no-accumulate", PriceAmount: 10,
 		DurationUnit: SubscriptionDurationMonth, DurationValue: 1,
-		TotalAmount:     500,
 		ResetWindowsRaw: `[{"unit":"hour","value":5,"limit":100}]`,
 	})
 	startUnix := now - 10*86400
@@ -338,7 +336,7 @@ func TestApplyPlanWindowsToActiveSubscriptionsResetsCounters(t *testing.T) {
 	seedQuotaSub(t, 7819, &UserSubscription{
 		UserId: 790, PlanId: 7818, Status: "active",
 		AmountTotal: 1000, AmountUsed: 300,
-		CycleUsed: 150, WeekUsed: 40, MonthUsed: 90,
+		WeekUsed: 40, MonthUsed: 90,
 		StartTime: now - 86400, EndTime: activeEnd,
 	})
 	// 已过期订阅：不受转换影响。
@@ -462,46 +460,4 @@ func TestWindowDynamicMaintainsCalendarMonthCounter(t *testing.T) {
 	after = getSubByID(t, 7825)
 	assert.Zero(t, after.MonthUsed)
 	assert.Zero(t, after.WeekUsed)
-}
-
-// 动态 → legacy 转换（ApplyPlanLegacyToActiveSubscriptions）：总额度重授为新套餐
-// TotalAmount、周期/周/月计数清零、窗口状态清空。对称于"改动即重置"，防止冻结的
-// legacy 旧计数在转回后复活（白嫖或卡死）。
-func TestApplyPlanLegacyToActiveSubscriptionsResetsLegacyCounters(t *testing.T) {
-	truncateTables(t)
-
-	now := GetDBTimestamp()
-	seedQuotaPlan(t, 7821, &SubscriptionPlan{
-		Title: "back-to-legacy", PriceAmount: 10,
-		DurationUnit: SubscriptionDurationMonth, DurationValue: 1,
-		QuotaResetPeriod: SubscriptionResetNever, TotalAmount: 1000,
-	})
-	activeEnd := now + 10*86400
-	// 动态期订阅：带窗口状态 + 动态期残留的 AmountUsed（legacy 计数冻结在转换前）。
-	seedQuotaSub(t, 7822, &UserSubscription{
-		UserId: 791, PlanId: 7821, Status: "active",
-		AmountTotal: 0, AmountUsed: 300,
-		StartTime: now - 86400, EndTime: activeEnd,
-		WindowState: windowStateJSON(windowEntry(0, 150, now, 0)),
-	})
-	// 已过期订阅：不受转换影响。
-	seedQuotaSub(t, 7823, &UserSubscription{
-		UserId: 791, PlanId: 7821, Status: "active",
-		StartTime: now - 86400, EndTime: now - 1,
-	})
-
-	plan, err := GetSubscriptionPlanById(7821)
-	require.NoError(t, err)
-	count, err := ApplyPlanLegacyToActiveSubscriptions(DB, plan, now)
-	require.NoError(t, err)
-	assert.EqualValues(t, 1, count, "只应重置活跃订阅")
-
-	after := getSubByID(t, 7822)
-	assert.EqualValues(t, 1000, after.AmountTotal, "总额度重授为套餐 TotalAmount")
-	assert.Zero(t, after.AmountUsed, "累计使用清零")
-	assert.Zero(t, after.CycleUsed, "周期计数清零")
-	assert.Zero(t, after.WeekUsed, "周计数清零")
-	assert.Zero(t, after.MonthUsed, "月计数清零")
-	assert.Empty(t, after.WindowState, "窗口状态应清空（死数据）")
-	assert.GreaterOrEqual(t, after.CycleStartAt, now)
 }

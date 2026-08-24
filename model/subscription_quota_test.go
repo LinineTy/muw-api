@@ -13,12 +13,11 @@ GNU Affero General Public License for more details.
 
 You should have received a copy of the GNU Affero General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-For commercial licensing, please contact support@quantumnous.com
 */
 package model
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
@@ -28,10 +27,16 @@ import (
 	"gorm.io/gorm"
 )
 
-// 复用独立计数器模型，验证四个限额各自独立生效：
-// - Bug 3：自然周/月限额在订阅周期重置（daily）后仍累计，不被清零。
-// - Bug 4：总额度设为 0（无限）时，周期/周/月限额仍然生效。
-// - advanceSubscriptionWindows 的窗口推进边界。
+// 动态窗口模型下的配额/续费回归测试（legacy 周期/周/月上限已随模型移除）。
+
+// capWindowJSON 返回一个 limit 窗口的动态窗口 JSON（测试种子用）。
+func capWindowJSON(limit int64) string {
+	return `[{"unit":"day","value":1,"limit":` + itoa(limit) + `}]`
+}
+
+func itoa(v int64) string {
+	return strconv.FormatInt(v, 10)
+}
 
 func seedQuotaPlan(t *testing.T, id int, plan *SubscriptionPlan) {
 	t.Helper()
@@ -51,7 +56,6 @@ func newActiveQuotaSub(userId, planId int) *UserSubscription {
 	return &UserSubscription{
 		UserId:       userId,
 		PlanId:       planId,
-		AmountTotal:  0,
 		Status:       "active",
 		StartTime:    now - 86400,
 		EndTime:      now + 30*24*3600,
@@ -60,66 +64,14 @@ func newActiveQuotaSub(userId, planId int) *UserSubscription {
 	}
 }
 
-func TestPreConsumeWeeklyCapSurvivesDailyReset(t *testing.T) {
-	truncateTables(t)
-
-	seedQuotaPlan(t, 7001, &SubscriptionPlan{
-		Title: "daily+weekly", PriceAmount: 10,
-		DurationUnit: SubscriptionDurationMonth, DurationValue: 1,
-		TotalAmount:       1000,
-		QuotaResetPeriod:  SubscriptionResetDaily,
-		WeeklyAmountLimit: 100,
-	})
-	sub := newActiveQuotaSub(701, 7001)
-	sub.AmountTotal = 1000
-	sub.NextCycleResetAt = GetDBTimestamp() - 10 // 周期已到期：首次预扣即触发重置
-	seedQuotaSub(t, 7701, sub)
-
-	res, err := PreConsumeUserSubscription("req-daily-1", 701, "gpt-4", 1, 80)
-	require.NoError(t, err)
-	require.NotNil(t, res)
-	assert.EqualValues(t, 80, res.PreConsumed)
-
-	// daily 重置已发生，但自然周已用 80 → 本周只剩 20，预扣 50 必须被拒。
-	_, err = PreConsumeUserSubscription("req-daily-2", 701, "gpt-4", 1, 50)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "subscription quota insufficient")
-
-	var after UserSubscription
-	require.NoError(t, DB.Where("id = ?", 7701).First(&after).Error)
-	assert.EqualValues(t, 80, after.WeekUsed, "周用量必须保留")
-	assert.EqualValues(t, 80, after.CycleUsed)
-}
-
-func TestPreConsumeWeeklyCapEnforcedWhenTotalAmountZero(t *testing.T) {
-	truncateTables(t)
-
-	seedQuotaPlan(t, 7002, &SubscriptionPlan{
-		Title: "zero-total+weekly", PriceAmount: 10,
-		DurationUnit: SubscriptionDurationMonth, DurationValue: 1,
-		TotalAmount:       0, // 无限总额
-		WeeklyAmountLimit: 100,
-	})
-	seedQuotaSub(t, 7702, newActiveQuotaSub(702, 7002))
-
-	res, err := PreConsumeUserSubscription("req-zero-1", 702, "gpt-4", 1, 60)
-	require.NoError(t, err)
-	require.NotNil(t, res)
-	assert.EqualValues(t, 60, res.PreConsumed)
-
-	// 总额无限，但周限仍生效：剩余 40 < 50 → 拒绝。
-	_, err = PreConsumeUserSubscription("req-zero-2", 702, "gpt-4", 1, 50)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "subscription quota insufficient")
-}
-
+// TestPreConsumeUnlimitedWhenNoCaps 无限额度 = 动态窗口全部额度为 0：预扣不设额度门。
 func TestPreConsumeUnlimitedWhenNoCaps(t *testing.T) {
 	truncateTables(t)
 
 	seedQuotaPlan(t, 7003, &SubscriptionPlan{
 		Title: "unlimited", PriceAmount: 10,
-		DurationUnit: SubscriptionDurationMonth, DurationValue: 1,
-		TotalAmount: 0,
+		DurationUnit:   SubscriptionDurationMonth, DurationValue: 1,
+		ResetWindowsRaw: capWindowJSON(0),
 	})
 	seedQuotaSub(t, 7703, newActiveQuotaSub(703, 7003))
 
@@ -127,38 +79,39 @@ func TestPreConsumeUnlimitedWhenNoCaps(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res)
 	assert.EqualValues(t, 1_000_000, res.PreConsumed)
+
+	var after UserSubscription
+	require.NoError(t, DB.Where("id = ?", 7703).First(&after).Error)
+	// 无限套餐仍照常累加展示计数（AmountUsed / 周 / 月）。
+	assert.EqualValues(t, 1_000_000, after.AmountUsed)
+	assert.EqualValues(t, 1_000_000, after.MonthUsed)
 }
 
-func TestPreConsumeCycleCapGrantedFreshlyAfterReset(t *testing.T) {
+// TestPreConsumeWindowCapEnforced 动态窗口额度生效：用满后预扣被拒，窗口推进后恢复。
+func TestPreConsumeWindowCapEnforced(t *testing.T) {
 	truncateTables(t)
 
-	seedQuotaPlan(t, 7004, &SubscriptionPlan{
-		Title: "cycle-cap", PriceAmount: 10,
-		DurationUnit: SubscriptionDurationMonth, DurationValue: 1,
-		TotalAmount:      0,
-		QuotaResetPeriod: SubscriptionResetCustom,
-		QuotaResetCustomSeconds: 3600,
-		ResetAmountLimit: 100,
+	seedQuotaPlan(t, 7005, &SubscriptionPlan{
+		Title: "window-cap", PriceAmount: 10,
+		DurationUnit:   SubscriptionDurationMonth, DurationValue: 1,
+		ResetWindowsRaw: capWindowJSON(100),
 	})
-	sub := newActiveQuotaSub(704, 7004)
-	sub.NextCycleResetAt = GetDBTimestamp() - 10
-	seedQuotaSub(t, 7704, sub)
+	seedQuotaSub(t, 7705, newActiveQuotaSub(705, 7005))
 
-	res, err := PreConsumeUserSubscription("req-cycle-1", 704, "gpt-4", 1, 100)
+	res, err := PreConsumeUserSubscription("req-wcap-1", 705, "gpt-4", 1, 100)
 	require.NoError(t, err)
 	require.NotNil(t, res)
 	assert.EqualValues(t, 100, res.PreConsumed)
 
-	// 周期已用满 100 → 拒绝，直到窗口推进后重新获得 100。
-	_, err = PreConsumeUserSubscription("req-cycle-2", 704, "gpt-4", 1, 1)
+	// 窗口已用满 100 → 拒绝。
+	_, err = PreConsumeUserSubscription("req-wcap-2", 705, "gpt-4", 1, 1)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "subscription quota insufficient")
 
-	// 手动把窗口推到已过期，下一次预扣应先重置周期再放行。
-	require.NoError(t, DB.Model(&UserSubscription{}).Where("id = ?", 7704).
-		Update("next_cycle_reset_at", GetDBTimestamp()-1).Error)
-
-	res, err = PreConsumeUserSubscription("req-cycle-3", 704, "gpt-4", 1, 50)
+	// 手动把窗口推到已过期，下一次预扣先重置窗口再放行。
+	require.NoError(t, DB.Model(&UserSubscription{}).Where("id = ?", 7705).
+		Update("window_state", `[{"idx":0,"cycle_used":100,"cycle_start_at":1,"next_reset_at":1}]`).Error)
+	res, err = PreConsumeUserSubscription("req-wcap-3", 705, "gpt-4", 1, 50)
 	require.NoError(t, err)
 	require.NotNil(t, res)
 	assert.EqualValues(t, 50, res.PreConsumed)
@@ -187,56 +140,6 @@ func TestAdvanceSubscriptionWindowsWeeklyRollover(t *testing.T) {
 	assert.False(t, advanceSubscriptionWindows(sub2, &SubscriptionPlan{}, now))
 }
 
-func TestAdvanceSubscriptionWindowsCustomCycle(t *testing.T) {
-	now := GetDBTimestamp()
-	plan := &SubscriptionPlan{
-		QuotaResetPeriod:       SubscriptionResetCustom,
-		QuotaResetCustomSeconds: 3600,
-	}
-	sub := &UserSubscription{NextCycleResetAt: now - 1, CycleUsed: 100}
-	changed := advanceSubscriptionWindows(sub, plan, now)
-	assert.True(t, changed)
-	assert.Zero(t, sub.CycleUsed)
-	assert.InDelta(t, float64(now+3600), float64(sub.NextCycleResetAt), 5)
-}
-
-// TestRenewPreservesResetSchedule 保护续费语义：续费只延长订阅有效期并累加总额，
-// 不能重新武装已排期的重置周期（否则会吞掉下一次重置，用户损失一个周期的配额）。
-func TestRenewPreservesResetSchedule(t *testing.T) {
-	truncateTables(t)
-
-	now := GetDBTimestamp()
-	nextReset := now + 11*86400 // 已排期的下次重置（如每月 1 号）
-	plan := &SubscriptionPlan{
-		Id: 7205, Title: "monthly-reset", PriceAmount: 10,
-		DurationUnit: SubscriptionDurationMonth, DurationValue: 1,
-		TotalAmount: 1000, QuotaResetPeriod: SubscriptionResetMonthly,
-	}
-	require.NoError(t, DB.Create(plan).Error)
-	InvalidateSubscriptionPlanCache(7205)
-
-	sub := &UserSubscription{
-		Id: 7206, UserId: 902, PlanId: plan.Id, Status: "active",
-		AmountTotal: 1000, AmountUsed: 100,
-		StartTime: now - 20 * 86400, EndTime: nextReset,
-		CycleStartAt: now - 20 * 86400, CycleUsed: 40, NextCycleResetAt: nextReset,
-	}
-	require.NoError(t, DB.Create(sub).Error)
-
-	// 在下一次重置之前续费。
-	require.NoError(t, DB.Transaction(func(tx *gorm.DB) error {
-		var locked UserSubscription
-		require.NoError(t, tx.Where("id = ?", sub.Id).First(&locked).Error)
-		return RenewSubscriptionTx(tx, &locked, plan, now)
-	}))
-
-	var after UserSubscription
-	require.NoError(t, DB.Where("id = ?", sub.Id).First(&after).Error)
-	assert.Equal(t, nextReset, after.NextCycleResetAt, "续费不应推后已排期的重置周期")
-	assert.Greater(t, after.EndTime, nextReset, "续费应延长订阅有效期")
-	assert.EqualValues(t, 2000, after.AmountTotal)
-}
-
 // TestCancelAtEndBlocksRenewal 保护到期取消语义：cancel_at_end 的订阅禁止任何续费。
 // RenewSubscriptionTx 是余额/自动/epay 回调的公共咽喉，ValidateSubscriptionPurchaseGate
 // 是 epay 创建订单前的网关，两处都必须拒绝续费目标，且被拒后订阅有效期不得改变。
@@ -246,12 +149,12 @@ func TestCancelAtEndBlocksRenewal(t *testing.T) {
 	now := GetDBTimestamp()
 	seedQuotaPlan(t, 7101, &SubscriptionPlan{
 		Title: "cancel-at-end", PriceAmount: 10,
-		DurationUnit: SubscriptionDurationMonth, DurationValue: 1,
-		TotalAmount: 1000,
+		DurationUnit:   SubscriptionDurationMonth, DurationValue: 1,
+		ResetWindowsRaw: capWindowJSON(1000),
 	})
 	seedQuotaSub(t, 7102, &UserSubscription{
 		UserId: 720, PlanId: 7101, Status: "active",
-		AmountTotal: 1000, CancelAtEnd: true,
+		AmountTotal: 0, CancelAtEnd: true,
 		StartTime: now - 86400, EndTime: now + 30*86400,
 	})
 
@@ -285,22 +188,22 @@ func TestCancelAtEndBlocksRenewal(t *testing.T) {
 	// 对照组：非 cancel_at_end 的订阅可通过续费目标检查，不被误伤。
 	seedQuotaSub(t, 7103, &UserSubscription{
 		UserId: 720, PlanId: 7101, Status: "active",
-		AmountTotal: 1000,
-		StartTime: now - 86400, EndTime: now + 30*86400,
+		AmountTotal: 0,
+		StartTime:   now - 86400, EndTime: now + 30*86400,
 	})
 	require.NoError(t, ValidateSubscriptionPurchaseGate(720, plan, 7103))
 }
 
 // TestRenewUsesSnapshotTerms 保护"续费走旧条款"：购买时写入续费条款快照，之后套餐
-// 被编辑（改价/改额度）不影响续费——延长时长与累加额度都取快照值。
+// 被编辑（改时长/改价）不影响续费——延长时长取快照周期而非套餐当前周期。
 func TestRenewUsesSnapshotTerms(t *testing.T) {
 	truncateTables(t)
 
 	now := GetDBTimestamp()
 	seedQuotaPlan(t, 7201, &SubscriptionPlan{
 		Title: "snapshot-terms", PriceAmount: 10,
-		DurationUnit: SubscriptionDurationMonth, DurationValue: 1,
-		TotalAmount: 1000,
+		DurationUnit:   SubscriptionDurationMonth, DurationValue: 1,
+		ResetWindowsRaw: capWindowJSON(100),
 	})
 	plan, err := GetSubscriptionPlanById(7201)
 	require.NoError(t, err)
@@ -309,21 +212,20 @@ func TestRenewUsesSnapshotTerms(t *testing.T) {
 	startUnix := now - 10*86400
 	expectedDuration := planDurationSeconds(plan, startUnix)
 	sub := &UserSubscription{
-		UserId: 721, PlanId: 7201, Status: "active",
-		AmountTotal: 1000,
-		StartTime:   startUnix,
-		EndTime:     startUnix + expectedDuration,
+		UserId:    721, PlanId: 7201, Status: "active",
+		StartTime: startUnix,
+		EndTime:   startUnix + expectedDuration,
 	}
 	sub.SnapshotRenewTerms(plan, startUnix)
 	require.NotEmpty(t, sub.RenewTerms)
 	seedQuotaSub(t, 7202, sub)
 
-	// 管理员事后改条款：$10→$20、单期额度 1000→2000。
+	// 管理员事后改条款：时长 1 月 → 2 月。
 	require.NoError(t, DB.Model(&SubscriptionPlan{}).Where("id = ?", 7201).
-		Updates(map[string]interface{}{"price_amount": 20, "total_amount": 2000}).Error)
+		Updates(map[string]interface{}{"duration_value": 2}).Error)
 	InvalidateSubscriptionPlanCache(7201)
 
-	// 续费按快照旧条款：累加快照单期额度 1000（非改后的 2000），时长按快照周期。
+	// 续费按快照旧条款：时长按快照周期（1 月），而非改后的 2 月。
 	require.NoError(t, DB.Transaction(func(tx *gorm.DB) error {
 		var locked UserSubscription
 		require.NoError(t, tx.Where("id = ?", 7202).First(&locked).Error)
@@ -334,8 +236,7 @@ func TestRenewUsesSnapshotTerms(t *testing.T) {
 
 	var after UserSubscription
 	require.NoError(t, DB.Where("id = ?", 7202).First(&after).Error)
-	assert.EqualValues(t, 2000, after.AmountTotal, "续费应累加快照单期额度 1000，而非改后的 2000")
-	assert.Equal(t, sub.EndTime+expectedDuration, after.EndTime, "续费应按快照周期时长延长")
+	assert.Equal(t, sub.EndTime+expectedDuration, after.EndTime, "续费应按快照周期时长延长，而非套餐当前的 2 月")
 }
 
 // TestRemainingValueUsesSnapshotPeriod 保护升降配估值：按快照周期时长与价格折算，
@@ -346,8 +247,8 @@ func TestRemainingValueUsesSnapshotPeriod(t *testing.T) {
 	now := GetDBTimestamp()
 	seedQuotaPlan(t, 7203, &SubscriptionPlan{
 		Title: "snapshot-value", PriceAmount: 10,
-		DurationUnit: SubscriptionDurationMonth, DurationValue: 1,
-		TotalAmount: 1000,
+		DurationUnit:   SubscriptionDurationMonth, DurationValue: 1,
+		ResetWindowsRaw: capWindowJSON(1000),
 	})
 	plan, err := GetSubscriptionPlanById(7203)
 	require.NoError(t, err)
@@ -355,8 +256,8 @@ func TestRemainingValueUsesSnapshotPeriod(t *testing.T) {
 	// 已续费一次的订阅：start 在约 2.3 个月前，剩余 20 天；快照周期 ≈ 30 天、价格 $10。
 	startUnix := now - 70*86400
 	sub := &UserSubscription{
-		UserId: 722, PlanId: 7203, Status: "active",
-		AmountTotal: 2000,
+		UserId:    722, PlanId: 7203, Status: "active",
+		AmountTotal: 0,
 		StartTime:   startUnix,
 		EndTime:     now + 20*86400,
 	}
@@ -384,8 +285,8 @@ func TestDisabledPlanAllowsRenewalBlocksNewPurchase(t *testing.T) {
 	now := GetDBTimestamp()
 	seedQuotaPlan(t, 7204, &SubscriptionPlan{
 		Title: "disabled-renew", PriceAmount: 10,
-		DurationUnit: SubscriptionDurationMonth, DurationValue: 1,
-		TotalAmount: 1000, Enabled: false,
+		DurationUnit:   SubscriptionDurationMonth, DurationValue: 1,
+		ResetWindowsRaw: capWindowJSON(1000), Enabled: false,
 	})
 	plan, err := GetSubscriptionPlanById(7204)
 	require.NoError(t, err)
@@ -394,8 +295,8 @@ func TestDisabledPlanAllowsRenewalBlocksNewPurchase(t *testing.T) {
 	// 存量订阅（购买时写入快照）+ 余额 10M（快照价 $10 * 500k = 5M）。
 	startUnix := now - 10*86400
 	sub := &UserSubscription{
-		UserId: 723, PlanId: 7204, Status: "active",
-		AmountTotal: 1000,
+		UserId:    723, PlanId: 7204, Status: "active",
+		AmountTotal: 0,
 		StartTime:   startUnix,
 		EndTime:     startUnix + planDurationSeconds(plan, startUnix),
 	}

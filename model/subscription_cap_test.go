@@ -39,7 +39,6 @@ func TestAdminBindSubscriptionRespectsSimultaneousCap(t *testing.T) {
 	plan := &SubscriptionPlan{
 		Id: 7101, Title: "Cap", PriceAmount: 10,
 		DurationUnit: SubscriptionDurationMonth, DurationValue: 1,
-		TotalAmount: 1000,
 	}
 	require.NoError(t, DB.Create(plan).Error)
 	InvalidateSubscriptionPlanCache(7101)

@@ -84,6 +84,13 @@
 - 迁移在启动时自动执行一次（日志含 `[WARN] 订阅功能重设计迁移已执行...`），之后由 v2 版本戳防止重复。
 - `user_subscriptions` 新增 `cycle_start_at`/`cycle_used`/`next_cycle_reset_at`/`week_used`/`month_used`/`tier_priority`；旧的 `cycle_start_used`/`week_start_used`/`month_start_used`/`last_reset_time` 等列保留为孤儿列，不参与运行。
 
+**v16：移除 legacy 订阅配额模型。** 动态窗口（`reset_windows`）成为唯一模型，删除：
+`subscription_plans` 的 `total_amount`/`quota_reset_period`/`quota_reset_custom_seconds`/
+`reset_amount_limit`/`weekly_amount_limit`/`monthly_amount_limit`，以及 `user_subscriptions`
+的 `cycle_start_at`/`cycle_used`/`next_cycle_reset_at`。删列由幂等 `ensureDropLegacy*` 在每次
+启动自动执行（SQLite 先删索引再删列），v16 版本戳记录该变更。**无限额度改由动态窗口表达**：
+全部窗口 `limit=0` 即无限（不再有 `total_amount=0` 的 legacy 出口）。
+
 **未来开发流程（改 model 时）**：
 1. 修改 `model/` 下的结构体。
 2. **递增 `CurrentSchemaVersion`**（必须，否则生产已最新库会跳过、新列不建）。

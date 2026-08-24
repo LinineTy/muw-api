@@ -63,7 +63,7 @@ func TestEnsureSubscriptionPlanTableSQLiteAddsMissingColumns(t *testing.T) {
 		names[c.Name] = true
 	}
 	assert.True(t, names["priority"], "必须补上 priority 列")
-	assert.True(t, names["total_amount"], "其他必需列也应补齐")
+	assert.True(t, names["reset_windows"], "其他必需列也应补齐")
 
 	// 补列后写入含 priority 的行应成功。
 	require.NoError(t, db.Exec("INSERT INTO subscription_plans (title, price_amount, priority, created_at, updated_at) VALUES ('x', 1, 5, 1, 1)").Error)

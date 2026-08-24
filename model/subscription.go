@@ -35,15 +35,6 @@ const (
 	SubscriptionWindowUnitMonth = "month"
 )
 
-// Subscription quota reset period
-const (
-	SubscriptionResetNever   = "never"
-	SubscriptionResetDaily   = "daily"
-	SubscriptionResetWeekly  = "weekly"
-	SubscriptionResetMonthly = "monthly"
-	SubscriptionResetCustom  = "custom"
-)
-
 var (
 	ErrSubscriptionOrderNotFound      = errors.New("subscription order not found")
 	ErrSubscriptionOrderStatusInvalid = errors.New("subscription order status invalid")
@@ -194,23 +185,6 @@ type SubscriptionPlan struct {
 
 	// Downgrade user group on expiry (empty = revert to the group held before purchase)
 	DowngradeGroup string `json:"downgrade_group" gorm:"type:varchar(64);default:''"`
-
-	// Total quota (amount in quota units, 0 = unlimited)
-	TotalAmount int64 `json:"total_amount" gorm:"type:bigint;not null;default:0"`
-
-	// Quota reset period for plan
-	QuotaResetPeriod        string `json:"quota_reset_period" gorm:"type:varchar(16);default:'never'"`
-	QuotaResetCustomSeconds int64  `json:"quota_reset_custom_seconds" gorm:"type:bigint;default:0"`
-
-	// Per-cycle quota limit (0 = no limit). When set and a reset period exists, the
-	// cycle caps usage each reset window while TotalAmount stays a cumulative cap.
-	ResetAmountLimit int64 `json:"reset_amount_limit" gorm:"type:bigint;not null;default:0"`
-
-	// Natural calendar week/month quota caps (0 = no cap). Independent of the
-	// subscription-relative reset period; they can be combined and apply to the
-	// current calendar week / month regardless of when the subscription started.
-	WeeklyAmountLimit  int64 `json:"weekly_amount_limit" gorm:"type:bigint;not null;default:0"`
-	MonthlyAmountLimit int64 `json:"monthly_amount_limit" gorm:"type:bigint;not null;default:0"`
 
 	// Max cumulative remaining seconds after a renewal (0 = unlimited). Prevents
 	// stacking subscription time indefinitely.
@@ -447,12 +421,8 @@ type UserSubscription struct {
 
 	Source string `json:"source" gorm:"type:varchar(32);default:'order'"` // order/admin/balance
 
-	// Reset-cycle window (only meaningful when the plan has a reset period).
-	CycleStartAt     int64 `json:"cycle_start_at" gorm:"type:bigint;not null;default:0"`
-	CycleUsed        int64 `json:"cycle_used" gorm:"type:bigint;not null;default:0"`
-	NextCycleResetAt int64 `json:"next_cycle_reset_at" gorm:"type:bigint;not null;default:0;index"`
-
-	// Natural calendar week/month windows (only meaningful when the plan caps them).
+	// 自然日历周/月展示计数（供钱包卡「订阅抵扣」按日历月统计；动态模型下不作额度
+	// 上限，仅展示）。legacy 移除后只保留展示语义。
 	WeekStartAt  int64 `json:"week_start_at" gorm:"type:bigint;not null;default:0"`
 	WeekUsed     int64 `json:"week_used" gorm:"type:bigint;not null;default:0"`
 	MonthStartAt int64 `json:"month_start_at" gorm:"type:bigint;not null;default:0"`
@@ -556,12 +526,11 @@ func calcPlanEndTime(start time.Time, plan *SubscriptionPlan) (int64, error) {
 	}
 }
 
-// RenewTermsSnapshot 记录购买时的套餐条款。续费价格、周期时长、单期额度、累计上限
-// 均取快照，保证"续费走旧条款"，不受套餐后续编辑影响。
+// RenewTermsSnapshot 记录购买时的套餐条款。续费价格、周期时长、累计上限均取快照，
+// 保证"续费走旧条款"，不受套餐后续编辑影响。
 type RenewTermsSnapshot struct {
 	DurationSeconds      int64   `json:"duration_seconds"`
 	PriceAmount          float64 `json:"price_amount"`
-	TotalAmount          int64   `json:"total_amount"`
 	MaxCumulativeSeconds int64   `json:"max_cumulative_seconds"`
 }
 
@@ -587,7 +556,6 @@ func (s *UserSubscription) SnapshotRenewTerms(plan *SubscriptionPlan, startUnix 
 	terms := RenewTermsSnapshot{
 		DurationSeconds:      planDurationSeconds(plan, startUnix),
 		PriceAmount:          plan.PriceAmount,
-		TotalAmount:          plan.TotalAmount,
 		MaxCumulativeSeconds: plan.MaxCumulativeSeconds,
 	}
 	data, err := common.Marshal(terms)
@@ -603,7 +571,6 @@ func (s *UserSubscription) SnapshotRenewTerms(plan *SubscriptionPlan, startUnix 
 func (s *UserSubscription) RenewTermsOrPlan(plan *SubscriptionPlan) RenewTermsSnapshot {
 	fallback := RenewTermsSnapshot{
 		PriceAmount:          plan.PriceAmount,
-		TotalAmount:          plan.TotalAmount,
 		MaxCumulativeSeconds: plan.MaxCumulativeSeconds,
 	}
 	if s == nil {
@@ -620,15 +587,6 @@ func (s *UserSubscription) RenewTermsOrPlan(plan *SubscriptionPlan) RenewTermsSn
 	return fallback
 }
 
-func NormalizeResetPeriod(period string) string {
-	switch strings.TrimSpace(period) {
-	case SubscriptionResetDaily, SubscriptionResetWeekly, SubscriptionResetMonthly, SubscriptionResetCustom:
-		return strings.TrimSpace(period)
-	default:
-		return SubscriptionResetNever
-	}
-}
-
 // weekStartUnix returns the UNIX timestamp of the Monday 00:00 that starts the
 // calendar week containing t (Monday-based ISO week).
 func weekStartUnix(t time.Time) int64 {
@@ -643,40 +601,19 @@ func monthStartUnix(t time.Time) int64 {
 	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.Location()).Unix()
 }
 
-// advanceSubscriptionWindows advances the reset-cycle and calendar week/month
-// windows for a subscription to now, resetting each independent usage counter at
-// its own boundary. Returns whether any window changed; the caller must persist
-// the subscription when it returns true, otherwise stale counters could bypass
-// the caps. The calendar week/month counters survive the subscription-relative
-// reset period because they are never reset here except by their own rollover.
+// advanceSubscriptionWindows advances the dynamic reset windows and the calendar
+// week/month display counters for a subscription to now, resetting each
+// independent usage counter at its own boundary. Returns whether anything changed;
+// the caller must persist the subscription when it returns true. 动态模型下
+// week_used/month_used 仅作展示统计（钱包卡「订阅抵扣」），不作额度上限。
 func advanceSubscriptionWindows(sub *UserSubscription, plan *SubscriptionPlan, now int64) bool {
 	if sub == nil || plan == nil {
 		return false
 	}
-	windows := plan.ResetWindows()
 	changed := false
-	if len(windows) > 0 {
-		// 动态窗口模型：多级独立窗口各自推进（含续费后重算/封顶语义）。
-		if advanceDynamicWindows(sub, windows, now) {
-			changed = true
-		}
-	} else if period := NormalizeResetPeriod(plan.QuotaResetPeriod); period != SubscriptionResetNever {
-		if sub.NextCycleResetAt > 0 && sub.NextCycleResetAt <= now {
-			sub.CycleUsed = 0
-			sub.CycleStartAt = now
-			sub.NextCycleResetAt = calcNextResetTime(time.Unix(now, 0), plan, sub.EndTime)
-			changed = true
-		} else if sub.NextCycleResetAt == 0 {
-			// Plan has a reset period but the window was never armed (fresh or
-			// legacy row): grant a full cycle from now.
-			sub.CycleUsed = 0
-			sub.CycleStartAt = now
-			sub.NextCycleResetAt = calcNextResetTime(time.Unix(now, 0), plan, sub.EndTime)
-			changed = true
-		}
+	if advanceDynamicWindows(sub, plan.ResetWindows(), now) {
+		changed = true
 	}
-	// 自然日历周/月窗口（legacy 与动态模型共用）：动态模型下 week_used/month_used 仅作
-	// 展示统计（钱包卡「订阅抵扣」），不作额度上限——动态上限只来自 reset_windows。
 	nowT := time.Unix(now, 0)
 	weekStart := weekStartUnix(nowT)
 	if sub.WeekStartAt < weekStart {
@@ -770,47 +707,6 @@ func addWindowUsage(sub *UserSubscription, windows []ResetWindow, amount int64) 
 		states[i].CycleUsed += amount
 	}
 	sub.SetWindowStates(states)
-}
-
-func calcNextResetTime(base time.Time, plan *SubscriptionPlan, endUnix int64) int64 {
-	if plan == nil {
-		return 0
-	}
-	period := NormalizeResetPeriod(plan.QuotaResetPeriod)
-	if period == SubscriptionResetNever {
-		return 0
-	}
-	var next time.Time
-	switch period {
-	case SubscriptionResetDaily:
-		next = time.Date(base.Year(), base.Month(), base.Day(), 0, 0, 0, 0, base.Location()).
-			AddDate(0, 0, 1)
-	case SubscriptionResetWeekly:
-		// Align to next Monday 00:00
-		weekday := int(base.Weekday()) // Sunday=0
-		// Convert to Monday=1..Sunday=7
-		if weekday == 0 {
-			weekday = 7
-		}
-		daysUntil := 8 - weekday
-		next = time.Date(base.Year(), base.Month(), base.Day(), 0, 0, 0, 0, base.Location()).
-			AddDate(0, 0, daysUntil)
-	case SubscriptionResetMonthly:
-		// Align to first day of next month 00:00
-		next = time.Date(base.Year(), base.Month(), 1, 0, 0, 0, 0, base.Location()).
-			AddDate(0, 1, 0)
-	case SubscriptionResetCustom:
-		if plan.QuotaResetCustomSeconds <= 0 {
-			return 0
-		}
-		next = base.Add(time.Duration(plan.QuotaResetCustomSeconds) * time.Second)
-	default:
-		return 0
-	}
-	if endUnix > 0 && next.Unix() > endUnix {
-		return 0
-	}
-	return next.Unix()
 }
 
 // calcWindowNextReset 返回动态窗口 w 从 baseUnix 起的下一次重置时刻（秒）。月按日历
@@ -1012,12 +908,6 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 	if plan.MaxCumulativeSeconds > 0 && endUnix-nowUnix > plan.MaxCumulativeSeconds {
 		return nil, errors.New("该套餐单次最长时长超过累计上限")
 	}
-	resetBase := now
-	nextCycleReset := calcNextResetTime(resetBase, plan, endUnix)
-	cycleStartAt := int64(0)
-	if nextCycleReset > 0 {
-		cycleStartAt = now.Unix()
-	}
 	upgradeGroup := ""
 	prevGroup := ""
 	if common.SubscriptionGroupUpgradeEnabled {
@@ -1042,23 +932,20 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 	}
 	nowUnixAtCreate := now.Unix()
 	sub := &UserSubscription{
-		UserId:              userId,
-		PlanId:              plan.Id,
-		AmountTotal:         plan.TotalAmount,
-		AmountUsed:          0,
-		StartTime:           nowUnixAtCreate,
-		EndTime:             endUnix,
-		Status:              "active",
-		Source:              source,
-		CycleStartAt:        cycleStartAt,
-		CycleUsed:           0,
-		NextCycleResetAt:    nextCycleReset,
-		WeekStartAt:         weekStartUnix(now),
-		WeekUsed:            0,
-		MonthStartAt:        monthStartUnix(now),
-		MonthUsed:           0,
-		UpgradeGroup:        upgradeGroup,
-		PrevUserGroup:       prevGroup,
+		UserId:        userId,
+		PlanId:        plan.Id,
+		AmountUsed:    0,
+		StartTime:     nowUnixAtCreate,
+		EndTime:       endUnix,
+		Status:        "active",
+		Source:        source,
+		WeekStartAt:   weekStartUnix(now),
+		WeekUsed:      0,
+		MonthStartAt:  monthStartUnix(now),
+		MonthUsed:     0,
+		UpgradeGroup:  upgradeGroup,
+		PrevUserGroup: prevGroup,
+		// 动态模型下 AmountTotal 恒为 0（总额度来自窗口），仅保留作展示字段。
 		DowngradeGroup:      strings.TrimSpace(plan.DowngradeGroup),
 		AllowWalletOverflow: allowWalletOverflow,
 		ExclusiveGroup:      strings.TrimSpace(plan.ExclusiveGroup),
@@ -1069,7 +956,7 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 	// 快照当前套餐条款：续费/升降配估值后续都按"旧条款"走，不受套餐编辑影响。
 	sub.SnapshotRenewTerms(plan, nowUnixAtCreate)
 	// 动态窗口模型：初始化各窗口状态（计数 0、从购买时刻锚定；窗口 ≥ 剩余有效期时
-	// next_reset_at=0 进入封顶态，limit 即本订阅总上限）。
+	// next_reset_at=0 进入封顶态，limit 即本订阅总上限；全部窗口额度为 0 = 无限）。
 	if windows := plan.ResetWindows(); len(windows) > 0 {
 		states := make([]WindowState, 0, len(windows))
 		for i, w := range windows {
@@ -1091,6 +978,29 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 func refreshSubscriptionUserGroupCache(userId int, operation string) {
 	if err := RefreshUserGroupCache(userId); err != nil {
 		common.SysError(fmt.Sprintf("failed to refresh user group cache after %s for user %d: %v", operation, userId, err))
+	}
+}
+
+// refreshSubscriptionStamp 把订阅到期标记（全部活跃订阅中最大的 end_time）写进用户缓存，
+// TokenAuth 据此惰性判断该用户是否有订阅已到期。无活跃订阅时清除标记（写 0）。
+// 仅需在订阅生命周期事件（购买/续费/取消/过期）后调用；Redis 未启用或缓存缺失时为空操作，
+// 缺失/陈旧只退化为维护任务兜底，不破坏正确性。
+func refreshSubscriptionStamp(userId int) {
+	if !common.RedisEnabled || userId <= 0 {
+		return
+	}
+	var maxEnd int64
+	if err := DB.Model(&UserSubscription{}).
+		Where("user_id = ? AND status = ?", userId, "active").
+		Select("COALESCE(MAX(end_time), 0)").Scan(&maxEnd).Error; err != nil {
+		common.SysError(fmt.Sprintf("failed to compute subscription stamp for user %d: %v", userId, err))
+		return
+	}
+	if maxEnd <= 0 {
+		maxEnd = 0
+	}
+	if err := updateUserCacheField(userId, "SubsEndAt", maxEnd); err != nil {
+		common.SysLog(fmt.Sprintf("failed to write subscription stamp cache for user %d: %v", userId, err))
 	}
 }
 
@@ -1185,6 +1095,8 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 		refreshSubscriptionUserGroupCache(logUserId, "subscription payment completion")
 	}
 	if logUserId > 0 {
+		// 购买与续费都会改变活跃订阅的到期时间，到期标记须同步（续费不升组也要刷）。
+		refreshSubscriptionStamp(logUserId)
 		msg := fmt.Sprintf("订阅购买成功，套餐: %s，支付金额: %.2f，支付方式: %s", logPlanTitle, logMoney, logPaymentMethod)
 		RecordTopupLogWithPayment(logUserId, msg, logPaymentMethod)
 	}
@@ -1288,6 +1200,7 @@ func AdminBindSubscription(userId int, planId int, sourceNote string) (string, e
 	if err != nil {
 		return "", err
 	}
+	refreshSubscriptionStamp(userId)
 	if groupChanged {
 		refreshSubscriptionUserGroupCache(userId, "admin subscription creation")
 		return fmt.Sprintf("用户分组将升级到 %s", plan.UpgradeGroup), nil
@@ -1699,6 +1612,7 @@ func PurchaseWithStrategy(userId int, planId int, subscriptionId int) (string, e
 			common.SysLog("failed to increase user quota cache after subscription downgrade refund: " + err.Error())
 		}
 	}
+	refreshSubscriptionStamp(userId)
 	if upgradeGroupChanged {
 		refreshSubscriptionUserGroupCache(userId, "subscription purchase")
 	}
@@ -1742,15 +1656,9 @@ func RenewSubscriptionTx(tx *gorm.DB, sub *UserSubscription, plan *SubscriptionP
 		return errors.New("已达该套餐最长可续时长，无法继续续费")
 	}
 	sub.EndTime = endUnix
-	// 动态窗口模型：续费纯延长有效期，不累加累计账本（授权归窗口、消耗归计数、钱归订单）。
-	// legacy 模型保留累加：AmountTotal 仍是总门限。
-	if len(plan.ResetWindows()) == 0 {
-		sub.AmountTotal += terms.TotalAmount
-	}
-	// 注意：不改 CycleStartAt/NextCycleResetAt/各窗口 next_reset_at——续费只延长订阅，
-	// 重置窗口照常按各自 cadence 推进（动态窗口的"封顶态重算"由 advanceSubscriptionWindows
-	// 在续费后的下一次预扣时惰性处理）；若在此重新武装，会吞掉已排期的下一次重置（用户
-	// 损失一个周期的重置额度）。
+	// 注意：不改各窗口 next_reset_at——续费只延长订阅，重置窗口照常按各自 cadence 推进
+	// （动态窗口的"封顶态重算"由 advanceSubscriptionWindows 在续费后的下一次预扣时惰性
+	// 处理）；若在此重新武装，会吞掉已排期的下一次重置（用户损失一个周期的重置额度）。
 	// A user-initiated renewal overrides a pending cancel-at-end and clears any
 	// previous auto-renew failure so the task may retry.
 	sub.CancelAtEnd = false
@@ -1861,6 +1769,7 @@ func UserCancelSubscription(userId int, subscriptionId int, mode string) (string
 	if err != nil {
 		return "", err
 	}
+	refreshSubscriptionStamp(userId)
 	if cacheGroup != "" {
 		refreshSubscriptionUserGroupCache(userId, "subscription cancellation")
 	}
@@ -2014,6 +1923,7 @@ func AutoRenewDueSubscriptions(limit int) (int, error) {
 				common.SysLog("failed to decrease user quota cache after auto renewal: " + err.Error())
 			}
 		}
+		refreshSubscriptionStamp(s.UserId)
 		msg := fmt.Sprintf("订阅自动续费成功，套餐: %s，扣除额度: %d", s.PlanTitle, s.ChargedQuota)
 		RecordTopupLogWithPayment(s.UserId, msg, PaymentMethodBalance)
 	}
@@ -2131,13 +2041,16 @@ func buildSubscriptionSummaries(subs []UserSubscription) []SubscriptionSummary {
 }
 
 // AdminUserSubscriptionSummary enriches a UserSubscription with owner and plan
-// info for the admin global subscriptions view.
+// info for the admin global subscriptions view. Plan carries the full plan
+// snapshot (including reset_windows) so the admin table can render per-window
+// rolling usage; it is omitted when the plan is gone.
 type AdminUserSubscriptionSummary struct {
 	Subscription *UserSubscription `json:"subscription"`
 	Username     string            `json:"username"`
 	Email        string            `json:"email"`
 	DisplayName  string            `json:"display_name"`
 	PlanTitle    string            `json:"plan_title"`
+	Plan         *SubscriptionPlan `json:"plan,omitempty"`
 }
 
 // subscriptionSortColumns maps the admin subscriptions table's sortable column
@@ -2255,6 +2168,21 @@ func GetAllSubscriptionsByAdmin(status string, userKeyword string, planId int, s
 		userMap[u.Id] = u
 	}
 
+	// Bulk-fetch plan snapshots so the admin table can render rolling-window usage
+	// (plan reset_windows + subscription window_state). Mirrors buildSubscriptionSummaries.
+	planIds := make([]int, 0, len(subs))
+	for _, sub := range subs {
+		planIds = append(planIds, sub.PlanId)
+	}
+	planMap := make(map[int]*SubscriptionPlan, len(planIds))
+	var foundPlans []SubscriptionPlan
+	if err := DB.Where("id IN ?", planIds).Find(&foundPlans).Error; err == nil {
+		for i := range foundPlans {
+			foundPlans[i].NormalizeDefaults()
+			planMap[foundPlans[i].Id] = &foundPlans[i]
+		}
+	}
+
 	result := make([]AdminUserSubscriptionSummary, 0, len(subs))
 	for _, sub := range subs {
 		subCopy := sub
@@ -2266,8 +2194,9 @@ func GetAllSubscriptionsByAdmin(status string, userKeyword string, planId int, s
 			item.Email = u.Email
 			item.DisplayName = u.DisplayName
 		}
-		if plan, err := GetSubscriptionPlanById(sub.PlanId); err == nil && plan != nil {
+		if plan, ok := planMap[sub.PlanId]; ok {
 			item.PlanTitle = plan.Title
+			item.Plan = plan
 		}
 		result = append(result, item)
 	}
@@ -2309,6 +2238,9 @@ func AdminInvalidateUserSubscription(userSubscriptionId int) (string, error) {
 	})
 	if err != nil {
 		return "", err
+	}
+	if userId > 0 {
+		refreshSubscriptionStamp(userId)
 	}
 	if cacheGroup != "" && userId > 0 {
 		refreshSubscriptionUserGroupCache(userId, "admin subscription update")
@@ -2357,6 +2289,9 @@ func AdminDeleteUserSubscription(userSubscriptionId int) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if userId > 0 {
+		refreshSubscriptionStamp(userId)
+	}
 	if cacheGroup != "" && userId > 0 {
 		refreshSubscriptionUserGroupCache(userId, "admin subscription deletion")
 	}
@@ -2404,6 +2339,9 @@ func AdminPurgeUserSubscription(userSubscriptionId int) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if userId > 0 {
+		refreshSubscriptionStamp(userId)
+	}
 	if cacheGroup != "" && userId > 0 {
 		refreshSubscriptionUserGroupCache(userId, "admin subscription purge")
 	}
@@ -2418,39 +2356,21 @@ func resetUserSubscriptionTx(tx *gorm.DB, sub *UserSubscription, plan *Subscript
 		return errors.New("invalid reset args")
 	}
 	windows := plan.ResetWindows()
-	if len(windows) > 0 {
-		// 动态模型：重置全部窗口——计数清零、从 now 锚定；advance 决定是否顺延下次
-		// 重置（否则保留原窗口的 next_reset_at）。
-		oldStates := sub.WindowStates()
-		states := make([]WindowState, 0, len(windows))
-		for i := range windows {
-			next := calcWindowNextReset(windows[i], now, sub.EndTime)
-			if !advanceResetTime && i < len(oldStates) && oldStates[i].NextResetAt > 0 {
-				next = oldStates[i].NextResetAt
-			}
-			states = append(states, WindowState{Idx: i, CycleUsed: 0, CycleStartAt: now, NextResetAt: next})
+	if len(windows) == 0 {
+		return errors.New("动态窗口至少需要配置一个窗口")
+	}
+	// 动态模型：重置全部窗口——计数清零、从 now 锚定；advance 决定是否顺延下次
+	// 重置（否则保留原窗口的 next_reset_at）。
+	oldStates := sub.WindowStates()
+	states := make([]WindowState, 0, len(windows))
+	for i := range windows {
+		next := calcWindowNextReset(windows[i], now, sub.EndTime)
+		if !advanceResetTime && i < len(oldStates) && oldStates[i].NextResetAt > 0 {
+			next = oldStates[i].NextResetAt
 		}
-		sub.SetWindowStates(states)
-		return tx.Save(sub).Error
+		states = append(states, WindowState{Idx: i, CycleUsed: 0, CycleStartAt: now, NextResetAt: next})
 	}
-	period := NormalizeResetPeriod(plan.QuotaResetPeriod)
-	if period == SubscriptionResetNever {
-		// No reset period: a manual reset grants the full TotalAmount again.
-		sub.AmountUsed = 0
-	} else {
-		// Reset cycle: grant a fresh cycle, keep the cumulative AmountUsed.
-		sub.CycleUsed = 0
-		sub.CycleStartAt = now
-	}
-	// 自然周/月上限一并清零并重起点：手动重置必须把全部门限刷新（修复历史缺口——
-	// 只清周期/总额、周/月上限仍卡着用户导致"半拉子重置"）。
-	sub.WeekUsed = 0
-	sub.WeekStartAt = now
-	sub.MonthUsed = 0
-	sub.MonthStartAt = now
-	if advanceResetTime {
-		sub.NextCycleResetAt = calcNextResetTime(time.Unix(now, 0), plan, sub.EndTime)
-	}
+	sub.SetWindowStates(states)
 	return tx.Save(sub).Error
 }
 
@@ -2483,44 +2403,6 @@ func ApplyPlanWindowsToActiveSubscriptions(tx *gorm.DB, plan *SubscriptionPlan, 
 			})
 		}
 		subs[i].SetWindowStates(states)
-		if err := tx.Save(&subs[i]).Error; err != nil {
-			return 0, err
-		}
-		count++
-	}
-	return count, nil
-}
-
-// ApplyPlanLegacyToActiveSubscriptions 用套餐当前的 legacy 上限字段重置其全部活跃订阅的
-// legacy 计数（总额度重授、周期/周/月清零、窗口状态清空），返回受影响订阅数。管理端把
-// 套餐从动态窗口转回 legacy 时调用，对称于 ApplyPlanWindowsToActiveSubscriptions 的
-// "改动即重置"——转换方向不论哪边都是重定义配额，不映射旧计数。
-// 不复用 resetUserSubscriptionTx：重置保留 AmountTotal，而转换要重设为新套餐 TotalAmount。
-func ApplyPlanLegacyToActiveSubscriptions(tx *gorm.DB, plan *SubscriptionPlan, now int64) (int64, error) {
-	if tx == nil || plan == nil || plan.Id <= 0 {
-		return 0, errors.New("invalid args")
-	}
-	if len(plan.ResetWindows()) > 0 {
-		return 0, nil
-	}
-	var subs []UserSubscription
-	if err := lockForUpdate(tx).
-		Where("plan_id = ? AND status = ? AND end_time > ?", plan.Id, "active", now).
-		Find(&subs).Error; err != nil {
-		return 0, err
-	}
-	count := int64(0)
-	for i := range subs {
-		subs[i].AmountTotal = plan.TotalAmount
-		subs[i].AmountUsed = 0
-		subs[i].CycleUsed = 0
-		subs[i].CycleStartAt = now
-		subs[i].WeekUsed = 0
-		subs[i].WeekStartAt = now
-		subs[i].MonthUsed = 0
-		subs[i].MonthStartAt = now
-		subs[i].SetWindowStates(nil)
-		subs[i].NextCycleResetAt = calcNextResetTime(time.Unix(now, 0), plan, subs[i].EndTime)
 		if err := tx.Save(&subs[i]).Error; err != nil {
 			return 0, err
 		}
@@ -2639,6 +2521,110 @@ type SubscriptionPreConsumeResult struct {
 	AmountUsedAfter    int64
 }
 
+// expireUserSubscriptionsTx marks all of a user's due active subscriptions as
+// expired and downgrades the group when the subscription had elevated it.
+// Returns the number of subscriptions expired and the downgrade target (empty
+// when the group did not change). Caller owns the transaction; group cache and
+// subscription stamp refresh belong to the caller after commit.
+func expireUserSubscriptionsTx(tx *gorm.DB, userId int, now int64) (int, string, error) {
+	if tx == nil || userId <= 0 {
+		return 0, "", errors.New("invalid expire args")
+	}
+	res := tx.Model(&UserSubscription{}).
+		Where("user_id = ? AND status = ? AND end_time > 0 AND end_time <= ?", userId, "active", now).
+		Updates(map[string]interface{}{
+			"status":     "expired",
+			"updated_at": common.GetTimestamp(),
+		})
+	if res.Error != nil {
+		return 0, "", res.Error
+	}
+	expired := int(res.RowsAffected)
+	if expired == 0 || !common.SubscriptionGroupUpgradeEnabled {
+		// 组升降级功能关闭：到期只标记状态，不改用户组。
+		return expired, "", nil
+	}
+	// If there's an active upgraded subscription, keep current group.
+	var activeSub UserSubscription
+	activeQuery := tx.Where("user_id = ? AND status = ? AND end_time > ? AND upgrade_group <> ''",
+		userId, "active", now).
+		Order("end_time desc, id desc").
+		Limit(1).
+		Find(&activeSub)
+	if activeQuery.Error == nil && activeQuery.RowsAffected > 0 {
+		return expired, "", nil
+	}
+	// Find the most recently expired subscription that defines a group transition
+	// (an explicit downgrade target or an upgrade snapshot to revert).
+	var lastExpired UserSubscription
+	expiredQuery := tx.Where("user_id = ? AND status = ? AND (downgrade_group <> '' OR upgrade_group <> '')",
+		userId, "expired").
+		Order("end_time desc, id desc").
+		Limit(1).
+		Find(&lastExpired)
+	if expiredQuery.Error != nil || expiredQuery.RowsAffected == 0 {
+		return expired, "", nil
+	}
+	currentGroup, err := getUserGroupByIdTx(tx, userId)
+	if err != nil {
+		return expired, "", err
+	}
+	// An explicit downgrade group takes precedence; otherwise revert to the
+	// group held before purchase (legacy behavior, only when the subscription
+	// actually elevated the user).
+	target := strings.TrimSpace(lastExpired.DowngradeGroup)
+	if target == "" {
+		upgradeGroup := strings.TrimSpace(lastExpired.UpgradeGroup)
+		prevGroup := strings.TrimSpace(lastExpired.PrevUserGroup)
+		if upgradeGroup == "" || prevGroup == "" {
+			return expired, "", nil
+		}
+		if currentGroup != upgradeGroup {
+			return expired, "", nil
+		}
+		target = prevGroup
+	}
+	if target == "" || target == currentGroup {
+		return expired, "", nil
+	}
+	if err := tx.Model(&User{}).Where("id = ?", userId).
+		Update("group", target).Error; err != nil {
+		return expired, "", err
+	}
+	return expired, target, nil
+}
+
+// LazyExpireUserSubscriptions 在请求路径惰性处理该用户已到期的活跃订阅：标记 expired
+// 并按订阅回退分组。与 ExpireDueSubscriptions（维护任务）互补——任务受 tick 间隔约束，
+// 惰性路径让降级在到期后的下一次请求即生效。幂等：并发请求时后到者 UPDATE 0 行即跳过
+// 回退，只顺带把到期标记修复正确。Redis 未启用时同样会标记过期并回退，仅跳过缓存刷新。
+func LazyExpireUserSubscriptions(userId int) (bool, error) {
+	if userId <= 0 {
+		return false, errors.New("invalid userId")
+	}
+	now := GetDBTimestamp()
+	downgraded := false
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		_, target, err := expireUserSubscriptionsTx(tx, userId, now)
+		if err != nil {
+			return err
+		}
+		if target != "" {
+			downgraded = true
+		}
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	// 无条件刷新到期标记：标记可能是过时的（订阅已续费/已被处理），顺手修复为当前真值。
+	refreshSubscriptionStamp(userId)
+	if downgraded {
+		refreshSubscriptionUserGroupCache(userId, "lazy subscription expiration")
+	}
+	return downgraded, nil
+}
+
 // ExpireDueSubscriptions marks expired subscriptions and handles group downgrade.
 func ExpireDueSubscriptions(limit int) (int, error) {
 	if limit <= 0 {
@@ -2665,75 +2651,18 @@ func ExpireDueSubscriptions(limit int) (int, error) {
 	for userId := range userIds {
 		cacheGroup := ""
 		err := DB.Transaction(func(tx *gorm.DB) error {
-			res := tx.Model(&UserSubscription{}).
-				Where("user_id = ? AND status = ? AND end_time > 0 AND end_time <= ?", userId, "active", now).
-				Updates(map[string]interface{}{
-					"status":     "expired",
-					"updated_at": common.GetTimestamp(),
-				})
-			if res.Error != nil {
-				return res.Error
-			}
-			expiredCount += int(res.RowsAffected)
-
-			if !common.SubscriptionGroupUpgradeEnabled {
-				return nil // 组升降级功能关闭：到期只标记状态，不改用户组
-			}
-
-			// If there's an active upgraded subscription, keep current group.
-			var activeSub UserSubscription
-			activeQuery := tx.Where("user_id = ? AND status = ? AND end_time > ? AND upgrade_group <> ''",
-				userId, "active", now).
-				Order("end_time desc, id desc").
-				Limit(1).
-				Find(&activeSub)
-			if activeQuery.Error == nil && activeQuery.RowsAffected > 0 {
-				return nil
-			}
-
-			// Find the most recently expired subscription that defines a group transition
-			// (an explicit downgrade target or an upgrade snapshot to revert).
-			var lastExpired UserSubscription
-			expiredQuery := tx.Where("user_id = ? AND status = ? AND (downgrade_group <> '' OR upgrade_group <> '')",
-				userId, "expired").
-				Order("end_time desc, id desc").
-				Limit(1).
-				Find(&lastExpired)
-			if expiredQuery.Error != nil || expiredQuery.RowsAffected == 0 {
-				return nil
-			}
-			currentGroup, err := getUserGroupByIdTx(tx, userId)
+			expired, target, err := expireUserSubscriptionsTx(tx, userId, now)
 			if err != nil {
 				return err
 			}
-			// An explicit downgrade group takes precedence; otherwise revert to the
-			// group held before purchase (legacy behavior, only when the subscription
-			// actually elevated the user).
-			target := strings.TrimSpace(lastExpired.DowngradeGroup)
-			if target == "" {
-				upgradeGroup := strings.TrimSpace(lastExpired.UpgradeGroup)
-				prevGroup := strings.TrimSpace(lastExpired.PrevUserGroup)
-				if upgradeGroup == "" || prevGroup == "" {
-					return nil
-				}
-				if currentGroup != upgradeGroup {
-					return nil
-				}
-				target = prevGroup
-			}
-			if target == "" || target == currentGroup {
-				return nil
-			}
-			if err := tx.Model(&User{}).Where("id = ?", userId).
-				Update("group", target).Error; err != nil {
-				return err
-			}
+			expiredCount += expired
 			cacheGroup = target
 			return nil
 		})
 		if err != nil {
 			return expiredCount, err
 		}
+		refreshSubscriptionStamp(userId)
 		if cacheGroup != "" {
 			refreshSubscriptionUserGroupCache(userId, "subscription expiration")
 		}
@@ -2766,50 +2695,13 @@ func (r *SubscriptionPreConsumeRecord) BeforeUpdate(tx *gorm.DB) error {
 }
 
 // subscriptionRemaining returns the quota still available on a subscription after
-// the caller has already advanced its windows. Each cap is independent and only
-// applies when configured, so a zero TotalAmount (unlimited) never disables the
-// cycle/week/month caps and a reset period never erases calendar usage.
-// Returns math.MaxInt64 when nothing limits the subscription.
+// the caller has already advanced its windows. All windows limit<=0 (unlimited)
+// yields math.MaxInt64. Returns math.MaxInt64 when nothing limits the subscription.
 func subscriptionRemaining(sub *UserSubscription, plan *SubscriptionPlan) int64 {
 	if sub == nil || plan == nil {
 		return 0
 	}
-	windows := plan.ResetWindows()
-	if len(windows) > 0 {
-		return subscriptionRemainingWindows(sub, windows)
-	}
-	remaining := int64(math.MaxInt64)
-	period := NormalizeResetPeriod(plan.QuotaResetPeriod)
-	// TotalAmount is a cumulative cap only when no reset period exists or when a
-	// per-cycle cap is configured on top of it; otherwise it is the per-cycle grant.
-	cumulativeTotal := period == SubscriptionResetNever || plan.ResetAmountLimit > 0
-	if cumulativeTotal && sub.AmountTotal > 0 {
-		if r := sub.AmountTotal - sub.AmountUsed; r < remaining {
-			remaining = r
-		}
-	}
-	if period != SubscriptionResetNever {
-		grant := plan.ResetAmountLimit
-		if grant <= 0 {
-			grant = sub.AmountTotal
-		}
-		if grant > 0 {
-			if r := grant - sub.CycleUsed; r < remaining {
-				remaining = r
-			}
-		}
-	}
-	if plan.WeeklyAmountLimit > 0 {
-		if r := plan.WeeklyAmountLimit - sub.WeekUsed; r < remaining {
-			remaining = r
-		}
-	}
-	if plan.MonthlyAmountLimit > 0 {
-		if r := plan.MonthlyAmountLimit - sub.MonthUsed; r < remaining {
-			remaining = r
-		}
-	}
-	return remaining
+	return subscriptionRemainingWindows(sub, plan.ResetWindows())
 }
 
 // subscriptionRemainingWindows 返回动态模型的剩余额度：所有窗口剩余的最小值。
@@ -2923,17 +2815,11 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 				return err
 			}
 			sub.AmountUsed += amount
-			if len(windows) > 0 {
-				// 动态：累加到全部窗口计数（AmountUsed 仅保留作累计展示）；
-				// 自然周/月计数同步累加，供钱包卡「订阅抵扣」按日历月统计（不作上限）。
-				addWindowUsage(&sub, windows, amount)
-				sub.WeekUsed += amount
-				sub.MonthUsed += amount
-			} else {
-				sub.CycleUsed += amount
-				sub.WeekUsed += amount
-				sub.MonthUsed += amount
-			}
+			// 累加到全部窗口计数（AmountUsed 仅保留作累计展示）；自然周/月计数同步累加，
+			// 供钱包卡「订阅抵扣」按日历月统计（不作上限）。
+			addWindowUsage(&sub, windows, amount)
+			sub.WeekUsed += amount
+			sub.MonthUsed += amount
 			if err := tx.Save(&sub).Error; err != nil {
 				return err
 			}
@@ -2976,54 +2862,6 @@ func RefundSubscriptionPreConsume(requestId string) error {
 		record.Status = "refunded"
 		return tx.Save(&record).Error
 	})
-}
-
-// ResetDueSubscriptions proactively advances the reset-cycle windows of
-// subscriptions whose next_cycle_reset_at has passed. This only keeps admin views
-// and notifications fresh; correctness does not depend on it because
-// PreConsumeUserSubscription advances windows lazily before every cap check.
-func ResetDueSubscriptions(limit int) (int, error) {
-	if limit <= 0 {
-		limit = 200
-	}
-	now := GetDBTimestamp()
-	var subs []UserSubscription
-	if err := DB.Where("next_cycle_reset_at > 0 AND next_cycle_reset_at <= ? AND status = ?", now, "active").
-		Order("next_cycle_reset_at asc").
-		Limit(limit).
-		Find(&subs).Error; err != nil {
-		return 0, err
-	}
-	if len(subs) == 0 {
-		return 0, nil
-	}
-	resetCount := 0
-	for _, sub := range subs {
-		subCopy := sub
-		plan, err := getSubscriptionPlanByIdTx(nil, sub.PlanId)
-		if err != nil || plan == nil {
-			continue
-		}
-		err = DB.Transaction(func(tx *gorm.DB) error {
-			var locked UserSubscription
-			if err := lockForUpdate(tx).
-				Where("id = ? AND next_cycle_reset_at > 0 AND next_cycle_reset_at <= ?", subCopy.Id, now).
-				First(&locked).Error; err != nil {
-				return nil
-			}
-			if advanceSubscriptionWindows(&locked, plan, now) {
-				if err := tx.Save(&locked).Error; err != nil {
-					return err
-				}
-			}
-			resetCount++
-			return nil
-		})
-		if err != nil {
-			return resetCount, err
-		}
-	}
-	return resetCount, nil
 }
 
 // CleanupSubscriptionPreConsumeRecords removes old idempotency records to keep table small.
@@ -3092,44 +2930,22 @@ func PostConsumeUserSubscriptionDelta(db *gorm.DB, userSubscriptionId int, delta
 		if plan != nil {
 			windows = plan.ResetWindows()
 		}
-		if len(windows) > 0 {
-			// 动态模型：无条件跳过累计账本 guard（HOLE D——total_amount>0 的动态订阅
-			// 结算时不得因展示用 AmountUsed 越过 total 而报错），只对窗口计数反向回填。
-			sub.AmountUsed = clampNonNegative(sub.AmountUsed + delta)
-			states := sub.WindowStates()
-			changed := false
-			for i := range windows {
-				if i >= len(states) {
-					continue
-				}
-				states[i].CycleUsed = clampNonNegative(states[i].CycleUsed + delta)
-				changed = true
+		// 动态模型：对窗口计数反向回填（正数补扣、负数退还）。AmountUsed 仅作累计展示，
+		// 不再有 legacy 的总额门限 guard。
+		sub.AmountUsed = clampNonNegative(sub.AmountUsed + delta)
+		states := sub.WindowStates()
+		changed := false
+		for i := range windows {
+			if i >= len(states) {
+				continue
 			}
-			if changed {
-				sub.SetWindowStates(states)
-			}
-			// 自然周/月展示计数同步按差额修正（与 legacy 结算一致，保持日历月统计准确）。
-			sub.WeekUsed = clampNonNegative(sub.WeekUsed + delta)
-			sub.MonthUsed = clampNonNegative(sub.MonthUsed + delta)
-			return tx.Save(&sub).Error
+			states[i].CycleUsed = clampNonNegative(states[i].CycleUsed + delta)
+			changed = true
 		}
-		// AmountTotal is a cumulative cap only when the plan has no reset period or
-		// has a per-cycle cap on top; otherwise usage legitimately exceeds it across
-		// cycles, so the guard is skipped.
-		cumulativeTotal := true
-		if plan != nil {
-			period := NormalizeResetPeriod(plan.QuotaResetPeriod)
-			cumulativeTotal = period == SubscriptionResetNever || plan.ResetAmountLimit > 0
+		if changed {
+			sub.SetWindowStates(states)
 		}
-		newUsed := sub.AmountUsed + delta
-		if newUsed < 0 {
-			newUsed = 0
-		}
-		if cumulativeTotal && sub.AmountTotal > 0 && newUsed > sub.AmountTotal {
-			return fmt.Errorf("subscription used exceeds total, used=%d total=%d", newUsed, sub.AmountTotal)
-		}
-		sub.AmountUsed = newUsed
-		sub.CycleUsed = clampNonNegative(sub.CycleUsed + delta)
+		// 自然周/月展示计数同步按差额修正，保持日历月统计准确。
 		sub.WeekUsed = clampNonNegative(sub.WeekUsed + delta)
 		sub.MonthUsed = clampNonNegative(sub.MonthUsed + delta)
 		return tx.Save(&sub).Error

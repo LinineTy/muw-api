@@ -15,7 +15,10 @@ import (
 )
 
 const (
-	subscriptionResetTickInterval = 1 * time.Minute
+	// 订阅维护 tick：10s。过期回退/自动续费/窗口重置都受此节奏约束，用户常用 30s 级
+	// 短订阅，1 分钟 tick 会让分组回退滞后接近两个订阅生命周期。惰性过期（请求路径）
+	// 已让有请求的场景即时生效，这里只作无请求场景的兜底。
+	subscriptionResetTickInterval = 10 * time.Second
 	subscriptionResetBatchSize    = 300
 	subscriptionCleanupInterval   = 30 * time.Minute
 )
@@ -51,7 +54,6 @@ func runSubscriptionQuotaResetOnce() {
 	defer subscriptionResetRunning.Store(false)
 
 	ctx := context.Background()
-	totalReset := 0
 	totalExpired := 0
 	for {
 		n, err := model.ExpireDueSubscriptions(subscriptionResetBatchSize)
@@ -63,20 +65,6 @@ func runSubscriptionQuotaResetOnce() {
 			break
 		}
 		totalExpired += n
-		if n < subscriptionResetBatchSize {
-			break
-		}
-	}
-	for {
-		n, err := model.ResetDueSubscriptions(subscriptionResetBatchSize)
-		if err != nil {
-			logger.LogWarn(ctx, fmt.Sprintf("subscription quota reset task failed: %v", err))
-			return
-		}
-		if n == 0 {
-			break
-		}
-		totalReset += n
 		if n < subscriptionResetBatchSize {
 			break
 		}
@@ -93,7 +81,7 @@ func runSubscriptionQuotaResetOnce() {
 			subscriptionCleanupLast.Store(time.Now().Unix())
 		}
 	}
-	if common.DebugEnabled && (totalReset > 0 || totalExpired > 0) {
-		logger.LogDebug(ctx, "subscription maintenance: reset_count=%d, expired_count=%d", totalReset, totalExpired)
+	if common.DebugEnabled && totalExpired > 0 {
+		logger.LogDebug(ctx, "subscription maintenance: expired_count=%d", totalExpired)
 	}
 }

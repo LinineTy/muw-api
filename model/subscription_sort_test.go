@@ -98,3 +98,42 @@ func TestGetAllSubscriptionsByAdminSorting(t *testing.T) {
 	run("id", "asc", []int{7951, 7952, 7953})
 	run("bogus", "", []int{7952, 7953, 7951})
 }
+
+// TestGetAllSubscriptionsByAdminIncludesPlan verifies the admin list attaches the
+// full plan snapshot (reset_windows included) so the frontend can render per-window
+// rolling usage. This is the API contract the admin usage column depends on.
+func TestGetAllSubscriptionsByAdminIncludesPlan(t *testing.T) {
+	now := GetDBTimestamp()
+	const userId = 99212
+
+	seedQuotaPlan(t, 730501, &SubscriptionPlan{
+		Title:           "Rolling window plan",
+		PriceAmount:     9.9,
+		DurationUnit:    "day",
+		DurationValue:   30,
+		ResetWindowsRaw: `[{"unit":"day","value":7,"limit":10000},{"unit":"month","value":1,"limit":50000}]`,
+	})
+	seedQuotaSub(t, 7961, &UserSubscription{
+		UserId:    userId,
+		PlanId:    730501,
+		Status:    "active",
+		StartTime: now - 100,
+		EndTime:   now + 100,
+	})
+
+	items, total, err := GetAllSubscriptionsByAdmin(
+		"", strconv.Itoa(userId), 0, 0, 20,
+		NewSubscriptionSortOptions("id", "asc"),
+	)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), total)
+	require.Len(t, items, 1)
+	require.NotNil(t, items[0].Plan)
+	assert.Equal(t, "Rolling window plan", items[0].PlanTitle)
+	assert.Equal(t,
+		`[{"unit":"day","value":7,"limit":10000},{"unit":"month","value":1,"limit":50000}]`,
+		items[0].Plan.ResetWindowsRaw)
+	windows := items[0].Plan.ResetWindows()
+	require.Len(t, windows, 2)
+	assert.Equal(t, int64(10000), windows[0].Limit)
+}

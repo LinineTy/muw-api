@@ -46,7 +46,6 @@ func TestSubscriptionGroupTransitionsPreserveAuthVersionAndSessions(t *testing.T
 		Title:         "Upgraded",
 		DurationUnit:  SubscriptionDurationMonth,
 		DurationValue: 1,
-		TotalAmount:   100,
 		UpgradeGroup:  "pro",
 		Enabled:       true,
 	}
@@ -116,7 +115,6 @@ func TestSubscriptionGroupCacheRefreshFailureDoesNotChangeCommittedResult(t *tes
 		Title:         "Cache failure plan",
 		DurationUnit:  SubscriptionDurationMonth,
 		DurationValue: 1,
-		TotalAmount:   100,
 		UpgradeGroup:  "pro",
 		Enabled:       true,
 	}

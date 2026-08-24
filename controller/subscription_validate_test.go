@@ -41,24 +41,20 @@ func TestValidateResetWindowsOrdering(t *testing.T) {
 	assert.Error(t, validateResetWindows(equalDuration))
 }
 
-// validatePlanResetWindows 的套餐级护栏：空串=legacy 合法；空数组/全 0 窗口=无上限陷阱，
-// 拒绝并引导用 legacy 的无限额度；互斥校验在窗口存在时仍生效。
+// validatePlanResetWindows 的套餐级护栏：动态窗口是唯一额度模型——空串/空数组拒绝，
+// 全 0 窗口 = 无限额度（合法）。
 func TestValidatePlanResetWindowsGuards(t *testing.T) {
-	// 空串 = legacy 路径，合法。
-	require.NoError(t, validatePlanResetWindows(model.SubscriptionPlan{ResetWindowsRaw: ""}))
+	// 空串：legacy 已移除，必须至少一个窗口。
+	assert.Error(t, validatePlanResetWindows(model.SubscriptionPlan{ResetWindowsRaw: ""}))
 
-	// 空数组 []：非空串但没有任何窗口 → 拒绝（避免运行时分裂成"无限 legacy"）。
+	// 空数组 []：非空串但没有任何窗口 → 拒绝。
 	assert.Error(t, validatePlanResetWindows(model.SubscriptionPlan{ResetWindowsRaw: "[]"}))
 
-	// 全部窗口 limit=0：等于无上限 → 拒绝。
+	// 全部窗口 limit=0 = 无限额度 → 合法（动态模型显式无限）。
 	allZero := `[{"unit":"hour","value":5,"limit":0},{"unit":"day","value":1,"limit":0}]`
-	assert.Error(t, validatePlanResetWindows(model.SubscriptionPlan{ResetWindowsRaw: allZero}))
+	require.NoError(t, validatePlanResetWindows(model.SubscriptionPlan{ResetWindowsRaw: allZero}))
 
 	// 至少一个 limit>0 → 通过。
 	valid := `[{"unit":"hour","value":5,"limit":10},{"unit":"day","value":1,"limit":200}]`
 	require.NoError(t, validatePlanResetWindows(model.SubscriptionPlan{ResetWindowsRaw: valid}))
-
-	// 动态窗口与 legacy 上限字段互斥仍生效。
-	conflict := `[{"unit":"day","value":1,"limit":10}]`
-	assert.Error(t, validatePlanResetWindows(model.SubscriptionPlan{ResetWindowsRaw: conflict, WeeklyAmountLimit: 50}))
 }
