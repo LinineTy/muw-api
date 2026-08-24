@@ -43,7 +43,7 @@
 
 ## 已知注意事项
 
-- **孤儿表 / 残留列保留**：`checkins`、`_bak_*` 等旧备份表，以及 `users.stripe_customer`、`subscription_plans.stripe_price_id/creem_product_id/waffo_pancake_product_id` 等旧列，升级后原样保留、不影响运行，当前版本不做清理。
+- **孤儿表 / 残留列（升级保留，可手动清理）**：`checkins`、`_bak_*` 等旧备份表，以及 `users.stripe_customer`、`subscription_plans.stripe_price_id/creem_product_id/waffo_pancake_product_id` 等旧列，升级后原样保留、不影响运行。代码不自动清理（`ensureDropLegacySubscriptionPlanColumns` 仅覆盖旧配额列，不含上述支付列），需手动 DROP；2026-08-25 新库升级遇同类残留可先 dump 备份再删除。
 - **额度池从零开始**：额度池已收敛为单池（`quota_claim_records` + `options` 配置），旧 `quota_pools`/`checkins` 的历史领取/打卡数据不会回迁，升级后需在管理端重新配置额度池规则。
 - **MySQL 1101（TEXT 默认值）已修复**：`subscription_plans.allowed_groups` 曾因 `text DEFAULT ''` 导致 MySQL 迁移报错 `Error 1101`，当前版本已移除该默认值。
 - **反复 ALTER 已消除**：`subscription_plans.enabled/is_recommended`、`custom_oauth_providers.enabled` 的 `gorm:"default:true/false"` 及 `price_amount` 的 `default:0` 已按项目规范移除，避免 MySQL/PostgreSQL 每次启动重复执行 `ALTER TABLE`。
