@@ -141,9 +141,10 @@ type RelayInfo struct {
 	SubscriptionPlanTitle string
 	// RequestId is used for idempotent pre-consume/refund
 	RequestId string
-	// SubscriptionAmountTotal / SubscriptionAmountUsedAfterPreConsume are used to compute remaining in logs.
-	SubscriptionAmountTotal               int64
-	SubscriptionAmountUsedAfterPreConsume int64
+	// SubscriptionRemaining is the subscription quota remaining after pre-consume
+	// (dynamic-window remaining; math.MaxInt64 = unlimited). Used for quota-exceeded
+	// notifications and consume-log remaining display.
+	SubscriptionRemaining int64
 	IsClaudeBetaQuery                     bool // /v1/messages?beta=true
 	IsChannelTest                         bool // channel test request
 	RetryIndex                            int

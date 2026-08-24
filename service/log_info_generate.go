@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/base64"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -182,24 +183,16 @@ func appendBillingInfo(relayInfo *relaycommon.RelayInfo, other map[string]interf
 		}
 		// Compute "this request" subscription consumed + remaining
 		consumed := relayInfo.SubscriptionPreConsumed + relayInfo.SubscriptionPostDelta
-		usedFinal := relayInfo.SubscriptionAmountUsedAfterPreConsume + relayInfo.SubscriptionPostDelta
 		if consumed < 0 {
 			consumed = 0
 		}
-		if usedFinal < 0 {
-			usedFinal = 0
-		}
-		if relayInfo.SubscriptionAmountTotal > 0 {
-			remain := relayInfo.SubscriptionAmountTotal - usedFinal
-			if remain < 0 {
-				remain = 0
-			}
-			other["subscription_total"] = relayInfo.SubscriptionAmountTotal
-			other["subscription_used"] = usedFinal
-			other["subscription_remain"] = remain
-		}
 		if consumed > 0 {
 			other["subscription_consumed"] = consumed
+		}
+		// 动态窗口模型：剩余额度 = 预扣后窗口剩余（subscription_remain）；无限额度
+		// （全部窗口 limit<=0，剩余为 math.MaxInt64）不写——没有单一总额可展示。
+		if relayInfo.SubscriptionRemaining > 0 && relayInfo.SubscriptionRemaining < math.MaxInt64 {
+			other["subscription_remain"] = relayInfo.SubscriptionRemaining
 		}
 		// Wallet quota is not deducted when billed from subscription.
 		other["wallet_quota_deducted"] = 0
