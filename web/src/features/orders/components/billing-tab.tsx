@@ -54,6 +54,8 @@ import {
 } from '@/features/wallet/lib/billing'
 import type { TopupRecord } from '@/features/wallet/types'
 
+import { usePaymentMethodOptions } from '../hooks/use-payment-method-options'
+
 /**
  * 充值记录 / 订阅订单合并列表：服务端分页 + 搜索 + 类型/状态/支付方式筛选 + 视图切换。
  * 管理员可补单（充值 pending → 补 quota；订阅 pending → 补单创建订阅 / 驳回关闭）。
@@ -66,6 +68,8 @@ export function BillingTab() {
   const [completeSubTarget, setCompleteSubTarget] = useState<string | null>(null)
   const [rejectTarget, setRejectTarget] = useState<string | null>(null)
   const { copyToClipboard, copiedText } = useCopyToClipboard({ notify: false })
+  // 支付方式筛选选项与列显示名均来自管理员配置的 PayMethods（+固定「余额」），随配置变化，不硬编码。
+  const { payMethods, options: methodOptions } = usePaymentMethodOptions(true)
 
   const statusFilter = useMemo(
     () =>
@@ -214,7 +218,7 @@ export function BillingTab() {
         header: t('Payment Method'),
         cell: ({ row }) => (
           <span className='text-sm font-medium'>
-            {getPaymentMethodName(row.original.payment_method, t)}
+            {getPaymentMethodName(row.original.payment_method, t, payMethods)}
           </span>
         ),
         size: 140,
@@ -321,6 +325,7 @@ export function BillingTab() {
     completingSub,
     copiedText,
     copyToClipboard,
+    payMethods,
   ])
 
   const resetPage = useCallback(() => {
@@ -435,12 +440,7 @@ export function BillingTab() {
             {
               columnId: 'payment_method',
               title: t('Payment Method'),
-              options: [
-                { label: 'All Payment Methods', value: 'all' },
-                { label: 'Alipay', value: 'alipay' },
-                { label: 'WeChat Pay', value: 'wxpay' },
-                { label: 'Balance', value: 'balance' },
-              ],
+              options: methodOptions,
               singleSelect: true,
             },
           ],

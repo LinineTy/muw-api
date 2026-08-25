@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import type { StatusBadgeProps } from '@/components/status-badge'
 import { formatTimestampToDate } from '@/lib/format'
 
-import type { TopupStatus } from '../types'
+import type { PaymentMethod, TopupStatus } from '../types'
 
 // ============================================================================
 // Billing Utility Functions
@@ -65,12 +65,20 @@ export const PAYMENT_METHOD_NAMES: Record<string, string> = {
 }
 
 /**
- * Get payment method display name
+ * Get payment method display name.
+ * 优先用管理员配置的 PayMethods 名称（type → name），未命中再回退内置映射表，
+ * 最后回退原始 type。让订单列里自定义渠道（如 epay 配的 "linuxdo credit"）显示配置名，
+ * 而不是裸 type。
  */
 export function getPaymentMethodName(
   method: string,
-  t?: (key: string) => string
+  t?: (key: string) => string,
+  payMethods?: PaymentMethod[]
 ): string {
+  if (payMethods) {
+    const configured = payMethods.find((pm) => pm.type === method)
+    if (configured?.name) return configured.name
+  }
   const name = PAYMENT_METHOD_NAMES[method] || method
   return t ? t(name) : name
 }

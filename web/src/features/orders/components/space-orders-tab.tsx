@@ -52,6 +52,7 @@ import {
 } from '@/features/wallet/lib/billing'
 
 import { useSpaceOrders } from '../hooks/use-space-orders'
+import { usePaymentMethodOptions } from '../hooks/use-payment-method-options'
 import type { SpaceOrderRecord } from '../types'
 
 /**
@@ -65,6 +66,8 @@ export function SpaceOrdersTab() {
   const [completeTarget, setCompleteTarget] = useState<string | null>(null)
   const [rejectTarget, setRejectTarget] = useState<string | null>(null)
   const { copyToClipboard, copiedText } = useCopyToClipboard({ notify: false })
+  // 支付方式筛选选项与列显示名均来自管理员配置的 PayMethods（云空间订单无余额支付，不追加「余额」）。
+  const { payMethods, options: methodOptions } = usePaymentMethodOptions(false)
 
   const statusFilter = useMemo(
     () =>
@@ -175,7 +178,7 @@ export function SpaceOrdersTab() {
         header: t('Payment Method'),
         cell: ({ row }) => (
           <span className='text-sm font-medium'>
-            {getPaymentMethodName(row.original.payment_method, t)}
+            {getPaymentMethodName(row.original.payment_method, t, payMethods)}
           </span>
         ),
         size: 140,
@@ -242,7 +245,7 @@ export function SpaceOrdersTab() {
     )
 
     return cols
-  }, [t, isAdmin, completing, copiedText, copyToClipboard])
+  }, [t, isAdmin, completing, copiedText, copyToClipboard, payMethods])
 
   const resetPage = useCallback(() => {
     if (page > 1) {
@@ -337,11 +340,7 @@ export function SpaceOrdersTab() {
             {
               columnId: 'payment_method',
               title: t('Payment Method'),
-              options: [
-                { label: 'All Payment Methods', value: 'all' },
-                { label: 'Alipay', value: 'alipay' },
-                { label: 'WeChat Pay', value: 'wxpay' },
-              ],
+              options: methodOptions,
               singleSelect: true,
             },
           ],
