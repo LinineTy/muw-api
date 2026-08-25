@@ -99,6 +99,12 @@ export type SiteSettings = {
   Notice: string
   SystemName: string
   Logo: string
+  /** 全局背景图 URL(液态玻璃主题等消费),存 option key BackgroundImage */
+  BackgroundImage: string
+  /** 玻璃预设背景图遮罩强度(0~0.95 小数串),存 option key GlassMaskOpacity */
+  GlassMaskOpacity: string
+  /** 玻璃预设背景图整体亮度(系数小数串,1 = 原样),存 option key GlassBrightness */
+  GlassBrightness: string
   Footer: string
   About: string
   HomePageContent: string

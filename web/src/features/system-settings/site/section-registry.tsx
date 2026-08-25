@@ -39,6 +39,9 @@ const SITE_SECTIONS = [
         defaultValues={{
           SystemName: settings.SystemName,
           Logo: settings.Logo,
+          BackgroundImage: settings.BackgroundImage,
+          GlassMaskOpacity: settings.GlassMaskOpacity,
+          GlassBrightness: settings.GlassBrightness,
           Footer: settings.Footer,
           ServerAddress: settings.ServerAddress,
         }}
