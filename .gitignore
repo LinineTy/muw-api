@@ -49,6 +49,9 @@ skills-lock.json
 
 # Local-only live probes and scratch test workspaces.
 .local-tests/
+
+# 本地玻璃主题调试工作区(mock 页面 + 服务日志),不提交
+.glass-mock/
 service/relayconvert/chat_responses_live_local_test.go
 service/openaicompat/chat_responses_live_local_test.go
 go.work
