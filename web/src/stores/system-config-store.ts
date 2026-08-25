@@ -42,10 +42,21 @@ export interface SystemConfig {
   systemName: string
   logo: string
   footerHtml?: string
+  /** 全局背景图 URL,由管理员在系统设置中配置;液态玻璃预设消费为 --app-bg-photo */
+  backgroundImage?: string
+  /** 玻璃预设背景图遮罩强度(0~0.95),驯服明暗差异较大的照片 */
+  glassMaskOpacity: number
+  /** 玻璃预设背景图整体亮度(系数,1 = 原样),与遮罩分开调节 */
+  glassBrightness: number
   demoSiteEnabled?: boolean
   displayTokenStatEnabled?: boolean
   currency: CurrencyConfig
 }
+
+/** 背景图遮罩强度默认值(35% 白/黑遮罩),未配置时使用 */
+export const DEFAULT_GLASS_MASK_OPACITY = 0.35
+/** 背景图亮度默认值(系数,1 = 原样),未配置时使用 */
+export const DEFAULT_GLASS_BRIGHTNESS = 1
 
 export const DEFAULT_CURRENCY_CONFIG: CurrencyConfig = {
   displayInCurrency: true,
@@ -75,6 +86,8 @@ export const useSystemConfigStore = create<SystemConfigState>()(
       config: {
         systemName: DEFAULT_SYSTEM_NAME,
         logo: DEFAULT_LOGO,
+        glassMaskOpacity: DEFAULT_GLASS_MASK_OPACITY,
+        glassBrightness: DEFAULT_GLASS_BRIGHTNESS,
         currency: { ...DEFAULT_CURRENCY_CONFIG },
       },
       loading: true,

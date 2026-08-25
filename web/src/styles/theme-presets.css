@@ -429,7 +429,7 @@ For commercial licensing, please contact support@quantumnous.com
  *   - `simple-large`: keeps intentionally neutral, high-contrast surfaces. */
 [data-theme-preset]:not([data-theme-preset='default']):not(
   [data-theme-preset='anthropic']
-):not([data-theme-preset='simple-large']) {
+):not([data-theme-preset='simple-large']):not([data-theme-preset='liquid-glass']) {
   --card: color-mix(in oklch, var(--primary) 3%, var(--background));
   --popover: color-mix(in oklch, var(--primary) 5%, var(--background));
   --muted: color-mix(in oklch, var(--primary) 7%, var(--background));
@@ -454,7 +454,7 @@ For commercial licensing, please contact support@quantumnous.com
 .dark
   [data-theme-preset]:not([data-theme-preset='default']):not(
     [data-theme-preset='anthropic']
-  ):not([data-theme-preset='simple-large']) {
+  ):not([data-theme-preset='simple-large']):not([data-theme-preset='liquid-glass']) {
   --card: color-mix(in oklch, var(--primary) 8%, var(--background));
   --popover: color-mix(in oklch, var(--primary) 12%, var(--background));
   --muted: color-mix(in oklch, var(--primary) 12%, var(--background));
@@ -679,19 +679,22 @@ For commercial licensing, please contact support@quantumnous.com
 }
 
 /* ── Border radius ────────────────────────────────────────────────────── */
-[data-theme-radius='none'] {
+/* `body` 前缀把优先级抬到 (0,1,1),压过预设块的 (0,1,0)——否则文件里排在
+ * 后面的预设(liquid-glass 的 --radius 在文件最底部)会以源码顺序压掉这里,
+ * 导致圆角切换按钮对那个预设"按了没反应"。其他预设块都在本块之前,无此问题。 */
+body[data-theme-radius='none'] {
   --radius: 0rem;
 }
-[data-theme-radius='sm'] {
+body[data-theme-radius='sm'] {
   --radius: 0.3rem;
 }
-[data-theme-radius='md'] {
+body[data-theme-radius='md'] {
   --radius: 0.5rem;
 }
-[data-theme-radius='lg'] {
+body[data-theme-radius='lg'] {
   --radius: 0.75rem;
 }
-[data-theme-radius='xl'] {
+body[data-theme-radius='xl'] {
   --radius: 1rem;
 }
 
@@ -740,3 +743,464 @@ For commercial licensing, please contact support@quantumnous.com
     width: 100%;
   }
 }
+
+/* ── Liquid Glass ────────────────────────────────────────────────────────
+ * 苹果液态玻璃风格:背景(管理员配图或内置 aurora 渐变兜底)+ 半透明玻璃面板。
+ * 背景由 --app-bg-image 提供(body::before 绘制,见 index.css),多层组合:
+ *   var(--app-bg-photo) —— 管理员配了图则显示(盖在上层);
+ *   aurora 渐变 —— 未配图时的柔和彩色兜底,让玻璃面板有东西可透。
+ * body 底色为实色(见下方 body 规则),避免半透明白把背景图也压白。
+ *
+ * 关键结构决策(避免"整块毛玻璃"):
+ * - 最外层容器([data-slot='sidebar-wrapper'])透明,背景图整页直接透出;
+ *   内容区([data-slot='sidebar-inset'])自身半透明 + 8px 轻霜,让背景图
+ *   模糊可见同时保证文字可读。
+ * - 玻璃面板(card/弹层/抽屉/下拉/侧栏)是真正的玻璃:更高白度 + 24px 模糊 +
+ *   更高饱和 + 斜向高光(液态玻璃的灵魂) + 顶缘高亮描边。
+ * 此预设退出 semantic surface bridge(见上方 :not() 列表),因为它定义的是
+ * 白色半透明玻璃表面,而非 primary 派生色。 */
+[data-theme-preset='liquid-glass'] {
+  /* 背景驯服:aurora 渐变从高彩度亮色(0.9 亮度/0.075 彩度)收敛为低饱和柔和色
+   * (0.78 亮度/0.045 彩度),让玻璃面板和圆角缝隙透出的都是不刺眼的柔和底。
+   * 有照片时(见下方 [data-has-bg-photo] 覆盖块)照片上方会叠一层可调遮罩(亮色白/暗色黑)。 */
+  --app-bg-image: var(--app-bg-photo),
+    radial-gradient(
+        90% 70% at 15% 10%,
+        oklch(0.78 0.045 300),
+        transparent 65%
+      ),
+    radial-gradient(
+        90% 70% at 85% 85%,
+        oklch(0.78 0.045 230),
+        transparent 68%
+      ),
+    linear-gradient(
+      160deg,
+      oklch(0.94 0.008 285),
+      oklch(0.92 0.008 200)
+    );
+
+  /* Canvas 底色:降到 10% 白,与内容区/main 一致——弹窗里、页面上所有用
+   * bg-background 的容器(图标框、分组、步骤导航、编辑器等)不再叠出 55% 的白块,
+   * 这是"局部容器发白"的根源。 */
+  --background: oklch(1 0 0 / 0.1);
+  --foreground: oklch(0.18 0 0);
+
+  /* 玻璃面板(比画布更白,保证可读) */
+  --card: oklch(1 0 0 / 0.15);
+  --card-foreground: oklch(0.18 0 0);
+  --popover: oklch(1 0 0 / 0.25);
+  --popover-foreground: oklch(0.18 0 0);
+  --secondary: oklch(1 0 0 / 0.1);
+  --secondary-foreground: oklch(0.3 0 0);
+  --muted: oklch(1 0 0 / 0.1);
+  --muted-foreground: oklch(0.4 0 0);
+  --accent: oklch(1 0 0 / 0.12);
+  --accent-foreground: oklch(0.3 0 0);
+
+  --primary: oklch(0.56 0.17 250 / 0.85);
+  --primary-foreground: oklch(1 0 0);
+  --destructive: oklch(0.6 0.2 25 / 0.7);
+  --destructive-foreground: oklch(1 0 0);
+  --success: oklch(0.55 0.12 150 / 0.7);
+  --success-foreground: oklch(1 0 0);
+  --warning: oklch(0.75 0.14 80 / 0.7);
+  --warning-foreground: oklch(0.2 0.02 80);
+  --info: oklch(0.55 0.12 250 / 0.7);
+  --info-foreground: oklch(1 0 0);
+  --neutral: oklch(0.5 0 0);
+  --neutral-foreground: oklch(1 0 0);
+
+  --border: oklch(0.9 0 0 / 0.5);
+  --input: oklch(1 0 0 / 0.2);
+  --ring: oklch(0.62 0.16 250);
+
+  /* 玻璃色板:蓝/青/紫/teal/品红 */
+  --chart-1: oklch(0.65 0.17 255);
+  --chart-2: oklch(0.62 0.14 200);
+  --chart-3: oklch(0.68 0.15 285);
+  --chart-4: oklch(0.7 0.13 160);
+  --chart-5: oklch(0.65 0.16 320);
+
+  --sidebar: oklch(1 0 0 / 0.1);
+  --sidebar-foreground: oklch(0.25 0 0);
+  --sidebar-primary: oklch(0.6 0.16 255);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(1 0 0 / 0.25);
+  --sidebar-accent-foreground: oklch(0.3 0 0);
+  --sidebar-border: oklch(1 0 0 / 0.5);
+  --sidebar-ring: oklch(0.62 0.16 250);
+
+  --skeleton-base: oklch(0.9 0 0 / 0.6);
+  --skeleton-highlight: oklch(0.96 0 0 / 0.6);
+
+  --table-row: oklch(1 0 0 / 0.08);
+  --table-header: oklch(1 0 0 / 0.15);
+  --table-header-hover: oklch(1 0 0 / 0.2);
+  --table-disabled: oklch(1 0 0 / 0.45);
+  --table-disabled-hover: oklch(1 0 0 / 0.55);
+  --table-disabled-border: oklch(0.85 0 0 / 0.45);
+
+  --radius: 1.25rem;
+}
+/* 有照片时:在照片层上方叠一层黑色遮罩(强度由管理端"背景图遮罩"滑块控制,
+ * 经 useAppBackground 写到 --app-bg-mask-opacity),驯服明暗差异较大的照片;
+ * 无照片时 body 不带 data-has-bg-photo,此块不生效,aurora 渐变不被压暗。
+ * 亮色模式用白色遮罩:黑色会把浅色背景压成灰,白色则把照片向白柔和、让深色
+ * 文字更清晰;强度只调不透明度(管理端"背景图遮罩"滑块)。暗色模式用黑色。 */
+[data-theme-preset='liquid-glass'][data-has-bg-photo] {
+  --app-bg-image: linear-gradient(
+      oklch(1 0 0 / var(--app-bg-mask-opacity, 0.35)),
+      oklch(1 0 0 / var(--app-bg-mask-opacity, 0.35))
+    ),
+    var(--app-bg-photo),
+    radial-gradient(
+        90% 70% at 15% 10%,
+        oklch(0.78 0.045 300),
+        transparent 65%
+      ),
+    radial-gradient(
+        90% 70% at 85% 85%,
+        oklch(0.78 0.045 230),
+        transparent 68%
+      ),
+    linear-gradient(
+      160deg,
+      oklch(0.94 0.008 285),
+      oklch(0.92 0.008 200)
+    );
+}
+.dark [data-theme-preset='liquid-glass'] {
+  /* 暗色模式:无照片时直接是柔和的暗 aurora(去掉原来硬编码的 0.6 黑遮罩层,
+   * 它会把 aurora 也压成纯黑);有照片时由下方 [data-has-bg-photo] 覆盖块加遮罩,
+   * 强度走同一配置(暗色 fallback 0.6,保留原来的暗色压暗幅度)。 */
+  --app-bg-image: var(--app-bg-photo),
+    radial-gradient(
+        90% 70% at 15% 10%,
+        oklch(0.26 0.03 300),
+        transparent 65%
+      ),
+    radial-gradient(
+        90% 70% at 85% 85%,
+        oklch(0.28 0.03 235),
+        transparent 68%
+      ),
+    linear-gradient(
+      160deg,
+      oklch(0.17 0.012 290),
+      oklch(0.16 0.012 205)
+    );
+
+  --background: oklch(0.13 0 0 / 0.35);
+  --foreground: oklch(0.97 0 0);
+  --card: oklch(0.13 0 0 / 0.25);
+  --card-foreground: oklch(0.97 0 0);
+  --popover: oklch(0.13 0 0 / 0.4);
+  --popover-foreground: oklch(0.97 0 0);
+  --secondary: oklch(0.13 0 0 / 0.15);
+  --secondary-foreground: oklch(0.9 0 0);
+  --muted: oklch(0.13 0 0 / 0.15);
+  --muted-foreground: oklch(0.8 0 0);
+  --accent: oklch(0.13 0 0 / 0.2);
+  --accent-foreground: oklch(0.93 0 0);
+
+  --primary: oklch(0.68 0.15 250 / 0.6);
+  --primary-foreground: oklch(0.98 0 0);
+  --destructive: oklch(0.72 0.18 25 / 0.7);
+  --destructive-foreground: oklch(0.98 0 0);
+  --success: oklch(0.7 0.14 150 / 0.7);
+  --success-foreground: oklch(0.12 0 0);
+  --warning: oklch(0.78 0.15 80 / 0.7);
+  --warning-foreground: oklch(0.12 0 0);
+  --info: oklch(0.7 0.13 250 / 0.7);
+  --info-foreground: oklch(0.98 0 0);
+  --neutral: oklch(0.75 0 0);
+  --neutral-foreground: oklch(0.12 0 0);
+
+  --border: oklch(1 0 0 / 0.2);
+  --input: oklch(0.13 0 0 / 0.3);
+  --ring: oklch(0.68 0.15 250);
+
+  --chart-1: oklch(0.72 0.15 255);
+  --chart-2: oklch(0.7 0.13 200);
+  --chart-3: oklch(0.73 0.13 285);
+  --chart-4: oklch(0.74 0.12 160);
+  --chart-5: oklch(0.7 0.14 320);
+
+  --sidebar: oklch(0.13 0 0 / 0.35);
+  --sidebar-foreground: oklch(0.95 0 0);
+  --sidebar-primary: oklch(0.66 0.15 255);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(1 0 0 / 0.12);
+  --sidebar-accent-foreground: oklch(0.93 0 0);
+  --sidebar-border: oklch(1 0 0 / 0.12);
+  --sidebar-ring: oklch(0.68 0.15 250);
+
+  --skeleton-base: oklch(0.33 0 0 / 0.6);
+  --skeleton-highlight: oklch(0.42 0 0 / 0.6);
+
+  --table-row: oklch(0.13 0 0 / 0.12);
+  --table-header: oklch(0.13 0 0 / 0.25);
+  --table-header-hover: oklch(0.2 0 0 / 0.32);
+  --table-disabled: oklch(0.2 0 0 / 0.38);
+  --table-disabled-hover: oklch(0.24 0 0 / 0.48);
+  --table-disabled-border: oklch(1 0 0 / 0.18);
+}
+/* 暗色有照片:照片上方叠黑色遮罩,强度同一配置,fallback 0.6(≈原硬编码的 0.6) */
+.dark [data-theme-preset='liquid-glass'][data-has-bg-photo] {
+  --app-bg-image: linear-gradient(
+      oklch(0 0 0 / var(--app-bg-mask-opacity, 0.6)),
+      oklch(0 0 0 / var(--app-bg-mask-opacity, 0.6))
+    ),
+    var(--app-bg-photo),
+    radial-gradient(
+        90% 70% at 15% 10%,
+        oklch(0.26 0.03 300),
+        transparent 65%
+      ),
+    radial-gradient(
+        90% 70% at 85% 85%,
+        oklch(0.28 0.03 235),
+        transparent 68%
+      ),
+    linear-gradient(
+      160deg,
+      oklch(0.17 0.012 290),
+      oklch(0.16 0.012 205)
+    );
+}
+
+/* body 底色必须实色:body::before(z-index:-1) 的背景图绘制在 body 背景之上,
+ * 若 body 用半透明白(--background)会把背景图也压白一档。 */
+body[data-theme-preset='liquid-glass'] {
+  background-color: oklch(0.985 0 0);
+}
+.dark body[data-theme-preset='liquid-glass'] {
+  background-color: oklch(0.12 0 0);
+}
+/* 背景图亮度:body::before 绘制整页背景层,brightness 滤镜调节其整体明暗,
+ * 与遮罩强度(向白/黑靠拢)分开,由管理端"背景亮度"滑块控制。非琉璃主题
+ * --app-bg-image 为 none,滤镜无可视影响。 */
+body[data-theme-preset='liquid-glass']::before {
+  filter: brightness(var(--app-bg-brightness, 1));
+}
+
+/* ── Liquid Glass — 玻璃模糊与高光 ─────────────────────────────────────────
+ * 表面半透明由上面的变量完成,这里补:
+ * 1. wrapper 透明 → 背景图/aurora 渐变在整页直接透出,不被白层压盖。
+ * 2. 画布(内容区/公开页根)淡白 + 12px 轻霜,压住背景亮度同时透出背景。
+ * 3. 所有玻璃面板(顶栏/侧栏/card/弹层/下拉)统一配方:18px 模糊 + 高饱和 +
+ *    斜向高光 + 顶缘描边;背景色由各自 token 提供。
+ * 4. 表格头/行统一半透明(同一 token),坐在画布上,不单独 blur(性能)。
+ * Tooltip 是反色表面(bg-foreground),保持实色。 */
+[data-theme-preset='liquid-glass'] [data-slot='sidebar-wrapper'] {
+  background-color: transparent;
+}
+/* 内容区画布:极轻底色 + 轻模糊,让背景图"柔和透出"(而非锋利暴露),
+ * 压住壁纸亮部对文字的干扰,同时保持透明轻玻璃的清爽感。
+ * 公开页没有 wrapper,根容器自己当画布,但保持可读(见下)。
+ * 注意:这里只定义画布本身(所有变体通用);inset 变体的贴边/高度调整在
+ * 下方"inset 变体专属"块。 */
+[data-theme-preset='liquid-glass'] [data-slot='sidebar-inset'] {
+  background-color: oklch(1 0 0 / 0.1);
+  backdrop-filter: blur(8px) saturate(140%);
+}
+.dark [data-theme-preset='liquid-glass'] [data-slot='sidebar-inset'] {
+  background-color: oklch(0.13 0 0 / 0.35);
+}
+/* 公开页画布与内部内容区统一:背景驯服后不需要 55% 白遮罩,降到和 sidebar-inset
+ * 相同的 10% 白,玻璃更透、背景图更可见;18px blur 保留(整页画布没有侧栏/卡片
+ * 托底,需要更强的柔化压住背景亮度不均,保证长文可读)。 */
+[data-theme-preset='liquid-glass'] [data-slot='public-layout'] {
+  background-color: oklch(1 0 0 / 0.1);
+  backdrop-filter: blur(18px) saturate(160%);
+}
+.dark [data-theme-preset='liquid-glass'] [data-slot='public-layout'] {
+  background-color: oklch(0.13 0 0 / 0.35);
+}
+/* 轻玻璃面板配方:透明背景 + 极轻模糊,主要靠 --border 边框和圆角区分。
+ * 背景图在面板下清晰可见——参考概览页系统负载卡片的透明质感。 */
+[data-theme-preset='liquid-glass'] :is(
+  [data-slot='header'],
+  [data-slot='card'],
+  [data-slot='dialog-content'],
+  [data-slot='alert-dialog-content'],
+  [data-slot='sheet-content'],
+  [data-slot='drawer-content'],
+  [data-slot='popover-content'],
+  [data-slot='dropdown-menu-content'],
+  [data-slot='dropdown-menu-sub-content']
+) {
+  backdrop-filter: blur(8px) saturate(150%);
+  box-shadow: none;
+  background-image: none;
+}
+.dark
+  [data-theme-preset='liquid-glass'] :is(
+    [data-slot='header'],
+    [data-slot='card'],
+    [data-slot='dialog-content'],
+    [data-slot='alert-dialog-content'],
+    [data-slot='sheet-content'],
+    [data-slot='drawer-content'],
+    [data-slot='popover-content'],
+    [data-slot='dropdown-menu-content'],
+    [data-slot='dropdown-menu-sub-content']
+  ) {
+  box-shadow: none;
+  background-image: none;
+}
+/* sidebar-inner 单独给 blur:它原本在 :is() 面板配方里,但那个列表会连 box-shadow
+ * 一起清掉,把 floating 变体的浮起阴影 shadow-sm 也抹了;移出后 floating 保留
+ * 自己的浮起阴影,inset 侧栏只需 blur(圆角由下方规则补)。 */
+[data-theme-preset='liquid-glass'] [data-slot='sidebar-inner'] {
+  backdrop-filter: blur(8px) saturate(150%);
+}
+
+/* 弹窗(抽屉/对话框/alert)的背景逻辑:
+ * - content(4 个 slot):统一为轻玻璃(亮 0.18 白 / 暗 0.45 黑)。琉璃下 sheet-content
+ *   用 bg-background(55% 白)、dialog-content 用 bg-popover(25% 白),整面发白。
+ * - header/footer 必须透明:它们是 content 的子层,若再给半透明背景会叠在 content
+ *   上累积白度(标题背景/按钮条比正文白的根源)。透明后直接透出 content 的玻璃底,
+ *   标题/说明/按钮与正文同底色,彻底一致。
+ * - 弹窗内所有高白度 bg-background/x(bg-background/95 等,如 sideDrawer header/
+ *   footer、自定义 sticky 底部)同理:统一透明,不叠层。 */
+[data-theme-preset='liquid-glass'] :is(
+  [data-slot='sheet-content'],
+  [data-slot='dialog-content'],
+  [data-slot='alert-dialog-content'],
+  [data-slot='drawer-content']
+) {
+  background-color: oklch(1 0 0 / 0.18);
+}
+.dark
+  [data-theme-preset='liquid-glass'] :is(
+    [data-slot='sheet-content'],
+    [data-slot='dialog-content'],
+    [data-slot='alert-dialog-content'],
+    [data-slot='drawer-content']
+  ) {
+  background-color: oklch(0.13 0 0 / 0.45);
+}
+[data-theme-preset='liquid-glass'] :is(
+  [data-slot='sheet-header'],
+  [data-slot='dialog-header'],
+  [data-slot='alert-dialog-header'],
+  [data-slot='drawer-header'],
+  [data-slot='sheet-footer'],
+  [data-slot='dialog-footer'],
+  [data-slot='alert-dialog-footer'],
+  [data-slot='drawer-footer']
+) {
+  background-color: transparent;
+}
+[data-theme-preset='liquid-glass'] :is(
+  [data-slot='sheet-content'],
+  [data-slot='dialog-content'],
+  [data-slot='alert-dialog-content'],
+  [data-slot='drawer-content']
+) :is(
+  .bg-background\/95,
+  .bg-background\/90,
+  .bg-background\/85,
+  .bg-background\/80
+) {
+  background-color: transparent;
+}
+/* Dialog/AlertDialog 的 footer 是通栏圆角条(bg-muted/50 + -mx-4 -mb-4 +
+ * rounded-b-xl),与 sideDrawer 的直角条形态不一致;背景已由上面规则置透明,
+ * 这里只去掉圆角统一为直条(保留通栏贴底和上边框)。 */
+[data-theme-preset='liquid-glass'] :is(
+  [data-slot='dialog-footer'],
+  [data-slot='alert-dialog-footer']
+) {
+  border-radius: 0;
+}
+
+/* 顶栏恢复透明:背景驯服(aurora 柔和化 + 照片可调遮罩)后,透明顶栏透出的是
+ * 与侧栏亮度接近的柔和背景,不再有"全亮背景图 vs 半透明侧栏"的亮度断裂;
+ * 滚动时 header 仍保留 :is() 面板配方里的 backdrop-filter,毛玻璃吸顶。 */
+
+/* 背景驯服后,inset 变体不再需要"贴边一体"的补丁:内容区恢复 sidebar.tsx 自带
+ * 的 m-2 + rounded-xl + shadow-sm(圆角浮起卡片),侧栏恢复默认间距;圆角缝隙透出
+ * 的是柔和的驯服背景,不再有亮色缺口。此前的去圆角/贴边/固定高度规则已删除。 */
+
+/* 侧栏加圆角:玻璃面板的直角在琉璃下显生硬,给默认 inset 变体的侧栏补上与
+ * 内容区呼应的圆角(--radius-lg,与 floating 变体的 rounded-lg 同值),让侧栏和
+ * 内容区成为一对圆角玻璃卡片。sidebar 变体是贴边导航,保持直角;floating 变体
+ * 本就自带 rounded-lg。 */
+[data-theme-preset='liquid-glass']
+  [data-slot='sidebar'][data-variant='inset'] [data-slot='sidebar-inner'] {
+  border-radius: var(--radius-lg);
+}
+
+/* 表格行默认透明,补齐与表头一致的半透明底;头/行 token 已设同值(见上),
+ * 坐在统一画布模糊上,不单独 blur(大量行各自 blur 性能差)。 */
+[data-theme-preset='liquid-glass'] [data-slot='table-row'] {
+  background-color: var(--table-row);
+}
+/* 表格行 hover/选中/展开态:组件默认用 muted 实色混合,在轻玻璃下突兀,
+ * 统一为轻玻璃底色。 */
+[data-theme-preset='liquid-glass'] [data-slot='table-row']:hover,
+[data-theme-preset='liquid-glass'] [data-slot='table-row'][data-state='selected'],
+[data-theme-preset='liquid-glass'] [data-slot='table-row'][data-state='expanded'] {
+  background-color: oklch(1 0 0 / 0.18);
+}
+.dark
+  [data-theme-preset='liquid-glass'] [data-slot='table-row']:hover,
+.dark
+  [data-theme-preset='liquid-glass'] [data-slot='table-row'][data-state='selected'],
+.dark
+  [data-theme-preset='liquid-glass'] [data-slot='table-row'][data-state='expanded'] {
+  background-color: oklch(0.13 0 0 / 0.3);
+}
+
+/* 按钮玻璃化:半透明 primary + 模糊 + 内描边,与玻璃面板统一(默认实色块突兀)。 */
+[data-theme-preset='liquid-glass'] [data-slot='button'] {
+  backdrop-filter: blur(16px) saturate(170%);
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.35),
+    inset 0 0 0 0.5px oklch(1 0 0 / 0.15),
+    0 1px 2px oklch(0 0 0 / 0.08);
+}
+
+/* 页脚(分页栏):section-page-layout 的 footer 用 bg-background(亮色 55% 白),
+ * 在玻璃主题下像一条实色白/黑横条,改为透明玻璃,靠顶部细边框与内容区分。 */
+[data-theme-preset='liquid-glass'] [data-slot='page-footer'] {
+  background-color: transparent;
+}
+
+/* outline 按钮:默认 bg-background(55% 半透明白)在玻璃主题下发白,
+ * 改为透明玻璃,靠细边框 + 按钮玻璃配方(模糊/内高光)区分;hover 轻微抬升。 */
+[data-theme-preset='liquid-glass'] [data-slot='button'][data-variant='outline'] {
+  background-color: transparent;
+}
+[data-theme-preset='liquid-glass'] [data-slot='button'][data-variant='outline']:hover {
+  background-color: oklch(1 0 0 / 0.08);
+}
+.dark
+  [data-theme-preset='liquid-glass'] [data-slot='button'][data-variant='outline']:hover {
+  background-color: oklch(1 0 0 / 0.08);
+}
+
+/* 表格固定列(操作列):pinned cell 默认 bg-background 是一块实色白/黑,
+ * 改为轻玻璃底色 + 轻霜,滚动时盖住其下的行内容,同时保持玻璃质感。 */
+[data-theme-preset='liquid-glass'] .data-table-pinned-cell {
+  background-color: oklch(1 0 0 / 0.12);
+  backdrop-filter: blur(10px) saturate(150%);
+}
+.dark [data-theme-preset='liquid-glass'] .data-table-pinned-cell {
+  background-color: oklch(0.13 0 0 / 0.3);
+}
+
+/* 登录/注册/找回密码等 auth 页:画布与内部内容区统一(10% 白),背景图更透出;
+ * 18px blur 保留保证表单文字可读。暗色同步统一为 0.13/0.35。 */
+[data-theme-preset='liquid-glass'] [data-slot='auth-layout'] {
+  background-color: oklch(1 0 0 / 0.1);
+  backdrop-filter: blur(18px) saturate(160%);
+}
+.dark [data-theme-preset='liquid-glass'] [data-slot='auth-layout'] {
+  background-color: oklch(0.13 0 0 / 0.35);
+}
+
+

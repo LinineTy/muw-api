@@ -42,6 +42,7 @@ import {
 } from '@/lib/auth-session'
 import { subscribeAuthSessionEvents } from '@/lib/auth-session-sync'
 import { resolveLegacyRoute } from '@/lib/legacy-route'
+import { useAppBackground } from '@/lib/use-app-background'
 import { useAuthStore } from '@/stores/auth-store'
 
 function RootComponent() {
@@ -50,6 +51,8 @@ function RootComponent() {
 
   // Load system configuration (logo, system name, etc.) from backend
   useSystemConfig({ autoLoad: true })
+  // 把后台配置的全局背景图同步到 body 内联 CSS 变量(液态玻璃预设消费)
+  useAppBackground()
 
   useEffect(() => {
     const aff = new URLSearchParams(window.location.search).get('aff')?.trim()

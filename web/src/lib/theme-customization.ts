@@ -77,6 +77,13 @@ export const THEME_PRESETS = [
     name: 'Lavender Dream',
     swatches: ['oklch(0.5709 0.1808 306.89)', 'oklch(0.811 0.0589 201.14)'],
   },
+  {
+    // Apple 液态玻璃风格:半透明玻璃表面 + backdrop blur,配合全局背景图。
+    // 色卡渐变只是预览,真正的半透明表面在 theme-presets.css 里定义。
+    value: 'liquid-glass',
+    name: '琉璃',
+    swatches: ['oklch(0.75 0.16 240)', 'oklch(0.85 0.12 190)'],
+  },
 ] as const
 
 export type ThemePreset = (typeof THEME_PRESETS)[number]['value']
@@ -115,8 +122,10 @@ export type ThemeCustomization = {
   contentLayout: ContentLayout
 }
 
+/** 默认主题为琉璃(liquid-glass)。preset 轴总是写 data-theme-preset 属性,
+ * 所以默认值必须是真实 preset 值之一,不能再用代表"无属性基础样式"的 default。 */
 export const DEFAULT_THEME_CUSTOMIZATION: ThemeCustomization = {
-  preset: 'default',
+  preset: 'liquid-glass',
   font: 'default',
   radius: 'default',
   scale: 'default',
