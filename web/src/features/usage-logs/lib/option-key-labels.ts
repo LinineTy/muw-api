@@ -140,6 +140,9 @@ export const OPTION_KEY_LABELS: Record<string, string> = {
   SystemName: 'System Name',
   ServerAddress: 'Server Address',
   Logo: 'Logo URL',
+  BackgroundImage: 'Background image URL',
+  GlassMaskOpacity: 'Background image mask',
+  GlassBrightness: 'Background brightness',
   Footer: 'Footer',
 
   // ---- 通用 · 额度（general/quota-settings-section.tsx）----
