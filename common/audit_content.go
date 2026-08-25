@@ -104,7 +104,7 @@ var auditContentTemplates = map[string]string{
 
 	// 日志 / 图床
 	"log.cleanup_start": "Log cleanup task started.",
-	"image.upload":      "Uploaded a file to the media library",
+	"image.upload":      "Uploaded an image to the image library",
 	"image.delete":      "Deleted image (ID: ${id})",
 
 	// 图床（用户云空间）
