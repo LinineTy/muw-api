@@ -31,6 +31,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { Slider } from '@/components/ui/slider'
 import { Textarea } from '@/components/ui/textarea'
 
 import { FormDirtyIndicator } from '../components/form-dirty-indicator'
@@ -48,6 +49,9 @@ const _systemInfoSchema = z.object({
   SystemName: z.string().min(1),
   ServerAddress: z.string().optional(),
   Logo: z.string().url().optional().or(z.literal('')),
+  BackgroundImage: z.string().optional(),
+  GlassMaskOpacity: z.string().optional(),
+  GlassBrightness: z.string().optional(),
   Footer: z.string().optional(),
 })
 
@@ -70,6 +74,10 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
     SystemName: normalizeValue(defaultValues.SystemName),
     ServerAddress: normalizeValue(defaultValues.ServerAddress),
     Logo: normalizeValue(defaultValues.Logo),
+    BackgroundImage: normalizeValue(defaultValues.BackgroundImage),
+    GlassMaskOpacity:
+      normalizeValue(defaultValues.GlassMaskOpacity) || '0.35',
+    GlassBrightness: normalizeValue(defaultValues.GlassBrightness) || '1',
     Footer: normalizeValue(defaultValues.Footer),
   }
 
@@ -79,6 +87,9 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
     }),
     ServerAddress: z.string().optional(),
     Logo: z.string().url().optional().or(z.literal('')),
+    BackgroundImage: z.string().optional(),
+    GlassMaskOpacity: z.string().optional(),
+    GlassBrightness: z.string().optional(),
     Footer: z.string().optional(),
   })
 
@@ -173,6 +184,110 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
                     <FormMessage />
                   </FormItem>
                 )}
+              />
+
+              <FormField
+                control={form.control}
+                name='BackgroundImage'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Background image URL')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder={t('https://example.com/background.jpg')}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'URL to a global background image shown behind the interface (optional); looks best with the Liquid Glass theme'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='GlassMaskOpacity'
+                render={({ field }) => {
+                  const raw = Number(field.value)
+                  // clamp 到滑块 [0,90],防 DB 值被 API 写成越界时滑块 value 超 max
+                  const percent = Number.isFinite(raw)
+                    ? Math.min(90, Math.max(0, Math.round(raw * 100)))
+                    : 35
+                  return (
+                    <FormItem>
+                      <FormLabel>{t('Background image mask')}</FormLabel>
+                      <div className='flex items-center gap-3'>
+                        <Slider
+                          aria-label={t('Background image mask')}
+                          min={0}
+                          max={90}
+                          step={5}
+                          value={[percent]}
+                          onValueChange={(nextValue) => {
+                            const first = Array.isArray(nextValue)
+                              ? nextValue[0]
+                              : nextValue
+                            field.onChange((first / 100).toFixed(2))
+                          }}
+                        />
+                        <span className='text-muted-foreground w-10 shrink-0 text-right text-sm tabular-nums'>
+                          {percent}%
+                        </span>
+                      </div>
+                      <FormDescription>
+                        {t(
+                          'How strongly the background image is dimmed (0% = shown as-is; higher = softer behind the glass)'
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )
+                }}
+              />
+
+              <FormField
+                control={form.control}
+                name='GlassBrightness'
+                render={({ field }) => {
+                  const raw = Number(field.value)
+                  // clamp 到滑块 [50,150],防 DB 值被 API 写成越界时滑块 value 超 max
+                  const percent = Number.isFinite(raw)
+                    ? Math.min(150, Math.max(50, Math.round(raw * 100)))
+                    : 100
+                  return (
+                    <FormItem>
+                      <FormLabel>{t('Background brightness')}</FormLabel>
+                      <div className='flex items-center gap-3'>
+                        <Slider
+                          aria-label={t('Background brightness')}
+                          min={50}
+                          max={150}
+                          step={5}
+                          value={[percent]}
+                          onValueChange={(nextValue) => {
+                            const first = Array.isArray(nextValue)
+                              ? nextValue[0]
+                              : nextValue
+                            field.onChange((first / 100).toFixed(2))
+                          }}
+                        />
+                        <span className='text-muted-foreground w-10 shrink-0 text-right text-sm tabular-nums'>
+                          {percent}%
+                        </span>
+                      </div>
+                      <FormDescription>
+                        {t(
+                          'Overall brightness of the background image (100% = as-is)'
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )
+                }}
               />
 
               <FormField
