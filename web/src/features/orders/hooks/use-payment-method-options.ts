@@ -45,22 +45,23 @@ export function usePaymentMethodOptions(includeBalance: boolean): {
 
   const payMethods = useMemo(() => topupInfo?.pay_methods ?? [], [topupInfo])
 
-  const options = useMemo(() => {
-    const opts: PaymentMethodFilterOption[] = [
-      { label: t('All Payment Methods'), value: 'all' },
-    ]
-    const seen = new Set<string>(['all'])
-    for (const method of payMethods) {
-      if (method.type && !seen.has(method.type)) {
-        opts.push({ label: method.name || method.type, value: method.type })
-        seen.add(method.type)
-      }
+  // 注意：options 不能 useMemo。DataTableFacetedFilter 是 React.memo 浅比较 props，
+  // 勾选后 columnFilters 更新触发重渲染时，若 options 引用不变，memo 判定 props 未变
+  // 就不重渲染、读不到最新 filterValue → 选中态不刷新（跟 type/status 内联数组一个道理，
+  // 必须每次渲染新建引用）。payMethods 仍 memo 化供列显示名解析使用。
+  const options: PaymentMethodFilterOption[] = [
+    { label: t('All Payment Methods'), value: 'all' },
+  ]
+  const seen = new Set<string>(['all'])
+  for (const method of payMethods) {
+    if (method.type && !seen.has(method.type)) {
+      options.push({ label: method.name || method.type, value: method.type })
+      seen.add(method.type)
     }
-    if (includeBalance && !seen.has('balance')) {
-      opts.push({ label: t('Balance'), value: 'balance' })
-    }
-    return opts
-  }, [payMethods, includeBalance, t])
+  }
+  if (includeBalance && !seen.has('balance')) {
+    options.push({ label: t('Balance'), value: 'balance' })
+  }
 
   return { payMethods, options }
 }

@@ -3,6 +3,11 @@
 本文件记录 muw fork 的发布版本与变更。版本号格式：`vYY.MM.DD.muw.N`
 （发版日期 + muw 小标记），自 v26.08.14.muw.1 起从上游 semver 版本号迁移到日期制。
 
+## v26.08.25.muw.3 (2026-08-25)
+
+### 订单中心
+- **修复**：支付方式筛选勾选态不刷新——`DataTableFacetedFilter` 是 `React.memo` 浅比较 props，上一版把筛选 options 用 `useMemo` 包了导致引用稳定，勾选后组件不重渲染、读不到最新 filterValue，选中态丢失；改为每次渲染新建引用（与 type/status 内联数组一致）。
+
 ## v26.08.25.muw.2 (2026-08-25)
 
 ### 审计 / 日志
