@@ -69,6 +69,12 @@ func GetStatus(c *gin.Context) {
 		"system_name":                    common.SystemName,
 		"logo":                           common.Logo,
 		"footer_html":                    common.Footer,
+		// 全局背景图(液态玻璃主题等前端消费),由管理员在系统设置中配置
+		"background_image":               common.OptionMap["BackgroundImage"],
+		// 玻璃预设背景图遮罩强度,驯服明暗差异较大的照片
+		"glass_mask_opacity":             common.OptionMap["GlassMaskOpacity"],
+		// 玻璃预设背景图整体亮度(系数,1 = 原样),与遮罩分开调节
+		"glass_brightness":               common.OptionMap["GlassBrightness"],
 		"wechat_qrcode":                  common.WeChatAccountQRCodeImageURL,
 		"wechat_login":                   common.WeChatAuthEnabled,
 		"server_address":                 system_setting.ServerAddress,

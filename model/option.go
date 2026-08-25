@@ -81,6 +81,12 @@ func InitOptionMap() {
 	common.OptionMap["Footer"] = common.Footer
 	common.OptionMap["SystemName"] = common.SystemName
 	common.OptionMap["Logo"] = common.Logo
+	// 全局背景图,默认空;前端玻璃预设通过 --app-bg-photo 消费
+	common.OptionMap["BackgroundImage"] = ""
+	// 玻璃预设背景图遮罩强度(0~0.95 小数串),用于驯服明暗差异较大的照片
+	common.OptionMap["GlassMaskOpacity"] = "0.35"
+	// 玻璃预设背景图整体亮度(系数,1 = 原样),与遮罩分开调节
+	common.OptionMap["GlassBrightness"] = "1"
 	common.OptionMap["ServerAddress"] = ""
 	common.OptionMap["WorkerUrl"] = system_setting.WorkerUrl
 	common.OptionMap["WorkerValidKey"] = system_setting.WorkerValidKey
