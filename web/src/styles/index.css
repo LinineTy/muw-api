@@ -102,6 +102,22 @@ For commercial licensing, please contact support@quantumnous.com
     font-family: var(--font-body);
   }
 
+  /* 全局背景层:由 --app-bg-image 绘制(默认 none,不产生任何层)。
+   * z-index:-1 让它盖在 body 画布色之上、所有内容之下;fixed 定位本身不随滚动,
+   * 无需 background-attachment。玻璃预设会引用 --app-bg-photo(管理端配置的图)。 */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-color: transparent;
+    background-image: var(--app-bg-image);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+  }
+
   /* Keep sticky headers stable while primitives lock body scrolling. */
   body[data-scroll-locked] {
     overflow: unset !important;

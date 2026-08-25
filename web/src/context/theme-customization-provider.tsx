@@ -135,11 +135,12 @@ export function ThemeCustomizationProvider(props: {
 
   // Mirror state to the <body> via data-* attributes so theme-presets.css can
   // override CSS variables at the right cascade layer.
+  // preset 轴总是写属性:默认主题是琉璃(liquid-glass),必须写 data-theme-preset
+  // CSS 才生效;default 预设也写 data-theme-preset='default'——theme-presets.css
+  // 里所有 [data-theme-preset] 规则都是 :not([data-theme-preset='default']) 排除式,
+  // 所以 default 写属性后仍等于基础样式,行为不变。
   useEffect(() => {
-    applyAttribute(
-      'data-theme-preset',
-      preset === DEFAULT_THEME_CUSTOMIZATION.preset ? null : preset
-    )
+    applyAttribute('data-theme-preset', preset)
   }, [preset])
 
   // Font is the one axis where we resolve before writing the attribute:

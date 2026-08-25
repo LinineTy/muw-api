@@ -96,6 +96,11 @@ For commercial licensing, please contact support@quantumnous.com
 :root {
   --radius: 1rem;
   --app-header-height: 3rem;
+  /* 全局背景层(由 body::before 绘制):--app-bg-image 为各预设组合后的背景,
+   * --app-bg-photo 由后台"背景图 URL"设置通过 useAppBackground 写到 body 内联,
+   * 供 liquid-glass 等预设引用。默认 none,不产生任何背景层,对现有主题零影响。 */
+  --app-bg-image: none;
+  --app-bg-photo: none;
   /* Static build-channel fallback consumed when JS hasn't booted yet. */
   --app-rev: '2k6e8r7p';
   /* Currently active body font. The font axis swaps this between
