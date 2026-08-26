@@ -24,6 +24,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -80,6 +81,11 @@ import {
   type TimeFunc,
 } from '@/features/pricing/lib/billing-expr'
 import {
+  checkRequestConditionIssues,
+  formatConditionText,
+  type ConditionIssue,
+} from '@/features/pricing/lib/condition-format'
+import {
   CACHE_MODE_GENERIC,
   CACHE_MODE_TIMED,
   type CacheMode,
@@ -115,6 +121,8 @@ const CONDITION_INPUT_OPTIONS: {
   { value: 'c', labelKey: 'Billable output tokens' },
 ]
 const OPS: TierConditionInput['op'][] = ['<', '<=', '>', '>=']
+// 0 = Sunday .. 6 = Saturday, matching time.Weekday() in the backend engine.
+const WEEKDAY_OPTIONS = [0, 1, 2, 3, 4, 5, 6]
 
 type Preset = {
   key: string
@@ -830,12 +838,15 @@ type RuleConditionRowProps = {
   condition: RequestCondition
   onChange: (next: RequestCondition) => void
   onRemove: () => void
+  /** Row-level issues (conditionIndex matching this row), from the group check. */
+  issues?: ConditionIssue[]
 }
 
 function RuleConditionRow({
   condition,
   onChange,
   onRemove,
+  issues,
 }: RuleConditionRowProps) {
   const { t } = useTranslation()
   const matchOptions = getRequestRuleMatchOptions(condition.source)
@@ -897,6 +908,73 @@ function RuleConditionRow({
 
   const handleModeChange = (mode: string) => {
     onChange({ ...condition, mode } as RequestCondition)
+  }
+
+  const renderTimeValueInput = (timeCond: TimeCondition) => {
+    if (timeCond.mode === MATCH_EQ && timeCond.timeFunc === 'weekday') {
+      return (
+        <Select
+          items={WEEKDAY_OPTIONS.map((day) => ({
+            value: String(day),
+            label: t(`Every week on day ${day}`),
+          }))}
+          value={timeCond.value}
+          onValueChange={(value) =>
+            value !== null && onChange({ ...timeCond, value: String(value) })
+          }
+        >
+          <SelectTrigger className='w-32' size='sm'>
+            <SelectValue>
+              {/^[0-6]$/.test(timeCond.value)
+                ? t(`Every week on day ${timeCond.value}`)
+                : t('Every week')}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent alignItemWithTrigger={false}>
+            <SelectGroup>
+              {WEEKDAY_OPTIONS.map((day) => (
+                <SelectItem key={day} value={String(day)}>
+                  {t(`Every week on day ${day}`)}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      )
+    }
+    if (timeCond.mode === MATCH_RANGE) {
+      return (
+        <>
+          <DraftNumberInput
+            value={timeCond.rangeStart}
+            onValueChange={(value) =>
+              onChange({ ...timeCond, rangeStart: String(value) })
+            }
+            placeholder={t('Start')}
+            className='w-20'
+          />
+          <span className='text-muted-foreground text-xs'>~</span>
+          <DraftNumberInput
+            value={timeCond.rangeEnd}
+            onValueChange={(value) =>
+              onChange({ ...timeCond, rangeEnd: String(value) })
+            }
+            placeholder={t('End')}
+            className='w-20'
+          />
+        </>
+      )
+    }
+    return (
+      <DraftNumberInput
+        value={timeCond.value}
+        onValueChange={(value) =>
+          onChange({ ...timeCond, value: String(value) })
+        }
+        placeholder={t('Value')}
+        className='w-24'
+      />
+    )
   }
 
   const renderTimeCondition = (timeCond: TimeCondition) => (
@@ -977,36 +1055,7 @@ function RuleConditionRow({
           </SelectGroup>
         </SelectContent>
       </Select>
-      {timeCond.mode === MATCH_RANGE ? (
-        <>
-          <DraftNumberInput
-            value={timeCond.rangeStart}
-            onValueChange={(value) =>
-              onChange({ ...timeCond, rangeStart: String(value) })
-            }
-            placeholder={t('Start')}
-            className='w-20'
-          />
-          <span className='text-muted-foreground text-xs'>~</span>
-          <DraftNumberInput
-            value={timeCond.rangeEnd}
-            onValueChange={(value) =>
-              onChange({ ...timeCond, rangeEnd: String(value) })
-            }
-            placeholder={t('End')}
-            className='w-20'
-          />
-        </>
-      ) : (
-        <DraftNumberInput
-          value={timeCond.value}
-          onValueChange={(value) =>
-            onChange({ ...timeCond, value: String(value) })
-          }
-          placeholder={t('Value')}
-          className='w-24'
-        />
-      )}
+      {renderTimeValueInput(timeCond)}
     </>
   )
 
@@ -1056,40 +1105,75 @@ function RuleConditionRow({
     </>
   )
 
+  const previewText = useMemo(() => {
+    if (condition.source === SOURCE_TIME) {
+      if (condition.mode === MATCH_RANGE) {
+        if (!condition.rangeStart || !condition.rangeEnd) return ''
+      } else if (!condition.value) {
+        return ''
+      }
+      return formatConditionText(condition, t)
+    }
+    if (!condition.path) return ''
+    return formatConditionText(condition, t)
+  }, [condition, t])
+
   return (
-    <div className='flex flex-wrap items-center gap-2'>
-      <Select
-        items={[
-          { value: SOURCE_PARAM, label: t('Body param') },
-          { value: SOURCE_HEADER, label: t('Header') },
-          { value: SOURCE_TIME, label: t('Time') },
-        ]}
-        value={condition.source}
-        onValueChange={(v) => v !== null && handleSourceChange(v)}
-      >
-        <SelectTrigger className='w-28' size='sm'>
-          <SelectValue>{sourceLabel}</SelectValue>
-        </SelectTrigger>
-        <SelectContent alignItemWithTrigger={false}>
-          <SelectGroup>
-            <SelectItem value={SOURCE_PARAM}>{t('Body param')}</SelectItem>
-            <SelectItem value={SOURCE_HEADER}>{t('Header')}</SelectItem>
-            <SelectItem value={SOURCE_TIME}>{t('Time')}</SelectItem>
-          </SelectGroup>
-        </SelectContent>
-      </Select>
-      {condition.source === SOURCE_TIME
-        ? renderTimeCondition(condition as TimeCondition)
-        : renderParamHeaderCondition(condition as ParamHeaderCondition)}
-      <Button
-        variant='ghost'
-        size='icon'
-        onClick={onRemove}
-        aria-label={t('Remove condition')}
-        className='ml-auto'
-      >
-        <Trash2 className='text-destructive h-4 w-4' />
-      </Button>
+    <div className='space-y-1'>
+      <div className='flex flex-wrap items-center gap-2'>
+        <Select
+          items={[
+            { value: SOURCE_PARAM, label: t('Body param') },
+            { value: SOURCE_HEADER, label: t('Header') },
+            { value: SOURCE_TIME, label: t('Time') },
+          ]}
+          value={condition.source}
+          onValueChange={(v) => v !== null && handleSourceChange(v)}
+        >
+          <SelectTrigger className='w-28' size='sm'>
+            <SelectValue>{sourceLabel}</SelectValue>
+          </SelectTrigger>
+          <SelectContent alignItemWithTrigger={false}>
+            <SelectGroup>
+              <SelectItem value={SOURCE_PARAM}>{t('Body param')}</SelectItem>
+              <SelectItem value={SOURCE_HEADER}>{t('Header')}</SelectItem>
+              <SelectItem value={SOURCE_TIME}>{t('Time')}</SelectItem>
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+        {condition.source === SOURCE_TIME
+          ? renderTimeCondition(condition as TimeCondition)
+          : renderParamHeaderCondition(condition as ParamHeaderCondition)}
+        <Button
+          variant='ghost'
+          size='icon'
+          onClick={onRemove}
+          aria-label={t('Remove condition')}
+          className='ml-auto'
+        >
+          <Trash2 className='text-destructive h-4 w-4' />
+        </Button>
+      </div>
+      {(previewText || (issues && issues.length > 0)) && (
+        <div className='space-y-0.5 pl-0.5'>
+          {previewText && (
+            <p className='text-muted-foreground text-xs'>{previewText}</p>
+          )}
+          {issues?.map((issue) => (
+            <p
+              key={issue.key}
+              className={cn(
+                'text-xs',
+                issue.severity === 'error'
+                  ? 'text-destructive'
+                  : 'text-amber-600 dark:text-amber-400'
+              )}
+            >
+              {t(issue.key, issue.params)}
+            </p>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -1100,18 +1184,23 @@ function RuleConditionRow({
 
 type RuleGroupCardProps = {
   group: RequestRuleGroup
-  index: number
   onChange: (next: RequestRuleGroup) => void
   onRemove: () => void
 }
 
-function RuleGroupCard({
-  group,
-  index,
-  onChange,
-  onRemove,
-}: RuleGroupCardProps) {
+function RuleGroupCard({ group, onChange, onRemove }: RuleGroupCardProps) {
   const { t } = useTranslation()
+  const issues = useMemo(
+    () => checkRequestConditionIssues(group.conditions, t),
+    [group.conditions, t]
+  )
+  const groupIssues = issues.filter(
+    (issue) => issue.conditionIndex === undefined
+  )
+  const summary = group.conditions
+    .map((condition) => formatConditionText(condition, t))
+    .filter(Boolean)
+    .join(' · ')
 
   const handleConditionChange = (
     conditionIndex: number,
@@ -1135,9 +1224,14 @@ function RuleGroupCard({
   return (
     <div className='bg-muted/30 space-y-3 rounded-md border p-3'>
       <div className='flex items-center justify-between gap-2'>
-        <Badge variant='outline'>
-          {t('Rule group')} #{index + 1}
-        </Badge>
+        <div className='flex min-w-0 items-center gap-2'>
+          <Badge variant='secondary' className='shrink-0'>
+            {group.multiplier.trim() ? `${group.multiplier}×` : '×'}
+          </Badge>
+          <span className='text-muted-foreground min-w-0 truncate text-xs'>
+            {summary || t('Rule group')}
+          </span>
+        </div>
         <Button
           variant='ghost'
           size='icon'
@@ -1148,11 +1242,24 @@ function RuleGroupCard({
         </Button>
       </div>
 
+      {groupIssues.length > 0 && (
+        <div className='space-y-0.5'>
+          {groupIssues.map((issue) => (
+            <p key={issue.key} className='text-destructive text-xs'>
+              {t(issue.key, issue.params)}
+            </p>
+          ))}
+        </div>
+      )}
+
       <div className='space-y-2'>
         {group.conditions.map((condition, conditionIndex) => (
           <RuleConditionRow
             key={conditionIndex}
             condition={condition}
+            issues={issues.filter(
+              (issue) => issue.conditionIndex === conditionIndex
+            )}
             onChange={(next) => handleConditionChange(conditionIndex, next)}
             onRemove={() =>
               onChange({
@@ -1205,6 +1312,48 @@ function RuleGroupCard({
 }
 
 // ---------------------------------------------------------------------------
+// Collapsible section
+// ---------------------------------------------------------------------------
+
+type CollapsibleSectionProps = {
+  title: ReactNode
+  defaultOpen?: boolean
+  children: ReactNode
+  className?: string
+  contentClassName?: string
+}
+
+function CollapsibleSection({
+  title,
+  defaultOpen = false,
+  children,
+  className,
+  contentClassName,
+}: CollapsibleSectionProps) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className={className}>
+      <CollapsibleTrigger
+        render={
+          <Button variant='ghost' size='sm' className='h-7 px-2 text-xs' />
+        }
+      >
+        <ChevronDown
+          className={cn(
+            'mr-1 h-3 w-3 transition-transform',
+            open && 'rotate-180'
+          )}
+        />
+        {title}
+      </CollapsibleTrigger>
+      <CollapsibleContent className={cn('mt-2', contentClassName)}>
+        {children}
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Preset section
 // ---------------------------------------------------------------------------
 
@@ -1220,19 +1369,6 @@ function PresetSection({ applyPreset }: PresetSectionProps) {
 
   return (
     <div className='space-y-2'>
-      <div className='flex items-center gap-2'>
-        <span className='text-sm font-medium'>{t('Preset templates')}</span>
-        {hasMore && (
-          <Button
-            variant='ghost'
-            size='sm'
-            className='h-6 px-2 text-xs'
-            onClick={() => setExpanded((prev) => !prev)}
-          >
-            {expanded ? t('Collapse') : t('More templates...')}
-          </Button>
-        )}
-      </div>
       <div className='space-y-1'>
         {visible.map((presetGroup) => (
           <div
@@ -1256,6 +1392,16 @@ function PresetSection({ applyPreset }: PresetSectionProps) {
           </div>
         ))}
       </div>
+      {hasMore && (
+        <Button
+          variant='ghost'
+          size='sm'
+          className='h-6 px-2 text-xs'
+          onClick={() => setExpanded((prev) => !prev)}
+        >
+          {expanded ? t('Collapse') : t('More templates...')}
+        </Button>
+      )}
     </div>
   )
 }
@@ -1295,14 +1441,11 @@ function CostEstimator({ effectiveExpr }: EstimatorProps) {
 
   return (
     <div className='bg-muted/30 space-y-3 rounded-md border p-3'>
-      <div className='space-y-1'>
-        <h4 className='text-sm font-medium'>{t('Token estimator')}</h4>
-        <p className='text-muted-foreground text-xs'>
-          {t(
-            'Enter token counts to preview the estimated cost (excluding group multipliers).'
-          )}
-        </p>
-      </div>
+      <p className='text-muted-foreground text-xs'>
+        {t(
+          'Enter token counts to preview the estimated cost (excluding group multipliers).'
+        )}
+      </p>
       <div className='grid grid-cols-2 gap-3'>
         <div className='space-y-1'>
           <Label className='text-xs'>{t('Input tokens')}</Label>
@@ -1710,7 +1853,9 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
         )}
       </div>
 
-      <PresetSection applyPreset={applyPreset} />
+      <CollapsibleSection title={t('Preset templates')}>
+        <PresetSection applyPreset={applyPreset} />
+      </CollapsibleSection>
 
       <div className='bg-muted/30 space-y-3 rounded-md border p-3'>
         {editorMode === 'visual' ? (
@@ -1723,17 +1868,17 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
         )}
 
         {editorMode === 'visual' && (
-          <div className='space-y-3 border-t pt-3'>
-            <div className='space-y-1'>
-              <h4 className='text-sm font-medium'>
-                {t('Request rule pricing')}
-              </h4>
-              <p className='text-muted-foreground text-xs'>
-                {t(
-                  'When conditions match, the final price is multiplied by X. Multiple matches multiply together; values < 1 act as discounts.'
-                )}
-              </p>
-            </div>
+          <CollapsibleSection
+            title={t('Request rule pricing')}
+            defaultOpen
+            className='border-t pt-3'
+            contentClassName='space-y-3'
+          >
+            <p className='text-muted-foreground text-xs'>
+              {t(
+                'When conditions match, the final price is multiplied by X. Multiple matches multiply together; values < 1 act as discounts.'
+              )}
+            </p>
 
             {currentRequestRuleExpr && !canUseVisualRules ? (
               <Alert>
@@ -1749,7 +1894,6 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
                   <RuleGroupCard
                     key={groupIndex}
                     group={group}
-                    index={groupIndex}
                     onChange={(next) => {
                       const updated = [...requestRuleGroups]
                       updated[groupIndex] = next
@@ -1778,11 +1922,13 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
                 </Button>
               </>
             )}
-          </div>
+          </CollapsibleSection>
         )}
       </div>
 
-      <CostEstimator effectiveExpr={effectiveExpr} />
+      <CollapsibleSection title={t('Token estimator')}>
+        <CostEstimator effectiveExpr={effectiveExpr} />
+      </CollapsibleSection>
     </div>
   )
 })
