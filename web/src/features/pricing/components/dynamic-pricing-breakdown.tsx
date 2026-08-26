@@ -31,7 +31,9 @@ import {
   MATCH_EQ,
   MATCH_EXISTS,
   MATCH_GTE,
+  MATCH_GT,
   MATCH_LT,
+  MATCH_LTE,
   MATCH_RANGE,
   SOURCE_TIME,
   normalizeTierLabel,
@@ -44,6 +46,7 @@ import {
   type RequestRuleGroup,
   type RequestRuleTrace,
   type TierCondition,
+  type TimeCondition,
 } from '../lib/billing-expr'
 
 type DynamicPricingBreakdownProps = {
@@ -115,22 +118,120 @@ function formatConditionSummary(
     .join(' && ')
 }
 
-function describeCondition(
+function formatRangeText(start: string, end: string, timeFunc: string): string {
+  const pad = timeFunc === 'hour' ? ':00' : ''
+  return `${start}${pad}~${end}${pad}`
+}
+
+function timeFuncPrefix(timeFunc: string, t: (key: string) => string): string {
+  switch (timeFunc) {
+    case 'hour':
+      return t('Every day')
+    case 'minute':
+      return t('Every hour')
+    case 'weekday':
+      return t('Every week')
+    case 'day':
+      return t('Every month')
+    case 'month':
+      return t('Every year')
+    default:
+      return t(TIME_FUNC_LABELS[timeFunc] || timeFunc)
+  }
+}
+
+function timeUnitSuffix(timeFunc: string, t: (key: string) => string): string {
+  switch (timeFunc) {
+    case 'minute':
+      return t('Minute unit')
+    case 'day':
+      return t('Day unit')
+    case 'month':
+      return t('Month unit')
+    default:
+      return ''
+  }
+}
+
+function hourRangeText(
+  start: string,
+  end: string,
+  t: (key: string) => string
+): string {
+  const startVal = Number(start)
+  const endVal = Number(end)
+  if (
+    Number.isFinite(startVal) &&
+    Number.isFinite(endVal) &&
+    startVal > endVal
+  ) {
+    return `${start}:00~${t('Next day')} ${end}:00`
+  }
+  return formatRangeText(start, end, 'hour')
+}
+
+function hourConditionText(
+  cond: TimeCondition,
+  t: (key: string) => string
+): string {
+  const prefix = t('Every day')
+  if (cond.mode === MATCH_RANGE) {
+    return `${prefix} ${hourRangeText(cond.rangeStart, cond.rangeEnd, t)}`
+  }
+  if (cond.mode === MATCH_EQ) return `${prefix} ${cond.value}:00`
+  const op = cond.mode === MATCH_GTE ? '≥' : '<'
+  return `${prefix} ${op} ${cond.value}:00`
+}
+
+function weekdayConditionText(
+  cond: TimeCondition,
+  t: (key: string) => string
+): string {
+  if (cond.mode === MATCH_EQ) {
+    const day = Number(cond.value)
+    if (Number.isInteger(day) && day >= 0 && day <= 6) {
+      return t(`Every week on day ${day}`)
+    }
+    return `${t('Every week')} ${cond.value}`
+  }
+  const prefix = t('Every week')
+  if (cond.mode === MATCH_RANGE) {
+    return `${prefix} ${formatRangeText(
+      cond.rangeStart,
+      cond.rangeEnd,
+      cond.timeFunc
+    )}`
+  }
+  const op = cond.mode === MATCH_GTE ? '≥' : '<'
+  return `${prefix} ${op} ${cond.value}`
+}
+
+function recurringTimeConditionText(
+  cond: TimeCondition,
+  t: (key: string) => string
+): string {
+  const prefix = timeFuncPrefix(cond.timeFunc, t)
+  const unit = timeUnitSuffix(cond.timeFunc, t)
+  if (cond.mode === MATCH_RANGE) {
+    return `${prefix} ${formatRangeText(
+      cond.rangeStart,
+      cond.rangeEnd,
+      cond.timeFunc
+    )}${unit}`
+  }
+  if (cond.mode === MATCH_EQ) return `${prefix} ${cond.value}${unit}`
+  const op = cond.mode === MATCH_GTE ? '≥' : '<'
+  return `${prefix} ${op} ${cond.value}${unit}`
+}
+
+function conditionChipText(
   cond: RequestCondition,
   t: (key: string) => string
 ): string {
   if (cond.source === SOURCE_TIME) {
-    const fn = t(TIME_FUNC_LABELS[cond.timeFunc] || cond.timeFunc)
-    const tz = cond.timezone || 'UTC'
-    if (cond.mode === MATCH_RANGE) {
-      return `${fn} ${cond.rangeStart}:00~${cond.rangeEnd}:00 (${tz})`
-    }
-    const opMap: Record<string, string> = {
-      [MATCH_EQ]: '=',
-      [MATCH_GTE]: '≥',
-      [MATCH_LT]: '<',
-    }
-    return `${fn} ${opMap[cond.mode] || '='} ${cond.value} (${tz})`
+    if (cond.timeFunc === 'hour') return hourConditionText(cond, t)
+    if (cond.timeFunc === 'weekday') return weekdayConditionText(cond, t)
+    return recurringTimeConditionText(cond, t)
   }
   const src = cond.source === 'header' ? t('Header') : t('Body param')
   const path = cond.path || ''
@@ -139,23 +240,112 @@ function describeCondition(
     return `${src} ${path} ${t('Contains')} "${cond.value}"`
   }
   const opMap: Record<string, string> = {
-    eq: '=',
-    gt: '>',
-    gte: '≥',
-    lt: '<',
-    lte: '≤',
+    [MATCH_EQ]: '=',
+    [MATCH_GT]: '>',
+    [MATCH_GTE]: '≥',
+    [MATCH_LT]: '<',
+    [MATCH_LTE]: '≤',
   }
   return `${src} ${path} ${opMap[cond.mode] || '='} ${cond.value}`
 }
 
-function describeGroup(
+const TIME_FUNC_PRIORITY: Record<string, number> = {
+  hour: 0,
+  minute: 1,
+  weekday: 2,
+  day: 3,
+  month: 4,
+}
+
+// Sort key for conditions inside a rule card: time-of-day first (small -> large),
+// then weekdays Monday -> Sunday, then day/month, and request conditions last.
+function conditionSortKey(
+  cond: RequestCondition,
+  originalIndex: number
+): number {
+  if (cond.source !== SOURCE_TIME) return 100_000 + originalIndex
+  const base = (TIME_FUNC_PRIORITY[cond.timeFunc] ?? 5) * 10_000
+  const value =
+    cond.mode === MATCH_RANGE ? Number(cond.rangeStart) : Number(cond.value)
+  let numeric = Number.isFinite(value) ? value : 0
+  if (cond.timeFunc === 'weekday') numeric = numeric === 0 ? 6 : numeric - 1
+  return base + Math.min(9999, Math.max(0, Math.round(numeric)))
+}
+
+type ConditionChip = { id: string; text: string; sortKey: number }
+
+function buildGroupChips(
   group: RequestRuleGroup,
   t: (key: string) => string
-): string {
-  const description = (group.conditions || [])
-    .map((condition) => describeCondition(condition, t))
-    .join(' && ')
-  return description || group.conditionText || ''
+): { chips: ConditionChip[] } {
+  const conditions = group.conditions || []
+  const chips: ConditionChip[] = []
+  const chipOccurrences = new Map<string, number>()
+
+  const pushChip = (text: string, sortKey: number) => {
+    const occurrence = chipOccurrences.get(text) || 0
+    chipOccurrences.set(text, occurrence + 1)
+    chips.push({ id: `${text}:${occurrence}`, text, sortKey })
+  }
+
+  // Merge `>= X` and `< Y` conditions on the same hour func + timezone into
+  // `X~Y` ranges (e.g. `>= 12 && < 18` -> `每天 12:00~18:00`). Each pair keeps
+  // its own && semantics, so disjoint windows stay separate instead of folding
+  // into one broad range.
+  const gtesByKey = new Map<string, { index: number; cond: TimeCondition }[]>()
+  const ltsByKey = new Map<string, { index: number; cond: TimeCondition }[]>()
+  conditions.forEach((c, index) => {
+    if (c.source !== SOURCE_TIME) return
+    if (c.timeFunc !== 'hour') return
+    if (c.mode !== MATCH_GTE && c.mode !== MATCH_LT) return
+    const key = `${c.timeFunc}:${c.timezone || 'UTC'}`
+    const list = c.mode === MATCH_GTE ? gtesByKey : ltsByKey
+    const arr = list.get(key) || []
+    arr.push({ index, cond: c })
+    list.set(key, arr)
+  })
+  const merged = new Set<number>()
+  for (const [key, gtes] of gtesByKey) {
+    const lts = ltsByKey.get(key)
+    if (!lts || lts.length === 0) continue
+    const sortedGtes = [...gtes].sort(
+      (a, b) => Number(a.cond.value) - Number(b.cond.value)
+    )
+    const sortedLts = [...lts].sort(
+      (a, b) => Number(a.cond.value) - Number(b.cond.value)
+    )
+    let ltCursor = 0
+    for (const { index: gteIndex, cond: gte } of sortedGtes) {
+      const gteVal = Number(gte.value)
+      while (
+        ltCursor < sortedLts.length &&
+        Number(sortedLts[ltCursor].cond.value) <= gteVal
+      ) {
+        ltCursor += 1
+      }
+      if (ltCursor >= sortedLts.length) break
+      const ltEntry = sortedLts[ltCursor]
+      const ltVal = Number(ltEntry.cond.value)
+      if (!Number.isFinite(gteVal) || !Number.isFinite(ltVal)) continue
+      const fn = timeFuncPrefix(gte.timeFunc, t)
+      pushChip(
+        `${fn} ${formatRangeText(gte.value, ltEntry.cond.value, gte.timeFunc)}`,
+        conditionSortKey(gte, 0)
+      )
+      merged.add(gteIndex)
+      merged.add(ltEntry.index)
+      ltCursor += 1
+    }
+  }
+
+  conditions.forEach((c, index) => {
+    if (merged.has(index)) return
+    pushChip(conditionChipText(c, t), conditionSortKey(c, index))
+  })
+
+  chips.sort((a, b) => a.sortKey - b.sortKey)
+
+  return { chips }
 }
 
 function nextOccurrenceKey(
@@ -206,6 +396,24 @@ export function DynamicPricingBreakdown({
 
   const hasTiers = tiers.length > 0
   const hasRules = ruleGroups.length > 0
+  // Distinct timezones used by the request rules, in order of first appearance.
+  // Shown once in the section header; individual conditions never repeat it.
+  const sectionTimezones = useMemo(() => {
+    const tzs: string[] = []
+    const seen = new Set<string>()
+    for (const group of ruleGroups) {
+      for (const cond of group.conditions || []) {
+        if (cond.source === SOURCE_TIME) {
+          const tz = cond.timezone || 'UTC'
+          if (!seen.has(tz)) {
+            seen.add(tz)
+            tzs.push(tz)
+          }
+        }
+      }
+    }
+    return tzs
+  }, [ruleGroups])
   const normalizedMatchedTierLabel = normalizeTierLabel(
     matchedTierLabel ?? undefined
   )
@@ -448,6 +656,11 @@ export function DynamicPricingBreakdown({
           >
             {t('Conditional multipliers')}
           </div>
+          {sectionTimezones.length > 0 && (
+            <div className='text-muted-foreground mb-2 text-xs'>
+              {t('Effective timezone')}: {sectionTimezones.join(' · ')}
+            </div>
+          )}
           <ul className='space-y-1.5'>
             {ruleGroups.map((group) => {
               const isMatched = group.matched === true
@@ -455,32 +668,48 @@ export function DynamicPricingBreakdown({
                 `${group.conditionText || JSON.stringify(group.conditions)}:${group.multiplier}`,
                 requestRuleKeyOccurrences
               )
+              const { chips } = buildGroupChips(group, t)
               return (
                 <li
                   key={`group-${rowKey}`}
                   className={cn(
-                    'bg-muted/50 flex items-center justify-between gap-3 rounded-md border border-transparent px-3 py-2',
-                    isMatched && 'border-emerald-500/40 bg-emerald-500/10'
+                    'rounded-lg border p-2.5',
+                    isMatched
+                      ? 'border-emerald-500/40 bg-emerald-500/10'
+                      : 'border-border/60 bg-card/60'
                   )}
                 >
-                  <span
-                    className={cn(
-                      'text-foreground break-all',
-                      compact ? 'text-xs' : 'text-sm'
+                  <div className='flex items-center justify-between gap-3'>
+                    {chips.length > 0 ? (
+                      <span
+                        className={cn(
+                          'text-muted-foreground min-w-0',
+                          compact ? 'text-xs' : 'text-sm'
+                        )}
+                      >
+                        {chips.map((chip) => chip.text).join(' · ')}
+                      </span>
+                    ) : (
+                      <span
+                        className={cn(
+                          'text-foreground break-all',
+                          compact ? 'text-xs' : 'text-sm'
+                        )}
+                      >
+                        {group.conditionText || ''}
+                      </span>
                     )}
-                  >
-                    {describeGroup(group, t)}
-                  </span>
-                  <Badge
-                    variant='secondary'
-                    className={cn(
-                      'shrink-0 bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300',
-                      isMatched &&
-                        'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
-                    )}
-                  >
-                    {group.multiplier}x{isMatched && ` · ${t('Matched')}`}
-                  </Badge>
+                    <Badge
+                      variant='secondary'
+                      className={cn(
+                        'shrink-0 bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300',
+                        isMatched &&
+                          'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                      )}
+                    >
+                      {group.multiplier}x{isMatched && ` · ${t('Matched')}`}
+                    </Badge>
+                  </div>
                 </li>
               )
             })}
