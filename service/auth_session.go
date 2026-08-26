@@ -101,9 +101,10 @@ func createLoginSession(userID int, expectedAuthVersion int64, loginMethod, ip, 
 	}
 	// 自动清理：活跃会话达到上限时淘汰最老的活跃会话为新会话腾位，避免
 	// AUTH_SESSION_LIMIT 硬拦截导致登录死锁（会话已建成，淘汰失败只记日志，
-	// 超限由下一次登录收敛）。
+	// 超限由下一次登录收敛）。excludedSID 传入当前会话，防止同秒创建的
+	// 平局排序把新会话自己踢掉（上游 new-api#7028 review 修复）。
 	evicted, err := model.RevokeOldestActiveUserSessions(
-		userID, int64(common.UserSessionActiveLimit), now, "active_limit_evicted",
+		userID, int64(common.UserSessionActiveLimit), now, "active_limit_evicted", session.SID,
 	)
 	if err != nil {
 		common.SysError(fmt.Sprintf("failed to evict oldest user sessions for user %d: %s", userID, err.Error()))

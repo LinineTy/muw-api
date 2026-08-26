@@ -677,7 +677,7 @@ func TestRevokeOldestActiveUserSessionsEvictsOldestFirst(t *testing.T) {
 	require.NoError(t, DB.Create(&all).Error)
 
 	// limit=2:活跃 4 个,应只淘汰 last_active_at 最老的 2 个。
-	revokedCount, err := RevokeOldestActiveUserSessions(7, 2, now, "test_evict")
+	revokedCount, err := RevokeOldestActiveUserSessions(7, 2, now, "test_evict", "")
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), revokedCount)
 
@@ -705,7 +705,36 @@ func TestRevokeOldestActiveUserSessionsNoOpUnderLimit(t *testing.T) {
 	now := time.Now().Unix()
 	require.NoError(t, DB.Create(newTestUserSession("under-limit", 8, now)).Error)
 
-	revoked, err := RevokeOldestActiveUserSessions(8, 10, now, "test_evict")
+	revoked, err := RevokeOldestActiveUserSessions(8, 10, now, "test_evict", "")
 	require.NoError(t, err)
 	assert.Zero(t, revoked)
+}
+
+func TestRevokeOldestActiveUserSessionsExcludesSpecifiedSession(t *testing.T) {
+	setupUserSessionTest(t)
+	createUserSessionTestUser(t, 9, 1)
+	now := time.Now().Unix()
+	// 所有会话 created_at 与 last_active_at 相同，淘汰顺序未定义；
+	// 被排除的会话（登录时刚创建的那个）无论顺序如何都不得被淘汰。
+	sessions := []*UserSession{
+		newTestUserSession("evict-tie-a", 9, now),
+		newTestUserSession("evict-tie-b", 9, now),
+		newTestUserSession("evict-tie-new", 9, now),
+	}
+	require.NoError(t, DB.Create(&sessions).Error)
+
+	// limit=2 且 3 个平局活跃会话：恰好淘汰 1 个，且永远不是被排除的
+	// "evict-tie-new"。
+	revokedCount, err := RevokeOldestActiveUserSessions(9, 2, now, "test_evict", "evict-tie-new")
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), revokedCount)
+
+	var excluded UserSession
+	require.NoError(t, DB.Where("sid = ?", "evict-tie-new").First(&excluded).Error)
+	assert.Equal(t, UserSessionStatusActive, excluded.Status)
+	var activeLeft int64
+	require.NoError(t, DB.Model(&UserSession{}).
+		Where("user_id = ? AND status = ?", 9, UserSessionStatusActive).
+		Count(&activeLeft).Error)
+	assert.Equal(t, int64(2), activeLeft)
 }
