@@ -438,9 +438,10 @@ const ModelRatioVisualEditorComponent = forwardRef<
         onDelete: handleDelete,
         onEdit: handleEdit,
         deleteDisabled: filterMode === 'unset',
+        selectable: batchMode,
         t,
       }),
-    [handleEdit, handleDelete, filterMode, t]
+    [handleEdit, handleDelete, filterMode, batchMode, t]
   )
 
   const ensurePageInRange = useCallback((pageCount: number) => {
@@ -762,11 +763,11 @@ const ModelRatioVisualEditorComponent = forwardRef<
             ]}
             colgroup={
               <colgroup>
-                <col className='w-9' />
+                {batchMode && <col className='w-9' />}
                 <col className='w-[300px]' />
                 <col className='w-[120px]' />
-                <col className='w-[300px]' />
                 <col className='w-auto' />
+                <col className='w-20' />
               </colgroup>
             }
             renderRow={(row, { getCellClassName }) => (

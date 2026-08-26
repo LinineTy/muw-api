@@ -220,7 +220,7 @@ export function buildPreviewRows(
   if (mode === 'tiered_expr') {
     const effectiveExpr = combineBillingExpr(billingExpr, requestRuleExpr)
     return [
-      { key: 'mode', label: 'BillingMode', value: 'tiered_expr' },
+      { key: 'mode', label: t('Billing Mode'), value: t('Expression') },
       {
         key: 'expr',
         label: t('Expression'),
@@ -234,7 +234,7 @@ export function buildPreviewRows(
     return [
       {
         key: 'price',
-        label: 'ModelPrice',
+        label: t('Model Price'),
         value: values.price || t('Empty'),
       },
     ]
