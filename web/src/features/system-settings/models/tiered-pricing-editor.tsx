@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ChevronDown, Copy, Plus, Trash2 } from 'lucide-react'
+import { AlertTriangle, ChevronDown, Copy, Plus, Trash2 } from 'lucide-react'
 import {
   memo,
   useCallback,
@@ -1105,18 +1105,9 @@ function RuleConditionRow({
     </>
   )
 
-  const previewText = useMemo(() => {
-    if (condition.source === SOURCE_TIME) {
-      if (condition.mode === MATCH_RANGE) {
-        if (!condition.rangeStart || !condition.rangeEnd) return ''
-      } else if (!condition.value) {
-        return ''
-      }
-      return formatConditionText(condition, t)
-    }
-    if (!condition.path) return ''
-    return formatConditionText(condition, t)
-  }, [condition, t])
+  // The group card header renders the natural-language live preview for the
+  // whole group; a per-row preview would just repeat the controls above it.
+  // Only issues (incomplete / always-match / never-match) render under a row.
 
   return (
     <div className='space-y-1'>
@@ -1154,12 +1145,9 @@ function RuleConditionRow({
           <Trash2 className='text-destructive h-4 w-4' />
         </Button>
       </div>
-      {(previewText || (issues && issues.length > 0)) && (
+      {issues && issues.length > 0 && (
         <div className='space-y-0.5 pl-0.5'>
-          {previewText && (
-            <p className='text-muted-foreground text-xs'>{previewText}</p>
-          )}
-          {issues?.map((issue) => (
+          {issues.map((issue) => (
             <p
               key={issue.key}
               className={cn(
@@ -1194,9 +1182,17 @@ function RuleGroupCard({ group, onChange, onRemove }: RuleGroupCardProps) {
     () => checkRequestConditionIssues(group.conditions, t),
     [group.conditions, t]
   )
-  const groupIssues = issues.filter(
-    (issue) => issue.conditionIndex === undefined
-  )
+  // Group-level issues can repeat the same message (one per conflicting
+  // timeFunc+timezone pair); dedupe so a "never matches" warning shows once.
+  const groupIssues = useMemo(() => {
+    const seen = new Set<string>()
+    return issues.filter((issue) => {
+      if (issue.conditionIndex !== undefined) return false
+      if (seen.has(issue.key)) return false
+      seen.add(issue.key)
+      return true
+    })
+  }, [issues])
   const summary = group.conditions
     .map((condition) => formatConditionText(condition, t))
     .filter(Boolean)
@@ -1222,15 +1218,25 @@ function RuleGroupCard({ group, onChange, onRemove }: RuleGroupCardProps) {
   }
 
   return (
-    <div className='bg-muted/30 space-y-3 rounded-md border p-3'>
+    <div className='space-y-3 rounded-lg border p-3'>
+      {/* Header: the × multiplier is the whole point of a rule — edit it right
+          here, with the natural-language condition summary as the live preview. */}
       <div className='flex items-center justify-between gap-2'>
-        <div className='flex min-w-0 items-center gap-2'>
-          <Badge variant='secondary' className='shrink-0'>
-            {group.multiplier.trim() ? `${group.multiplier}×` : '×'}
-          </Badge>
-          <span className='text-muted-foreground min-w-0 truncate text-xs'>
-            {summary || t('Rule group')}
+        <div className='flex min-w-0 items-center gap-1.5'>
+          <span className='text-muted-foreground text-sm' aria-hidden='true'>
+            ×
           </span>
+          <DraftNumberInput
+            min={0}
+            step={0.000001}
+            value={group.multiplier}
+            onValueChange={(value) =>
+              onChange({ ...group, multiplier: String(value) })
+            }
+            className='w-20 text-sm'
+            placeholder='1.0'
+            aria-label={t('Multiplier')}
+          />
         </div>
         <Button
           variant='ghost'
@@ -1241,14 +1247,23 @@ function RuleGroupCard({ group, onChange, onRemove }: RuleGroupCardProps) {
           <Trash2 className='text-destructive h-4 w-4' />
         </Button>
       </div>
+      <p className='text-muted-foreground min-w-0 text-xs leading-5'>
+        {summary || t('Rule group')}
+      </p>
 
       {groupIssues.length > 0 && (
-        <div className='space-y-0.5'>
-          {groupIssues.map((issue) => (
-            <p key={issue.key} className='text-destructive text-xs'>
-              {t(issue.key, issue.params)}
-            </p>
-          ))}
+        <div className='flex items-start gap-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-2'>
+          <AlertTriangle className='mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive' />
+          <div className='space-y-0.5'>
+            {groupIssues.map((issue) => (
+              <p
+                key={issue.key}
+                className='text-destructive text-xs'
+              >
+                {t(issue.key, issue.params)}
+              </p>
+            ))}
+          </div>
         </div>
       )}
 
@@ -1273,7 +1288,7 @@ function RuleGroupCard({ group, onChange, onRemove }: RuleGroupCardProps) {
         ))}
         <div className='flex flex-wrap gap-2'>
           <Button
-            variant='ghost'
+            variant='outline'
             size='sm'
             onClick={() => handleAddCondition(false)}
           >
@@ -1281,7 +1296,7 @@ function RuleGroupCard({ group, onChange, onRemove }: RuleGroupCardProps) {
             {t('Add param/header')}
           </Button>
           <Button
-            variant='ghost'
+            variant='outline'
             size='sm'
             onClick={() => handleAddCondition(true)}
           >
@@ -1289,23 +1304,6 @@ function RuleGroupCard({ group, onChange, onRemove }: RuleGroupCardProps) {
             {t('Add time condition')}
           </Button>
         </div>
-      </div>
-
-      <div className='flex items-center gap-2'>
-        <Label className='text-xs'>{t('Multiplier')}</Label>
-        <DraftNumberInput
-          min={0}
-          step={0.000001}
-          value={group.multiplier}
-          onValueChange={(value) =>
-            onChange({ ...group, multiplier: String(value) })
-          }
-          className='w-32'
-          placeholder='1.0'
-        />
-        <span className='text-muted-foreground text-xs'>
-          {t('Final cost = base × multiplier when conditions match')}
-        </span>
       </div>
     </div>
   )
@@ -1335,12 +1333,16 @@ function CollapsibleSection({
     <Collapsible open={open} onOpenChange={setOpen} className={className}>
       <CollapsibleTrigger
         render={
-          <Button variant='ghost' size='sm' className='h-7 px-2 text-xs' />
+          <Button
+            variant='ghost'
+            size='sm'
+            className='h-8 w-full justify-start px-2 text-xs font-medium text-muted-foreground hover:text-foreground'
+          />
         }
       >
         <ChevronDown
           className={cn(
-            'mr-1 h-3 w-3 transition-transform',
+            'mr-1 h-3.5 w-3.5 transition-transform',
             open && 'rotate-180'
           )}
         />
@@ -1440,7 +1442,7 @@ function CostEstimator({ effectiveExpr }: EstimatorProps) {
   )
 
   return (
-    <div className='bg-muted/30 space-y-3 rounded-md border p-3'>
+    <div className='space-y-3 rounded-lg border p-3'>
       <p className='text-muted-foreground text-xs'>
         {t(
           'Enter token counts to preview the estimated cost (excluding group multipliers).'
@@ -1633,14 +1635,18 @@ function LlmPromptHelper({ modelName }: LlmPromptHelperProps) {
     <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger
         render={
-          <Button variant='ghost' size='sm' className='h-7 px-2 text-xs' />
+          <Button
+            variant='ghost'
+            size='sm'
+            className='h-8 w-full justify-start px-2 text-xs font-medium text-muted-foreground hover:text-foreground'
+          />
         }
       >
-        <Copy className='mr-1.5 h-3 w-3' />
+        <Copy className='mr-1.5 h-3.5 w-3.5' />
         {t('LLM prompt helper')}
       </CollapsibleTrigger>
       <CollapsibleContent className='mt-2'>
-        <div className='bg-muted/30 rounded-md border p-3'>
+        <div className='rounded-lg border p-3'>
           <div className='mb-2 flex items-center justify-between'>
             <p className='text-muted-foreground text-xs'>
               {t(
@@ -1857,7 +1863,7 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
         <PresetSection applyPreset={applyPreset} />
       </CollapsibleSection>
 
-      <div className='bg-muted/30 space-y-3 rounded-md border p-3'>
+      <div className='space-y-3 rounded-lg border p-3'>
         {editorMode === 'visual' ? (
           <VisualEditor
             visualConfig={visualConfig}
