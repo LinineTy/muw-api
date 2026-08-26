@@ -60,10 +60,13 @@ function SheetContent({
   children,
   side = 'right',
   showCloseButton = true,
+  hideOverlay = false,
   ...props
 }: SheetPrimitive.Popup.Props & {
   side?: 'top' | 'right' | 'bottom' | 'left'
   showCloseButton?: boolean
+  /** Skip the dimming backdrop, e.g. for non-modal drawers over an interactive table. */
+  hideOverlay?: boolean
 }) {
   // Side-specific classes are emitted via JS conditionals (rather than
   // `data-[side=*]:` variants) so consumer-provided width overrides such as
@@ -72,7 +75,7 @@ function SheetContent({
   // and trap the panel at the default `sm:max-w-sm` width.
   return (
     <SheetPortal>
-      <SheetOverlay />
+      {!hideOverlay && <SheetOverlay />}
       <SheetPrimitive.Popup
         data-slot='sheet-content'
         data-side={side}

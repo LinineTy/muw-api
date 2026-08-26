@@ -91,6 +91,12 @@ type ModelPricingSheetProps = {
   editData?: ModelRatioData | null
   onSave?: () => void | Promise<void>
   isSaving?: boolean
+  /**
+   * Whether the drawer blocks interaction with the page behind it. Pass
+   * `false` when the drawer should overlay an interactive table (e.g. batch
+   * selection while editing). Defaults to true (modal).
+   */
+  modal?: boolean
 }
 
 type ModelPricingEditorPanelProps = Omit<
@@ -108,7 +114,7 @@ export const ModelPricingSheet = forwardRef<
   ModelPricingEditorPanelHandle,
   ModelPricingSheetProps
 >(function ModelPricingSheet(
-  { open, onOpenChange, editData, onSave, isSaving },
+  { open, onOpenChange, editData, onSave, isSaving, modal = true },
   ref
 ) {
   const { t } = useTranslation()
@@ -116,9 +122,10 @@ export const ModelPricingSheet = forwardRef<
   const description = editData?.name || t('New model')
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={onOpenChange} modal={modal}>
       <SheetContent
         side='right'
+        hideOverlay={modal === false}
         className={sideDrawerContentClassName('sm:max-w-2xl')}
       >
         <SheetHeader className='sr-only'>

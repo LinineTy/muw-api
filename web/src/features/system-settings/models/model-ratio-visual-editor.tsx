@@ -47,14 +47,17 @@ import {
   useDataTable,
 } from '@/components/data-table'
 import { Button } from '@/components/ui/button'
-import { MobileToggleMenu, ToggleMenuItem, TogglePill } from '@/components/ui/responsive-toggle'
+import {
+  MobileToggleMenu,
+  ToggleMenuItem,
+  TogglePill,
+} from '@/components/ui/responsive-toggle'
 import { combineBillingExpr } from '@/features/pricing/lib/billing-expr'
 import { useMediaQuery } from '@/hooks'
 
 import { safeJsonParse } from '../utils/json-parser'
 import type { PricingMode } from './model-pricing-core'
 import {
-  ModelPricingEditorPanel,
   type ModelPricingEditorPanelHandle,
   ModelPricingSheet,
   type ModelRatioData,
@@ -139,7 +142,6 @@ const ModelRatioVisualEditorComponent = forwardRef<
   const { t } = useTranslation()
   const isMobile = useMediaQuery('(max-width: 767px)')
   const [sheetOpen, setSheetOpen] = useState(false)
-  const [editorOpen, setEditorOpen] = useState(false)
   const [editData, setEditData] = useState<ModelRatioData | null>(null)
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -291,40 +293,35 @@ const ModelRatioVisualEditorComponent = forwardRef<
     [models]
   )
 
-  const handleEdit = useCallback(
-    (model: ModelRow) => {
-      const editableModel = model.draft ?? model.saved ?? model
-      let editBillingMode: PricingMode = 'per-token'
-      if (editableModel.billingMode === 'tiered_expr') {
-        editBillingMode = 'tiered_expr'
-      } else if (editableModel.price && editableModel.price !== '') {
-        editBillingMode = 'per-request'
-      }
-      setEditData({
-        name: editableModel.name,
-        price: editableModel.price,
-        ratio: editableModel.ratio,
-        cacheRatio: editableModel.cacheRatio,
-        createCacheRatio: editableModel.createCacheRatio,
-        completionRatio: editableModel.completionRatio,
-        imageRatio: editableModel.imageRatio,
-        audioRatio: editableModel.audioRatio,
-        audioCompletionRatio: editableModel.audioCompletionRatio,
-        billingMode: editBillingMode,
-        billingExpr: editableModel.billingExpr,
-        requestRuleExpr: editableModel.requestRuleExpr,
-      })
-      setEditorOpen(true)
-      if (isMobile) setSheetOpen(true)
-    },
-    [isMobile]
-  )
+  const handleEdit = useCallback((model: ModelRow) => {
+    const editableModel = model.draft ?? model.saved ?? model
+    let editBillingMode: PricingMode = 'per-token'
+    if (editableModel.billingMode === 'tiered_expr') {
+      editBillingMode = 'tiered_expr'
+    } else if (editableModel.price && editableModel.price !== '') {
+      editBillingMode = 'per-request'
+    }
+    setEditData({
+      name: editableModel.name,
+      price: editableModel.price,
+      ratio: editableModel.ratio,
+      cacheRatio: editableModel.cacheRatio,
+      createCacheRatio: editableModel.createCacheRatio,
+      completionRatio: editableModel.completionRatio,
+      imageRatio: editableModel.imageRatio,
+      audioRatio: editableModel.audioRatio,
+      audioCompletionRatio: editableModel.audioCompletionRatio,
+      billingMode: editBillingMode,
+      billingExpr: editableModel.billingExpr,
+      requestRuleExpr: editableModel.requestRuleExpr,
+    })
+    setSheetOpen(true)
+  }, [])
 
   const handleAdd = useCallback(() => {
     setEditData(null)
-    setEditorOpen(true)
-    if (isMobile) setSheetOpen(true)
-  }, [isMobile])
+    setSheetOpen(true)
+  }, [])
 
   const handleGlobalFilterChange = useCallback<OnChangeFn<string>>(
     (updater) => {
@@ -332,7 +329,6 @@ const ModelRatioVisualEditorComponent = forwardRef<
         const next = typeof updater === 'function' ? updater(previous) : updater
         if (next !== previous) {
           setEditData(null)
-          setEditorOpen(false)
           setSheetOpen(false)
         }
         return next
@@ -417,7 +413,6 @@ const ModelRatioVisualEditorComponent = forwardRef<
 
       if (editData?.name === name) {
         setEditData(null)
-        setEditorOpen(false)
         setSheetOpen(false)
       }
     },
@@ -627,7 +622,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
     }
 
     let sourceData = editData
-    if (editorOpen && editorPanelRef.current) {
+    if (sheetOpen && editorPanelRef.current) {
       const committed = await editorPanelRef.current.commitDraft()
       if (!committed) return
       sourceData = committed
@@ -655,13 +650,13 @@ const ModelRatioVisualEditorComponent = forwardRef<
         count: targetNames.length,
       })
     )
-  }, [editData, editorOpen, persistPricingData, t, table])
+  }, [editData, sheetOpen, persistPricingData, t, table])
 
   useImperativeHandle(
     ref,
     () => ({
       commitOpenEditor: async () => {
-        if (!editorOpen || !editorPanelRef.current) return true
+        if (!sheetOpen || !editorPanelRef.current) return true
         const data = await editorPanelRef.current.commitDraft()
         if (!data) return false
         persistPricingData(data)
@@ -669,7 +664,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
         return true
       },
     }),
-    [editorOpen, persistPricingData]
+    [sheetOpen, persistPricingData]
   )
 
   const hasRows = table.getRowModel().rows.length > 0
@@ -685,147 +680,120 @@ const ModelRatioVisualEditorComponent = forwardRef<
 
   return (
     <div className='flex flex-col gap-4'>
-      <div className='grid h-[clamp(720px,calc(100vh-12rem),900px)] min-h-0 gap-4 md:grid-cols-[minmax(300px,0.72fr)_minmax(520px,1.28fr)] xl:grid-cols-[minmax(320px,0.68fr)_minmax(640px,1.32fr)]'>
-        <div className='flex min-h-0 min-w-0 flex-col gap-3'>
-          <DataTableToolbar
-            table={table}
-            searchPlaceholder={t('Search models...')}
-            searchDebounceMs={250}
-            filters={[
-              {
-                columnId: 'billingMode',
-                title: t('Mode'),
-                options: [
-                  {
-                    label: 'Per-token',
-                    value: 'per-token',
-                    count: modeCounts['per-token'],
-                  },
-                  {
-                    label: 'Per-request',
-                    value: 'per-request',
-                    count: modeCounts['per-request'],
-                  },
-                  {
-                    label: 'Expression',
-                    value: 'tiered_expr',
-                    count: modeCounts.tiered_expr,
-                  },
-                ],
-              },
-            ]}
-            preActions={
-              <>
-                <TogglePill
-                  id='ratio-batch-mode'
-                  label={t('Batch Operations')}
-                  icon={<ListChecks className='text-muted-foreground h-4 w-4' aria-hidden='true' />}
-                  checked={batchMode}
-                  onCheckedChange={setBatchMode}
-                />
-                {filterMode !== 'unset' && (
-                  <Button onClick={handleAdd}>
-                    <Plus data-icon='inline-start' />
-                    {t('Add model')}
-                  </Button>
-                )}
-                <MobileToggleMenu>
-                  <ToggleMenuItem
-                    label={t('Batch Operations')}
-                    icon={<ListChecks className='size-4' aria-hidden='true' />}
-                    checked={batchMode}
-                    onCheckedChange={setBatchMode}
-                  />
-                </MobileToggleMenu>
-              </>
-            }
-          />
-
-          {!hasRows ? (
-            <div className='text-muted-foreground rounded-lg border border-dashed p-8 text-center'>
-              {emptyStateText}
-            </div>
-          ) : (
-            <DataTableView
-              table={table}
-              containerClassName='min-h-0 flex-1 rounded-md'
-              tableContainerClassName='h-full'
-              tableClassName='min-w-[852px] table-fixed'
-              tableHeaderClassName='[&_tr]:border-b-0'
-              splitHeaderScrollClassName='h-full'
-              bodyContainerClassName='[scrollbar-gutter:stable]'
-              splitHeader
-              pinnedColumns={[
+      <div className='flex h-[clamp(720px,calc(100vh-12rem),900px)] min-h-0 flex-col gap-3'>
+        <DataTableToolbar
+          table={table}
+          searchPlaceholder={t('Search models...')}
+          searchDebounceMs={250}
+          filters={[
+            {
+              columnId: 'billingMode',
+              title: t('Mode'),
+              options: [
                 {
-                  columnId: 'actions',
-                  side: 'right',
+                  label: 'Per-token',
+                  value: 'per-token',
+                  count: modeCounts['per-token'],
                 },
-              ]}
-              colgroup={
-                <colgroup>
-                  <col className='w-9' />
-                  <col className='w-[300px]' />
-                  <col className='w-[120px]' />
-                  <col className='w-[300px]' />
-                  <col className='w-auto' />
-                </colgroup>
-              }
-              renderRow={(row, { getCellClassName }) => (
-                <DataTableRow
-                  key={row.id}
-                  row={row}
-                  className={
-                    editData?.name === row.original.name
-                      ? 'bg-muted/45 hover:bg-muted/50 data-[state=selected]:bg-muted group'
-                      : 'group'
-                  }
-                  getColumnClassName={(columnId) =>
-                    columnId === 'actions' &&
-                    editData?.name === row.original.name
-                      ? getCellClassName(columnId, 'bg-muted')
-                      : getCellClassName(columnId)
-                  }
-                  onClick={(event) => {
-                    const target = event.target as HTMLElement
-                    if (target.closest('button, [role="checkbox"]')) return
-                    handleEdit(row.original)
-                  }}
-                />
-              )}
-            />
-          )}
-
-          {hasRows && <DataTablePagination table={table} />}
-        </div>
-
-        <div className='hidden min-h-0 min-w-0 md:block'>
-          {editorOpen ? (
-            <ModelPricingEditorPanel
-              ref={editorPanelRef}
-              editData={editData}
-              onSave={onSave}
-              isSaving={isSaving}
-              className='h-full min-h-0'
-            />
-          ) : (
-            <div className='bg-card text-muted-foreground flex h-full min-h-0 flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-6 text-center'>
-              <div className='text-foreground text-base font-medium'>
-                {t('Select a model to edit pricing')}
-              </div>
-              <p className='max-w-sm text-sm'>
-                {t(
-                  'Use the full-width table to scan prices, then select a row to edit it here.'
-                )}
-              </p>
+                {
+                  label: 'Per-request',
+                  value: 'per-request',
+                  count: modeCounts['per-request'],
+                },
+                {
+                  label: 'Expression',
+                  value: 'tiered_expr',
+                  count: modeCounts.tiered_expr,
+                },
+              ],
+            },
+          ]}
+          preActions={
+            <>
+              <TogglePill
+                id='ratio-batch-mode'
+                label={t('Batch Operations')}
+                icon={
+                  <ListChecks
+                    className='text-muted-foreground h-4 w-4'
+                    aria-hidden='true'
+                  />
+                }
+                checked={batchMode}
+                onCheckedChange={setBatchMode}
+              />
               {filterMode !== 'unset' && (
-                <Button variant='outline' onClick={handleAdd}>
+                <Button onClick={handleAdd}>
                   <Plus data-icon='inline-start' />
                   {t('Add model')}
                 </Button>
               )}
-            </div>
-          )}
-        </div>
+              <MobileToggleMenu>
+                <ToggleMenuItem
+                  label={t('Batch Operations')}
+                  icon={<ListChecks className='size-4' aria-hidden='true' />}
+                  checked={batchMode}
+                  onCheckedChange={setBatchMode}
+                />
+              </MobileToggleMenu>
+            </>
+          }
+        />
+
+        {!hasRows ? (
+          <div className='text-muted-foreground rounded-lg border border-dashed p-8 text-center'>
+            {emptyStateText}
+          </div>
+        ) : (
+          <DataTableView
+            table={table}
+            containerClassName='min-h-0 flex-1 rounded-md'
+            tableContainerClassName='h-full'
+            tableClassName='min-w-[852px] table-fixed'
+            tableHeaderClassName='[&_tr]:border-b-0'
+            splitHeaderScrollClassName='h-full'
+            bodyContainerClassName='[scrollbar-gutter:stable]'
+            splitHeader
+            pinnedColumns={[
+              {
+                columnId: 'actions',
+                side: 'right',
+              },
+            ]}
+            colgroup={
+              <colgroup>
+                <col className='w-9' />
+                <col className='w-[300px]' />
+                <col className='w-[120px]' />
+                <col className='w-[300px]' />
+                <col className='w-auto' />
+              </colgroup>
+            }
+            renderRow={(row, { getCellClassName }) => (
+              <DataTableRow
+                key={row.id}
+                row={row}
+                className={
+                  editData?.name === row.original.name
+                    ? 'bg-muted/45 hover:bg-muted/50 data-[state=selected]:bg-muted group'
+                    : 'group'
+                }
+                getColumnClassName={(columnId) =>
+                  columnId === 'actions' && editData?.name === row.original.name
+                    ? getCellClassName(columnId, 'bg-muted')
+                    : getCellClassName(columnId)
+                }
+                onClick={(event) => {
+                  const target = event.target as HTMLElement
+                  if (target.closest('button, [role="checkbox"]')) return
+                  handleEdit(row.original)
+                }}
+              />
+            )}
+          />
+        )}
+
+        {hasRows && <DataTablePagination table={table} />}
       </div>
 
       {batchMode && (
@@ -839,16 +807,15 @@ const ModelRatioVisualEditorComponent = forwardRef<
         </DataTableBulkActions>
       )}
 
-      {isMobile && (
-        <ModelPricingSheet
-          ref={editorPanelRef}
-          open={sheetOpen}
-          onOpenChange={setSheetOpen}
-          editData={editData}
-          onSave={onSave}
-          isSaving={isSaving}
-        />
-      )}
+      <ModelPricingSheet
+        ref={editorPanelRef}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        editData={editData}
+        onSave={onSave}
+        isSaving={isSaving}
+        modal={isMobile}
+      />
     </div>
   )
 })
