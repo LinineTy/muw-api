@@ -1009,6 +1009,7 @@
     "Month unit": "",
     "Next day": "next day",
     "{{label}} must be between {{min}} and {{max}}": "{{label}} must be between {{min}} and {{max}}",
+    "{{label}} must be a whole number between {{min}} and {{max}}": "{{label}} must be a whole number between {{min}} and {{max}}",
     "This condition always matches": "This condition always matches",
     "The overnight range requires start > end. For a normal window, use a ≥ and a < condition instead.": "The overnight range requires start > end. For a normal window, use a ≥ and a < condition instead.",
     "Conflicting conditions in this rule make it never match": "Conflicting conditions in this rule make it never match",

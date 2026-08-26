@@ -328,7 +328,16 @@ export function checkRequestConditionIssues(
       return
     }
     if (cond.mode === MATCH_EQ) {
-      if (v < domain.min || v > domain.max) {
+      if (!Number.isInteger(v)) {
+        // Backend time functions return an int, so `hour(tz) == 5.5` can never
+        // match. The domain check below only bounds the value, not its integrality.
+        issues.push({
+          severity: 'error',
+          key: '{{label}} must be a whole number between {{min}} and {{max}}',
+          params: rangeParams,
+          conditionIndex: index,
+        })
+      } else if (v < domain.min || v > domain.max) {
         issues.push({
           severity: 'error',
           key: '{{label}} must be between {{min}} and {{max}}',
