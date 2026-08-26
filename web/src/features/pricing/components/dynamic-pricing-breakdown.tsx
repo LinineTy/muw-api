@@ -27,13 +27,8 @@ import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import {
   BILLING_PRICING_VARS,
-  MATCH_CONTAINS,
-  MATCH_EQ,
-  MATCH_EXISTS,
   MATCH_GTE,
-  MATCH_GT,
   MATCH_LT,
-  MATCH_LTE,
   MATCH_RANGE,
   SOURCE_TIME,
   normalizeTierLabel,
@@ -48,6 +43,12 @@ import {
   type TierCondition,
   type TimeCondition,
 } from '../lib/billing-expr'
+import {
+  TIME_FUNC_PRIORITY,
+  formatConditionText,
+  formatRangeText,
+  timeFuncPrefix,
+} from '../lib/condition-format'
 
 type DynamicPricingBreakdownProps = {
   billingExpr: string | null | undefined
@@ -84,13 +85,6 @@ const OP_LABELS: Record<string, string> = {
   '>': '>',
   '>=': '≥',
 }
-const TIME_FUNC_LABELS: Record<string, string> = {
-  hour: 'Hour',
-  minute: 'Minute',
-  weekday: 'Weekday',
-  month: 'Month',
-  day: 'Day',
-}
 
 function formatTokenHint(value: string | number): string {
   const n = Number(value)
@@ -116,145 +110,6 @@ function formatConditionSummary(
     })
     .filter(Boolean)
     .join(' && ')
-}
-
-function formatRangeText(start: string, end: string, timeFunc: string): string {
-  const pad = timeFunc === 'hour' ? ':00' : ''
-  return `${start}${pad}~${end}${pad}`
-}
-
-function timeFuncPrefix(timeFunc: string, t: (key: string) => string): string {
-  switch (timeFunc) {
-    case 'hour':
-      return t('Every day')
-    case 'minute':
-      return t('Every hour')
-    case 'weekday':
-      return t('Every week')
-    case 'day':
-      return t('Every month')
-    case 'month':
-      return t('Every year')
-    default:
-      return t(TIME_FUNC_LABELS[timeFunc] || timeFunc)
-  }
-}
-
-function timeUnitSuffix(timeFunc: string, t: (key: string) => string): string {
-  switch (timeFunc) {
-    case 'minute':
-      return t('Minute unit')
-    case 'day':
-      return t('Day unit')
-    case 'month':
-      return t('Month unit')
-    default:
-      return ''
-  }
-}
-
-function hourRangeText(
-  start: string,
-  end: string,
-  t: (key: string) => string
-): string {
-  const startVal = Number(start)
-  const endVal = Number(end)
-  if (
-    Number.isFinite(startVal) &&
-    Number.isFinite(endVal) &&
-    startVal > endVal
-  ) {
-    return `${start}:00~${t('Next day')} ${end}:00`
-  }
-  return formatRangeText(start, end, 'hour')
-}
-
-function hourConditionText(
-  cond: TimeCondition,
-  t: (key: string) => string
-): string {
-  const prefix = t('Every day')
-  if (cond.mode === MATCH_RANGE) {
-    return `${prefix} ${hourRangeText(cond.rangeStart, cond.rangeEnd, t)}`
-  }
-  if (cond.mode === MATCH_EQ) return `${prefix} ${cond.value}:00`
-  const op = cond.mode === MATCH_GTE ? '≥' : '<'
-  return `${prefix} ${op} ${cond.value}:00`
-}
-
-function weekdayConditionText(
-  cond: TimeCondition,
-  t: (key: string) => string
-): string {
-  if (cond.mode === MATCH_EQ) {
-    const day = Number(cond.value)
-    if (Number.isInteger(day) && day >= 0 && day <= 6) {
-      return t(`Every week on day ${day}`)
-    }
-    return `${t('Every week')} ${cond.value}`
-  }
-  const prefix = t('Every week')
-  if (cond.mode === MATCH_RANGE) {
-    return `${prefix} ${formatRangeText(
-      cond.rangeStart,
-      cond.rangeEnd,
-      cond.timeFunc
-    )}`
-  }
-  const op = cond.mode === MATCH_GTE ? '≥' : '<'
-  return `${prefix} ${op} ${cond.value}`
-}
-
-function recurringTimeConditionText(
-  cond: TimeCondition,
-  t: (key: string) => string
-): string {
-  const prefix = timeFuncPrefix(cond.timeFunc, t)
-  const unit = timeUnitSuffix(cond.timeFunc, t)
-  if (cond.mode === MATCH_RANGE) {
-    return `${prefix} ${formatRangeText(
-      cond.rangeStart,
-      cond.rangeEnd,
-      cond.timeFunc
-    )}${unit}`
-  }
-  if (cond.mode === MATCH_EQ) return `${prefix} ${cond.value}${unit}`
-  const op = cond.mode === MATCH_GTE ? '≥' : '<'
-  return `${prefix} ${op} ${cond.value}${unit}`
-}
-
-function conditionChipText(
-  cond: RequestCondition,
-  t: (key: string) => string
-): string {
-  if (cond.source === SOURCE_TIME) {
-    if (cond.timeFunc === 'hour') return hourConditionText(cond, t)
-    if (cond.timeFunc === 'weekday') return weekdayConditionText(cond, t)
-    return recurringTimeConditionText(cond, t)
-  }
-  const src = cond.source === 'header' ? t('Header') : t('Body param')
-  const path = cond.path || ''
-  if (cond.mode === MATCH_EXISTS) return `${src} ${path} ${t('Exists')}`
-  if (cond.mode === MATCH_CONTAINS) {
-    return `${src} ${path} ${t('Contains')} "${cond.value}"`
-  }
-  const opMap: Record<string, string> = {
-    [MATCH_EQ]: '=',
-    [MATCH_GT]: '>',
-    [MATCH_GTE]: '≥',
-    [MATCH_LT]: '<',
-    [MATCH_LTE]: '≤',
-  }
-  return `${src} ${path} ${opMap[cond.mode] || '='} ${cond.value}`
-}
-
-const TIME_FUNC_PRIORITY: Record<string, number> = {
-  hour: 0,
-  minute: 1,
-  weekday: 2,
-  day: 3,
-  month: 4,
 }
 
 // Sort key for conditions inside a rule card: time-of-day first (small -> large),
@@ -340,7 +195,7 @@ function buildGroupChips(
 
   conditions.forEach((c, index) => {
     if (merged.has(index)) return
-    pushChip(conditionChipText(c, t), conditionSortKey(c, index))
+    pushChip(formatConditionText(c, t), conditionSortKey(c, index))
   })
 
   chips.sort((a, b) => a.sortKey - b.sortKey)
