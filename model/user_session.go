@@ -711,8 +711,10 @@ func RevokeAllUserSessions(userID int, reason string) (int64, error) {
 
 // RevokeOldestActiveUserSessions 按 last_active_at ASC 淘汰最老的活跃会话，
 // 使活跃会话不超过 limit（登录时为新会话腾位，避免活跃上限硬拦死登录）。
-// 低于上限时为空操作，返回实际撤销数量。
-func RevokeOldestActiveUserSessions(userID int, limit int64, now int64, reason string) (int64, error) {
+// 低于上限时为空操作，返回实际撤销数量。excludedSID（通常为刚创建的会话）
+// 永不参与淘汰：同一秒内创建的会话 created_at 与 last_active_at 相同，
+// 平局排序顺序未定义，可能把新会话踢掉而其 token 正在签发中。
+func RevokeOldestActiveUserSessions(userID int, limit int64, now int64, reason, excludedSID string) (int64, error) {
 	if userID <= 0 || limit <= 0 {
 		return 0, ErrUserSessionInvalid
 	}
@@ -727,9 +729,13 @@ func RevokeOldestActiveUserSessions(userID int, limit int64, now int64, reason s
 	if toEvict <= 0 {
 		return 0, nil
 	}
+	evictQuery := DB.Model(&UserSession{}).
+		Where("user_id = ? AND status = ? AND expires_at > ?", userID, UserSessionStatusActive, now)
+	if excludedSID != "" {
+		evictQuery = evictQuery.Where("sid <> ?", excludedSID)
+	}
 	var sids []string
-	if err := DB.Model(&UserSession{}).
-		Where("user_id = ? AND status = ? AND expires_at > ?", userID, UserSessionStatusActive, now).
+	if err := evictQuery.
 		Order("last_active_at ASC").Order("created_at ASC").
 		Limit(int(toEvict)).Pluck("sid", &sids).Error; err != nil {
 		return 0, err
