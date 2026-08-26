@@ -1075,12 +1075,26 @@ body[data-theme-preset='liquid-glass']::before {
 }
 .dark
   [data-theme-preset='liquid-glass'] :is(
-    [data-slot='sheet-content'],
     [data-slot='dialog-content'],
-    [data-slot='alert-dialog-content'],
-    [data-slot='drawer-content']
+    [data-slot='alert-dialog-content']
   ) {
   background-color: oklch(0.13 0 0 / 0.45);
+}
+
+/* 抽屉(非对话框)统一浅一档的 token:让输入框/标签/卡片与抽屉同底色、靠边框区分,
+ * 消除"input 一块深、footer 一条深"的叠层暗块,整个窗体看起来是一整块表面。 */
+.dark [data-theme-preset='liquid-glass'] :is(
+  [data-slot='sheet-content'],
+  [data-slot='drawer-content']
+) {
+  background-color: oklch(0.24 0 0 / 0.6);
+  --background: oklch(0.24 0 0 / 0.6);
+  --muted: oklch(1 0 0 / 0.07);
+  --muted-foreground: oklch(0.82 0 0);
+  --border: oklch(1 0 0 / 0.16);
+  --input: oklch(1 0 0 / 0.09);
+  --card: oklch(1 0 0 / 0.07);
+  --popover: oklch(0.24 0 0 / 0.9);
 }
 [data-theme-preset='liquid-glass'] :is(
   [data-slot='sheet-header'],
