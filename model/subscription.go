@@ -1215,7 +1215,7 @@ func calcSubscriptionBalanceQuota(priceAmount float64) (int, error) {
 	quota := decimal.NewFromFloat(priceAmount).
 		Mul(decimal.NewFromFloat(common.QuotaPerUnit)).
 		Ceil()
-	return common.QuotaFromDecimalStrict(quota)
+	return common.WalletQuotaFromDecimalStrict(quota)
 }
 
 // createBalanceOrderTx records a successful wallet-based subscription order.

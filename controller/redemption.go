@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"unicode/utf8"
@@ -96,6 +97,13 @@ func AddRedemption(c *gin.Context) {
 	if redemption.Type == common.RedemptionCodeTypeInvite {
 		// 注册邀请码是纯门禁，不携带额度。
 		redemption.Quota = 0
+	} else if redemption.Quota <= 0 {
+		// 充值码必须携带正额度。
+		common.ApiError(c, errors.New("redemption quota must be positive"))
+		return
+	} else if err := common.ValidateWalletQuota(redemption.Quota); err != nil {
+		common.ApiError(c, err)
+		return
 	}
 	if valid, msg := validateExpiredTime(c, redemption.ExpiredTime); !valid {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": msg})
@@ -169,6 +177,14 @@ func UpdateRedemption(c *gin.Context) {
 		return
 	}
 	if statusOnly == "" {
+		if redemption.Quota <= 0 {
+			common.ApiError(c, errors.New("redemption quota must be positive"))
+			return
+		}
+		if err := common.ValidateWalletQuota(redemption.Quota); err != nil {
+			common.ApiError(c, err)
+			return
+		}
 		if valid, msg := validateExpiredTime(c, redemption.ExpiredTime); !valid {
 			c.JSON(http.StatusOK, gin.H{"success": false, "message": msg})
 			return
