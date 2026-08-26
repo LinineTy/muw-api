@@ -126,7 +126,7 @@ export const ModelPricingSheet = forwardRef<
       <SheetContent
         side='right'
         hideOverlay={modal === false}
-        className={sideDrawerContentClassName('sm:max-w-2xl')}
+        className={sideDrawerContentClassName('sm:max-w-3xl')}
       >
         <SheetHeader className='sr-only'>
           <SheetTitle>{title}</SheetTitle>
@@ -487,7 +487,7 @@ export const ModelPricingEditorPanel = forwardRef<
   return (
     <div
       className={cn(
-        'bg-background flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border',
+        'flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border',
         className
       )}
     >
@@ -508,7 +508,31 @@ export const ModelPricingEditorPanel = forwardRef<
           autoComplete='off'
         >
           <div className='min-h-0 flex-1 overflow-y-auto p-4 pb-6'>
-            <div className='grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(220px,260px)]'>
+            <div className='grid gap-4 lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start'>
+              <aside className='bg-muted/20 hidden self-start rounded-lg border lg:sticky lg:top-0 lg:block'>
+                <div className='border-b px-3 py-2'>
+                  <div className='text-sm font-medium'>{t('Preview')}</div>
+                </div>
+                <div className='divide-y'>
+                  {previewRows.map((row) => (
+                    <div key={row.key} className='grid gap-1 px-3 py-2.5'>
+                      <span className='text-muted-foreground text-xs'>
+                        {row.label}
+                      </span>
+                      <span
+                        className={cn(
+                          'min-w-0 text-sm',
+                          row.multiline
+                            ? 'font-mono text-xs leading-5 break-words whitespace-pre-wrap'
+                            : 'truncate'
+                        )}
+                      >
+                        {row.value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </aside>
               <FieldGroup>
                 {warnings.length > 0 && (
                   <Alert variant='destructive'>
@@ -660,35 +684,10 @@ export const ModelPricingEditorPanel = forwardRef<
                   </TabsContent>
                 </Tabs>
               </FieldGroup>
-
-              <aside className='bg-muted/20 sticky top-0 rounded-lg border'>
-                <div className='border-b px-3 py-2'>
-                  <div className='text-sm font-medium'>{t('Preview')}</div>
-                </div>
-                <div className='divide-y'>
-                  {previewRows.map((row) => (
-                    <div key={row.key} className='grid gap-1 px-3 py-2.5'>
-                      <span className='text-muted-foreground text-xs'>
-                        {row.label}
-                      </span>
-                      <span
-                        className={cn(
-                          'min-w-0 text-sm',
-                          row.multiline
-                            ? 'font-mono text-xs leading-5 break-words whitespace-pre-wrap'
-                            : 'truncate'
-                        )}
-                      >
-                        {row.value}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </aside>
             </div>
           </div>
           {showActions && (
-            <div className='bg-background/95 supports-[backdrop-filter]:bg-background/80 shrink-0 border-t p-3 backdrop-blur'>
+            <div className='shrink-0 border-t p-3'>
               <div className='flex flex-col-reverse gap-2 sm:flex-row sm:justify-end'>
                 {onSave && (
                   <Button

@@ -1898,35 +1898,33 @@ export function ChannelMutateDrawer({
       <Sheet open={open} onOpenChange={handleOpenChange}>
         <SheetContent className={sideDrawerContentClassName('sm:max-w-5xl')}>
           <SheetHeader className={sideDrawerHeaderClassName()}>
-            <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
-              <div className='min-w-0'>
-                <SheetTitle className='flex items-center gap-3'>
-                  <IconBadge tone='info' size='title'>
-                    <ChannelTypeLogo type={currentType} size={22} />
-                  </IconBadge>
-                  <span>
-                    {isEditing ? t('Edit Channel') : t('Create Channel')}
-                    <span className='text-muted-foreground ml-2 text-sm font-normal'>
-                      {t(currentTypeLabel)}
-                    </span>
+            <div className='min-w-0'>
+              <SheetTitle className='flex items-center gap-3'>
+                <IconBadge tone='info' size='title'>
+                  <ChannelTypeLogo type={currentType} size={22} />
+                </IconBadge>
+                <span>
+                  {isEditing ? t('Edit Channel') : t('Create Channel')}
+                  <span className='text-muted-foreground ml-2 text-sm font-normal'>
+                    {t(currentTypeLabel)}
                   </span>
-                </SheetTitle>
-                <SheetDescription className='mt-1'>
-                  {isEditing
-                    ? t(
-                        "Update channel configuration and click save when you're done."
-                      )
-                    : t(
-                        'Add a new channel by providing the necessary information.'
-                      )}
-                </SheetDescription>
-              </div>
+                </span>
+              </SheetTitle>
+              <SheetDescription className='mt-1'>
+                {isEditing
+                  ? t(
+                      "Update channel configuration and click save when you're done."
+                    )
+                  : t(
+                      'Add a new channel by providing the necessary information.'
+                    )}
+              </SheetDescription>
               {!isEditing && (
                 <Button
                   type='button'
                   variant='outline'
                   size='sm'
-                  className='shrink-0'
+                  className='mt-2 shrink-0'
                   onClick={pasteConnectionInfoFromClipboard}
                 >
                   <ClipboardPaste className='size-4' />
