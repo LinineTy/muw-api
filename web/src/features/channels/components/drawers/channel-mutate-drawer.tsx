@@ -31,6 +31,7 @@ import {
   Server,
   Sparkles,
   Trash2,
+  X,
   Copy,
   FileText,
   Eraser,
@@ -107,6 +108,7 @@ import { NumericSpinnerInput } from '../numeric-spinner-input'
 import {
   Tooltip,
   TooltipContent,
+  TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import {
@@ -937,6 +939,12 @@ export function ChannelMutateDrawer({
   const modelSettings =
     useWatch({ control: form.control, name: 'model_settings' }) ?? []
 
+  // 尚未配置设置的模型（「添加模型设置」下拉的候选）。
+  // 计算很轻（filter + some），不值得 memo；modelSettings 由 useWatch 提供。
+  const unconfiguredModels = currentModelsArray.filter(
+    (m) => !modelSettings.some((s) => s.model === m)
+  )
+
   const currentTypeLabel = useMemo(
     () =>
       CHANNEL_TYPE_OPTIONS.find((option) => option.value === currentType)
@@ -1478,6 +1486,20 @@ export function ChannelMutateDrawer({
         ]
       }
       form.setValue('model_settings', next)
+    },
+    [form]
+  )
+
+  // 移除某模型的设置行 = 恢复默认（启用 + 继承模型默认）。
+  // 后端 ReplaceChannelModelSettings 全量对齐，缺省行即从表中清除。
+  const removeModelSetting = useCallback(
+    (model: string) => {
+      form.setValue(
+        'model_settings',
+        (form.getValues('model_settings') ?? []).filter(
+          (s) => s.model !== model
+        )
+      )
     },
     [form]
   )
@@ -3477,29 +3499,70 @@ export function ChannelMutateDrawer({
                                   </FormControl>
                                   {currentModelsArray.length > 0 && (
                                     <div className='mt-4 space-y-2'>
-                                      <div className='flex items-center justify-between'>
-                                        <Label className='text-foreground text-xs font-medium'>
-                                          {t('Per-model settings')}
-                                        </Label>
-                                        <span className='text-muted-foreground text-xs'>
-                                          {t(
-                                            'Disable individual models or override their context window. 0 = use model default.'
+                                      <div className='flex items-center justify-between gap-3'>
+                                        <div className='flex items-center gap-2'>
+                                          <Label className='text-foreground text-xs font-medium'>
+                                            {t('Per-model settings')}
+                                          </Label>
+                                          {modelSettings.length > 0 && (
+                                            <Badge
+                                              variant='outline'
+                                              className='text-muted-foreground text-xs'
+                                            >
+                                              {t(
+                                                '{{count}} of {{total}} configured',
+                                                {
+                                                  count: modelSettings.length,
+                                                  total: currentModelsArray.length,
+                                                }
+                                              )}
+                                            </Badge>
                                           )}
-                                        </span>
-                                      </div>
-                                      <div className='border-border/60 divide-y rounded-md border'>
-                                        {currentModelsArray.map((model) => {
-                                          const setting =
-                                            modelSettings.find(
-                                              (s) => s.model === model
-                                            ) ?? {
-                                              model,
-                                              enabled: true,
-                                              context_window: null,
+                                        </div>
+                                        {unconfiguredModels.length > 0 && (
+                                          <Select
+                                            key={unconfiguredModels.join('|')}
+                                            onValueChange={(model) =>
+                                              updateModelSetting(model as string, {
+                                                enabled: true,
+                                                context_window: null,
+                                              })
                                             }
-                                          return (
+                                          >
+                                            <SelectTrigger
+                                              size='sm'
+                                              className='w-44'
+                                            >
+                                              <SelectValue
+                                                placeholder={t(
+                                                  'Add model setting'
+                                                )}
+                                              />
+                                            </SelectTrigger>
+                                            <SelectContent
+                                              alignItemWithTrigger={false}
+                                            >
+                                              <SelectGroup>
+                                                {unconfiguredModels.map(
+                                                  (model) => (
+                                                    <SelectItem
+                                                      key={model}
+                                                      value={model}
+                                                    >
+                                                      {model}
+                                                    </SelectItem>
+                                                  )
+                                                )}
+                                              </SelectGroup>
+                                            </SelectContent>
+                                          </Select>
+                                        )}
+                                      </div>
+                                      {modelSettings.length > 0 ? (
+                                        <div className='border-border/60 divide-y rounded-md border'>
+                                          {modelSettings.map((setting) => (
                                             <div
-                                              key={model}
+                                              key={setting.model}
                                               className='flex items-center justify-between gap-3 px-3 py-2'
                                             >
                                               <span
@@ -3509,7 +3572,7 @@ export function ChannelMutateDrawer({
                                                     'text-muted-foreground line-through'
                                                 )}
                                               >
-                                                {model}
+                                                {setting.model}
                                               </span>
                                               <div className='flex shrink-0 items-center gap-3'>
                                                 <NumericSpinnerInput
@@ -3517,9 +3580,10 @@ export function ChannelMutateDrawer({
                                                     setting.context_window
                                                   }
                                                   onChange={(v) =>
-                                                    updateModelSetting(model, {
-                                                      context_window: v,
-                                                    })
+                                                    updateModelSetting(
+                                                      setting.model,
+                                                      { context_window: v }
+                                                    )
                                                   }
                                                   min={0}
                                                   label={t('Context')}
@@ -3527,20 +3591,56 @@ export function ChannelMutateDrawer({
                                                 <Switch
                                                   checked={setting.enabled}
                                                   onCheckedChange={(checked) =>
-                                                    updateModelSetting(model, {
-                                                      enabled: checked,
-                                                    })
+                                                    updateModelSetting(
+                                                      setting.model,
+                                                      { enabled: checked }
+                                                    )
                                                   }
                                                   aria-label={t(
                                                     'Enable or disable {{model}}',
-                                                    { model }
+                                                    { model: setting.model }
                                                   )}
                                                 />
+                                                <TooltipProvider delay={100}>
+                                                  <Tooltip>
+                                                    <TooltipTrigger
+                                                      render={
+                                                        <Button
+                                                          type='button'
+                                                          variant='ghost'
+                                                          size='sm'
+                                                          className='text-muted-foreground hover:text-foreground h-6 w-6 p-0'
+                                                          onClick={() =>
+                                                            removeModelSetting(
+                                                              setting.model
+                                                            )
+                                                          }
+                                                        >
+                                                          <X className='h-3.5 w-3.5' />
+                                                        </Button>
+                                                      }
+                                                    />
+                                                    <TooltipContent side='top'>
+                                                      {t('Reset to default')}
+                                                    </TooltipContent>
+                                                  </Tooltip>
+                                                </TooltipProvider>
                                               </div>
                                             </div>
-                                          )
-                                        })}
-                                      </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p className='text-muted-foreground text-xs'>
+                                          {t(
+                                            'No custom settings. All models use defaults.'
+                                          )}
+                                        </p>
+                                      )}
+                                      <p className='text-muted-foreground text-xs'>
+                                        {t(
+                                          'Disable individual models or override their context window. 0 = use model default.'
+                                        )}
+                                      </p>
                                     </div>
                                   )}
                                   {modelMappingGuardrail.exposedTargetModels

@@ -23,6 +23,7 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
+  EyeOff,
   Gauge,
   ListOrdered,
   Shuffle,
@@ -156,6 +157,38 @@ function UpstreamUpdateTags({ channel }: { channel: Channel }) {
         />
       )}
     </div>
+  )
+}
+
+/**
+ * Disabled-models badge: a compact indicator next to the channel name when one
+ * or more models are disabled in this channel (via channel model settings).
+ * The model-line-through in the Models column is easy to miss once folded;
+ * this makes the disabled state visible from the name cell.
+ */
+function DisabledModelsBadge({ channel }: { channel: Channel }) {
+  const { t } = useTranslation()
+  const disabled = (channel.model_settings ?? []).filter((s) => !s.enabled)
+  if (disabled.length === 0) {
+    return null
+  }
+  const modelNames = disabled.map((s) => s.model).join(', ')
+  return (
+    <TooltipProvider delay={100}>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <EyeOff className='text-violet-600 dark:text-violet-300 h-3.5 w-3.5 flex-shrink-0' />
+          }
+        />
+        <TooltipContent side='top'>
+          {t('{{count}} model(s) disabled: {{models}}', {
+            count: disabled.length,
+            models: modelNames,
+          })}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   )
 }
 
@@ -769,6 +802,7 @@ export function useChannelsColumns(
                     </TooltipProvider>
                   )}
                   <CodingPlanLinkedBadge channel={channel} />
+                  <DisabledModelsBadge channel={channel} />
                   <UpstreamUpdateTags channel={channel} />
                 </div>
                 {channel.remark && (

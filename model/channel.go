@@ -347,8 +347,7 @@ func splitModelSettings(settings []ChannelModelSetting) (map[string]bool, map[st
 
 // loadChannelsModelSettings 批量加载渠道的模型设置（禁用/上下文覆盖）并填充到各渠道。
 // 供管理端列表/搜索一次 IN 查询，避免每渠道一次 DB 查询。
-func loadChannelsModelSettings(channels []*Channel) error {
-	ids := lo.Map(channels, func(ch *Channel, _ int) int { return ch.Id })
+func loadChannelsModelSettings(channels []*Channel) error {	ids := lo.Map(channels, func(ch *Channel, _ int) int { return ch.Id })
 	if len(ids) == 0 {
 		return nil
 	}
@@ -364,6 +363,12 @@ func loadChannelsModelSettings(channels []*Channel) error {
 		ch.DisabledModels, ch.ModelContextWindows, ch.ModelSettings = splitModelSettings(byChannel[ch.Id])
 	}
 	return nil
+}
+
+// LoadChannelsModelSettings 加载渠道的模型覆盖设置（禁用/上下文覆盖）并填充到各渠道。
+// 导出版供 controller 在内联列表查询（不走 model.GetAllChannels）后调用。
+func LoadChannelsModelSettings(channels []*Channel) error {
+	return loadChannelsModelSettings(channels)
 }
 
 // ensureDisabledModelsLoaded 保证 DisabledModels 已加载（abilities 重建/缓存索引
@@ -707,13 +712,9 @@ func (channel *Channel) Update() error {
 		return err
 	}
 	DB.Model(channel).First(channel, "id = ?", channel.Id)
-	// 渠道内模型设置（禁用/上下文覆盖）写入，并清理 models 列表外的失效行
-	if len(channel.ModelSettings) > 0 {
-		if err := UpsertChannelModelSettings(channel.Id, channel.ModelSettings); err != nil {
-			return err
-		}
-	}
-	if err := CleanupStaleChannelModelSettings(channel.Id, channel.GetModels()); err != nil {
+	// 渠道内模型设置（禁用/上下文覆盖）全量对齐：提交什么就是什么，表内不留
+	// 传入集合外的行。前端只提交「已配置」行，其余模型恢复默认。
+	if err := ReplaceChannelModelSettings(channel.Id, channel.ModelSettings); err != nil {
 		return err
 	}
 	err = channel.UpdateAbilities(nil)

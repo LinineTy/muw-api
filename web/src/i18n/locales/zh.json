@@ -4018,7 +4018,7 @@
     "Reset subscription quota": "重置订阅额度",
     "Reset the user passkey": "重置了用户的通行密钥",
     "Reset to Default": "重置为默认",
-    "Reset to default": "重置为默认",
+    "Reset to default": "恢复默认",
     "Reset to default configuration": "已重置为默认配置",
     "Reset usage window": "重置用量窗口",
     "Reset {{count}} active subscriptions": "已重置 {{count}} 个有效订阅",
@@ -6488,6 +6488,16 @@
     "Total quota included in the plan, usable per billing period. 0 means unlimited.": "套餐包含的总额度，每个计费周期可用；0 表示不限量",
     "Upstream JSON response": "上游 JSON 响应",
     "Upstream protocol plan": "上游协议方案",
-    "Use Bearer for all protocols": "所有协议统一使用 Bearer"
+    "Use Bearer for all protocols": "所有协议统一使用 Bearer",
+    "Per-model settings": "模型设置",
+    "Disable individual models or override their context window. 0 = use model default.": "可禁用单个模型或覆盖其上下文窗口。0 = 使用模型默认值。",
+    "Enable or disable {{model}}": "启用或禁用 {{model}}",
+    "Add model setting": "添加模型设置",
+    "{{count}} of {{total}} configured": "已设置 {{count}}/{{total}}",
+    "No custom settings. All models use defaults.": "暂无自定义设置，所有模型使用默认值。",
+    "{{count}} model(s) disabled: {{models}}": "已禁用 {{count}} 个模型：{{models}}",
+    "Context Window": "上下文窗口",
+    "e.g. 131072, 0 or empty = unlimited": "例如 131072，0 或留空 = 不限制",
+    "Maximum context window in tokens. Requests exceeding it are rejected with 400.": "最大上下文窗口（token）。请求超过则返回 400 拒绝。"
   }
 }
