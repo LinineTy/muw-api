@@ -51,7 +51,7 @@ import {
   useCallback,
   useRef,
 } from 'react'
-import { type SubmitErrorHandler, useForm } from 'react-hook-form'
+import { type SubmitErrorHandler, useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -102,6 +102,8 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { NumericSpinnerInput } from '../numeric-spinner-input'
 import {
   Tooltip,
   TooltipContent,
@@ -167,6 +169,7 @@ import {
   getKeyPromptForType,
   parseModelsString,
   formatModelsArray,
+  syncModelSettings,
   extractRedirectModels,
   extractMappingSourceModels,
   hasModelConfigChanged,
@@ -178,7 +181,7 @@ import {
   collectInvalidStatusCodeEntries,
   collectNewDisallowedStatusCodeRedirects,
 } from '../../lib/status-code-risk-guard'
-import type { Channel } from '../../types'
+import type { Channel, ChannelModelSettingForm } from '../../types'
 import { useChannels } from '../channels-provider'
 import { CodingPlanBaseUrlField } from '../coding-plan-base-url-field'
 import { AdvancedCustomEditorDialog } from '../dialogs/advanced-custom-editor-dialog'
@@ -930,6 +933,10 @@ export function ChannelMutateDrawer({
     [currentModels]
   )
 
+  // 渠道内模型设置（禁用/上下文覆盖），与 models 同步
+  const modelSettings =
+    useWatch({ control: form.control, name: 'model_settings' }) ?? []
+
   const currentTypeLabel = useMemo(
     () =>
       CHANNEL_TYPE_OPTIONS.find((option) => option.value === currentType)
@@ -1426,16 +1433,64 @@ export function ChannelMutateDrawer({
     }
   }, [channelId, queryClient, t])
 
+  // 更新 models 时同步渠道内模型设置：新增模型补默认行（启用+继承模型默认）、
+  // 移除的模型删除对应行。
+  const applyModelsAndSyncSettings = useCallback(
+    (selected: string[]) => {
+      form.setValue('models', formatModelsArray(selected))
+      form.setValue(
+        'model_settings',
+        syncModelSettings(form.getValues('model_settings') ?? [], selected)
+      )
+    },
+    [form]
+  )
+
+  // 更新单个模型的设置（禁用 / 上下文覆盖）。context_window 为 0 表示继承模型默认。
+  // 无设置行的模型（默认启用 + 继承模型默认）先建行再应用变更，否则点击不生效。
+  const updateModelSetting = useCallback(
+    (model: string, patch: Partial<ChannelModelSettingForm>) => {
+      const current: ChannelModelSettingForm[] = (
+        form.getValues('model_settings') ?? []
+      ).map((s) => ({
+        model: s.model,
+        enabled: s.enabled,
+        context_window: s.context_window ?? null,
+      }))
+      const existing = current.find((s) => s.model === model)
+      const applyPatch = (s: ChannelModelSettingForm): ChannelModelSettingForm => {
+        if ('context_window' in patch && (patch.context_window ?? 0) <= 0) {
+          return { ...s, context_window: null }
+        }
+        return {
+          ...s,
+          ...patch,
+          context_window: patch.context_window ?? s.context_window ?? null,
+        }
+      }
+      let next: ChannelModelSettingForm[]
+      if (existing) {
+        next = current.map((s) => (s.model === model ? applyPatch(s) : s))
+      } else {
+        next = [
+          ...current,
+          applyPatch({ model, enabled: true, context_window: null }),
+        ]
+      }
+      form.setValue('model_settings', next)
+    },
+    [form]
+  )
+
   // Unified function to update models
   const updateModels = useCallback(
     (newModels: string[], merge: boolean = false) => {
-      const finalModels = merge
-        ? formatModelsArray([...currentModelsArray, ...newModels])
-        : formatModelsArray(newModels)
-      form.setValue('models', finalModels)
+      applyModelsAndSyncSettings(
+        merge ? [...currentModelsArray, ...newModels] : newModels
+      )
       return newModels.length
     },
-    [currentModelsArray, form]
+    [currentModelsArray, applyModelsAndSyncSettings]
   )
 
   // Handle fetching models from upstream
@@ -1532,9 +1587,9 @@ export function ChannelMutateDrawer({
   }, [allModelsList, updateModels, t])
 
   const handleClearModels = useCallback(() => {
-    form.setValue('models', '')
+    applyModelsAndSyncSettings([])
     toast.success(t('Cleared all models'))
-  }, [form, t])
+  }, [applyModelsAndSyncSettings, t])
 
   const handleCopyModels = useCallback(async () => {
     const models = form.getValues('models')
@@ -1574,9 +1629,9 @@ export function ChannelMutateDrawer({
   // Handle model selection change from MultiSelect
   const handleModelsChange = useCallback(
     (selected: string[]) => {
-      form.setValue('models', selected.join(','))
+      applyModelsAndSyncSettings(selected)
     },
-    [form]
+    [applyModelsAndSyncSettings]
   )
 
   // Handle successful submission
@@ -3420,6 +3475,74 @@ export function ChannelMutateDrawer({
                                       copyChipOnClick
                                     />
                                   </FormControl>
+                                  {currentModelsArray.length > 0 && (
+                                    <div className='mt-4 space-y-2'>
+                                      <div className='flex items-center justify-between'>
+                                        <Label className='text-foreground text-xs font-medium'>
+                                          {t('Per-model settings')}
+                                        </Label>
+                                        <span className='text-muted-foreground text-xs'>
+                                          {t(
+                                            'Disable individual models or override their context window. 0 = use model default.'
+                                          )}
+                                        </span>
+                                      </div>
+                                      <div className='border-border/60 divide-y rounded-md border'>
+                                        {currentModelsArray.map((model) => {
+                                          const setting =
+                                            modelSettings.find(
+                                              (s) => s.model === model
+                                            ) ?? {
+                                              model,
+                                              enabled: true,
+                                              context_window: null,
+                                            }
+                                          return (
+                                            <div
+                                              key={model}
+                                              className='flex items-center justify-between gap-3 px-3 py-2'
+                                            >
+                                              <span
+                                                className={cn(
+                                                  'truncate text-sm',
+                                                  !setting.enabled &&
+                                                    'text-muted-foreground line-through'
+                                                )}
+                                              >
+                                                {model}
+                                              </span>
+                                              <div className='flex shrink-0 items-center gap-3'>
+                                                <NumericSpinnerInput
+                                                  value={
+                                                    setting.context_window
+                                                  }
+                                                  onChange={(v) =>
+                                                    updateModelSetting(model, {
+                                                      context_window: v,
+                                                    })
+                                                  }
+                                                  min={0}
+                                                  label={t('Context')}
+                                                />
+                                                <Switch
+                                                  checked={setting.enabled}
+                                                  onCheckedChange={(checked) =>
+                                                    updateModelSetting(model, {
+                                                      enabled: checked,
+                                                    })
+                                                  }
+                                                  aria-label={t(
+                                                    'Enable or disable {{model}}',
+                                                    { model }
+                                                  )}
+                                                />
+                                              </div>
+                                            </div>
+                                          )
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
                                   {modelMappingGuardrail.exposedTargetModels
                                     .length > 0 && (
                                     <Alert className='border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-50'>

@@ -141,4 +141,6 @@ var channelNonSensitiveFields = map[string]struct{}{
 	"channel_info":         {},
 	"multi_key_mode":       {},
 	"coding_plan_provider": {},
+	// 渠道内模型设置（禁用/上下文覆盖），不涉及凭据，属非敏感
+	"model_settings": {},
 }

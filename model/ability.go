@@ -143,7 +143,13 @@ func GetChannel(group string, model string, retry int, requestPath string) (*Cha
 		return nil, nil
 	}
 	err = DB.First(&channel, "id = ?", channel.Id).Error
-	return &channel, err
+	if err != nil {
+		return nil, err
+	}
+	// 挂载渠道内模型设置（禁用/上下文覆盖），供渠道级 context 校验使用；
+	// 加载失败不阻断选路（禁用态已由 abilities.enabled 过滤）。
+	_ = channel.loadModelSettings()
+	return &channel, nil
 }
 
 // filterAbilitiesByRequestPathAndModel restricts candidates by request path and
@@ -194,6 +200,9 @@ func filterAbilitiesByRequestPathAndModel(abilities []Ability, requestPath strin
 }
 
 func (channel *Channel) AddAbilities(tx *gorm.DB) error {
+	if err := channel.ensureDisabledModelsLoaded(); err != nil {
+		return err
+	}
 	models_ := strings.Split(channel.Models, ",")
 	groups_ := strings.Split(channel.Group, ",")
 	abilitySet := make(map[string]struct{})
@@ -209,7 +218,7 @@ func (channel *Channel) AddAbilities(tx *gorm.DB) error {
 				Group:     group,
 				Model:     model,
 				ChannelId: channel.Id,
-				Enabled:   channel.Status == common.ChannelStatusEnabled,
+				Enabled:   channel.Status == common.ChannelStatusEnabled && !channel.DisabledModels[model],
 				Priority:  channel.Priority,
 				Weight:    uint(channel.GetWeight()),
 				Tag:       channel.Tag,
@@ -266,6 +275,12 @@ func (channel *Channel) UpdateAbilities(tx *gorm.DB) error {
 	}
 
 	// Then add new abilities
+	if err := channel.ensureDisabledModelsLoaded(); err != nil {
+		if isNewTx {
+			tx.Rollback()
+		}
+		return err
+	}
 	models_ := strings.Split(channel.Models, ",")
 	groups_ := strings.Split(channel.Group, ",")
 	abilitySet := make(map[string]struct{})
@@ -281,7 +296,7 @@ func (channel *Channel) UpdateAbilities(tx *gorm.DB) error {
 				Group:     group,
 				Model:     model,
 				ChannelId: channel.Id,
-				Enabled:   channel.Status == common.ChannelStatusEnabled,
+				Enabled:   channel.Status == common.ChannelStatusEnabled && !channel.DisabledModels[model],
 				Priority:  channel.Priority,
 				Weight:    uint(channel.GetWeight()),
 				Tag:       channel.Tag,
@@ -311,11 +326,54 @@ func (channel *Channel) UpdateAbilities(tx *gorm.DB) error {
 }
 
 func UpdateAbilityStatus(channelId int, status bool) error {
-	return DB.Model(&Ability{}).Where("channel_id = ?", channelId).Select("enabled").Update("enabled", status).Error
+	err := DB.Model(&Ability{}).Where("channel_id = ?", channelId).Select("enabled").Update("enabled", status).Error
+	if err != nil {
+		return err
+	}
+	// 渠道整体启用会把渠道内被单独禁用的模型也置为 enabled，恢复禁用态；
+	// 整体禁用（status=false）时全部为 false，无需恢复。
+	if status {
+		return ReapplyDisabledModels([]int{channelId})
+	}
+	return nil
 }
 
 func UpdateAbilityStatusByTag(tag string, status bool) error {
-	return DB.Model(&Ability{}).Where("tag = ?", tag).Select("enabled").Update("enabled", status).Error
+	err := DB.Model(&Ability{}).Where("tag = ?", tag).Select("enabled").Update("enabled", status).Error
+	if err != nil {
+		return err
+	}
+	if !status {
+		return nil
+	}
+	var channelIds []int
+	if err := DB.Model(&Channel{}).Where("tag = ?", tag).Pluck("id", &channelIds).Error; err != nil {
+		return err
+	}
+	return ReapplyDisabledModels(channelIds)
+}
+
+// ReapplyDisabledModels 把渠道内被单独禁用的模型重新置为 disabled
+// （abilities.enabled=false）。供 UpdateAbilityStatus/UpdateAbilityStatusByTag 整渠道/
+// 整 tag 置 enabled 后调用，恢复渠道内模型级禁用态。
+// 用 GORM 通用查询+逐条更新，避免 SQLite/MySQL/PG 的 UPDATE JOIN 方言差异。
+func ReapplyDisabledModels(channelIds []int) error {
+	if len(channelIds) == 0 {
+		return nil
+	}
+	var disabled []ChannelModelSetting
+	if err := DB.Where("channel_id IN (?) AND enabled = ?", channelIds, false).
+		Find(&disabled).Error; err != nil {
+		return err
+	}
+	for _, s := range disabled {
+		if err := DB.Model(&Ability{}).
+			Where("channel_id = ? AND model = ?", s.ChannelId, s.Model).
+			Update("enabled", false).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func UpdateAbilityByTag(tag string, newTag *string, priority *int64, weight *uint) error {

@@ -28,7 +28,7 @@ import {
   MODEL_FETCHABLE_TYPES,
   OPENAI_FIELD_PASSTHROUGH_TYPES,
 } from '../constants'
-import type { Channel } from '../types'
+import type { Channel, ChannelModelSettingForm } from '../types'
 import {
   CHANNEL_TYPE_ADVANCED_CUSTOM,
   advancedCustomConfigUsesRelativeUpstreamPath,
@@ -290,6 +290,16 @@ export const channelFormSchema = z
     upstream_model_update_check_enabled: z.boolean().optional(),
     upstream_model_update_auto_sync_enabled: z.boolean().optional(),
     upstream_model_update_ignored_models: z.string().optional(),
+    // 渠道内模型设置（禁用/上下文覆盖），随 channel payload 提交
+    model_settings: z
+      .array(
+        z.object({
+          model: z.string(),
+          enabled: z.boolean(),
+          context_window: z.number().nullable().optional(),
+        })
+      )
+      .optional(),
   })
   .superRefine((data, ctx) => {
     if (
@@ -468,6 +478,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   upstream_model_update_auto_sync_enabled: false,
   upstream_model_update_ignored_models: '',
   advanced_custom: '',
+  model_settings: [],
 }
 
 // ============================================================================
@@ -619,6 +630,11 @@ export function transformChannelToFormDefaults(
     upstream_model_update_auto_sync_enabled: upstreamModelUpdateAutoSyncEnabled,
     upstream_model_update_ignored_models: upstreamModelUpdateIgnoredModels,
     advanced_custom: advancedCustom,
+    model_settings: (channel.model_settings ?? []).map((s) => ({
+      model: s.model,
+      enabled: s.enabled,
+      context_window: s.context_window ?? null,
+    })),
   }
 }
 
@@ -803,6 +819,54 @@ function normalizeBaseUrl(value: string | undefined): string {
 }
 
 /**
+ * 序列化表单态模型设置 → 提交 payload。全量输出（含默认行）：
+ * 「从禁用改回启用」必须输出 enabled=true 的行覆盖表里的旧 false 行。
+ * 后端按 OnConflict 更新 enabled/context_window，且 Channel.Update 会清理
+ * models 列表外的失效行，不会累积。
+ */
+export function serializeModelSettings(
+  settings: Array<{
+    model: string
+    enabled: boolean
+    context_window?: number | null
+  }> | undefined
+): ChannelModelSettingForm[] {
+  if (!settings?.length) return []
+  return settings.map((s) => ({
+    model: s.model,
+    enabled: s.enabled,
+    context_window: s.context_window ?? null,
+  }))
+}
+
+/**
+ * 同步表单态模型设置与当前已选模型：保留仍在列表里的行，为新选中的模型
+ * 补默认行（启用 + 继承模型默认）。取消选择的行移除。
+ */
+export function syncModelSettings(
+  settings: Array<{
+    model: string
+    enabled: boolean
+    context_window?: number | null
+  }>,
+  selectedModels: string[]
+): ChannelModelSettingForm[] {
+  const selectedSet = new Set(selectedModels)
+  const retained = settings.filter((s) => selectedSet.has(s.model))
+  const retainedModels = new Set(retained.map((s) => s.model))
+  for (const model of selectedModels) {
+    if (!retainedModels.has(model)) {
+      retained.push({ model, enabled: true, context_window: null })
+    }
+  }
+  return retained.map((s) => ({
+    model: s.model,
+    enabled: s.enabled,
+    context_window: s.context_window ?? null,
+  }))
+}
+
+/**
  * Transform form data to API payload for creating channel
  */
 export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
@@ -837,6 +901,7 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
     header_override: formData.header_override || null,
     settings: buildSettingsJSON(formData),
     other: formData.other || '',
+    model_settings: serializeModelSettings(formData.model_settings),
   }
 
   // Clean up empty strings to null for optional fields
@@ -888,6 +953,7 @@ export function transformFormDataToUpdatePayload(
     header_override: formData.header_override || null,
     settings: buildSettingsJSON(formData),
     other: formData.other || '',
+    model_settings: serializeModelSettings(formData.model_settings),
   }
 
   // Only include key if it was changed (not empty), unless the channel type

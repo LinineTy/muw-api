@@ -34,6 +34,21 @@ export const channelInfoSchema = z.object({
 
 export type ChannelInfo = z.infer<typeof channelInfoSchema>
 
+// 渠道内模型设置（channel_model_settings 表）：无行 = 启用 + 上下文用模型默认。
+export interface ChannelModelSetting {
+  channel_id: number
+  model: string
+  enabled: boolean
+  context_window: number | null
+}
+
+// 表单态：提交时随 channel payload 携带，channel_id 由后端覆盖。
+export interface ChannelModelSettingForm {
+  model: string
+  enabled: boolean
+  context_window: number | null | undefined
+}
+
 export const channelSchema = z.object({
   id: z.number(),
   type: z.number(),
@@ -75,6 +90,15 @@ export const channelSchema = z.object({
   coding_plan_key_masked: z.string().nullish(), // 套餐专用密钥的脱敏预览
   // 编码套餐余量分组指纹("厂商:密钥指纹"):同 key 多渠道共享同一值,前端据此合并成一张余量卡。
   coding_plan_quota_group: z.string().nullish(),
+  model_settings: z
+    .array(
+      z.object({
+        model: z.string(),
+        enabled: z.boolean(),
+        context_window: z.number().nullable().optional(),
+      })
+    )
+    .optional(),
 })
 
 export type Channel = z.infer<typeof channelSchema>

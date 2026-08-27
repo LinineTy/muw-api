@@ -68,7 +68,11 @@ func (SchemaMigration) TableName() string { return "schema_migrations" }
 // weekly/monthly_amount_limit 六列 + 订阅 cycle_start_at/cycle_used/next_cycle_reset_at 三列）。
 // 删列由 ensureDropLegacySubscriptionPlanColumns / ensureDropLegacyUserSubscriptionColumns
 // 幂等执行（挂在 migrateDB 两条分支，每次启动自检）；此处只打版本戳记录 schema 变更。
-const CurrentSchemaVersion = 16
+// v17：新增 channel_model_settings 表（渠道内模型级禁用 + 渠道级 context_window 覆盖，
+// 只写非默认值行）+ models.context_window 列（模型级上下文窗口）。表/列由 AutoMigrate
+// （升版本路径）或 ensureChannelModelSettingsTable / ensureModelsContextWindowColumn
+// （已最新版本库的跳过路径）创建，无需数据转换——无行 = 启用 + 继承模型默认。
+const CurrentSchemaVersion = 17
 
 // Migration 是一个可单独应用、记录版本戳的迁移步骤。Up 按版本升序执行，
 // 用于 AutoMigrate 补不了的结构改造（换类型、删列）与数据迁移/特殊适配。
@@ -163,6 +167,10 @@ var migrations = []Migration{
 	// v16：移除 legacy 订阅配额模型（9 个 legacy 列）。删列由幂等 ensureDropLegacy* 在
 	// migrateDB 两条分支每次启动自检执行（跨 SQLite/MySQL/PostgreSQL）；本条目只打版本戳。
 	{Version: 16, Name: "subscription-remove-legacy-columns", Up: func(db *gorm.DB) error { return nil }},
+	// v17：channel_model_settings 表 + models.context_window 列由 AutoMigrate（升版本路径）
+	// 或 ensureChannelModelSettingsTable / ensureModelsContextWindowColumn（已最新版本库的
+	// 跳过路径）创建，无需数据转换；只打版本戳推进 shouldSkipMigration。
+	{Version: 17, Name: "channel-model-settings-context-window", Up: func(db *gorm.DB) error { return nil }},
 }
 
 // ensureSchemaMigrationsTable 用纯 SQL 建版本表，避免对版本表自身跑 AutoMigrate。
