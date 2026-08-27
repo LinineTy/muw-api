@@ -68,6 +68,7 @@ import {
   SOURCE_TIME,
   TIME_FUNCS,
   buildRequestRuleExpr,
+  buildTierDnfExpr,
   combineBillingExpr,
   createEmptyCondition,
   createEmptyRuleGroup,
@@ -744,7 +745,10 @@ function VisualEditor({ visualConfig, onChange }: VisualEditorProps) {
   const validationIssues = useMemo(() => {
     const issues: string[] = []
     config.tiers.forEach((tier, index) => {
-      if (!tier.isFallback && tier.conditions.length === 0) {
+      // A tier with no conditions — or only empty OR branches, which serialize
+      // to nothing — degrades to an unconditional bare tier that shadows every
+      // tier below it. Test the serialized form so both shapes are caught.
+      if (!tier.isFallback && buildTierDnfExpr(tier.conditions) === '') {
         issues.push(
           t('Tier {{index}} always matches and hides the tiers below it. Add a condition or remove it.', {
             index: index + 1,
