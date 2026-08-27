@@ -1,0 +1,144 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+import { describe, expect, it } from 'vitest'
+
+import {
+  checkRequestDnfIssues,
+  formatRequestDnfText,
+  formatTierDnfText,
+  type ConditionIssue,
+} from './condition-format'
+import type { RequestDnf } from './billing-expr'
+
+const t = (key: string): string => key
+
+describe('formatRequestDnfText', () => {
+  it('joins branches with a localized OR word', () => {
+    const text = formatRequestDnfText(
+      [
+        {
+          conditions: [
+            { source: 'param', path: 'a', mode: 'eq', value: 'x' },
+          ],
+        },
+        {
+          conditions: [
+            { source: 'param', path: 'b', mode: 'eq', value: 'y' },
+          ],
+        },
+      ],
+      t
+    )
+    expect(text).toBe('Body param a = x OR Body param b = y')
+  })
+})
+
+describe('formatTierDnfText', () => {
+  it('renders AND within a clause and OR between branches', () => {
+    const text = formatTierDnfText(
+      [
+        {
+          conditions: [
+            { var: 'len', op: '<', value: 32000 },
+            { var: 'c', op: '<', value: 200 },
+          ],
+        },
+        { conditions: [{ var: 'len', op: '>', value: 100000 }] },
+      ],
+      t
+    )
+    expect(text).toBe('Length < 32K && Output < 200 OR Length > 100K')
+  })
+})
+
+describe('checkRequestDnfIssues', () => {
+  it('flags a never-matching branch but keeps others alive', () => {
+    const issues = checkRequestDnfIssues(
+      [
+        // hour >= 12 && hour < 6 -> empty window, never matches
+        {
+          conditions: [
+            {
+              source: 'time',
+              timeFunc: 'hour',
+              timezone: 'UTC',
+              mode: 'gte',
+              value: '12',
+              rangeStart: '',
+              rangeEnd: '',
+            },
+            {
+              source: 'time',
+              timeFunc: 'hour',
+              timezone: 'UTC',
+              mode: 'lt',
+              value: '6',
+              rangeStart: '',
+              rangeEnd: '',
+            },
+          ],
+        },
+        {
+          conditions: [
+            { source: 'param', path: 'ok', mode: 'eq', value: '1' },
+          ],
+        },
+      ],
+      t
+    )
+    // The dead branch gets a branch-level conflict error, the alive branch keeps
+    // the group alive (no group-level "never match" error).
+    expect(issues.some((i) => i.branchIndex === 0 && i.conditionIndex === undefined)).toBe(true)
+    expect(issues.some((i) => i.branchIndex === undefined && i.conditionIndex === undefined)).toBe(false)
+  })
+
+  it('errors on a rule group where every branch never matches', () => {
+    const deadBranch = {
+      conditions: [
+        {
+          source: 'time',
+          timeFunc: 'hour',
+          timezone: 'UTC',
+          mode: 'gte',
+          value: '12',
+          rangeStart: '',
+          rangeEnd: '',
+        },
+        {
+          source: 'time',
+          timeFunc: 'hour',
+          timezone: 'UTC',
+          mode: 'lt',
+          value: '6',
+          rangeStart: '',
+          rangeEnd: '',
+        },
+      ],
+    }
+    const issues = checkRequestDnfIssues([deadBranch] as RequestDnf, t)
+    expect(
+      issues.some(
+        (issue: ConditionIssue) =>
+          issue.key === 'Conflicting conditions in this rule make it never match' &&
+          issue.branchIndex === undefined &&
+          issue.conditionIndex === undefined
+      )
+    ).toBe(true)
+  })
+})

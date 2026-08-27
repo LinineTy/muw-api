@@ -40,14 +40,15 @@ import {
   type RequestCondition,
   type RequestRuleGroup,
   type RequestRuleTrace,
-  type TierCondition,
   type TimeCondition,
 } from '../lib/billing-expr'
 import {
   TIME_FUNC_PRIORITY,
   formatConditionText,
+  formatTierDnfText,
   formatRangeText,
   timeFuncPrefix,
+  weekdayRangeText,
 } from '../lib/condition-format'
 
 type DynamicPricingBreakdownProps = {
@@ -74,44 +75,6 @@ type DynamicPricingBreakdownProps = {
   compact?: boolean
 }
 
-const VAR_LABELS: Record<string, string> = {
-  p: 'Input',
-  c: 'Output',
-  len: 'Length',
-}
-const OP_LABELS: Record<string, string> = {
-  '<': '<',
-  '<=': '≤',
-  '>': '>',
-  '>=': '≥',
-}
-
-function formatTokenHint(value: string | number): string {
-  const n = Number(value)
-  if (!Number.isFinite(n) || n === 0) return ''
-  if (n >= 1_000_000) {
-    return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`
-  }
-  if (n >= 1000) {
-    return `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}K`
-  }
-  return String(n)
-}
-
-function formatConditionSummary(
-  conditions: TierCondition[],
-  t: (key: string) => string
-): string {
-  return conditions
-    .map((c) => {
-      const varLabel = t(VAR_LABELS[c.var] || c.var)
-      const hint = formatTokenHint(c.value)
-      return `${varLabel} ${OP_LABELS[c.op] || c.op} ${hint || c.value}`
-    })
-    .filter(Boolean)
-    .join(' && ')
-}
-
 // Sort key for conditions inside a rule card: time-of-day first (small -> large),
 // then weekdays Monday -> Sunday, then day/month, and request conditions last.
 function conditionSortKey(
@@ -127,31 +90,34 @@ function conditionSortKey(
   return base + Math.min(9999, Math.max(0, Math.round(numeric)))
 }
 
-type ConditionChip = { id: string; text: string; sortKey: number }
+type ConditionChip = { text: string; sortKey: number }
 
-function buildGroupChips(
-  group: RequestRuleGroup,
+// Natural-language text for one AND-clause: `>= X`/`< Y` windows on the same
+// hour/weekday func + timezone merge into one range chip, the remaining
+// conditions render via `formatConditionText`, all ordered and joined by ` · `.
+function buildBranchText(
+  conditions: RequestCondition[],
   t: (key: string) => string
-): { chips: ConditionChip[] } {
-  const conditions = group.conditions || []
+): string {
   const chips: ConditionChip[] = []
   const chipOccurrences = new Map<string, number>()
 
   const pushChip = (text: string, sortKey: number) => {
     const occurrence = chipOccurrences.get(text) || 0
     chipOccurrences.set(text, occurrence + 1)
-    chips.push({ id: `${text}:${occurrence}`, text, sortKey })
+    chips.push({ text, sortKey })
   }
 
-  // Merge `>= X` and `< Y` conditions on the same hour func + timezone into
-  // `X~Y` ranges (e.g. `>= 12 && < 18` -> `每天 12:00~18:00`). Each pair keeps
-  // its own && semantics, so disjoint windows stay separate instead of folding
-  // into one broad range.
+  // Merge `>= X` and `< Y` conditions on the same time func + timezone into a
+  // single window chip (e.g. `hour >= 12 && hour < 18` -> `每天 12:00~18:00`,
+  // `weekday >= 1 && weekday < 6` -> `每周一~周五`). Each pair keeps its own &&
+  // semantics, so disjoint windows stay separate instead of folding into one
+  // broad range.
   const gtesByKey = new Map<string, { index: number; cond: TimeCondition }[]>()
   const ltsByKey = new Map<string, { index: number; cond: TimeCondition }[]>()
   conditions.forEach((c, index) => {
     if (c.source !== SOURCE_TIME) return
-    if (c.timeFunc !== 'hour') return
+    if (c.timeFunc !== 'hour' && c.timeFunc !== 'weekday') return
     if (c.mode !== MATCH_GTE && c.mode !== MATCH_LT) return
     const key = `${c.timeFunc}:${c.timezone || 'UTC'}`
     const list = c.mode === MATCH_GTE ? gtesByKey : ltsByKey
@@ -182,11 +148,15 @@ function buildGroupChips(
       const ltEntry = sortedLts[ltCursor]
       const ltVal = Number(ltEntry.cond.value)
       if (!Number.isFinite(gteVal) || !Number.isFinite(ltVal)) continue
-      const fn = timeFuncPrefix(gte.timeFunc, t)
-      pushChip(
-        `${fn} ${formatRangeText(gte.value, ltEntry.cond.value, gte.timeFunc)}`,
-        conditionSortKey(gte, 0)
-      )
+      const chipText =
+        gte.timeFunc === 'weekday'
+          ? weekdayRangeText(gte.value, ltEntry.cond.value, t)
+          : `${timeFuncPrefix(gte.timeFunc, t)} ${formatRangeText(
+              gte.value,
+              ltEntry.cond.value,
+              gte.timeFunc
+            )}`
+      pushChip(chipText, conditionSortKey(gte, 0))
       merged.add(gteIndex)
       merged.add(ltEntry.index)
       ltCursor += 1
@@ -199,8 +169,21 @@ function buildGroupChips(
   })
 
   chips.sort((a, b) => a.sortKey - b.sortKey)
+  return chips.map((chip) => chip.text).join(' · ')
+}
 
-  return { chips }
+// Natural-language text for a rule group's DNF: each OR branch renders via
+// `buildBranchText`; branches are joined by a localized OR word.
+function buildGroupChips(
+  group: RequestRuleGroup,
+  t: (key: string) => string
+): string {
+  const branchTexts = (group.conditions || [])
+    .map((branch) => buildBranchText(branch.conditions || [], t))
+    .filter(Boolean)
+  if (branchTexts.length === 0) return ''
+  if (branchTexts.length === 1) return branchTexts[0]
+  return branchTexts.join(` ${t('OR')} `)
 }
 
 function nextOccurrenceKey(
@@ -257,12 +240,14 @@ export function DynamicPricingBreakdown({
     const tzs: string[] = []
     const seen = new Set<string>()
     for (const group of ruleGroups) {
-      for (const cond of group.conditions || []) {
-        if (cond.source === SOURCE_TIME) {
-          const tz = cond.timezone || 'UTC'
-          if (!seen.has(tz)) {
-            seen.add(tz)
-            tzs.push(tz)
+      for (const branch of group.conditions || []) {
+        for (const cond of branch.conditions || []) {
+          if (cond.source === SOURCE_TIME) {
+            const tz = cond.timezone || 'UTC'
+            if (!seen.has(tz)) {
+              seen.add(tz)
+              tzs.push(tz)
+            }
           }
         }
       }
@@ -344,7 +329,7 @@ export function DynamicPricingBreakdown({
           </div>
           <div className='space-y-1.5 sm:hidden'>
             {tiers.map((tier) => {
-              const condSummary = formatConditionSummary(tier.conditions, t)
+              const condSummary = formatTierDnfText(tier.conditions, t)
               const isMatched =
                 matchedTierLabel != null &&
                 matchedTierLabel !== '' &&
@@ -439,7 +424,7 @@ export function DynamicPricingBreakdown({
                 ),
                 cellClassName: cn('align-top', compact ? 'py-2' : 'py-2.5'),
                 cell: (tier) => {
-                  const condSummary = formatConditionSummary(tier.conditions, t)
+                  const condSummary = formatTierDnfText(tier.conditions, t)
                   const isMatched =
                     normalizedMatchedTierLabel !== '' &&
                     normalizeTierLabel(tier.label) ===
@@ -523,7 +508,7 @@ export function DynamicPricingBreakdown({
                 `${group.conditionText || JSON.stringify(group.conditions)}:${group.multiplier}`,
                 requestRuleKeyOccurrences
               )
-              const { chips } = buildGroupChips(group, t)
+              const chipsText = buildGroupChips(group, t)
               return (
                 <li
                   key={`group-${rowKey}`}
@@ -535,14 +520,14 @@ export function DynamicPricingBreakdown({
                   )}
                 >
                   <div className='flex items-center justify-between gap-3'>
-                    {chips.length > 0 ? (
+                    {chipsText ? (
                       <span
                         className={cn(
                           'text-muted-foreground min-w-0',
                           compact ? 'text-xs' : 'text-sm'
                         )}
                       >
-                        {chips.map((chip) => chip.text).join(' · ')}
+                        {chipsText}
                       </span>
                     ) : (
                       <span
