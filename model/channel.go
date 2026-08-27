@@ -347,7 +347,8 @@ func splitModelSettings(settings []ChannelModelSetting) (map[string]bool, map[st
 
 // loadChannelsModelSettings 批量加载渠道的模型设置（禁用/上下文覆盖）并填充到各渠道。
 // 供管理端列表/搜索一次 IN 查询，避免每渠道一次 DB 查询。
-func loadChannelsModelSettings(channels []*Channel) error {	ids := lo.Map(channels, func(ch *Channel, _ int) int { return ch.Id })
+func loadChannelsModelSettings(channels []*Channel) error {
+	ids := lo.Map(channels, func(ch *Channel, _ int) int { return ch.Id })
 	if len(ids) == 0 {
 		return nil
 	}
@@ -712,11 +713,10 @@ func (channel *Channel) Update() error {
 		return err
 	}
 	DB.Model(channel).First(channel, "id = ?", channel.Id)
-	// 渠道内模型设置（禁用/上下文覆盖）全量对齐：提交什么就是什么，表内不留
-	// 传入集合外的行。前端只提交「已配置」行，其余模型恢复默认。
-	if err := ReplaceChannelModelSettings(channel.Id, channel.ModelSettings); err != nil {
-		return err
-	}
+	// 渠道内模型设置（禁用/上下文覆盖）不在此处落库：全量对齐以调用方携带的
+	// ModelSettings 为准，任何未显式携带 model_settings 的局部更新（改名称、MultiKey
+	// 操作等）都会把 settings 表清空。写入口收敛到 controller.UpdateChannel（请求显式
+	// 携带 model_settings 时调用 ReplaceChannelModelSettings），其余路径保持不动。
 	err = channel.UpdateAbilities(nil)
 	return err
 }
