@@ -6496,6 +6496,7 @@
     "{{count}} of {{total}} configured": "{{count}} of {{total}} configured",
     "No custom settings. All models use defaults.": "No custom settings. All models use defaults.",
     "{{count}} model(s) disabled: {{models}}": "{{count}} model(s) disabled: {{models}}",
+    "{{count}} model(s) with context window override: {{models}}": "{{count}} модель(ей) с переопределением контекстного окна: {{models}}",
     "Context Window": "Context Window",
     "e.g. 131072, 0 or empty = unlimited": "e.g. 131072, 0 or empty = unlimited",
     "Maximum context window in tokens. Requests exceeding it are rejected with 400.": "Maximum context window in tokens. Requests exceeding it are rejected with 400."

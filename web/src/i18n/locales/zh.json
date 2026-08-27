@@ -6496,6 +6496,7 @@
     "{{count}} of {{total}} configured": "已设置 {{count}}/{{total}}",
     "No custom settings. All models use defaults.": "暂无自定义设置，所有模型使用默认值。",
     "{{count}} model(s) disabled: {{models}}": "已禁用 {{count}} 个模型：{{models}}",
+    "{{count}} model(s) with context window override: {{models}}": "{{count}} 个模型设置了上下文窗口覆盖：{{models}}",
     "Context Window": "上下文窗口",
     "e.g. 131072, 0 or empty = unlimited": "例如 131072，0 或留空 = 不限制",
     "Maximum context window in tokens. Requests exceeding it are rejected with 400.": "最大上下文窗口（token）。请求超过则返回 400 拒绝。"
