@@ -23,14 +23,13 @@ describe('syncModelSettings', () => {
     })
   })
 
-  it('adds default rows for newly selected models', () => {
+  it('does not add default rows for newly selected models (unset = default)', () => {
     const result = syncModelSettings(
       [{ model: 'gpt-4o', enabled: true, context_window: null }],
       ['gpt-4o', 'claude-3-opus']
     )
     expect(result).toEqual([
       { model: 'gpt-4o', enabled: true, context_window: null },
-      { model: 'claude-3-opus', enabled: true, context_window: null },
     ])
   })
 

@@ -6488,6 +6488,16 @@
     "Total quota included in the plan, usable per billing period. 0 means unlimited.": "プランに含まれる合計クォータ。請求期間ごとに使用可能。0 は無制限を意味します。",
     "Upstream JSON response": "上流 JSON レスポンス",
     "Upstream protocol plan": "上流プロトコルプラン",
-    "Use Bearer for all protocols": "すべてのプロトコルで Bearer を使用"
+    "Use Bearer for all protocols": "すべてのプロトコルで Bearer を使用",
+    "Per-model settings": "Per-model settings",
+    "Disable individual models or override their context window. 0 = use model default.": "Disable individual models or override their context window. 0 = use model default.",
+    "Enable or disable {{model}}": "Enable or disable {{model}}",
+    "Add model setting": "Add model setting",
+    "{{count}} of {{total}} configured": "{{count}} of {{total}} configured",
+    "No custom settings. All models use defaults.": "No custom settings. All models use defaults.",
+    "{{count}} model(s) disabled: {{models}}": "{{count}} model(s) disabled: {{models}}",
+    "Context Window": "Context Window",
+    "e.g. 131072, 0 or empty = unlimited": "e.g. 131072, 0 or empty = unlimited",
+    "Maximum context window in tokens. Requests exceeding it are rejected with 400.": "Maximum context window in tokens. Requests exceeding it are rejected with 400."
   }
 }

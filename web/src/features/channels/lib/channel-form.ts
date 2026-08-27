@@ -840,8 +840,10 @@ export function serializeModelSettings(
 }
 
 /**
- * 同步表单态模型设置与当前已选模型：保留仍在列表里的行，为新选中的模型
- * 补默认行（启用 + 继承模型默认）。取消选择的行移除。
+ * 同步表单态模型设置与当前已选模型：保留仍在列表里的行，移除已取消选择的
+ * 模型的设置行。不再为每个模型补默认行——设置区只承载「已配置」的行
+ * （禁用或上下文覆盖），未配置的模型走默认（启用 + 继承模型默认）。
+ * 后端 ReplaceChannelModelSettings 以传入集合为最终态，缺省即恢复默认。
  */
 export function syncModelSettings(
   settings: Array<{
@@ -852,18 +854,13 @@ export function syncModelSettings(
   selectedModels: string[]
 ): ChannelModelSettingForm[] {
   const selectedSet = new Set(selectedModels)
-  const retained = settings.filter((s) => selectedSet.has(s.model))
-  const retainedModels = new Set(retained.map((s) => s.model))
-  for (const model of selectedModels) {
-    if (!retainedModels.has(model)) {
-      retained.push({ model, enabled: true, context_window: null })
-    }
-  }
-  return retained.map((s) => ({
-    model: s.model,
-    enabled: s.enabled,
-    context_window: s.context_window ?? null,
-  }))
+  return settings
+    .filter((s) => selectedSet.has(s.model))
+    .map((s) => ({
+      model: s.model,
+      enabled: s.enabled,
+      context_window: s.context_window ?? null,
+    }))
 }
 
 /**

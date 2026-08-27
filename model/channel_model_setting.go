@@ -81,6 +81,30 @@ func CleanupStaleChannelModelSettings(channelId int, models []string) error {
 	return DB.Where("channel_id = ? AND model NOT IN (?)", channelId, models).Delete(&ChannelModelSetting{}).Error
 }
 
+// ReplaceChannelModelSettings 全量对齐某渠道的模型设置：事务内 upsert 传入行，
+// 并删除该渠道下不在传入集合中的行。前端只提交「已配置」的行（禁用或上下文覆盖），
+// 其余模型视为默认；传入空集合 = 该渠道全部恢复默认（清空表内行）。
+// 替代 UpsertChannelModelSettings + CleanupStaleChannelModelSettings 的组合：
+// 全量语义保证「删行恢复默认」时表内旧 enabled=false 行一并清除，禁用态不会残留。
+func ReplaceChannelModelSettings(channelId int, settings []ChannelModelSetting) error {
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if len(settings) > 0 {
+			if err := upsertChannelModelSettingsWithDB(tx, channelId, settings); err != nil {
+				return err
+			}
+		}
+		models := make([]string, 0, len(settings))
+		for _, s := range settings {
+			models = append(models, s.Model)
+		}
+		query := tx.Where("channel_id = ?", channelId)
+		if len(models) > 0 {
+			query = query.Where("model NOT IN (?)", models)
+		}
+		return query.Delete(&ChannelModelSetting{}).Error
+	})
+}
+
 // GetChannelModelSettings 读取某渠道全部模型设置。
 func GetChannelModelSettings(channelId int) ([]ChannelModelSetting, error) {
 	var settings []ChannelModelSetting

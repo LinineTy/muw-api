@@ -178,6 +178,12 @@ func GetAllChannels(c *gin.Context) {
 		}
 	}
 
+	// 填充渠道内模型设置（禁用/上下文覆盖），供列表展示禁用图标与上下文信息。
+	// 本接口列表查询是内联的（未走 model.GetAllChannels），必须显式加载。
+	if err := model.LoadChannelsModelSettings(channelData); err != nil {
+		common.SysError("failed to load channel model settings: " + err.Error())
+	}
+
 	for _, datum := range channelData {
 		clearChannelInfo(datum)
 	}
