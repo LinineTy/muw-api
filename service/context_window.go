@@ -94,7 +94,13 @@ func contextWindowError(info *relaycommon.RelayInfo, meta *types.TokenCountMeta,
 
 // CheckModelContextWindow 校验模型级 context_window（models 表配置，选渠道前执行）。
 // 超限返回 400 且带 SkipRetry：该模型的上下文限制对所有渠道一致，换渠道无意义。
+// 仅当该模型不存在任何渠道级覆盖时才生效——一旦存在覆盖，「渠道级覆盖 > 模型默认」，
+// 模型默认不再构成全局硬上限，需在选渠道后由 CheckChannelContextWindow 逐渠道判定
+// （覆盖 ?? 模型默认），否则更大覆盖的渠道会被模型默认值提前挡掉。
 func CheckModelContextWindow(c *gin.Context, meta *types.TokenCountMeta, info *relaycommon.RelayInfo) *types.NewAPIError {
+	if model.ModelHasChannelContextOverride(info.OriginModelName) {
+		return nil
+	}
 	limit, ok := model.GetModelContextWindow(info.OriginModelName)
 	if !ok || limit <= 0 {
 		return nil
@@ -103,9 +109,13 @@ func CheckModelContextWindow(c *gin.Context, meta *types.TokenCountMeta, info *r
 }
 
 // CheckChannelContextWindow 校验渠道级 context_window 覆盖（选渠道后执行）。
+// 生效上限 = 渠道覆盖 ?? 模型默认：无覆盖的渠道继承模型级配置，覆盖更大时按覆盖放行。
 // 不带 SkipRetry：另一渠道可能有更大的覆盖值，超限交给重试循环尝试下一渠道。
 func CheckChannelContextWindow(c *gin.Context, meta *types.TokenCountMeta, info *relaycommon.RelayInfo, channel *model.Channel) *types.NewAPIError {
 	limit, ok := channel.GetModelContextWindow(info.OriginModelName)
+	if !ok || limit <= 0 {
+		limit, ok = model.GetModelContextWindow(info.OriginModelName)
+	}
 	if !ok || limit <= 0 {
 		return nil
 	}
