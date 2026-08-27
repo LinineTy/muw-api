@@ -1022,6 +1022,7 @@
     "The overnight range requires start > end. For a normal window, use a ≥ and a < condition instead.": "跨日范围要求开始大于结束。普通时段请拆成 ≥ 和 < 两个条件。",
     "Conflicting conditions in this rule make it never match": "此规则组的条件互相冲突，永不匹配",
     "This condition is incomplete and will be ignored when saved": "此条件不完整，保存后会被忽略",
+    "This OR branch has no conditions and will be ignored when saved": "此或分支没有条件，保存后会被忽略",
     "Conditions": "条件",
     "Conditions (AND)": "条件（AND）",
     "Confidence": "置信度",

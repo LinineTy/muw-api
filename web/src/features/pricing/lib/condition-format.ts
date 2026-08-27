@@ -586,6 +586,19 @@ export function checkRequestDnfIssues(
   const branches = dnf || []
   let anyBranchAlive = false
   branches.forEach((branch, branchIndex) => {
+    if (branch.conditions.length === 0) {
+      // An empty OR branch serializes to nothing (the serializer drops it), so
+      // it can neither match nor conflict. Surface it instead of letting it
+      // vanish silently, and don't count it as alive — otherwise a sibling dead
+      // branch below would never raise the group-level never-match error even
+      // though the serialized rule (sans empty branch) still never matches.
+      issues.push({
+        severity: 'warning',
+        key: 'This OR branch has no conditions and will be ignored when saved',
+        branchIndex,
+      })
+      return
+    }
     branch.conditions.forEach((cond, conditionIndex) => {
       issues.push(...checkOneRequestCondition(cond, t, branchIndex, conditionIndex))
     })
@@ -596,7 +609,13 @@ export function checkRequestDnfIssues(
       anyBranchAlive = true
     }
   })
-  if (branches.length > 0 && !anyBranchAlive) {
+  // Group-level never-match only when at least one branch survives serialization
+  // and every surviving branch is dead — a group of entirely empty branches is
+  // "ignored", not "never matching".
+  if (
+    branches.some((branch) => branch.conditions.length > 0) &&
+    !anyBranchAlive
+  ) {
     issues.push({
       severity: 'error',
       key: 'Conflicting conditions in this rule make it never match',

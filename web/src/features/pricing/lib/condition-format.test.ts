@@ -141,4 +141,90 @@ describe('checkRequestDnfIssues', () => {
       )
     ).toBe(true)
   })
+
+  it('an empty branch must not mask a never-match group (it is dropped on serialize)', () => {
+    // The empty OR branch is dropped by the serializer, leaving only the dead
+    // `hour >= 12 && hour < 6` window — the group still never matches.
+    const issues = checkRequestDnfIssues(
+      [
+        { conditions: [] },
+        {
+          conditions: [
+            {
+              source: 'time',
+              timeFunc: 'hour',
+              timezone: 'UTC',
+              mode: 'gte',
+              value: '12',
+              rangeStart: '',
+              rangeEnd: '',
+            },
+            {
+              source: 'time',
+              timeFunc: 'hour',
+              timezone: 'UTC',
+              mode: 'lt',
+              value: '6',
+              rangeStart: '',
+              rangeEnd: '',
+            },
+          ],
+        },
+      ] as RequestDnf,
+      t
+    )
+    expect(
+      issues.some(
+        (issue: ConditionIssue) =>
+          issue.key === 'This OR branch has no conditions and will be ignored when saved' &&
+          issue.branchIndex === 0
+      )
+    ).toBe(true)
+    expect(
+      issues.some(
+        (issue: ConditionIssue) =>
+          issue.key === 'Conflicting conditions in this rule make it never match' &&
+          issue.branchIndex === undefined &&
+          issue.conditionIndex === undefined
+      )
+    ).toBe(true)
+  })
+
+  it('a group of only empty branches is ignored, not never-matching', () => {
+    const issues = checkRequestDnfIssues([{ conditions: [] }] as RequestDnf, t)
+    expect(
+      issues.some(
+        (issue: ConditionIssue) =>
+          issue.key === 'This OR branch has no conditions and will be ignored when saved'
+      )
+    ).toBe(true)
+    expect(
+      issues.some(
+        (issue: ConditionIssue) =>
+          issue.key === 'Conflicting conditions in this rule make it never match'
+      )
+    ).toBe(false)
+  })
+
+  it('an empty branch next to a healthy branch stays a warning, group stays alive', () => {
+    const issues = checkRequestDnfIssues(
+      [
+        { conditions: [] },
+        { conditions: [{ source: 'param', path: 'ok', mode: 'eq', value: '1' }] },
+      ] as RequestDnf,
+      t
+    )
+    expect(
+      issues.some(
+        (issue: ConditionIssue) =>
+          issue.key === 'This OR branch has no conditions and will be ignored when saved'
+      )
+    ).toBe(true)
+    expect(
+      issues.some(
+        (issue: ConditionIssue) =>
+          issue.key === 'Conflicting conditions in this rule make it never match'
+      )
+    ).toBe(false)
+  })
 })
