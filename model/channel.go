@@ -378,6 +378,16 @@ func (channel *Channel) ensureDisabledModelsLoaded() error {
 	if channel.DisabledModels != nil {
 		return nil
 	}
+	// 调用方已携带模型设置（创建/更新渠道流程）时禁用集合从携带行推导，不回读
+	// 数据库：设置落库发生在 abilities 重建之后（BatchInsertChannels 的 upsert /
+	// controller.UpdateChannel 的 ReplaceChannelModelSettings），此刻表里只有旧
+	// 状态，loadModelSettings 会把携带的 ModelSettings 覆盖为空——更新流程随后
+	// Replace(id, 空) 全量对齐等于删光，创建流程 len==0 判空跳过 upsert 静默丢失。
+	// 附带修正：同次保存内 abilities 重建由此感知请求携带的禁用行。
+	if channel.ModelSettings != nil {
+		channel.DisabledModels, _, _ = splitModelSettings(channel.ModelSettings)
+		return nil
+	}
 	return channel.loadModelSettings()
 }
 
