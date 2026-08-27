@@ -16,8 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import assert from 'node:assert/strict'
-import { beforeEach, describe, test } from 'node:test'
+import { beforeEach, describe, expect, test } from 'vitest'
 
 import {
   closeNoticeForToday,
@@ -51,18 +50,16 @@ beforeEach(() => {
 
 describe('announcement popup dismissal', () => {
   test('isNoticeClosedToday is false before the notice is dismissed', () => {
-    assert.equal(isNoticeClosedToday(), false)
+    expect(isNoticeClosedToday()).toBe(false)
   })
 
   test('closeNoticeForToday persists the current date and hash', () => {
     closeNoticeForToday('**maintenance**')
 
-    assert.equal(
-      localStorage.getItem('notice_close_date'),
+    expect(localStorage.getItem('notice_close_date')).toBe(
       new Date().toDateString()
     )
-    assert.equal(
-      localStorage.getItem('notice_close_hash'),
+    expect(localStorage.getItem('notice_close_hash')).toBe(
       hashNotice('**maintenance**')
     )
   })
@@ -70,26 +67,26 @@ describe('announcement popup dismissal', () => {
   test('a stale notice_close_date from a previous day does not count as today', () => {
     localStorage.setItem('notice_close_date', 'Mon Jan 01 2001')
 
-    assert.equal(isNoticeClosedToday(), false)
-    assert.equal(shouldShowNoticePopup('anything'), true)
+    expect(isNoticeClosedToday()).toBe(false)
+    expect(shouldShowNoticePopup('anything')).toBe(true)
   })
 
   test('does not show again for the same content dismissed today', () => {
     closeNoticeForToday('hello')
-    assert.equal(shouldShowNoticePopup('hello'), false)
+    expect(shouldShowNoticePopup('hello')).toBe(false)
   })
 
   test('shows again when the notice text changed since dismissal', () => {
     closeNoticeForToday('hello')
-    assert.equal(shouldShowNoticePopup('**updated** content'), true)
+    expect(shouldShowNoticePopup('**updated** content')).toBe(true)
   })
 
   test('shows when nothing was dismissed before', () => {
-    assert.equal(shouldShowNoticePopup('hello'), true)
+    expect(shouldShowNoticePopup('hello')).toBe(true)
   })
 
   test('hashNotice is stable and changes with content', () => {
-    assert.equal(hashNotice('abc'), hashNotice('abc'))
-    assert.notEqual(hashNotice('abc'), hashNotice('abd'))
+    expect(hashNotice('abc')).toBe(hashNotice('abc'))
+    expect(hashNotice('abc')).not.toBe(hashNotice('abd'))
   })
 })

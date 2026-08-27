@@ -1,39 +1,24 @@
-import assert from 'node:assert/strict'
-import { after, beforeEach, test } from 'node:test'
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+import { beforeEach, expect, test } from 'vitest'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Window } from 'happy-dom'
-
-const domWindow = new Window()
-const domGlobals = [
-  'window',
-  'document',
-  'navigator',
-  'matchMedia',
-  'customElements',
-  'localStorage',
-  'sessionStorage',
-  'ResizeObserver',
-  'IntersectionObserver',
-  'HTMLElement',
-  'SVGElement',
-  'Node',
-  'Element',
-  'Event',
-  'CustomEvent',
-  'MouseEvent',
-  'MutationObserver',
-  'requestAnimationFrame',
-  'cancelAnimationFrame',
-  'getComputedStyle',
-] as const
-
-for (const key of domGlobals) {
-  Object.defineProperty(globalThis, key, {
-    configurable: true,
-    value: domWindow[key],
-  })
-}
 
 const { act } = await import('react')
 const { createRoot } = await import('react-dom/client')
@@ -70,10 +55,6 @@ beforeEach(() => {
   })
 })
 
-after(() => {
-  domWindow.close()
-})
-
 test('Add Model opens the drawer when ModelsDialogs lives outside SectionPageLayout', async () => {
   const container = document.createElement('div')
   document.body.append(container)
@@ -105,7 +86,8 @@ test('Add Model opens the drawer when ModelsDialogs lives outside SectionPageLay
   const addBtn = [...document.querySelectorAll('button')].find(
     (b) => (b.textContent ?? '').trim() === 'Add Model'
   )
-  assert.ok(addBtn, 'Add Model button should be found')
+  expect(addBtn, 'Add Model button should be found').toBeTruthy()
+  if (!addBtn) throw new Error('Add Model button not found')
 
   await act(async () => {
     addBtn.click()
@@ -115,11 +97,11 @@ test('Add Model opens the drawer when ModelsDialogs lives outside SectionPageLay
   // not a child — SectionPageLayout drops any child that is not one of its
   // Title/Actions/Content/Breadcrumb slots).
   const sheet = document.querySelector('[data-slot="sheet-content"]')
-  assert.ok(sheet, 'drawer should open after clicking Add Model')
-  assert.ok(
+  expect(sheet, 'drawer should open after clicking Add Model').toBeTruthy()
+  expect(
     (document.body.textContent ?? '').includes('Create Model'),
     'drawer should render the Create Model form'
-  )
+  ).toBe(true)
 
   await act(async () => root.unmount())
   container.remove()
