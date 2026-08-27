@@ -32,8 +32,17 @@ func InitChannelCache() {
 	newChannel2advancedCustomConfig := make(map[int]*dto.AdvancedCustomConfig)
 	var channels []*Channel
 	DB.Find(&channels)
+	// 渠道内模型级禁用/上下文覆盖：批量加载一次，挂到每个渠道对象上。
+	// 展开 Group×Models 索引时跳过禁用模型，保证缓存路径与 abilities(DB) 路径一致。
+	disabledByChannel, contextByChannel := LoadAllChannelModelSettings()
 	for _, channel := range channels {
 		newChannelId2channel[channel.Id] = channel
+		if dis, ok := disabledByChannel[channel.Id]; ok {
+			channel.DisabledModels = dis
+		}
+		if ctx, ok := contextByChannel[channel.Id]; ok {
+			channel.ModelContextWindows = ctx
+		}
 		if channel.Type == constant.ChannelTypeAdvancedCustom {
 			if config := channel.GetOtherSettings().AdvancedCustom; config != nil {
 				newChannel2advancedCustomConfig[channel.Id] = config
@@ -58,6 +67,10 @@ func InitChannelCache() {
 		for _, group := range groups {
 			models := strings.Split(channel.Models, ",")
 			for _, model := range models {
+				// 渠道内被单独禁用的模型不进入选路索引
+				if channel.DisabledModels[model] {
+					continue
+				}
 				if _, ok := newGroup2model2channels[group][model]; !ok {
 					newGroup2model2channels[group][model] = make([]int, 0)
 				}

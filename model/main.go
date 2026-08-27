@@ -319,6 +319,14 @@ func migrateDB() error {
 	if err := ensureChannelCodingPlanQuotaColumns(DB); err != nil {
 		return err
 	}
+	// channel_model_settings 表 + models.context_window 列:幂等,每次启动执行,
+	// 新装(升版本路径走 AutoMigrate)与已最新版本库(跳过路径)都补齐。
+	if err := ensureChannelModelSettingsTable(DB); err != nil {
+		return err
+	}
+	if err := ensureModelsContextWindowColumn(DB); err != nil {
+		return err
+	}
 	applied, err := appliedSchemaVersion(DB)
 	if err != nil {
 		return err
@@ -439,6 +447,7 @@ func autoMigrateAll() error {
 		&Channel{},
 		&Token{},
 		&User{},
+		&ChannelModelSetting{},
 		&UserSession{},
 		&AuthFlow{},
 		&ExternalIdentityClaim{},
@@ -969,6 +978,30 @@ func ensureChannelCodingPlanQuotaColumns(db *gorm.DB) error {
 	if !db.Migrator().HasColumn(&Channel{}, "coding_plan_key") {
 		if err := db.Migrator().AddColumn(&Channel{}, "coding_plan_key"); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// ensureChannelModelSettingsTable 幂等建 channel_model_settings 表（渠道内模型级禁用 +
+// 渠道级 context_window 覆盖）。表在 autoMigrateAll 列表里，但 AutoMigrate 只在 schema
+// 版本变化时执行；已最新版本库走"跳过迁移"路径不会重跑，需显式建表。
+func ensureChannelModelSettingsTable(db *gorm.DB) error {
+	if db.Migrator().HasTable(&ChannelModelSetting{}) {
+		return nil
+	}
+	return db.Migrator().CreateTable(&ChannelModelSetting{})
+}
+
+// ensureModelsContextWindowColumn 幂等补 models.context_window 列（模型级上下文窗口）。
+// 理由同 ensureChannelModelSettingsTable：已最新版本库走跳过路径需显式补列。
+// AddColumn 无默认值，存量行是 NULL——Go 读作 0（不限制），语义正确，无需回填。
+func ensureModelsContextWindowColumn(db *gorm.DB) error {
+	if db.Migrator().HasTable(&Model{}) {
+		if !db.Migrator().HasColumn(&Model{}, "context_window") {
+			if err := db.Migrator().AddColumn(&Model{}, "context_window"); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

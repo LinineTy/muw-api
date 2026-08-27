@@ -54,7 +54,7 @@ import {
   getCurrencyLabel,
 } from '@/lib/currency'
 import { formatTimestampToDate } from '@/lib/format'
-import { truncateText } from '@/lib/utils'
+import { truncateText, cn } from '@/lib/utils'
 
 import { getCodexUsage, updateChannelBalance } from '../api'
 import {
@@ -1018,6 +1018,12 @@ export function useChannelsColumns(
         cell: ({ row }) => {
           const models = row.getValue('models') as string
           const modelArray = parseModelsList(models)
+          const settings = (row.getValue('model_settings') as
+            | Array<{ model: string; enabled: boolean }>
+            | undefined) ?? []
+          const disabledSet = new Set(
+            settings.filter((s) => !s.enabled).map((s) => s.model)
+          )
           return (
             <BadgeListCell
               items={modelArray.map((model) => (
@@ -1026,7 +1032,11 @@ export function useChannelsColumns(
                   label={model}
                   autoColor={model}
                   size='sm'
-                  className='font-mono'
+                  className={cn(
+                    'font-mono',
+                    disabledSet.has(model) &&
+                      'text-muted-foreground opacity-60 line-through'
+                  )}
                 />
               ))}
             />

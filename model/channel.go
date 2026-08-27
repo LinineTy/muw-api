@@ -71,6 +71,18 @@ type Channel struct {
 
 	// cache info
 	Keys []string `json:"-" gorm:"-"`
+
+	// DisabledModels 该渠道内被禁用的模型集合（由 channel_model_settings 加载，
+	// abilities 重建/缓存索引展开时合并：禁用模型不进入选路）。
+	DisabledModels map[string]bool `json:"-" gorm:"-"`
+
+	// ModelContextWindows 该渠道内按模型覆盖的上下文窗口（channel_model_settings，
+	// 渠道级覆盖 > 模型默认 > 不限制）。与 DisabledModels 同批加载。
+	ModelContextWindows map[string]int `json:"-" gorm:"-"`
+
+	// ModelSettings 创建/更新渠道时随请求提交的模型设置（非持久列，写入口
+	// BatchInsertChannels / Channel.Update 落库到 channel_model_settings）。
+	ModelSettings []ChannelModelSetting `json:"model_settings,omitempty" gorm:"-"`
 }
 
 type ChannelInfo struct {
@@ -307,6 +319,75 @@ func (channel *Channel) GetModels() []string {
 	return strings.Split(strings.Trim(channel.Models, ","), ",")
 }
 
+// loadModelSettings 从 channel_model_settings 加载该渠道的模型覆盖设置：
+// 被禁用的模型集合 + 按模型覆盖的上下文窗口（并填充 ModelSettings 供 API 输出）。
+func (channel *Channel) loadModelSettings() error {
+	var settings []ChannelModelSetting
+	if err := DB.Where("channel_id = ?", channel.Id).Find(&settings).Error; err != nil {
+		return err
+	}
+	channel.DisabledModels, channel.ModelContextWindows, channel.ModelSettings = splitModelSettings(settings)
+	return nil
+}
+
+// splitModelSettings 把模型设置行拆成禁用集合 + 上下文覆盖集合 + 原列表。
+func splitModelSettings(settings []ChannelModelSetting) (map[string]bool, map[string]int, []ChannelModelSetting) {
+	disabled := make(map[string]bool)
+	contextWindows := make(map[string]int)
+	for _, s := range settings {
+		if !s.Enabled {
+			disabled[s.Model] = true
+		}
+		if s.ContextWindow != nil {
+			contextWindows[s.Model] = *s.ContextWindow
+		}
+	}
+	return disabled, contextWindows, settings
+}
+
+// loadChannelsModelSettings 批量加载渠道的模型设置（禁用/上下文覆盖）并填充到各渠道。
+// 供管理端列表/搜索一次 IN 查询，避免每渠道一次 DB 查询。
+func loadChannelsModelSettings(channels []*Channel) error {
+	ids := lo.Map(channels, func(ch *Channel, _ int) int { return ch.Id })
+	if len(ids) == 0 {
+		return nil
+	}
+	var settings []ChannelModelSetting
+	if err := DB.Where("channel_id IN (?)", ids).Find(&settings).Error; err != nil {
+		return err
+	}
+	byChannel := make(map[int][]ChannelModelSetting)
+	for _, s := range settings {
+		byChannel[s.ChannelId] = append(byChannel[s.ChannelId], s)
+	}
+	for _, ch := range channels {
+		ch.DisabledModels, ch.ModelContextWindows, ch.ModelSettings = splitModelSettings(byChannel[ch.Id])
+	}
+	return nil
+}
+
+// ensureDisabledModelsLoaded 保证 DisabledModels 已加载（abilities 重建/缓存索引
+// 展开时调用；已加载则跳过，避免每次重建都查一次 DB）。
+func (channel *Channel) ensureDisabledModelsLoaded() error {
+	if channel.DisabledModels != nil {
+		return nil
+	}
+	return channel.loadModelSettings()
+}
+
+// LoadModelSettings 加载渠道的模型覆盖设置（禁用/上下文覆盖）。供 controller
+// 在从 gin context 重建渠道对象后调用，保证渠道级 context_window 校验有数据。
+func (channel *Channel) LoadModelSettings() error {
+	return channel.loadModelSettings()
+}
+
+// GetModelContextWindow 返回该渠道内某模型的上下文窗口覆盖；无覆盖返回 (0, false)。
+// 覆盖优先级：渠道覆盖 > 模型默认（GetModelContextWindow）> 不限制。
+func (channel *Channel) GetModelContextWindow(model string) (int, bool) {
+	cw, ok := channel.ModelContextWindows[model]
+	return cw, ok
+}
+
 func (channel *Channel) GetGroups() []string {
 	if channel.Group == "" {
 		return []string{}
@@ -395,7 +476,12 @@ func GetAllChannels(startIdx int, num int, selectAll bool, idSort bool, sortOpti
 	} else {
 		err = order.Apply(DB).Limit(num).Offset(startIdx).Omit("key").Find(&channels).Error
 	}
-	return channels, err
+	if err != nil {
+		return nil, err
+	}
+	// 填充渠道内模型设置（禁用/上下文覆盖），供列表展示
+	_ = loadChannelsModelSettings(channels)
+	return channels, nil
 }
 
 func GetChannelsByTag(tag string, idSort bool, selectAll bool, sortOptions ...ChannelSortOptions) ([]*Channel, error) {
@@ -406,7 +492,11 @@ func GetChannelsByTag(tag string, idSort bool, selectAll bool, sortOptions ...Ch
 		query = query.Omit("key")
 	}
 	err := query.Find(&channels).Error
-	return channels, err
+	if err != nil {
+		return nil, err
+	}
+	_ = loadChannelsModelSettings(channels)
+	return channels, nil
 }
 
 func SearchChannels(keyword string, group string, model string, idSort bool, sortOptions ...ChannelSortOptions) ([]*Channel, error) {
@@ -439,6 +529,7 @@ func SearchChannels(keyword string, group string, model string, idSort bool, sor
 	if err != nil {
 		return nil, err
 	}
+	_ = loadChannelsModelSettings(channels)
 	return channels, nil
 }
 
@@ -453,6 +544,8 @@ func GetChannelById(id int, selectAll bool) (*Channel, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 填充渠道内模型设置（禁用/上下文覆盖），供编辑抽屉回显
+	_ = channel.loadModelSettings()
 	return channel, nil
 }
 
@@ -475,10 +568,17 @@ func BatchInsertChannels(channels []Channel) error {
 			tx.Rollback()
 			return err
 		}
-		for _, channel_ := range chunk {
-			if err := channel_.AddAbilities(tx); err != nil {
+		for i := range chunk {
+			if err := chunk[i].AddAbilities(tx); err != nil {
 				tx.Rollback()
 				return err
+			}
+			// 渠道内模型设置（禁用/上下文覆盖）随创建一并落库
+			if len(chunk[i].ModelSettings) > 0 {
+				if err := upsertChannelModelSettingsWithDB(tx, chunk[i].Id, chunk[i].ModelSettings); err != nil {
+					tx.Rollback()
+					return err
+				}
 			}
 		}
 	}
@@ -607,6 +707,15 @@ func (channel *Channel) Update() error {
 		return err
 	}
 	DB.Model(channel).First(channel, "id = ?", channel.Id)
+	// 渠道内模型设置（禁用/上下文覆盖）写入，并清理 models 列表外的失效行
+	if len(channel.ModelSettings) > 0 {
+		if err := UpsertChannelModelSettings(channel.Id, channel.ModelSettings); err != nil {
+			return err
+		}
+	}
+	if err := CleanupStaleChannelModelSettings(channel.Id, channel.GetModels()); err != nil {
+		return err
+	}
 	err = channel.UpdateAbilities(nil)
 	return err
 }

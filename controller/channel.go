@@ -2403,3 +2403,50 @@ func OllamaVersion(c *gin.Context) {
 		},
 	})
 }
+
+// GetChannelModelSettings 获取渠道的模型设置列表（渠道内模型级禁用 / context_window 覆盖）。
+func GetChannelModelSettings(c *gin.Context) {
+	id := common.String2Int(c.Param("id"))
+	settings, err := model.GetChannelModelSettings(id)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, settings)
+}
+
+// UpdateChannelModelSettings 保存渠道的模型设置（禁用/上下文覆盖），并重建
+// abilities 应用禁用态（选路排除被禁用的模型）。
+func UpdateChannelModelSettings(c *gin.Context) {
+	id := common.String2Int(c.Param("id"))
+	if _, err := model.GetChannelById(id, false); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	var settings []model.ChannelModelSetting
+	if err := c.ShouldBindJSON(&settings); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	for i := range settings {
+		settings[i].ChannelId = id
+	}
+	if err := model.UpsertChannelModelSettings(id, settings); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	full, err := model.GetChannelById(id, true)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.CleanupStaleChannelModelSettings(id, full.GetModels()); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := full.UpdateAbilities(nil); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
+}
