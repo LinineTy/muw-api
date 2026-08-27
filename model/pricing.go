@@ -236,6 +236,9 @@ func updatePricing() {
 		}
 	}
 
+	// 重建 context_window 缓存（metaMap 已按 NameRule 展开到实际挂载模型名）。
+	refreshModelContextWindows(metaMap)
+
 	// 预加载供应商
 	var vendors []Vendor
 	_ = DB.Find(&vendors).Error

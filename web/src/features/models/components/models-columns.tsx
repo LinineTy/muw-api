@@ -333,16 +333,15 @@ export function useModelsColumns(
       meta: { mobileHidden: true },
       cell: ({ row }) => {
         const channels = row.getValue('bound_channels') as Array<{
-          id: number
+          channel_id: number
           name: string
           type?: number
-          status?: number
         }>
         return (
           <BadgeListCell
             items={(channels ?? []).map((c) => (
               <StatusBadge
-                key={c.id}
+                key={c.channel_id}
                 label={`${c.name} (${c.type})`}
                 autoColor={c.name}
                 size='sm'
@@ -352,6 +351,27 @@ export function useModelsColumns(
         )
       },
       size: 150,
+      enableSorting: false,
+    },
+
+    // Context Window column
+    {
+      accessorKey: 'context_window',
+      header: t('Context Window'),
+      meta: { mobileHidden: true },
+      cell: ({ row }) => {
+        const cw = row.getValue('context_window') as
+          | number
+          | null
+          | undefined
+        if (!cw) {
+          return <span className='text-muted-foreground'>—</span>
+        }
+        return (
+          <span className='font-mono text-sm'>{cw.toLocaleString()}</span>
+        )
+      },
+      size: 100,
       enableSorting: false,
     },
 

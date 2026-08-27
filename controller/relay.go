@@ -183,9 +183,17 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
 	needCountToken := constant.CountToken
+	// 上下文窗口校验：模型级配置或存在渠道级覆盖时，需要完整 TokenCountMeta
+	//（CombineText 用于估算输入 token；fast 版 CombineText 为空算不出）。
+	needContextCheck := false
+	if cw, ok := model.GetModelContextWindow(relayInfo.OriginModelName); ok && cw > 0 {
+		needContextCheck = true
+	} else if model.ModelHasChannelContextOverride(relayInfo.OriginModelName) {
+		needContextCheck = true
+	}
 	// Avoid building huge CombineText (strings.Join) when token counting and sensitive check are both disabled.
 	var meta *types.TokenCountMeta
-	if needSensitiveCheck || needCountToken {
+	if needSensitiveCheck || needCountToken || needContextCheck {
 		meta = request.GetTokenCountMeta()
 	} else {
 		meta = fastTokenCountMetaForPricing(request)
@@ -214,6 +222,12 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 
 	relayInfo.SetEstimatePromptTokens(tokens)
+
+	// 模型级上下文窗口校验：估算输入 + max_tokens 超限则 400 拒绝。
+	// 早于预扣费（零计费），且带 SkipRetry——同一模型的 context_window 对所有渠道一致。
+	if newAPIError = service.CheckModelContextWindow(c, meta, relayInfo); newAPIError != nil {
+		return
+	}
 
 	priceData, err := helper.ModelPriceHelper(c, relayInfo, tokens, meta)
 	if err != nil {
@@ -270,6 +284,14 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			break
 		}
 		addUsedChannel(c, channel.Id)
+		// 渠道级上下文覆盖校验：超限记入 LastError 并继续尝试下一渠道（其他渠道可能
+		// 有更大的 context_window 覆盖）。不调 processChannelError——这是配置性拒绝，
+		// 不是渠道故障，不应禁用渠道或记录渠道错误日志。
+		if apiErr := service.CheckChannelContextWindow(c, meta, relayInfo, channel); apiErr != nil {
+			relayInfo.LastError = apiErr
+			newAPIError = apiErr
+			continue
+		}
 		if billingErr := service.PrepareTieredBillingForSelectedGroup(c, relayInfo); billingErr != nil {
 			newAPIError = billingErr
 			break
@@ -394,12 +416,16 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 		if !autoBan {
 			autoBanInt = 0
 		}
-		return &model.Channel{
+		ch := &model.Channel{
 			Id:      c.GetInt("channel_id"),
 			Type:    c.GetInt("channel_type"),
 			Name:    c.GetString("channel_name"),
 			AutoBan: &autoBanInt,
-		}, nil
+		}
+		// 该分支从 gin context 重建渠道（distributor 已提前选路），缺少渠道级
+		// 模型设置（禁用/上下文覆盖）。加载后渠道级 context_window 校验才能生效。
+		_ = ch.LoadModelSettings()
+		return ch, nil
 	}
 	channel, selectGroup, err := service.CacheGetRandomSatisfiedChannel(retryParam)
 	if err != nil {

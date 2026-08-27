@@ -26,6 +26,7 @@ import { z } from 'zod'
  * Bound channel information
  */
 export interface BoundChannel {
+  channel_id: number
   name: string
   type: number
 }
@@ -46,6 +47,8 @@ export interface Model {
   created_time: number
   updated_time: number
   name_rule: number
+  /** 上下文窗口（token），0/空 = 不限制；relay 转发超限 400 拒绝 */
+  context_window?: number | null
   // Runtime fields
   bound_channels?: BoundChannel[]
   enable_groups?: string[]

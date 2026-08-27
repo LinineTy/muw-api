@@ -50,6 +50,8 @@ const (
 	ErrorCodeDoRequestFailed    ErrorCode = "do_request_failed"
 	ErrorCodeGetChannelFailed   ErrorCode = "get_channel_failed"
 	ErrorCodeGenRelayInfoFailed ErrorCode = "gen_relay_info_failed"
+	// 模型上下文窗口超限（估算输入 + max_tokens 超过配置的 context_window，400 拒绝）
+	ErrorCodeContextWindowExceeded ErrorCode = "context_window_exceeded"
 
 	// channel error
 	ErrorCodeChannelNoAvailableKey        ErrorCode = "channel:no_available_key"
