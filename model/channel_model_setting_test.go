@@ -109,6 +109,31 @@ func TestChannelModelContextWindowOverride(t *testing.T) {
 	assert.Equal(t, 128000, got)
 }
 
+// TestModelHasChannelContextOverrideCache 保护「有渠道覆盖的模型」内存集合由
+// LoadAllChannelModelSettings 同步：relay 热路径读缓存判定（ModelHasChannelContextOverride），
+// 避免每请求一次 DB COUNT；新写入需经 LoadAllChannelModelSettings 刷新才可见。
+func TestModelHasChannelContextOverrideCache(t *testing.T) {
+	ch := &Channel{
+		Type:   1,
+		Name:   "test-context-override-cache",
+		Models: "probe-context-override-model",
+		Group:  "default",
+		Status: common.ChannelStatusEnabled,
+	}
+	require.NoError(t, DB.Create(ch).Error)
+	cw := 64000
+	require.NoError(t, UpsertChannelModelSettings(ch.Id, []ChannelModelSetting{
+		{ChannelId: ch.Id, Model: "probe-context-override-model", ContextWindow: &cw},
+	}))
+
+	// 刷新前缓存不含刚写入的模型（未调用 LoadAllChannelModelSettings）
+	assert.False(t, ModelHasChannelContextOverride("probe-context-override-model"))
+
+	_, _ = LoadAllChannelModelSettings()
+	assert.True(t, ModelHasChannelContextOverride("probe-context-override-model"))
+	assert.False(t, ModelHasChannelContextOverride("probe-no-override-model"))
+}
+
 func assertAbilityEnabled(t *testing.T, channelId int, model string, want bool) {
 	t.Helper()
 	var a Ability

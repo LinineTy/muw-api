@@ -19,6 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 package model
 
 import (
+	"sync"
+
 	"github.com/QuantumNous/new-api/common"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
@@ -140,15 +142,30 @@ func ChannelModelContextWindow(channelId int, model string) (int, bool) {
 	return *setting.ContextWindow, true
 }
 
+// 内存缓存「存在至少一个渠道级 context_window 覆盖的模型」集合，供 relay 热路径
+// （ModelHasChannelContextOverride）判定是否需要逐渠道校验上下文窗口。随渠道缓存
+// （LoadAllChannelModelSettings / InitChannelCache）一起刷新，避免每请求一次 DB COUNT。
+var (
+	channelContextOverrideLock       sync.RWMutex
+	modelsWithChannelContextOverride = make(map[string]struct{})
+)
+
+// setModelsWithChannelContextOverride 替换「有渠道覆盖的模型」集合。
+// 由 LoadAllChannelModelSettings 在构建缓存索引时调用。
+func setModelsWithChannelContextOverride(models map[string]struct{}) {
+	channelContextOverrideLock.Lock()
+	modelsWithChannelContextOverride = models
+	channelContextOverrideLock.Unlock()
+}
+
 // ModelHasChannelContextOverride 判断是否存在针对该模型的渠道级 context_window 覆盖。
 // 供 relay 在选渠道前决定是否需要构建完整 TokenCountMeta（渠道级覆盖校验要算 token，
-// fast 版 CombineText 为空算不出）。settings 表只存非默认值行，行数小，开销可忽略。
+// fast 版 CombineText 为空算不出）。读内存缓存，不落 DB。
 func ModelHasChannelContextOverride(modelName string) bool {
-	var count int64
-	DB.Model(&ChannelModelSetting{}).
-		Where("model = ? AND context_window IS NOT NULL", modelName).
-		Count(&count)
-	return count > 0
+	channelContextOverrideLock.RLock()
+	defer channelContextOverrideLock.RUnlock()
+	_, ok := modelsWithChannelContextOverride[modelName]
+	return ok
 }
 
 // LoadAllChannelModelSettings 一次性加载全部渠道模型设置，返回按渠道分组的禁用集合
@@ -161,6 +178,7 @@ func LoadAllChannelModelSettings() (disabled map[int]map[string]bool, contextWin
 	}
 	disabled = make(map[int]map[string]bool)
 	contextWindows = make(map[int]map[string]int)
+	overrideModels := make(map[string]struct{})
 	for _, s := range settings {
 		if !s.Enabled {
 			if disabled[s.ChannelId] == nil {
@@ -173,7 +191,10 @@ func LoadAllChannelModelSettings() (disabled map[int]map[string]bool, contextWin
 				contextWindows[s.ChannelId] = make(map[string]int)
 			}
 			contextWindows[s.ChannelId][s.Model] = *s.ContextWindow
+			overrideModels[s.Model] = struct{}{}
 		}
 	}
+	// 同步「有渠道覆盖的模型」集合，relay 热路径直接读内存
+	setModelsWithChannelContextOverride(overrideModels)
 	return disabled, contextWindows
 }
