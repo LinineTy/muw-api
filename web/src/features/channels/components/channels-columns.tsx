@@ -26,6 +26,7 @@ import {
   EyeOff,
   Gauge,
   ListOrdered,
+  Ruler,
   Shuffle,
   SlidersHorizontal,
 } from 'lucide-react'
@@ -184,6 +185,42 @@ function DisabledModelsBadge({ channel }: { channel: Channel }) {
         <TooltipContent side='top'>
           {t('{{count}} model(s) disabled: {{models}}', {
             count: disabled.length,
+            models: modelNames,
+          })}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
+}
+
+/**
+ * Context-window override badge: counterpart of DisabledModelsBadge for
+ * per-channel context window limits. Shown next to the channel name when one
+ * or more models carry a context_window override, making the configured
+ * limits visible without opening the drawer. Tooltip lists model=limit pairs.
+ */
+function ContextWindowOverrideBadge({ channel }: { channel: Channel }) {
+  const { t } = useTranslation()
+  const overrides = (channel.model_settings ?? []).filter(
+    (s) => s.context_window != null && s.context_window > 0
+  )
+  if (overrides.length === 0) {
+    return null
+  }
+  const modelNames = overrides
+    .map((s) => `${s.model}=${s.context_window}`)
+    .join(', ')
+  return (
+    <TooltipProvider delay={100}>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Ruler className='text-sky-600 dark:text-sky-300 h-3.5 w-3.5 flex-shrink-0' />
+          }
+        />
+        <TooltipContent side='top'>
+          {t('{{count}} model(s) with context window override: {{models}}', {
+            count: overrides.length,
             models: modelNames,
           })}
         </TooltipContent>
@@ -803,6 +840,7 @@ export function useChannelsColumns(
                   )}
                   <CodingPlanLinkedBadge channel={channel} />
                   <DisabledModelsBadge channel={channel} />
+                  <ContextWindowOverrideBadge channel={channel} />
                   <UpstreamUpdateTags channel={channel} />
                 </div>
                 {channel.remark && (
