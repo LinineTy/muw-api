@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button'
 
 import type { Dnf } from '@/features/pricing/lib/billing-expr'
 import type { ConditionIssue } from '@/features/pricing/lib/condition-format'
+import { cn } from '@/lib/utils'
 
 export type ConditionRowRenderProps<T> = {
   value: T
@@ -49,6 +50,53 @@ type ConditionBuilderProps<T> = {
   issues?: ConditionIssue[]
   /** Localizes an issue's i18n key (with params) for rendering. */
   translateIssue: (key: string, params?: Record<string, string | number>) => string
+}
+
+/**
+ * Severity-aware issue box shared by the group-level and branch-level blocks:
+ * any error turns the box red, an all-warning box turns amber, and each line
+ * keeps its own severity color (mirrors RuleConditionRow).
+ */
+function IssueList({
+  issues,
+  translateIssue,
+}: {
+  issues: ConditionIssue[]
+  translateIssue: (key: string, params?: Record<string, string | number>) => string
+}) {
+  const hasError = issues.some((issue) => issue.severity === 'error')
+  return (
+    <div
+      className={cn(
+        'flex items-start gap-1.5 rounded-md border px-2.5 py-2',
+        hasError
+          ? 'border-destructive/30 bg-destructive/5'
+          : 'border-amber-500/30 bg-amber-500/5'
+      )}
+    >
+      <AlertTriangle
+        className={cn(
+          'mt-0.5 h-3.5 w-3.5 shrink-0',
+          hasError ? 'text-destructive' : 'text-amber-600 dark:text-amber-400'
+        )}
+      />
+      <div className='space-y-0.5'>
+        {issues.map((issue) => (
+          <p
+            key={issue.key}
+            className={cn(
+              'text-xs',
+              issue.severity === 'error'
+                ? 'text-destructive'
+                : 'text-amber-600 dark:text-amber-400'
+            )}
+          >
+            {translateIssue(issue.key, issue.params)}
+          </p>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 /**
@@ -124,16 +172,7 @@ export function ConditionBuilder<T>({
   return (
     <div className='space-y-2'>
       {groupIssues.length > 0 && (
-        <div className='flex items-start gap-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-2'>
-          <AlertTriangle className='mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive' />
-          <div className='space-y-0.5'>
-            {groupIssues.map((issue) => (
-              <p key={issue.key} className='text-destructive text-xs'>
-                {translateIssue(issue.key, issue.params)}
-              </p>
-            ))}
-          </div>
-        </div>
+        <IssueList issues={groupIssues} translateIssue={translateIssue} />
       )}
       {preview && (
         <p className='text-muted-foreground min-w-0 text-xs leading-5'>
@@ -178,16 +217,10 @@ export function ConditionBuilder<T>({
           </div>
 
           {branchIssues(branchIndex).length > 0 && (
-            <div className='flex items-start gap-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-2'>
-              <AlertTriangle className='mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive' />
-              <div className='space-y-0.5'>
-                {branchIssues(branchIndex).map((issue) => (
-                  <p key={issue.key} className='text-destructive text-xs'>
-                    {translateIssue(issue.key, issue.params)}
-                  </p>
-                ))}
-              </div>
-            </div>
+            <IssueList
+              issues={branchIssues(branchIndex)}
+              translateIssue={translateIssue}
+            />
           )}
 
           {branchIndex < dnf.length - 1 && (
