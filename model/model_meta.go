@@ -3,6 +3,7 @@ package model
 import (
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/QuantumNous/new-api/common"
 
@@ -17,8 +18,9 @@ const (
 )
 
 type BoundChannel struct {
-	Name string `json:"name"`
-	Type int    `json:"type"`
+	ChannelId int    `json:"channel_id"`
+	Name      string `json:"name"`
+	Type      int    `json:"type"`
 }
 
 type Model struct {
@@ -39,6 +41,11 @@ type Model struct {
 	EnableGroups  []string       `json:"enable_groups,omitempty" gorm:"-"`
 	QuotaTypes    []int          `json:"quota_types,omitempty" gorm:"-"`
 	NameRule      int            `json:"name_rule" gorm:"default:0"`
+
+	// ContextWindow 该模型的最大上下文窗口（token）。0/空 = 不限制。
+	// relay 转发时估算输入 prompt tokens + 请求 max_tokens 超限则 400 拒绝
+	// （见 service/context_window.go）。渠道内可按模型覆盖（channel_model_settings）。
+	ContextWindow *int `json:"context_window,omitempty"`
 
 	MatchedModels []string `json:"matched_models,omitempty" gorm:"-"`
 	MatchedCount  int      `json:"matched_count,omitempty" gorm:"-"`
@@ -78,7 +85,7 @@ func (mi *Model) Update() error {
 	mi.UpdatedTime = common.GetTimestamp()
 	// 使用 Select 强制更新所有字段，包括零值
 	return DB.Model(&Model{}).Where("id = ?", mi.Id).
-		Select("model_name", "description", "icon", "tags", "vendor_id", "endpoints", "status", "sync_official", "name_rule", "updated_time").
+		Select("model_name", "description", "icon", "tags", "vendor_id", "endpoints", "status", "sync_official", "name_rule", "context_window", "updated_time").
 		Updates(mi).Error
 }
 
@@ -115,13 +122,14 @@ func GetBoundChannelsByModelsMap(modelNames []string) (map[string][]BoundChannel
 		return result, nil
 	}
 	type row struct {
-		Model string
-		Name  string
-		Type  int
+		Model     string
+		ChannelId int
+		Name      string
+		Type      int
 	}
 	var rows []row
 	err := DB.Table("channels").
-		Select("abilities.model as model, channels.name as name, channels.type as type").
+		Select("abilities.model as model, abilities.channel_id as channel_id, channels.name as name, channels.type as type").
 		Joins("JOIN abilities ON abilities.channel_id = channels.id").
 		Where("abilities.model IN ? AND abilities.enabled = ?", modelNames, true).
 		Distinct().
@@ -130,7 +138,7 @@ func GetBoundChannelsByModelsMap(modelNames []string) (map[string][]BoundChannel
 		return nil, err
 	}
 	for _, r := range rows {
-		result[r.Model] = append(result[r.Model], BoundChannel{Name: r.Name, Type: r.Type})
+		result[r.Model] = append(result[r.Model], BoundChannel{ChannelId: r.ChannelId, Name: r.Name, Type: r.Type})
 	}
 	return result, nil
 }
@@ -257,4 +265,36 @@ func parseModelSyncFilter(syncOfficial string) (value int, ok bool) {
 		}
 		return n, true
 	}
+}
+
+// modelContextWindowMap 缓存 modelName -> context_window（>0 才入缓存）。由
+// updatePricing 每次从已展开的 metaMap 重建（refreshModelContextWindows），
+// 与 endpoints/定价缓存同生命周期。relay 校验热路径直接查内存，避免每请求查 DB。
+var (
+	modelContextWindowLock sync.RWMutex
+	modelContextWindowMap  = make(map[string]int)
+)
+
+// refreshModelContextWindows 从 updatePricing 已按 NameRule 展开的 metaMap 重建
+// context_window 缓存。metaMap 的 key 即「模型名 → 元数据」（规则模型已展开到
+// 实际挂载名），正好是校验时收到的 OriginModelName 集合。
+func refreshModelContextWindows(metaMap map[string]*Model) {
+	m := make(map[string]int, len(metaMap))
+	for name, meta := range metaMap {
+		if meta != nil && meta.ContextWindow != nil && *meta.ContextWindow > 0 {
+			m[name] = *meta.ContextWindow
+		}
+	}
+	modelContextWindowLock.Lock()
+	modelContextWindowMap = m
+	modelContextWindowLock.Unlock()
+}
+
+// GetModelContextWindow 返回模型配置的上下文窗口（token）；未配置返回 (0, false)。
+// 渠道级覆盖 > 模型默认 > 不限制，见 ChannelModelSetting / ChannelModelContextWindow。
+func GetModelContextWindow(modelName string) (int, bool) {
+	modelContextWindowLock.RLock()
+	defer modelContextWindowLock.RUnlock()
+	cw, ok := modelContextWindowMap[modelName]
+	return cw, ok
 }

@@ -98,6 +98,7 @@ const extendedModelFormSchema = z.object({
   name_rule: z.number(),
   status: z.boolean(),
   sync_official: z.boolean(),
+  context_window: z.number().nullable().optional(),
   price: z.string().optional(),
   ratio: z.string().optional(),
   cacheRatio: z.string().optional(),
@@ -375,6 +376,7 @@ export function ModelMutateDrawer({
       name_rule: 0,
       status: true,
       sync_official: true,
+      context_window: null,
       price: '',
       ratio: '',
       cacheRatio: '',
@@ -443,6 +445,7 @@ export function ModelMutateDrawer({
         name_rule: model.name_rule || 0,
         status: model.status === 1,
         sync_official: model.sync_official === 1,
+        context_window: model.context_window ?? null,
         ...pricing.fields,
       })
     } else if (open && !isEditing) {
@@ -813,6 +816,36 @@ export function ModelMutateDrawer({
                     </FormControl>
                     <FormDescription className='text-xs'>
                       {t('@lobehub/icons key')}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='context_window'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Context Window')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type='number'
+                        min={0}
+                        placeholder={t(
+                          'e.g. 131072, 0 or empty = unlimited'
+                        )}
+                        value={field.value ?? ''}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          field.onChange(v === '' ? null : Number(v))
+                        }}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Maximum context window in tokens. Requests exceeding it are rejected with 400.'
+                      )}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
