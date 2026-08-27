@@ -1181,6 +1181,15 @@ func UpdateChannel(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// 渠道内模型设置（禁用/上下文覆盖）：仅当请求显式携带 model_settings 时全量对齐
+	//（含空数组 = 全部恢复默认）。未携带保持现状——避免外部局部更新（如仅改名称）
+	// 意外清空模型级禁用/覆盖。对齐先于 InitChannelCache，保证重建索引包含新设置。
+	if _, ok := requestData["model_settings"]; ok {
+		if err := model.ReplaceChannelModelSettings(channel.Id, channel.ModelSettings); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	}
 	// 清除套餐专用密钥:Updates(struct) 跳过空值字段,需显式置空。
 	if clearCodingPlanKey {
 		if err := model.DB.Model(&model.Channel{}).
@@ -2454,5 +2463,7 @@ func UpdateChannelModelSettings(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// 重建渠道内存索引：禁用模型要即时退出选路，覆盖模型集合同步进热路径缓存
+	model.InitChannelCache()
 	common.ApiSuccess(c, nil)
 }
