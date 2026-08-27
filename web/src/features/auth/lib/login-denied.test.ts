@@ -16,8 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import assert from 'node:assert/strict'
-import { describe, test } from 'node:test'
+import { describe, expect, test } from 'vitest'
 
 import { buildLoginDeniedSearch, getLoginDeniedInfo } from './login-denied'
 
@@ -35,7 +34,7 @@ function deniedPayload(overrides: Record<string, unknown> = {}) {
 
 describe('getLoginDeniedInfo', () => {
   test('parses a structured denial with a reason', () => {
-    assert.deepEqual(getLoginDeniedInfo(deniedPayload()), {
+    expect(getLoginDeniedInfo(deniedPayload())).toEqual({
       status: 'user_disabled',
       reason: 'violated terms',
     })
@@ -45,27 +44,26 @@ describe('getLoginDeniedInfo', () => {
     const payload = deniedPayload({
       data: { login_status: { status: 'linuxdo_blacklisted', reason: '' } },
     })
-    assert.deepEqual(getLoginDeniedInfo(payload), {
+    expect(getLoginDeniedInfo(payload)).toEqual({
       status: 'linuxdo_blacklisted',
     })
   })
 
   test('returns null when login_status is absent', () => {
-    assert.equal(getLoginDeniedInfo({ success: true, data: { user: {} } }), null)
+    expect(getLoginDeniedInfo({ success: true, data: { user: {} } })).toBeNull()
   })
 
   test('parses the axios error shape response.data', () => {
-    assert.deepEqual(
-      getLoginDeniedInfo({ isAxiosError: true, response: { data: deniedPayload() } }),
-      { status: 'user_disabled', reason: 'violated terms' }
-    )
+    expect(
+      getLoginDeniedInfo({ isAxiosError: true, response: { data: deniedPayload() } })
+    ).toEqual({ status: 'user_disabled', reason: 'violated terms' })
   })
 
   test('keeps unknown statuses for forward compatibility', () => {
     const payload = deniedPayload({
       data: { login_status: { status: 'some_future_status' } },
     })
-    assert.deepEqual(getLoginDeniedInfo(payload), {
+    expect(getLoginDeniedInfo(payload)).toEqual({
       status: 'some_future_status',
     })
   })
@@ -74,29 +72,28 @@ describe('getLoginDeniedInfo', () => {
     const payload = deniedPayload({
       data: { login_status: { status: '' } },
     })
-    assert.equal(getLoginDeniedInfo(payload), null)
+    expect(getLoginDeniedInfo(payload)).toBeNull()
   })
 })
 
 describe('buildLoginDeniedSearch', () => {
   test('carries status, reason and message', () => {
-    assert.deepEqual(
+    expect(
       buildLoginDeniedSearch(
         { status: 'user_disabled', reason: 'violated terms' },
         'denied message',
         '/dashboard'
-      ),
-      {
-        status: 'user_disabled',
-        reason: 'violated terms',
-        message: 'denied message',
-        redirect: '/dashboard',
-      }
-    )
+      )
+    ).toEqual({
+      status: 'user_disabled',
+      reason: 'violated terms',
+      message: 'denied message',
+      redirect: '/dashboard',
+    })
   })
 
   test('drops empty message and redirect', () => {
-    assert.deepEqual(buildLoginDeniedSearch({ status: 'user_disabled' }), {
+    expect(buildLoginDeniedSearch({ status: 'user_disabled' })).toEqual({
       status: 'user_disabled',
     })
   })

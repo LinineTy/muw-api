@@ -16,42 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import assert from 'node:assert/strict'
-import { after, describe, test } from 'node:test'
+import { afterAll, describe, expect, test } from 'vitest'
 
-import { Window } from 'happy-dom'
-
-const domWindow = new Window()
-const domGlobals = [
-  'window',
-  'document',
-  'navigator',
-  'HTMLElement',
-  'HTMLButtonElement',
-  'SVGElement',
-  'Node',
-  'Element',
-  'Event',
-  'CustomEvent',
-  'MouseEvent',
-  'PointerEvent',
-  'MutationObserver',
-  'ResizeObserver',
-  'requestAnimationFrame',
-  'cancelAnimationFrame',
-  'getComputedStyle',
-] as const
-
-for (const key of domGlobals) {
-  Object.defineProperty(globalThis, key, {
-    configurable: true,
-    value: domWindow[key],
-  })
-}
-
-// Base UI ScrollArea checks running animations; happy-dom does not implement
+// Base UI ScrollArea checks running animations; jsdom does not implement
 // Element.getAnimations, so polyfill it as "no animations".
-;(domWindow.HTMLElement.prototype as unknown as {
+(HTMLElement.prototype as unknown as {
   getAnimations: () => unknown[]
 }).getAnimations = () => []
 
@@ -82,7 +51,7 @@ const reactTestGlobals = globalThis as typeof globalThis & {
 reactTestGlobals.IS_REACT_ACT_ENVIRONMENT = true
 
 function findFooterButton(text: string): HTMLButtonElement | undefined {
-  const footer = domWindow.document.querySelector('[data-slot="dialog-footer"]')
+  const footer = document.querySelector('[data-slot="dialog-footer"]')
   if (!footer) return undefined
   return [...footer.querySelectorAll('button')].find((button) =>
     button.textContent?.includes(text)
@@ -90,7 +59,7 @@ function findFooterButton(text: string): HTMLButtonElement | undefined {
 }
 
 function findCheckbox(): HTMLElement | undefined {
-  return (domWindow.document.querySelector(
+  return (document.querySelector(
     '[data-slot="checkbox"]'
   ) as HTMLElement | null) ?? undefined
 }
@@ -126,8 +95,8 @@ async function renderDialog(props: {
 const sampleNotice = '**System maintenance** at 02:00'
 
 describe('AnnouncementDialog component', () => {
-  after(() => {
-    domWindow.close()
+  afterAll(() => {
+    document.body.innerHTML = ''
   })
 
   test('renders the notice, hide-today checkbox and the confirm action when open', async () => {
@@ -139,12 +108,11 @@ describe('AnnouncementDialog component', () => {
       onOpenChange: () => undefined,
     })
 
-    assert.equal(
-      domWindow.document.body.textContent?.includes('System maintenance'),
-      true
-    )
-    assert.ok(findCheckbox())
-    assert.ok(findFooterButton('Got it'))
+    expect(
+      document.body.textContent?.includes('System maintenance')
+    ).toBe(true)
+    expect(findCheckbox()).toBeTruthy()
+    expect(findFooterButton('Got it')).toBeTruthy()
 
     await act(async () => root.unmount())
   })
@@ -158,10 +126,9 @@ describe('AnnouncementDialog component', () => {
       onOpenChange: () => undefined,
     })
 
-    assert.equal(
-      domWindow.document.body.textContent?.includes('System maintenance'),
-      false
-    )
+    expect(
+      document.body.textContent?.includes('System maintenance')
+    ).toBe(false)
 
     await act(async () => root.unmount())
   })
@@ -176,8 +143,8 @@ describe('AnnouncementDialog component', () => {
     })
 
     const gotItButton = findFooterButton('Got it (5s)')
-    assert.ok(gotItButton)
-    assert.equal(gotItButton.disabled, true)
+    expect(gotItButton).toBeTruthy()
+    expect(gotItButton?.disabled).toBe(true)
 
     await act(async () => root.unmount())
   })
@@ -193,9 +160,9 @@ describe('AnnouncementDialog component', () => {
     })
 
     const gotItButton = findFooterButton('Got it')
-    assert.ok(gotItButton)
-    await act(async () => gotItButton.click())
-    assert.deepEqual(dismissCalls, [true])
+    expect(gotItButton).toBeTruthy()
+    await act(async () => gotItButton?.click())
+    expect(dismissCalls).toEqual([true])
 
     await act(async () => root.unmount())
   })
@@ -211,13 +178,13 @@ describe('AnnouncementDialog component', () => {
     })
 
     const checkbox = findCheckbox()
-    assert.ok(checkbox)
-    await act(async () => checkbox.click())
+    expect(checkbox).toBeTruthy()
+    await act(async () => checkbox?.click())
 
     const gotItButton = findFooterButton('Got it')
-    assert.ok(gotItButton)
-    await act(async () => gotItButton.click())
-    assert.deepEqual(dismissCalls, [false])
+    expect(gotItButton).toBeTruthy()
+    await act(async () => gotItButton?.click())
+    expect(dismissCalls).toEqual([false])
 
     await act(async () => root.unmount())
   })

@@ -16,42 +16,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import assert from 'node:assert/strict'
-import { after, afterEach, beforeEach, describe, test } from 'node:test'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Window } from 'happy-dom'
-
-const domWindow = new Window()
-const domGlobals = [
-  'window',
-  'document',
-  'navigator',
-  'matchMedia',
-  'customElements',
-  'localStorage',
-  'sessionStorage',
-  'ResizeObserver',
-  'IntersectionObserver',
-  'HTMLElement',
-  'SVGElement',
-  'Node',
-  'Element',
-  'Event',
-  'CustomEvent',
-  'MouseEvent',
-  'MutationObserver',
-  'requestAnimationFrame',
-  'cancelAnimationFrame',
-  'getComputedStyle',
-] as const
-
-for (const key of domGlobals) {
-  Object.defineProperty(globalThis, key, {
-    configurable: true,
-    value: domWindow[key],
-  })
-}
 
 const { act } = await import('react')
 const { createRoot } = await import('react-dom/client')
@@ -183,21 +150,17 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-after(() => {
-  domWindow.close()
-})
-
 describe('vendor management dialog', () => {
   test('renders each vendor with name, status, and model count header', async () => {
     seedVendors(VENDORS)
     const rendered = await renderDialog()
 
     const text = document.body.textContent ?? ''
-    assert.equal(text.includes('OpenAI'), true)
-    assert.equal(text.includes('Anthropic'), true)
-    assert.equal(text.includes('Enabled'), true)
-    assert.equal(text.includes('Disabled'), true)
-    assert.equal(text.includes('Model Count'), true)
+    expect(text.includes('OpenAI')).toBe(true)
+    expect(text.includes('Anthropic')).toBe(true)
+    expect(text.includes('Enabled')).toBe(true)
+    expect(text.includes('Disabled')).toBe(true)
+    expect(text.includes('Model Count')).toBe(true)
 
     await unmountDialog(rendered)
   })
@@ -207,7 +170,7 @@ describe('vendor management dialog', () => {
     const rendered = await renderDialog()
 
     const text = document.body.textContent ?? ''
-    assert.equal(text.includes('No vendors yet'), true)
+    expect(text.includes('No vendors yet')).toBe(true)
 
     await unmountDialog(rendered)
   })
@@ -220,7 +183,7 @@ describe('vendor management dialog', () => {
       '[data-slot="provider-badge"]'
     ).length
     // One badge per vendor row.
-    assert.ok(badgeCount >= 2)
+    expect(badgeCount).toBeGreaterThanOrEqual(2)
 
     await unmountDialog(rendered)
   })
@@ -237,14 +200,14 @@ describe('vendor management dialog', () => {
     const editButtons = document.body.querySelectorAll(
       '[aria-label="Edit Vendor"]'
     )
-    assert.ok(editButtons.length >= 2)
+    expect(editButtons.length).toBeGreaterThanOrEqual(2)
     await act(async () => {
       ;(editButtons[0] as HTMLElement).click()
     })
 
     // Vendors are listed sorted by name, so Anthropic is the first row.
-    assert.equal(edited.length, 1)
-    assert.equal(edited[0].name, 'Anthropic')
+    expect(edited.length).toBe(1)
+    expect(edited[0].name).toBe('Anthropic')
 
     await unmountDialog(rendered)
   })
@@ -256,7 +219,7 @@ describe('vendor management dialog', () => {
     const menuTriggers = document.body.querySelectorAll(
       '[aria-label="Open menu"]'
     )
-    assert.ok(menuTriggers.length >= 2)
+    expect(menuTriggers.length).toBeGreaterThanOrEqual(2)
     await act(async () => {
       ;(menuTriggers[0] as HTMLElement).click()
     })
@@ -264,7 +227,7 @@ describe('vendor management dialog', () => {
     const deleteItems = [
       ...document.body.querySelectorAll('[role="menuitem"]'),
     ].filter((el) => (el.textContent ?? '').includes('Delete Vendor'))
-    assert.ok(deleteItems.length > 0)
+    expect(deleteItems.length).toBeGreaterThan(0)
     await act(async () => {
       ;(deleteItems[0] as HTMLElement).dispatchEvent(
         new MouseEvent('click', { bubbles: true, cancelable: true })
@@ -272,13 +235,12 @@ describe('vendor management dialog', () => {
     })
 
     const confirmText = document.body.textContent ?? ''
-    assert.equal(
+    expect(
       confirmText.includes(
         'Are you sure you want to delete vendor "Anthropic"?'
       ),
-      true,
       'expected the delete confirmation dialog to show the vendor name'
-    )
+    ).toBe(true)
 
     await unmountDialog(rendered)
   })

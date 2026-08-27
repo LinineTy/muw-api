@@ -16,8 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import assert from 'node:assert/strict'
-import { describe, test } from 'node:test'
+import { describe, expect, test } from 'vitest'
 
 import {
   CHANNEL_TYPE_OPENCODE_ZEN,
@@ -49,28 +48,27 @@ describe('OpenCode Zen channel', () => {
       (item) => item.value === CHANNEL_TYPE_OPENCODE_ZEN
     )
 
-    assert.deepEqual(option, {
+    expect(option).toEqual({
       value: CHANNEL_TYPE_OPENCODE_ZEN,
       label: 'OpenCode Zen',
     })
-    assert.equal(MODEL_FETCHABLE_TYPES.has(CHANNEL_TYPE_OPENCODE_ZEN), true)
-    assert.equal(getChannelTypeIcon(CHANNEL_TYPE_OPENCODE_ZEN), 'OpenCode')
-    assert.equal(
-      getChannelTypeConfig(CHANNEL_TYPE_OPENCODE_ZEN).defaultBaseUrl,
-      'https://opencode.ai/zen'
-    )
+    expect(MODEL_FETCHABLE_TYPES.has(CHANNEL_TYPE_OPENCODE_ZEN)).toBe(true)
+    expect(getChannelTypeIcon(CHANNEL_TYPE_OPENCODE_ZEN)).toBe('OpenCode')
+    expect(
+      getChannelTypeConfig(CHANNEL_TYPE_OPENCODE_ZEN).defaultBaseUrl
+    ).toBe('https://opencode.ai/zen')
   })
 
   test('allows creating a channel with an empty key (free plan)', () => {
     const result = channelFormSchema.safeParse(openCodeZenForm(''))
 
-    assert.equal(result.success, true)
+    expect(result.success).toBe(true)
   })
 
   test('still accepts a filled key (paid plan)', () => {
     const result = channelFormSchema.safeParse(openCodeZenForm('oc_zen_secret'))
 
-    assert.equal(result.success, true)
+    expect(result.success).toBe(true)
   })
 
   test('explicitly clearing the key keeps it in the update payload', () => {
@@ -81,8 +79,8 @@ describe('OpenCode Zen channel', () => {
 
     // '' is normalized to null by the empty-string cleanup; the backend
     // interprets a present key:null as "clear the saved key".
-    assert.equal('key' in payload, true)
-    assert.equal(payload.key == null, true)
+    expect('key' in payload).toBe(true)
+    expect(payload.key == null).toBe(true)
   })
 
   test('empty key without the clear toggle keeps the existing key untouched', () => {
@@ -91,6 +89,6 @@ describe('OpenCode Zen channel', () => {
       1
     )
 
-    assert.equal('key' in payload, false)
+    expect('key' in payload).toBe(false)
   })
 })
