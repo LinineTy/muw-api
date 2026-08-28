@@ -288,10 +288,19 @@ func TestParseKimiTiersFiveHourAndWeekly(t *testing.T) {
 	// (100-10)/100*100 = 90%
 	assert.Equal(t, CodingPlanTierFiveHour, tiers[0].Name)
 	assert.Equal(t, 90.0, tiers[0].Utilization)
+	// 原始数值:limit=100, remaining=10, used=90
+	assert.Equal(t, int64(100), tiers[0].Limit)
+	assert.Equal(t, int64(10), tiers[0].Remaining)
+	assert.Equal(t, int64(90), tiers[0].Used)
 	assert.Equal(t, CodingPlanTierFiveHour, tiers[1].Name)
 	assert.Equal(t, 75.0, tiers[1].Utilization)
+	assert.Equal(t, int64(200), tiers[1].Limit)
+	assert.Equal(t, int64(150), tiers[1].Used)
 	assert.Equal(t, CodingPlanTierWeeklyLimit, tiers[2].Name)
 	assert.Equal(t, 70.0, tiers[2].Utilization)
+	assert.Equal(t, int64(1000), tiers[2].Limit)
+	assert.Equal(t, int64(300), tiers[2].Remaining)
+	assert.Equal(t, int64(700), tiers[2].Used)
 	assert.Equal(t, millisToRFC3339(3000000000000), *tiers[2].ResetsAt)
 }
 

@@ -125,6 +125,9 @@ func main() {
 	// Codex credential auto-refresh check every 10 minutes, refresh when expires within 1 day
 	service.StartCodexCredentialAutoRefreshTask()
 
+	// 编码套餐自动启停:按余量自动禁用/恢复渠道(每 30s 轮询,主节点执行)
+	service.StartCodingPlanAutoControlTask()
+
 	// Subscription quota reset task (daily/weekly/monthly/custom)
 	service.StartSubscriptionQuotaResetTask()
 

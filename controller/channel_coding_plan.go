@@ -2,7 +2,6 @@ package controller
 
 import (
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -13,37 +12,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// resolveChannelCodingPlanProvider 解析渠道的编码套餐厂商,优先级:
-//  1. 渠道显式配置的 CodingPlanProvider(权威,覆盖聚合前置场景);"none" 表示显式
-//     关闭余量监控(手动/自定义渠道),即使 base_url 是套餐端点也不再自动绑定。
-//  2. 按 base_url 探测(含上游 ChannelSpecialBases 符号键,如 glm-coding-plan)
-//  3. 按渠道类型给出默认(智谱v4→zhipu、Moonshot→kimi、MiniMax→minimax、火山→volcengine)
-func resolveChannelCodingPlanProvider(channel *model.Channel) (service.CodingPlanProvider, error) {
-	if channel.CodingPlanProvider != nil {
-		p := strings.TrimSpace(*channel.CodingPlanProvider)
-		if p == string(service.CodingPlanProviderDisabled) {
-			return "", errors.New("coding plan monitoring is disabled for this channel")
-		}
-		if p != "" {
-			if service.IsKnownCodingPlanProvider(p) {
-				return service.CodingPlanProvider(p), nil
-			}
-			return "", fmt.Errorf("unsupported coding plan provider: %s", p)
-		}
-	}
-	var baseURL string
-	if channel.BaseURL != nil {
-		baseURL = *channel.BaseURL
-	}
-	if detected, ok := service.DetectCodingPlanProvider(baseURL); ok {
-		return detected, nil
-	}
-	if detected, ok := service.CodingPlanProviderFromChannelType(channel.Type); ok {
-		return detected, nil
-	}
-	return "", errors.New("coding plan quota is not enabled for this channel (set coding_plan_provider)")
-}
-
 // codingPlanQuotaGroupID 派生渠道编码套餐余量的分组指纹。生效 key 与查询一致
 // (CodingPlanKey 优先,空则用渠道自身 key),sha256 截断成不可逆指纹并拼上厂商,
 // 同 key 多渠道得到同一值,前端据此合并成一张余量卡。厂商无法解析或 key 为空返回空串。
@@ -51,7 +19,7 @@ func codingPlanQuotaGroupID(channel *model.Channel, effectiveKey string) string 
 	if effectiveKey == "" {
 		return ""
 	}
-	provider, err := resolveChannelCodingPlanProvider(channel)
+	provider, err := service.ResolveChannelCodingPlanProvider(channel)
 	if err != nil {
 		return ""
 	}
@@ -73,7 +41,7 @@ func ChannelCodingPlanQuota(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	provider, err := resolveChannelCodingPlanProvider(channel)
+	provider, err := service.ResolveChannelCodingPlanProvider(channel)
 	if err != nil {
 		common.ApiErrorMsg(c, err.Error())
 		return
@@ -92,4 +60,85 @@ func ChannelCodingPlanQuota(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, quota)
+}
+
+// codingPlanAutoControlFields 自动启停配置在渠道保存请求里的字段名。
+var codingPlanAutoControlFields = []string{
+	"coding_plan_auto_control",
+	"coding_plan_disable_threshold",
+	"coding_plan_enable_threshold",
+}
+
+// requestCarriesCodingPlanAutoControl 请求是否携带任一自动启停字段。
+func requestCarriesCodingPlanAutoControl(requestData map[string]any) bool {
+	for _, f := range codingPlanAutoControlFields {
+		if _, ok := requestData[f]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// syncCodingPlanAutoControlToGroup 渠道保存后,把本次请求携带的编码套餐自动启停配置
+// 同步到同组(同厂商 + 同生效 key)其余渠道。同 key 多渠道共享同一套餐账号,配置必须
+// 一致——编辑任一支渠道即改整个账号(余量卡合并显示正是这个语义)。未携带自动启停
+// 字段的局部更新(改名称、权重等)不受影响。厂商无法解析/多 key 无单一账号的渠道
+// 不构成分组,直接跳过。
+func syncCodingPlanAutoControlToGroup(source *model.Channel, requestData map[string]any) error {
+	if !requestCarriesCodingPlanAutoControl(requestData) {
+		return nil
+	}
+	if _, err := service.ResolveChannelCodingPlanProvider(source); err != nil {
+		return nil
+	}
+	srcKey := source.CodingPlanKey
+	if srcKey == "" {
+		srcKey = source.Key
+	}
+	if strings.Contains(srcKey, "\n") {
+		return nil
+	}
+	srcGroup := codingPlanQuotaGroupID(source, srcKey)
+	if srcGroup == "" {
+		return nil
+	}
+
+	var channels []*model.Channel
+	if err := model.DB.
+		Select("id", "type", "base_url", "key", "coding_plan_provider", "coding_plan_key").
+		Find(&channels).Error; err != nil {
+		return err
+	}
+	updates := make(map[string]any)
+	for _, f := range codingPlanAutoControlFields {
+		if v, ok := requestData[f]; ok {
+			updates[f] = v
+		}
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+	var siblingIDs []int
+	for _, ch := range channels {
+		if ch.Id == source.Id {
+			continue
+		}
+		if _, err := service.ResolveChannelCodingPlanProvider(ch); err != nil {
+			continue
+		}
+		k := ch.CodingPlanKey
+		if k == "" {
+			k = ch.Key
+		}
+		if strings.Contains(k, "\n") {
+			continue
+		}
+		if codingPlanQuotaGroupID(ch, k) == srcGroup {
+			siblingIDs = append(siblingIDs, ch.Id)
+		}
+	}
+	if len(siblingIDs) == 0 {
+		return nil
+	}
+	return model.DB.Model(&model.Channel{}).Where("id IN ?", siblingIDs).Updates(updates).Error
 }

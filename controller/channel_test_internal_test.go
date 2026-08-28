@@ -596,7 +596,7 @@ func TestResolveChannelCodingPlanProviderDisabled(t *testing.T) {
 		CodingPlanProvider: &disabled,
 		BaseURL:            common.GetPointer("https://open.bigmodel.cn/api/anthropic/v1/messages"),
 	}
-	_, err := resolveChannelCodingPlanProvider(ch)
+	_, err := service.ResolveChannelCodingPlanProvider(ch)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "disabled")
 
@@ -607,7 +607,7 @@ func TestResolveChannelCodingPlanProviderDisabled(t *testing.T) {
 		CodingPlanProvider: &p,
 		BaseURL:            common.GetPointer("https://myproxy.example.com"),
 	}
-	got, err := resolveChannelCodingPlanProvider(ch2)
+	got, err := service.ResolveChannelCodingPlanProvider(ch2)
 	require.NoError(t, err)
 	assert.Equal(t, service.CodingPlanProviderZhipu, got)
 }

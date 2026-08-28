@@ -141,6 +141,10 @@ var channelNonSensitiveFields = map[string]struct{}{
 	"channel_info":         {},
 	"multi_key_mode":       {},
 	"coding_plan_provider": {},
+	// 编码套餐自动启停配置(开关 + 禁用/恢复阈值),不涉及凭据,属非敏感
+	"coding_plan_auto_control":       {},
+	"coding_plan_disable_threshold":  {},
+	"coding_plan_enable_threshold":   {},
 	// 渠道内模型设置（禁用/上下文覆盖），不涉及凭据，属非敏感
 	"model_settings": {},
 }

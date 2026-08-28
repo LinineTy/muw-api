@@ -69,3 +69,41 @@ func TestEnsureChannelCodingPlanQuotaColumnsOnUpToDateDB(t *testing.T) {
 	require.NoError(t, ensureChannelCodingPlanQuotaColumns(fresh))
 	assert.False(t, fresh.Migrator().HasTable(&Channel{}))
 }
+
+// TestEnsureChannelCodingPlanAutoControlColumnsOnUpToDateDB 回归:channels 的
+// coding_plan_auto_control / *_threshold 是已有表上的新列,已到最新 schema 版本的库
+// 只能靠幂等 ensure 补列——否则自动启停任务查询这些列时报列不存在。
+func TestEnsureChannelCodingPlanAutoControlColumnsOnUpToDateDB(t *testing.T) {
+	db := openCodingPlanQuotaUpToDateDB(t)
+	require.NoError(t, db.Exec(`CREATE TABLE channels (
+		id integer PRIMARY KEY AUTOINCREMENT,
+		name text NOT NULL,
+		type integer DEFAULT 0,
+		key text NOT NULL,
+		status integer DEFAULT 1
+	)`).Error)
+	for _, column := range []string{
+		"coding_plan_auto_control",
+		"coding_plan_disable_threshold",
+		"coding_plan_enable_threshold",
+	} {
+		assert.False(t, db.Migrator().HasColumn(&Channel{}, column))
+	}
+
+	require.NoError(t, ensureChannelCodingPlanAutoControlColumns(db))
+	for _, column := range []string{
+		"coding_plan_auto_control",
+		"coding_plan_disable_threshold",
+		"coding_plan_enable_threshold",
+	} {
+		assert.True(t, db.Migrator().HasColumn(&Channel{}, column))
+	}
+
+	// 幂等:再次调用不报错、不加重复列。
+	require.NoError(t, ensureChannelCodingPlanAutoControlColumns(db))
+
+	// 全新安装路径:channels 表尚不存在时 ensure 为无操作。
+	fresh := openCodingPlanQuotaUpToDateDB(t)
+	require.NoError(t, ensureChannelCodingPlanAutoControlColumns(fresh))
+	assert.False(t, fresh.Migrator().HasTable(&Channel{}))
+}
