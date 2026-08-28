@@ -49,6 +49,20 @@ function mergeTrend(rows: ModelHealthRow[]): TestTrendPoint[] {
   return points
 }
 
+// lastErrorDotClass colors the per-channel last-error dot by failure kind,
+// mirroring the heartbeat block colors (amber=client, green=moderation,
+// red=upstream/legacy).
+function lastErrorDotClass(kind?: string): string {
+  switch (kind) {
+    case 'client':
+      return 'bg-warning'
+    case 'moderation':
+      return 'bg-success'
+    default:
+      return 'bg-destructive'
+  }
+}
+
 // ModelHealthCard renders one model as a compact two-line block: line 1 shows
 // the model name and overall success rate, line 2 shows the health blocks strip
 // and the detail toggle. Expanding reveals per-channel rows with their own
@@ -78,6 +92,22 @@ export function ModelHealthCard({
   )
   const overallRate =
     totalTests > 0 ? (totalSuccess / totalTests) * 100 : 0
+  // overallRate 这里是"原始口径"(成功/总数);后端 success_rate 已是技术口径
+  // (剔除 client 错误、审核拦截计成功)。渠道行来自后端的 rate 才是技术值,
+  // 模型级在卡片里自己合成:技术口径对 rows 重新聚合。
+  const totalClientErrors = rows.reduce(
+    (sum, row) => sum + (row.client_error_count ?? 0),
+    0
+  )
+  const totalModeration = rows.reduce(
+    (sum, row) => sum + (row.moderation_count ?? 0),
+    0
+  )
+  const denom = totalTests - totalClientErrors
+  const technicalRate =
+    denom > 0
+      ? ((totalSuccess + totalModeration) / denom) * 100
+      : 100
 
   return (
     <Card data-card-hover='false' className='gap-0 overflow-hidden py-0'>
@@ -93,7 +123,7 @@ export function ModelHealthCard({
             {t('Real user traffic')}: {totalUserTraffic}
           </span>
         )}
-        <SuccessRateBadge rate={overallRate} />
+        <SuccessRateBadge rate={technicalRate} rawRate={overallRate} />
       </div>
 
       <div className='flex items-center gap-2 px-3 pb-1.5 sm:px-4'>
@@ -133,7 +163,9 @@ export function ModelHealthCard({
                     <Tooltip>
                       <TooltipTrigger
                         render={
-                          <span className='bg-destructive size-2 shrink-0 rounded-full' />
+                          <span
+                            className={`size-2 shrink-0 rounded-full ${lastErrorDotClass(row.last_error_kind)}`}
+                          />
                         }
                       />
                       <TooltipContent side='top' className='max-w-xs'>

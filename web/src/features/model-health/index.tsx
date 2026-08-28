@@ -40,6 +40,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 
 import { getModelHealth } from './api'
+import { HealthLegend } from './components/health-legend'
 import { ModelHealthCard } from './components/model-health-card'
 import { ModelHealthSummary } from './components/model-health-summary'
 import type { ModelHealthRow } from './types'
@@ -103,7 +104,19 @@ export function ModelHealth() {
     const channelCount = new Set(rows.map((row) => row.channel_id)).size
     const totalTests = rows.reduce((sum, row) => sum + row.test_count, 0)
     const totalSuccess = rows.reduce((sum, row) => sum + row.success_count, 0)
-    const successRate = totalTests > 0 ? (totalSuccess / totalTests) * 100 : 0
+    // 汇总成功率与技术口径对齐(client 错误不进分母、审核拦截计成功),
+    // 与卡片 badge、非管理员视图一致。
+    const totalClientErrors = rows.reduce(
+      (sum, row) => sum + (row.client_error_count ?? 0),
+      0
+    )
+    const totalModeration = rows.reduce(
+      (sum, row) => sum + (row.moderation_count ?? 0),
+      0
+    )
+    const denom = totalTests - totalClientErrors
+    const successRate =
+      denom > 0 ? ((totalSuccess + totalModeration) / denom) * 100 : 100
     const weightedLatency = rows.reduce(
       (sum, row) => sum + row.avg_response_time * row.test_count,
       0
@@ -128,6 +141,7 @@ export function ModelHealth() {
           unhealthyModelCount={unhealthyModelCount}
           trafficModelCount={trafficModelCount}
         />
+        <HealthLegend />
         {modelNames.map((name) => (
           <ModelHealthCard
             key={name}

@@ -328,15 +328,18 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		if shouldRecordUserTraffic(relayInfo) &&
 			operation_setting.GetMonitorSetting().RecordUserTraffic {
 			errMsg := ""
+			errorKind := ""
 			if newAPIError != nil {
 				errMsg = newAPIError.Error()
+				// 按责任方归类失败(client/moderation/upstream),健康页分色用。
+				errorKind = model.ClassifyRelayError(newAPIError)
 			}
 			modelName := relayInfo.OriginModelName
 			success := newAPIError == nil
 			responseTime := int(time.Since(attemptStart).Milliseconds())
 			gopool.Go(func() {
 				recordChannelTest(model.ChannelTestSourceUser, channel,
-					modelName, success, responseTime, errMsg)
+					modelName, success, responseTime, errMsg, errorKind)
 			})
 		}
 
