@@ -88,6 +88,9 @@ export const channelSchema = z.object({
   settings: z.string().default('{}'), // other_settings JSON
   coding_plan_provider: z.string().nullish(), // 编码套餐厂商,空/未设置 = 未启用余量监控
   coding_plan_key_masked: z.string().nullish(), // 套餐专用密钥的脱敏预览
+  coding_plan_auto_control: z.boolean().nullish(), // 编码套餐自动启停开关
+  coding_plan_disable_threshold: z.number().int().nullish(), // 禁用阈值(%) 用量 ≥ 该值禁用
+  coding_plan_enable_threshold: z.number().int().nullish(), // 恢复阈值(%) 用量 < 该值恢复
   // 编码套餐余量分组指纹("厂商:密钥指纹"):同 key 多渠道共享同一值,前端据此合并成一张余量卡。
   coding_plan_quota_group: z.string().nullish(),
   model_settings: z
@@ -209,6 +212,10 @@ export interface CodingPlanTier {
   name: string
   utilization: number
   resets_at?: string | null
+  // 原始数值(仅厂商返回时有,如 Kimi;智谱/MiniMax 只有百分比 → 缺省)
+  limit?: number
+  remaining?: number
+  used?: number
 }
 
 export interface CodingPlanQuota {
