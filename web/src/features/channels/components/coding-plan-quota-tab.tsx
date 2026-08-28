@@ -17,34 +17,67 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Gauge, Loader2, Pencil, RefreshCw } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import {
+  Gauge,
+  Loader2,
+  RefreshCw,
+  Settings,
+  ShieldCheck,
+  ShieldOff,
+  type LucideIcon,
+} from 'lucide-react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Progress } from '@/components/ui/progress'
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
-import { formatPercent } from '@/lib/format'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import {
+  sideDrawerContentClassName,
+  sideDrawerFooterClassName,
+  sideDrawerFormClassName,
+  sideDrawerHeaderClassName,
+  sideDrawerSectionClassName,
+} from '@/components/drawer-layout'
+import { formatCompactNumber, formatPercent } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
-import { getChannelCodingPlanQuota, getChannels } from '../api'
+import { getChannelCodingPlanQuota, getChannels, updateChannel } from '../api'
 import {
+  CHANNEL_STATUS,
   CODING_PLAN_PROVIDER_DISABLED,
   CODING_PLAN_PROVIDER_OPTIONS,
   detectCodingPlanProvider,
 } from '../constants'
-import type { Channel, CodingPlanTier } from '../types'
-import { useChannels } from './channels-provider'
+import type { Channel, CodingPlanQuota, CodingPlanTier } from '../types'
 
 const QUOTA_REFRESH_MS = 5 * 60 * 1000
 
 // 自动刷新开关的本地持久化键:默认开启,关闭后余量仅在手动刷新时更新。
 const AUTO_REFRESH_STORAGE_KEY = 'coding-plan-auto-refresh'
-
-// 同 key 渠道标签的默认可见数量,超出折叠成 +N(展开/收起),避免卡片被撑高。
-const MAX_CHANNEL_TAGS = 3
 
 // 渠道是否启用编码套餐余量监控:显式配置了厂商,或 base_url 是套餐符号键/套餐专用地址。
 // 显式关闭监控("none",手动/自定义渠道默认)一律视为不监控,即使 base_url 是套餐端点。
@@ -101,31 +134,92 @@ function formatResetsAt(resetsAt: string | null | undefined): string {
   return new Date(ms).toLocaleString()
 }
 
+// 单条用量行(对齐钱包订阅卡的 LimitRow):label 左、已用/限额(或百分比)右,进度条按
+// 使用率阈值变色(>=90 红 / >=70 琥珀 / 其余主色),底部显示重置时间。仅 Kimi 等
+// 厂商返回原始数值(limit/remaining),其余回退成百分比。
 function QuotaTierRow({ tier }: { tier: CodingPlanTier }) {
   const { t } = useTranslation()
-  const used = Math.max(0, Math.min(100, tier.utilization))
+  const pct = Math.max(0, Math.min(100, tier.utilization))
+  let barClass = 'bg-primary'
+  if (pct >= 90) {
+    barClass = 'bg-destructive'
+  } else if (pct >= 70) {
+    barClass = 'bg-warning'
+  }
+  const value =
+    tier.limit != null && tier.limit > 0
+      ? `${formatCompactNumber(tier.used ?? 0)} / ${formatCompactNumber(
+          tier.limit
+        )}`
+      : formatPercent(tier.utilization)
 
   return (
-    <div className='space-y-1.5'>
-      <div className='flex items-center justify-between gap-2 text-xs'>
-        <span className='font-medium'>{tierNameLabel(tier.name, t)}</span>
+    <div className='py-2.5'>
+      <div className='flex items-baseline justify-between gap-3'>
+        <span className='min-w-0 truncate text-sm font-medium'>
+          {tierNameLabel(tier.name, t)}
+        </span>
         <span
           className={cn(
-            'font-semibold tabular-nums',
+            'shrink-0 font-mono text-sm font-medium tabular-nums',
             tierColorClass(tier.utilization)
           )}
+          title={
+            tier.limit != null && tier.limit > 0
+              ? t('Used {{pct}}%', { pct: formatPercent(tier.utilization) })
+              : undefined
+          }
         >
-          {formatPercent(tier.utilization)}
+          {value}
         </span>
       </div>
-      <Progress value={used} className='h-1.5 flex-1' />
-      <div className='text-muted-foreground flex items-center justify-between gap-2 text-[11px]'>
-        <span>{t('Used')}</span>
-        <span className='truncate'>
-          {t('Resets at {{time}}', { time: formatResetsAt(tier.resets_at) })}
-        </span>
+      <div className='bg-muted mt-1.5 h-1.5 overflow-hidden rounded-full'>
+        <div
+          className={cn('h-full rounded-full', barClass)}
+          style={{ width: `${pct}%` }}
+        />
       </div>
+      {tier.resets_at && (
+        <div className='text-muted-foreground mt-1 text-xs'>
+          {t('Reset')} {formatResetsAt(tier.resets_at)}
+        </div>
+      )}
     </div>
+  )
+}
+
+// 底部功能状态小图标:纯彩色图标 + tooltip,无背景(卡片本身带半透明 --table-row,
+// 不再叠 bg-muted 圆圈,避免在深色主题下变成一圈黑)。
+function StateChip({
+  icon: Icon,
+  label,
+  tone,
+}: {
+  icon: LucideIcon
+  label: string
+  tone: 'success' | 'warning' | 'neutral'
+}) {
+  const toneClass = {
+    success: 'text-success',
+    warning: 'text-warning',
+    neutral: 'text-muted-foreground',
+  }[tone]
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            className={cn(
+              'inline-flex cursor-help items-center justify-center',
+              toneClass
+            )}
+          />
+        }
+      >
+        <Icon className='size-4' aria-hidden='true' />
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -137,17 +231,9 @@ function ChannelQuotaCard({
   autoRefresh: boolean
 }) {
   const { t } = useTranslation()
-  const { setOpen, setCurrentRow } = useChannels()
   // 同 key 多渠道合并成一张卡:余量是账号级数据,取组内任一渠道查询即可。
   const channel = channels[0]
-  const groupSize = channels.length
-  const isGrouped = groupSize > 1
-  // 渠道标签折叠:默认显示前 MAX_CHANNEL_TAGS 个,其余折叠成 +N,展开后全部显示。
-  const [showAllChannels, setShowAllChannels] = useState(false)
-  const hiddenCount = channels.length - MAX_CHANNEL_TAGS
-  const visibleChannels = showAllChannels
-    ? channels
-    : channels.slice(0, MAX_CHANNEL_TAGS)
+  const [manageOpen, setManageOpen] = useState(false)
 
   const quotaQuery = useQuery({
     queryKey: ['channels', 'coding-plan-quota', channel.id],
@@ -166,142 +252,413 @@ function ChannelQuotaCard({
   })
 
   const providerLabelText = providerLabel(channel, t)
-
-  const openEdit = (target: Channel) => {
-    setCurrentRow(target)
-    setOpen('update-channel')
-  }
+  const autoControl = channel.coding_plan_auto_control ?? false
+  const effectiveUtilization =
+    quotaQuery.data && quotaQuery.data.tiers.length > 0
+      ? Math.max(...quotaQuery.data.tiers.map((tier) => tier.utilization))
+      : null
 
   let quotaArea
   if (quotaQuery.isLoading) {
     quotaArea = (
-      <div className='space-y-2'>
-        <Skeleton className='h-3 w-1/3 rounded' />
-        <Skeleton className='h-1.5 w-full rounded' />
-        <Skeleton className='h-1.5 w-full rounded' />
+      <div className='space-y-2 py-1'>
+        <Skeleton className='h-3 w-1/3' />
+        <Skeleton className='h-1.5 w-full' />
+        <Skeleton className='h-1.5 w-full' />
       </div>
     )
   } else if (quotaQuery.isError) {
     quotaArea = (
-      <div className='border-destructive/20 bg-destructive/5 rounded-md border px-2.5 py-2 text-xs'>
-        <p className='text-destructive font-medium'>
-          {t('Quota query failed')}
-        </p>
-        <p className='text-muted-foreground mt-0.5 truncate'>
-          {quotaQuery.error instanceof Error
-            ? quotaQuery.error.message
-            : t('Unknown error')}
-        </p>
+      <div className='text-muted-foreground py-2 text-xs'>
+        {quotaQuery.error instanceof Error
+          ? quotaQuery.error.message
+          : t('Quota query failed')}
       </div>
     )
   } else if (quotaQuery.data) {
     const quota = quotaQuery.data
-    quotaArea = (
-      <div className='space-y-3'>
-        {quota.tiers.length > 0 ? (
-          <div className='space-y-3'>
-            {quota.tiers.map((tier) => (
-              <QuotaTierRow key={tier.name} tier={tier} />
-            ))}
-          </div>
-        ) : (
-          <p className='text-muted-foreground text-xs'>
-            {t('No quota windows returned for this account.')}
-          </p>
-        )}
-      </div>
-    )
+    quotaArea =
+      quota.tiers.length > 0 ? (
+        <div className='divide-y divide-border'>
+          {quota.tiers.map((tier) => (
+            <QuotaTierRow key={tier.name} tier={tier} />
+          ))}
+        </div>
+      ) : (
+        <p className='text-muted-foreground py-2 text-xs'>
+          {t('No quota windows returned for this account.')}
+        </p>
+      )
   } else {
     quotaArea = null
   }
 
   return (
-    <div className='bg-card flex flex-col overflow-hidden rounded-lg border border-input'>
-      {/* 顶栏:卡片名 = 厂商(套餐)名;渠道名做成标签,点击标签进入对应渠道编辑 */}
-      <div className='flex min-w-0 items-start justify-between gap-2 border-b px-4 py-3'>
-        <div className='flex min-w-0 flex-col gap-1.5'>
-          <div className='flex min-w-0 items-center gap-2'>
-            <Gauge className='text-muted-foreground mt-0.5 size-4 shrink-0' aria-hidden='true' />
-            <p className='truncate text-sm font-semibold'>{providerLabelText}</p>
-          </div>
-          <div className='flex flex-wrap items-center gap-1.5'>
-            {visibleChannels.map((ch) => (
-              <Button
-                key={ch.id}
-                type='button'
-                variant='ghost'
-                size='sm'
-                className='bg-muted/60 text-muted-foreground hover:text-foreground h-auto px-2 py-0.5 text-xs'
-                onClick={() => openEdit(ch)}
-              >
-                {ch.name}
-              </Button>
-            ))}
-            {hiddenCount > 0 && (
-              <Button
-                type='button'
-                variant='ghost'
-                size='sm'
-                className='bg-muted/60 text-muted-foreground hover:text-foreground h-auto px-2 py-0.5 text-xs'
-                onClick={() => setShowAllChannels((v) => !v)}
-              >
-                {showAllChannels ? t('Collapse') : `+${hiddenCount} ${t('More')}`}
-              </Button>
-            )}
-          </div>
-        </div>
-        {!isGrouped && (
-          <Button
+    <div className='rounded-lg border bg-(--data-table-card-bg,var(--table-row)) px-3 py-2.5'>
+      {/* 顶:套餐名(厂商) + 右上角操作按钮(刷新 / 详情齿轮,纯图标无背景) */}
+      <div className='flex items-center justify-between gap-2'>
+        <h3 className='min-w-0 truncate text-sm font-semibold tracking-tight'>
+          {providerLabelText}
+        </h3>
+        <div className='flex shrink-0 items-center'>
+          <button
             type='button'
-            variant='ghost'
-            size='sm'
-            className='shrink-0'
-            aria-label={t('Edit channel')}
-            onClick={() => openEdit(channel)}
+            className='text-muted-foreground flex size-7 cursor-pointer items-center justify-center rounded-md transition-colors hover:text-foreground'
+            onClick={() => void quotaQuery.refetch()}
+            disabled={quotaQuery.isFetching}
+            aria-label={t('Refresh')}
           >
-            <Pencil className='size-3.5' aria-hidden='true' />
-          </Button>
-        )}
+            {quotaQuery.isFetching ? (
+              <Loader2 className='size-4 animate-spin' aria-hidden='true' />
+            ) : (
+              <RefreshCw className='size-4' aria-hidden='true' />
+            )}
+          </button>
+          <button
+            type='button'
+            className='text-muted-foreground flex size-7 cursor-pointer items-center justify-center rounded-md transition-colors hover:text-foreground'
+            onClick={() => setManageOpen(true)}
+            aria-label={t('Coding plan auto-control settings')}
+          >
+            <Settings className='size-4' aria-hidden='true' />
+          </button>
+        </div>
       </div>
 
-      {/* 中间余量区 flex-1 撑开、底部固定对齐(订阅卡片同款布局),不同套餐窗口
-          数量不同也不会高高低低;上下各用一条分隔线与顶栏/底栏隔开。 */}
-      <div className='flex-1 px-4 py-3' aria-busy={quotaQuery.isFetching}>
+      {/* 中:用量条 */}
+      <div className='flex flex-col' aria-busy={quotaQuery.isFetching}>
         {quotaArea}
       </div>
 
-      {/* 底部:等级标签(如 lite)+ 刷新,固定对齐 */}
-      <div className='flex items-center gap-2 border-t px-4 py-2.5'>
-        {quotaQuery.data?.level ? (
-          <span className='bg-muted/60 text-muted-foreground rounded-md px-1.5 py-0.5 text-[11px] font-medium'>
-            {quotaQuery.data.level}
-          </span>
-        ) : null}
-        <Button
-          type='button'
-          variant='ghost'
-          size='sm'
-          className='ml-auto'
-          onClick={() => void quotaQuery.refetch()}
-          disabled={quotaQuery.isFetching}
-        >
-          {quotaQuery.isFetching ? (
+      {/* 底:功能状态标签置底(对齐钱包订阅卡底部徽标:极简图标 + tooltip) */}
+      <div className='mt-2 flex items-center gap-1.5'>
+        <TooltipProvider delay={100}>
+          <StateChip
+            icon={Gauge}
+            label={t('Quota monitoring enabled')}
+            tone='warning'
+          />
+          <StateChip
+            icon={autoControl ? ShieldCheck : ShieldOff}
+            label={
+              autoControl ? t('Auto-manage: On') : t('Auto-manage: Off')
+            }
+            tone={autoControl ? 'success' : 'neutral'}
+          />
+        </TooltipProvider>
+      </div>
+
+      <CodingPlanAutoControlSheet
+        channels={channels}
+        quota={quotaQuery.data ?? null}
+        utilization={effectiveUtilization}
+        open={manageOpen}
+        onOpenChange={setManageOpen}
+      />
+    </div>
+  )
+}
+
+/**
+ * 自动启停配置表单(组级语义):配置存组内每渠道并保持同步,改代表渠道 = 改整个套餐
+ * 账号。放在详情抽屉里,抽屉开合期间配置变化会即时保存并同步到同 key 渠道。
+ */
+function CodingPlanAutoControlForm({
+  channel,
+  utilization,
+}: {
+  channel: Channel
+  utilization: number | null // 有效用量(各窗口最大值);余量查询失败/加载中为 null
+}) {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const [enabled, setEnabled] = useState(
+    channel.coding_plan_auto_control ?? false
+  )
+  const [disableThreshold, setDisableThreshold] = useState(
+    channel.coding_plan_disable_threshold ?? 98
+  )
+  const [enableThreshold, setEnableThreshold] = useState(
+    channel.coding_plan_enable_threshold ?? 90
+  )
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  // 配置变化(保存回读或其它入口改动)时同步本地态。
+  useEffect(() => {
+    setEnabled(channel.coding_plan_auto_control ?? false)
+    setDisableThreshold(channel.coding_plan_disable_threshold ?? 98)
+    setEnableThreshold(channel.coding_plan_enable_threshold ?? 90)
+  }, [
+    channel.id,
+    channel.coding_plan_auto_control,
+    channel.coding_plan_disable_threshold,
+    channel.coding_plan_enable_threshold,
+  ])
+
+  const save = useCallback(
+    async (nextEnabled: boolean, nextDisable: number, nextEnable: number) => {
+      if (nextDisable < 1 || nextDisable > 100) {
+        setError(t('Disable threshold must be between 1 and 100'))
+        return
+      }
+      if (nextEnable >= nextDisable) {
+        setError(t('Enable threshold must be lower than disable threshold'))
+        return
+      }
+      setError('')
+      setSaving(true)
+      try {
+        const res = await updateChannel(channel.id, {
+          coding_plan_auto_control: nextEnabled,
+          coding_plan_disable_threshold: nextDisable,
+          coding_plan_enable_threshold: nextEnable,
+        })
+        if (!res.success) {
+          setError(res.message || t('Save failed'))
+          // 回滚到已保存的配置,避免开关/输入显示与实际不符。
+          setEnabled(channel.coding_plan_auto_control ?? false)
+          setDisableThreshold(channel.coding_plan_disable_threshold ?? 98)
+          setEnableThreshold(channel.coding_plan_enable_threshold ?? 90)
+          return
+        }
+        // 后端已同步到同组其余渠道;刷新列表让卡片/渠道列表反映新配置。
+        void queryClient.invalidateQueries({
+          queryKey: ['channels', 'list', 'coding-plan-enabled'],
+        })
+      } catch (e) {
+        setError(e instanceof Error ? e.message : t('Save failed'))
+        setEnabled(channel.coding_plan_auto_control ?? false)
+        setDisableThreshold(channel.coding_plan_disable_threshold ?? 98)
+        setEnableThreshold(channel.coding_plan_enable_threshold ?? 90)
+      } finally {
+        setSaving(false)
+      }
+    },
+    [channel.id, channel.coding_plan_auto_control, queryClient, t]
+  )
+
+  const handleToggle = (checked: boolean) => {
+    setEnabled(checked)
+    void save(checked, disableThreshold, enableThreshold)
+  }
+
+  // 决策预览(纯前端按当前用量/阈值/状态推算,非真实状态机):让不操纵套餐余量的
+  // 验证成为可能——把禁用阈值调到当前用量以下,预览立即显示「将禁用」。
+  let preview: ReactNode = null
+  if (enabled && utilization != null) {
+    const pct = Math.round(utilization)
+    if (
+      channel.status === CHANNEL_STATUS.ENABLED &&
+      utilization >= disableThreshold
+    ) {
+      preview = (
+        <p className='text-destructive mt-1.5 text-[11px]'>
+          {t('Will disable: usage {{pct}}% reaches the disable threshold', {
+            pct,
+          })}
+        </p>
+      )
+    } else if (
+      channel.status === CHANNEL_STATUS.AUTO_DISABLED &&
+      utilization < enableThreshold
+    ) {
+      preview = (
+        <p className='text-emerald-600 dark:text-emerald-500 mt-1.5 text-[11px]'>
+          {t('Will re-enable: usage {{pct}}% drops below the enable threshold', {
+            pct,
+          })}
+        </p>
+      )
+    } else {
+      preview = (
+        <p className='text-muted-foreground mt-1.5 text-[11px]'>
+          {t('No action: usage {{pct}}% within current thresholds', { pct })}
+        </p>
+      )
+    }
+  }
+
+  return (
+    <div className='space-y-5'>
+      <div className='flex items-start justify-between gap-3'>
+        <div className='min-w-0 space-y-0.5'>
+          <Label
+            htmlFor={`coding-plan-auto-control-${channel.id}`}
+            className='font-medium'
+          >
+            {t('Auto enable/disable by quota')}
+          </Label>
+          <p className='text-muted-foreground text-xs'>
+            {t(
+              'Disable the channel when coding-plan usage reaches the disable threshold, re-enable it after usage drops below the enable threshold.'
+            )}
+          </p>
+        </div>
+        <div className='flex shrink-0 items-center gap-1.5'>
+          {saving && (
             <Loader2
-              data-icon='inline-start'
-              className='size-3.5 animate-spin'
-              aria-hidden='true'
-            />
-          ) : (
-            <RefreshCw
-              data-icon='inline-start'
-              className='size-3.5'
+              className='text-muted-foreground size-3.5 animate-spin'
               aria-hidden='true'
             />
           )}
-          {t('Refresh')}
-        </Button>
+          <Switch
+            id={`coding-plan-auto-control-${channel.id}`}
+            checked={enabled}
+            disabled={saving}
+            onCheckedChange={handleToggle}
+          />
+        </div>
       </div>
+
+      {enabled && (
+        <div className='space-y-3'>
+          <div className='grid grid-cols-2 gap-3'>
+            <div className='space-y-1.5'>
+              <Label
+                htmlFor={`cp-disable-threshold-${channel.id}`}
+                className='text-xs'
+              >
+                {t('Disable threshold')} (%)
+              </Label>
+              <Input
+                id={`cp-disable-threshold-${channel.id}`}
+                type='number'
+                min={1}
+                max={100}
+                value={disableThreshold}
+                disabled={saving}
+                onChange={(e) => setDisableThreshold(Number(e.target.value))}
+                onBlur={() => void save(enabled, disableThreshold, enableThreshold)}
+              />
+            </div>
+            <div className='space-y-1.5'>
+              <Label
+                htmlFor={`cp-enable-threshold-${channel.id}`}
+                className='text-xs'
+              >
+                {t('Enable threshold')} (%)
+              </Label>
+              <Input
+                id={`cp-enable-threshold-${channel.id}`}
+                type='number'
+                min={0}
+                max={100}
+                value={enableThreshold}
+                disabled={saving}
+                onChange={(e) => setEnableThreshold(Number(e.target.value))}
+                onBlur={() => void save(enabled, disableThreshold, enableThreshold)}
+              />
+            </div>
+          </div>
+          <p className='text-muted-foreground text-xs'>
+            {t(
+              'Re-enable the channel when usage drops below the enable threshold (e.g. after the 5-hour window rolls).'
+            )}
+          </p>
+        </div>
+      )}
+
+      {preview}
+      {error && <p className='text-destructive text-xs'>{error}</p>}
     </div>
+  )
+}
+
+/**
+ * 详情/管理抽屉:从卡片右上角按钮打开。原来外显的渠道名、等级都收进来,加上
+ * 用量详情与自动管理设置(开关/阈值/决策预览),改动即时保存并同步到同 key 渠道。
+ */
+function CodingPlanAutoControlSheet({
+  channels,
+  quota,
+  utilization,
+  open,
+  onOpenChange,
+}: {
+  channels: Channel[]
+  quota: CodingPlanQuota | null
+  utilization: number | null
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const { t } = useTranslation()
+  const channel = channels[0]
+  const providerLabelText = providerLabel(channel, t)
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className={sideDrawerContentClassName('sm:max-w-md')}>
+        <SheetHeader className={sideDrawerHeaderClassName()}>
+          <SheetTitle className='flex items-center gap-2 text-sm'>
+            <Gauge className='text-warning size-4' aria-hidden='true' />
+            <span className='min-w-0 truncate'>{providerLabelText}</span>
+            {quota?.level ? (
+              <span className='bg-muted/60 text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium'>
+                {quota.level}
+              </span>
+            ) : null}
+          </SheetTitle>
+          <SheetDescription className='text-xs'>
+            {t('Applied to every channel sharing this coding-plan account.')}
+          </SheetDescription>
+        </SheetHeader>
+        <div className={sideDrawerFormClassName()}>
+          {/* 渠道 */}
+          <div className={sideDrawerSectionClassName()}>
+            <div className='text-muted-foreground text-xs font-medium'>
+              {t('Channels')}
+            </div>
+            <div className='flex flex-wrap gap-1.5'>
+              {channels.map((ch) => (
+                <span
+                  key={ch.id}
+                  className='bg-muted/60 text-muted-foreground rounded-md px-2 py-0.5 text-xs'
+                >
+                  {ch.name}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* 用量详情 */}
+          {quota && (
+            <div className={sideDrawerSectionClassName()}>
+              <div className='text-muted-foreground text-xs font-medium'>
+                {t('Quota Details')}
+              </div>
+              {quota.tiers.length > 0 ? (
+                <div className='divide-y divide-border'>
+                  {quota.tiers.map((tier) => (
+                    <QuotaTierRow key={tier.name} tier={tier} />
+                  ))}
+                </div>
+              ) : (
+                <p className='text-muted-foreground text-xs'>
+                  {t('No quota windows returned for this account.')}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* 自动管理 */}
+          <div className={sideDrawerSectionClassName()}>
+            <div className='text-muted-foreground text-xs font-medium'>
+              {t('Auto-manage')}
+            </div>
+            <CodingPlanAutoControlForm
+              channel={channel}
+              utilization={utilization}
+            />
+          </div>
+        </div>
+        <SheetFooter className={sideDrawerFooterClassName()}>
+          <SheetClose render={<Button variant='outline' />}>
+            {t('Close')}
+          </SheetClose>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   )
 }
 
@@ -365,9 +722,9 @@ export function CodingPlanQuotaTab() {
   let content
   if (channelsQuery.isLoading) {
     content = (
-      <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3 min-[1600px]:grid-cols-4'>
+      <div className='grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-3'>
         {[0, 1, 2, 3].map((index) => (
-          <Skeleton key={index} className='h-40 w-full rounded-lg' />
+          <Skeleton key={index} className='h-40 w-full rounded-lg border' />
         ))}
       </div>
     )
@@ -394,7 +751,7 @@ export function CodingPlanQuotaTab() {
     )
   } else {
     content = (
-      <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3 min-[1600px]:grid-cols-4'>
+      <div className='grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-3'>
         {groups.map((group) => (
           <ChannelQuotaCard
             key={group[0].id}
