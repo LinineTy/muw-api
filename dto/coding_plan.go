@@ -8,6 +8,12 @@ type CodingPlanTier struct {
 	Utilization float64 `json:"utilization"`
 	// ResetsAt 重置时间(RFC3339);未知时为空
 	ResetsAt *string `json:"resets_at"`
+
+	// 原始数值(仅厂商返回时才有;Kimi 给 limit/remaining,智谱/MiniMax 只有百分比
+	// → 缺省为 0,omitempty 省略,前端据此回退成百分比展示)。
+	Limit     int64 `json:"limit,omitempty"`     // 窗口额度
+	Remaining int64 `json:"remaining,omitempty"` // 剩余
+	Used      int64 `json:"used,omitempty"`      // 已用 = Limit - Remaining(下限 0)
 }
 
 // CodingPlanQuota 编码套餐余量查询结果。

@@ -319,6 +319,10 @@ func migrateDB() error {
 	if err := ensureChannelCodingPlanQuotaColumns(DB); err != nil {
 		return err
 	}
+	// channels.coding_plan_auto_control / *_threshold 列:幂等加列,理由同上面。
+	if err := ensureChannelCodingPlanAutoControlColumns(DB); err != nil {
+		return err
+	}
 	// channel_model_settings 表 + models.context_window 列:幂等,每次启动执行,
 	// 新装(升版本路径走 AutoMigrate)与已最新版本库(跳过路径)都补齐。
 	if err := ensureChannelModelSettingsTable(DB); err != nil {
@@ -978,6 +982,29 @@ func ensureChannelCodingPlanQuotaColumns(db *gorm.DB) error {
 	if !db.Migrator().HasColumn(&Channel{}, "coding_plan_key") {
 		if err := db.Migrator().AddColumn(&Channel{}, "coding_plan_key"); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// ensureChannelCodingPlanAutoControlColumns 幂等加列:channels.coding_plan_auto_control /
+// coding_plan_disable_threshold / coding_plan_enable_threshold。理由与
+// ensureChannelCodingPlanQuotaColumns 相同:已有表上的新列,已最新版本库也要补。
+// 无 gorm default 标签,存量行为 NULL,由 service 回退默认阈值(98/90)。
+func ensureChannelCodingPlanAutoControlColumns(db *gorm.DB) error {
+	if !db.Migrator().HasTable(&Channel{}) {
+		return nil
+	}
+	columns := []string{
+		"coding_plan_auto_control",
+		"coding_plan_disable_threshold",
+		"coding_plan_enable_threshold",
+	}
+	for _, column := range columns {
+		if !db.Migrator().HasColumn(&Channel{}, column) {
+			if err := db.Migrator().AddColumn(&Channel{}, column); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

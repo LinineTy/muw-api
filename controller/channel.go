@@ -596,6 +596,23 @@ func validateChannel(channel *model.Channel, isAdd bool) error {
 		}
 	}
 
+	// 编码套餐自动启停阈值校验:禁用阈值 1-100,恢复阈值 0-100 且必须严格小于禁用阈值
+	// (保证滞回,避免边界抖动)。
+	if channel.CodingPlanDisableThreshold != nil {
+		d := *channel.CodingPlanDisableThreshold
+		if d < 1 || d > 100 {
+			return fmt.Errorf("编码套餐禁用阈值必须在 1-100 之间")
+		}
+		if channel.CodingPlanEnableThreshold != nil && *channel.CodingPlanEnableThreshold >= d {
+			return fmt.Errorf("编码套餐恢复阈值必须小于禁用阈值")
+		}
+	}
+	if channel.CodingPlanEnableThreshold != nil {
+		if e := *channel.CodingPlanEnableThreshold; e < 0 || e > 100 {
+			return fmt.Errorf("编码套餐恢复阈值必须在 0-100 之间")
+		}
+	}
+
 	return nil
 }
 
@@ -1180,6 +1197,11 @@ func UpdateChannel(c *gin.Context) {
 	if err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	// 编码套餐自动启停配置是组级语义:请求携带时同步到同 key 同厂商的其余渠道
+	// (同一套餐账号),失败不阻断主流程。先于 InitChannelCache 保证重建索引含同步值。
+	if err := syncCodingPlanAutoControlToGroup(&channel.Channel, requestData); err != nil {
+		common.SysLog(fmt.Sprintf("failed to sync coding plan auto-control config: channel_id=%d, error=%v", channel.Id, err))
 	}
 	// 渠道内模型设置（禁用/上下文覆盖）：仅当请求显式携带 model_settings 时全量对齐
 	//（含空数组 = 全部恢复默认）。未携带保持现状——避免外部局部更新（如仅改名称）

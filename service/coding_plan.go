@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/model"
 )
 
 // ── 编码套餐厂商 ──────────────────────────────────────────────
@@ -112,6 +114,128 @@ func CodingPlanProviderFromChannelType(channelType int) (CodingPlanProvider, boo
 	default:
 		return "", false
 	}
+}
+
+// ResolveChannelCodingPlanProvider 解析渠道的编码套餐厂商,优先级:
+//  1. 渠道显式配置的 CodingPlanProvider(权威,覆盖聚合前置场景);"none" 表示显式
+//     关闭余量监控(手动/自定义渠道),即使 base_url 是套餐端点也不再自动绑定。
+//  2. 按 base_url 探测(含上游 ChannelSpecialBases 符号键,如 glm-coding-plan)
+//  3. 按渠道类型给出默认(智谱v4→zhipu、Moonshot→kimi、MiniMax→minimax、火山→volcengine)
+func ResolveChannelCodingPlanProvider(channel *model.Channel) (CodingPlanProvider, error) {
+	if channel.CodingPlanProvider != nil {
+		p := strings.TrimSpace(*channel.CodingPlanProvider)
+		if p == string(CodingPlanProviderDisabled) {
+			return "", errors.New("coding plan monitoring is disabled for this channel")
+		}
+		if p != "" {
+			if IsKnownCodingPlanProvider(p) {
+				return CodingPlanProvider(p), nil
+			}
+			return "", fmt.Errorf("unsupported coding plan provider: %s", p)
+		}
+	}
+	var baseURL string
+	if channel.BaseURL != nil {
+		baseURL = *channel.BaseURL
+	}
+	if detected, ok := DetectCodingPlanProvider(baseURL); ok {
+		return detected, nil
+	}
+	if detected, ok := CodingPlanProviderFromChannelType(channel.Type); ok {
+		return detected, nil
+	}
+	return "", errors.New("coding plan quota is not enabled for this channel (set coding_plan_provider)")
+}
+
+// ── 编码套餐自动启停(按余量)────────────────────────────────────
+
+// 自动禁用/恢复写进渠道 other_info.status_reason 的原因标记,恢复只认本任务禁用过
+// 的渠道(status_reason == CodingPlanExhaustedReason),不碰手动禁用与 relay 错误禁用。
+const (
+	CodingPlanExhaustedReason = "coding plan quota exhausted"
+	CodingPlanRecoveredReason = "coding plan quota recovered"
+
+	codingPlanAutoControlDefaultDisableThreshold = 98 // 用量 ≥ 该值(%)禁用
+	codingPlanAutoControlDefaultEnableThreshold  = 90 // 用量 < 该值(%)恢复
+)
+
+// CodingPlanAutoControlAction 单渠道本轮自动启停处置。
+type CodingPlanAutoControlAction int
+
+const (
+	CodingPlanAutoControlNone CodingPlanAutoControlAction = iota
+	CodingPlanAutoControlDisable
+	CodingPlanAutoControlEnable
+)
+
+// CodingPlanEffectiveUtilization 计算编码套餐的有效已用百分比 = 各窗口 tier 的最大值
+// (任一窗口近耗尽即计划不可用),clamp 到 [0,100]。查询确定性失败(Success=false)或
+// quota 为空时返回负值,调用方应视为不可信、本轮不做任何处置。
+func CodingPlanEffectiveUtilization(quota *dto.CodingPlanQuota) float64 {
+	if quota == nil || !quota.Success {
+		return -1
+	}
+	var max float64
+	for _, tier := range quota.Tiers {
+		if tier.Utilization > max {
+			max = tier.Utilization
+		}
+	}
+	if max < 0 {
+		return 0
+	}
+	if max > 100 {
+		return 100
+	}
+	return max
+}
+
+// CodingPlanAutoControlThresholds 读渠道的自动启停阈值,nil/越界回退默认值,恢复阈值
+// 始终夹到严格小于禁用阈值(保证滞回、避免边界抖动)。
+func CodingPlanAutoControlThresholds(ch *model.Channel) (disable, enable int) {
+	disable = codingPlanAutoControlDefaultDisableThreshold
+	if ch != nil && ch.CodingPlanDisableThreshold != nil {
+		if v := *ch.CodingPlanDisableThreshold; v >= 1 && v <= 100 {
+			disable = v
+		}
+	}
+	enable = codingPlanAutoControlDefaultEnableThreshold
+	if ch != nil && ch.CodingPlanEnableThreshold != nil {
+		if v := *ch.CodingPlanEnableThreshold; v >= 0 && v < disable {
+			enable = v
+		}
+	}
+	if enable >= disable {
+		enable = disable - 1
+		if enable < 0 {
+			enable = 0
+		}
+	}
+	return disable, enable
+}
+
+// decideCodingPlanAutoControl 判定单个渠道本轮应执行的自动启停动作。
+//   - Enabled 且有效用量 ≥ 禁用阈值 → 禁用;
+//   - AutoDisabled 且确由本任务禁用(status_reason == CodingPlanExhaustedReason)
+//     且有效用量 < 恢复阈值 → 恢复;
+//   - 其余(手动禁用、其它原因自动禁用、用量未达阈值)一律不动。
+//
+// utilization < 0(查询不可信)直接返回 None。
+func decideCodingPlanAutoControl(status int, statusReason string, utilization float64, disableThreshold, enableThreshold int) CodingPlanAutoControlAction {
+	if utilization < 0 {
+		return CodingPlanAutoControlNone
+	}
+	switch status {
+	case common.ChannelStatusEnabled:
+		if utilization >= float64(disableThreshold) {
+			return CodingPlanAutoControlDisable
+		}
+	case common.ChannelStatusAutoDisabled:
+		if statusReason == CodingPlanExhaustedReason && utilization < float64(enableThreshold) {
+			return CodingPlanAutoControlEnable
+		}
+	}
+	return CodingPlanAutoControlNone
 }
 
 // ── 查询入口 ─────────────────────────────────────────────────
@@ -398,25 +522,32 @@ type kimiUsageResponse struct {
 
 // parseKimiTiers 把 Kimi usages 响应解析成 tier 列表。
 func parseKimiTiers(body *kimiUsageResponse) []dto.CodingPlanTier {
+	mk := func(name string, detail *kimiLimitDetail) dto.CodingPlanTier {
+		limitF := jsonNumF64(detail.Limit, 1.0)
+		remainingF := jsonNumF64(detail.Remaining, 0.0)
+		tier := dto.CodingPlanTier{
+			Name:        name,
+			Utilization: utilizationPercent(limitF, remainingF),
+			ResetsAt:    jsonNumToRFC3339Ptr(detail.ResetTime),
+			Limit:       jsonNumInt64(detail.Limit, 0),
+			Remaining:   jsonNumInt64(detail.Remaining, 0),
+		}
+		// 原始数值仅在 limit 有效时给出;used 下限 0,避免上游异常导致负值。
+		if tier.Limit > 0 {
+			tier.Used = tier.Limit - tier.Remaining
+			if tier.Used < 0 {
+				tier.Used = 0
+			}
+		}
+		return tier
+	}
+
 	tiers := make([]dto.CodingPlanTier, 0, 4)
 	for i := range body.Limits {
-		detail := &body.Limits[i].Detail
-		limit := jsonNumF64(detail.Limit, 1.0)
-		remaining := jsonNumF64(detail.Remaining, 0.0)
-		tiers = append(tiers, dto.CodingPlanTier{
-			Name:        CodingPlanTierFiveHour,
-			Utilization: utilizationPercent(limit, remaining),
-			ResetsAt:    jsonNumToRFC3339Ptr(detail.ResetTime),
-		})
+		tiers = append(tiers, mk(CodingPlanTierFiveHour, &body.Limits[i].Detail))
 	}
 	if usage := body.Usage; usage != nil {
-		limit := jsonNumF64(usage.Limit, 1.0)
-		remaining := jsonNumF64(usage.Remaining, 0.0)
-		tiers = append(tiers, dto.CodingPlanTier{
-			Name:        CodingPlanTierWeeklyLimit,
-			Utilization: utilizationPercent(limit, remaining),
-			ResetsAt:    jsonNumToRFC3339Ptr(usage.ResetTime),
-		})
+		tiers = append(tiers, mk(CodingPlanTierWeeklyLimit, usage))
 	}
 	return tiers
 }
@@ -586,6 +717,14 @@ func rawJSONInt(raw json.RawMessage, fallback int64) int64 {
 func jsonNumF64(n json.Number, fallback float64) float64 {
 	if f, err := n.Float64(); err == nil {
 		return f
+	}
+	return fallback
+}
+
+// jsonNumInt64 解析 json.Number 为 int64,缺失/非法时回落 fallback。
+func jsonNumInt64(n json.Number, fallback int64) int64 {
+	if v, err := n.Int64(); err == nil {
+		return v
 	}
 	return fallback
 }

@@ -62,6 +62,14 @@ type Channel struct {
 	CodingPlanKey       string  `json:"-" gorm:"size:512"`               // 套餐专用密钥,永不下发
 	CodingPlanKeyMasked string  `json:"coding_plan_key_masked" gorm:"-"` // 响应脱敏预览
 
+	// 编码套餐自动启停(按余量):开启后定时任务按用量自动禁用(≥禁用阈值)与恢复
+	// (<恢复阈值)。阈值用 *int、开关用 *bool:与 CodingPlanProvider 同理由,允许
+	// GORM Updates(struct) 写入零值(否则 false/0 会被跳过、关不掉)。
+	// 组级语义:同 key 多渠道共享同一套餐账号,保存时经 controller 同步到同组渠道。
+	CodingPlanAutoControl      *bool `json:"coding_plan_auto_control"`
+	CodingPlanDisableThreshold *int  `json:"coding_plan_disable_threshold"`
+	CodingPlanEnableThreshold  *int  `json:"coding_plan_enable_threshold"`
+
 	// CodingPlanQuotaGroup 编码套餐余量的分组指纹("厂商:密钥指纹"):同 key 多渠道共享
 	// 同一值,前端据此把同 key 的渠道合并成一张余量卡。由查询生效 key 派生,不可逆,
 	// 不下发原始密钥。仅在渠道列表(GetAllChannels)填充;非套餐渠道为空。
