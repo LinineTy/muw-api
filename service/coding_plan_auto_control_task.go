@@ -18,7 +18,7 @@ import (
 const (
 	// codingPlanAutoControlTickInterval 编码套餐自动启停轮询间隔。禁用拦截要赶在
 	// 缓冲耗尽前(默认禁用阈值 98%,2% 缓冲按当前用量可能撑不满一个长间隔),恢复要
-	// 跟得上 5 小时窗滚动/周重置。套餐余量端点是轻量 GET,一组一请求,几个套餐账号
+	// 跟得上 5 小时窗滚动/周重置。套餐余量端点是轻量 GET,一账户一请求,几个套餐账号
 	// 每分钟仅数次请求,负担可忽略。
 	codingPlanAutoControlTickInterval = 30 * time.Second
 )
@@ -48,9 +48,11 @@ func StartCodingPlanAutoControlTask() {
 	})
 }
 
-// runCodingPlanAutoControlOnce 跑一轮自动启停:查开了自动管理的渠道 → 按 (厂商, 生效
-// key) 分组 → 每组一次余量查询 → 组内每渠道按各自阈值决策禁用/恢复。查询失败(瞬时
-// 或确定性)一律跳过本轮,绝不基于失败结果翻状态。
+// runCodingPlanAutoControlOnce 跑一轮自动启停(账户版,凭证与渠道解耦后配置/状态都在
+// 账户上):查开了自动管理的账户 → 每账户一次余量查询 → 账户级滞回决策 → 禁用=禁
+// 账户+联动禁用全部引用渠道(status_reason=套餐耗尽),恢复=恢复账户+只恢复由本任务
+// 禁用的渠道(手动禁用/relay 错误禁用不碰)。查询失败(瞬时或确定性)一律跳过本轮,
+// 绝不基于失败结果翻状态。
 func runCodingPlanAutoControlOnce() {
 	if !codingPlanAutoControlRunning.CompareAndSwap(false, true) {
 		return
@@ -59,81 +61,143 @@ func runCodingPlanAutoControlOnce() {
 
 	ctx := context.Background()
 
-	var channels []*model.Channel
+	var accounts []*model.Account
 	err := model.DB.
 		Select("id", "name", "type", "key", "base_url", "status", "other_info",
 			"coding_plan_provider", "coding_plan_key",
 			"coding_plan_auto_control", "coding_plan_disable_threshold", "coding_plan_enable_threshold").
 		Where("coding_plan_auto_control = ?", true).
-		Find(&channels).Error
+		Find(&accounts).Error
 	if err != nil {
-		logger.LogWarn(ctx, fmt.Sprintf("coding plan auto-control: query channels failed: %v", err))
+		logger.LogWarn(ctx, fmt.Sprintf("coding plan auto-control: query accounts failed: %v", err))
 		return
 	}
-	if len(channels) == 0 {
+	if len(accounts) == 0 {
 		return
 	}
 
-	// 按 (厂商, 生效 key) 分组:同套餐账号的渠道共享一次余量查询。
-	type codingPlanGroup struct {
-		provider CodingPlanProvider
-		key      string
-		members  []*model.Channel
+	// 引用渠道一次加载(含 other_info/status,供联动过滤),按账户分组。
+	var channels []*model.Channel
+	err = model.DB.
+		Select("id", "name", "account_id", "status", "other_info").
+		Where("account_id IN ?", accountIds(accounts)).
+		Find(&channels).Error
+	if err != nil {
+		logger.LogWarn(ctx, fmt.Sprintf("coding plan auto-control: query member channels failed: %v", err))
+		return
 	}
-	groups := make(map[string]*codingPlanGroup)
+	channelsByAccount := make(map[int][]*model.Channel)
 	for _, ch := range channels {
-		provider, err := ResolveChannelCodingPlanProvider(ch)
-		if err != nil {
-			continue // 厂商无法解析(如显式 none 却残留开关),跳过
-		}
-		key := ch.CodingPlanKey
-		if key == "" {
-			key = ch.Key
-		}
-		if strings.Contains(key, "\n") {
-			continue // 多 key 渠道无单一套餐账号,跳过
-		}
-		groupKey := string(provider) + "\x00" + key
-		g := groups[groupKey]
-		if g == nil {
-			g = &codingPlanGroup{provider: provider, key: key}
-			groups[groupKey] = g
-		}
-		g.members = append(g.members, ch)
+		channelsByAccount[ch.AccountId] = append(channelsByAccount[ch.AccountId], ch)
 	}
 
 	changed := false
-	for _, g := range groups {
-		quota, err := QueryCodingPlanQuota(ctx, g.provider, g.key)
+	for _, account := range accounts {
+		members := channelsByAccount[account.Id]
+		if len(members) == 0 {
+			continue // 无引用渠道:无可联动对象,跳过(账户余额卡仍可单独查)
+		}
+		provider, err := ResolveAccountCodingPlanProvider(account)
+		if err != nil {
+			continue // 厂商无法解析(如显式 none 却残留开关),跳过
+		}
+		key := account.CodingPlanKey
+		if key == "" {
+			key = account.Key
+		}
+		if strings.Contains(key, "\n") {
+			continue // 多 key 账户无单一套餐账号,跳过(专用 key 未配)
+		}
+		quota, err := QueryCodingPlanQuota(ctx, provider, key)
 		if err != nil {
 			// 瞬时传输失败(超时/断连),本轮跳过,等下一轮。
-			logger.LogWarn(ctx, fmt.Sprintf("coding plan auto-control: quota query failed: provider=%s err=%v", g.provider, err))
+			logger.LogWarn(ctx, fmt.Sprintf("coding plan auto-control: quota query failed: account_id=%d provider=%s err=%v", account.Id, provider, err))
 			continue
 		}
 		if !quota.Success {
 			// 确定性失败(鉴权失败/业务错误/解析失败),也跳过,不据失败翻状态。
-			logger.LogWarn(ctx, fmt.Sprintf("coding plan auto-control: quota query failed: provider=%s error=%s", g.provider, quota.Error))
+			logger.LogWarn(ctx, fmt.Sprintf("coding plan auto-control: quota query failed: account_id=%d provider=%s error=%s", account.Id, provider, quota.Error))
 			continue
 		}
 		utilization := CodingPlanEffectiveUtilization(quota)
-		for _, ch := range g.members {
-			statusReason := fmt.Sprint(ch.GetOtherInfo()["status_reason"])
-			disable, enable := CodingPlanAutoControlThresholds(ch)
-			switch decideCodingPlanAutoControl(ch.Status, statusReason, utilization, disable, enable) {
-			case CodingPlanAutoControlDisable:
-				if model.UpdateChannelStatus(ch.Id, "", common.ChannelStatusAutoDisabled, CodingPlanExhaustedReason) {
-					changed = true
-					logger.LogInfo(ctx, fmt.Sprintf("coding plan auto-control: disabled channel_id=%d name=%s (utilization=%.1f%%)", ch.Id, ch.Name, utilization))
-				}
-			case CodingPlanAutoControlEnable:
-				if model.UpdateChannelStatus(ch.Id, "", common.ChannelStatusEnabled, CodingPlanRecoveredReason) {
-					changed = true
-					logger.LogInfo(ctx, fmt.Sprintf("coding plan auto-control: re-enabled channel_id=%d name=%s (utilization=%.1f%%)", ch.Id, ch.Name, utilization))
-				}
+		statusReason := fmt.Sprint(account.GetOtherInfo()["status_reason"])
+		disable, enable := CodingPlanAccountAutoControlThresholds(account)
+		switch decideCodingPlanAutoControl(account.Status, statusReason, utilization, disable, enable) {
+		case CodingPlanAutoControlDisable:
+			if disableAccountWithChannels(ctx, account, members) {
+				changed = true
+			}
+		case CodingPlanAutoControlEnable:
+			if enableAccountWithChannels(ctx, account, members) {
+				changed = true
 			}
 		}
 	}
 	if changed {
 		model.InitChannelCache()
 	}
+}
+
+// accountIds 提取账户 id 列表(成员渠道查询用)。
+func accountIds(accounts []*model.Account) []int {
+	ids := make([]int, 0, len(accounts))
+	for _, a := range accounts {
+		ids = append(ids, a.Id)
+	}
+	return ids
+}
+
+// disableAccountWithChannels 禁用落点(maintainer拍板):禁账户 + 联动禁用全部引用渠道。
+// 渠道侧 status_reason 用套餐耗尽标记,恢复只认这个标记(手动禁用不误伤)。
+func disableAccountWithChannels(ctx context.Context, account *model.Account, members []*model.Channel) bool {
+	changed := false
+	// 账户置禁用 + 状态原因(滞回判据)。
+	info := account.GetOtherInfo()
+	info["status_reason"] = CodingPlanExhaustedReason
+	info["status_time"] = common.GetTimestamp()
+	account.SetOtherInfo(info)
+	account.Status = common.ChannelStatusAutoDisabled
+	if err := account.SaveStatusState(); err != nil {
+		logger.LogWarn(ctx, fmt.Sprintf("coding plan auto-control: failed to disable account: account_id=%d err=%v", account.Id, err))
+		return false
+	}
+	logger.LogInfo(ctx, fmt.Sprintf("coding plan auto-control: disabled account_id=%d name=%s", account.Id, account.Name))
+	// 联动禁用引用渠道(已禁用的跳过,UpdateChannelStatus 同状态幂等返回 false)。
+	for _, ch := range members {
+		if model.UpdateChannelStatus(ch.Id, "", common.ChannelStatusAutoDisabled, CodingPlanExhaustedReason) {
+			changed = true
+			logger.LogInfo(ctx, fmt.Sprintf("coding plan auto-control: linked channel disabled: account_id=%d channel_id=%d name=%s", account.Id, ch.Id, ch.Name))
+		}
+	}
+	return changed
+}
+
+// enableAccountWithChannels 恢复:恢复账户 + 只恢复由本任务禁用的渠道
+// (status_reason == 套餐恢复/耗尽标记);手动禁用与 relay 错误禁用的渠道不动。
+func enableAccountWithChannels(ctx context.Context, account *model.Account, members []*model.Channel) bool {
+	changed := false
+	info := account.GetOtherInfo()
+	info["status_reason"] = CodingPlanRecoveredReason
+	info["status_time"] = common.GetTimestamp()
+	account.SetOtherInfo(info)
+	account.Status = common.ChannelStatusEnabled
+	if err := account.SaveStatusState(); err != nil {
+		logger.LogWarn(ctx, fmt.Sprintf("coding plan auto-control: failed to enable account: account_id=%d err=%v", account.Id, err))
+		return false
+	}
+	logger.LogInfo(ctx, fmt.Sprintf("coding plan auto-control: re-enabled account_id=%d name=%s", account.Id, account.Name))
+	for _, ch := range members {
+		// 只恢复自己禁的:渠道状态是自动禁用且原因匹配套餐标记。
+		if ch.Status != common.ChannelStatusAutoDisabled {
+			continue
+		}
+		if fmt.Sprint(ch.GetOtherInfo()["status_reason"]) != CodingPlanExhaustedReason {
+			continue
+		}
+		if model.UpdateChannelStatus(ch.Id, "", common.ChannelStatusEnabled, CodingPlanRecoveredReason) {
+			changed = true
+			logger.LogInfo(ctx, fmt.Sprintf("coding plan auto-control: linked channel re-enabled: account_id=%d channel_id=%d name=%s", account.Id, ch.Id, ch.Name))
+		}
+	}
+	return changed
 }

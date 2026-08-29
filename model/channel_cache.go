@@ -35,6 +35,9 @@ func InitChannelCache() {
 	// 渠道内模型级禁用/上下文覆盖：批量加载一次，挂到每个渠道对象上。
 	// 展开 Group×Models 索引时跳过禁用模型，保证缓存路径与 abilities(DB) 路径一致。
 	disabledByChannel, contextByChannel := LoadAllChannelModelSettings()
+	// 账户挂载：共享账户的渠道持有同一 *Account 指针（多 key 轮询状态/启停/
+	// 余额跨渠道一致）。挂载失败回退 legacy 渠道列降级。
+	_ = loadChannelsAccounts(channels)
 	for _, channel := range channels {
 		newChannelId2channel[channel.Id] = channel
 		if dis, ok := disabledByChannel[channel.Id]; ok {
@@ -269,7 +272,7 @@ func CacheGetChannelInfo(id int) (*ChannelInfo, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &channel.ChannelInfo, nil
+		return channel.effectiveChannelInfo(), nil
 	}
 	channelSyncLock.RLock()
 	defer channelSyncLock.RUnlock()
@@ -278,7 +281,7 @@ func CacheGetChannelInfo(id int) (*ChannelInfo, error) {
 	if !ok {
 		return nil, fmt.Errorf("渠道# %d，已不存在", id)
 	}
-	return &c.ChannelInfo, nil
+	return c.effectiveChannelInfo(), nil
 }
 
 func CacheUpdateChannelStatus(id int, status int) {
