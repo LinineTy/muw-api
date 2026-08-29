@@ -196,6 +196,7 @@ import { ParamOverrideEditorDialog } from '../dialogs/param-override-editor-dial
 import { StatusCodeRiskDialog } from '../dialogs/status-code-risk-dialog'
 import { ModelMappingEditor } from '../model-mapping-editor'
 import {
+  AccountBoundPanel,
   ChannelAdvancedSection,
   ChannelApiAccessSection,
   ChannelAuthSection,
@@ -3046,6 +3047,10 @@ export function ChannelMutateDrawer({
                             )}
 
                             <ChannelAuthSection>
+                            {isEditing && channelData?.data?.account ? (
+                              <AccountBoundPanel account={channelData.data.account} />
+                            ) : (
+                              <>
                               {!isEditing && (
                                 <FormField
                                   control={form.control}
@@ -3451,6 +3456,8 @@ export function ChannelMutateDrawer({
                                     )}
                                   />
                                 )}
+                              </>
+                            )}
                             </ChannelAuthSection>
                           </fieldset>
                         </div>

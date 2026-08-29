@@ -93,6 +93,18 @@ export const channelSchema = z.object({
   coding_plan_enable_threshold: z.number().int().nullish(), // 恢复阈值(%) 用量 < 该值恢复
   // 编码套餐余量分组指纹("厂商:密钥指纹"):同 key 多渠道共享同一值,前端据此合并成一张余量卡。
   coding_plan_quota_group: z.string().nullish(),
+  // 凭证与渠道解耦:绑定的账户(>0 时 key/base_url 等凭证在账户上管理)
+  account_id: z.number().default(0),
+  account: z
+    .object({
+      id: z.number(),
+      name: z.string(),
+      type: z.number(),
+      key_masked: z.string().default(''),
+      status: z.number(),
+      base_url: z.string().nullish(),
+    })
+    .nullish(),
   model_settings: z
     .array(
       z.object({
