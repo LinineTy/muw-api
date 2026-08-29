@@ -25,6 +25,7 @@ import {
   FlaskConical,
   HeartPulse,
   Key,
+  KeyRound,
   LayoutDashboard,
   ListTodo,
   MessageSquare,
@@ -143,6 +144,11 @@ export function useSidebarData(): SidebarData {
             title: t('Channels'),
             url: '/channels',
             icon: Radio,
+          },
+          {
+            title: t('Accounts'),
+            url: '/accounts',
+            icon: KeyRound,
           },
           {
             title: t('Models'),
