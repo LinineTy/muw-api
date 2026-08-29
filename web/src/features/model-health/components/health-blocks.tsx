@@ -33,9 +33,44 @@ import type { TestTrendPoint } from '../types'
 const BLOCK_SIZE = 10 // px
 const BLOCK_GAP = 3 // px
 
+// healthBlockClass maps one probe outcome to its block color:
+//   green          success, or a moderation block (the upstream handled the
+//                  request and returned a business moderation verdict — the
+//                  channel is alive and worked end to end)
+//   amber/warning  client error — the request itself is broken (bad params,
+//                  unknown model, oversized context…); not the channel's fault
+//   red            upstream error, or legacy records without error_kind
+//                  (unclassified failures stay red so real outages are never
+//                  de-emphasized)
+function healthBlockClass(point: TestTrendPoint): string {
+  if (point.success) return 'bg-success'
+  switch (point.error_kind) {
+    case 'client':
+      return 'bg-warning'
+    case 'moderation':
+      return 'bg-success'
+    default:
+      return 'bg-destructive'
+  }
+}
+
+// healthBlockLabel describes a failed probe by responsible party for tooltips.
+function healthBlockLabel(t: (k: string) => string, point: TestTrendPoint) {
+  if (point.success) return t('Success')
+  switch (point.error_kind) {
+    case 'client':
+      return t('Bad request (client)')
+    case 'moderation':
+      return t('Content moderation')
+    default:
+      return t('Failed')
+  }
+}
+
 // HealthBlocks renders the probe outcomes of a (channel, model) pair as a row of
-// fixed-size colored squares (Uptime Kuma style): green = success, red =
-// failure. The number of blocks adapts to the container width — as many newest
+// fixed-size colored squares (Uptime Kuma style): green = success (incl.
+// moderation verdicts), amber = client-side request errors, red = upstream
+// failures. The number of blocks adapts to the container width — as many newest
 // blocks as fit — so the strip fills the available space instead of a fixed
 // count. Missing data renders as a muted dash.
 export function HealthBlocks({ trend }: { trend: TestTrendPoint[] }) {
@@ -105,9 +140,7 @@ export function HealthBlocks({ trend }: { trend: TestTrendPoint[] }) {
               render={
                 <span
                   data-health-block
-                  className={`size-2.5 shrink-0 cursor-default rounded-[2px] ${
-                    point.success ? 'bg-success' : 'bg-destructive'
-                  }`}
+                  className={`size-2.5 shrink-0 cursor-default rounded-[2px] ${healthBlockClass(point)}`}
                 />
               }
             />
@@ -116,8 +149,7 @@ export function HealthBlocks({ trend }: { trend: TestTrendPoint[] }) {
                 {formatTimestampToDate(point.created_at)}
               </p>
               <p className='font-mono text-xs'>
-                {point.response_time}ms ·{' '}
-                {point.success ? t('Success') : t('Failed')}
+                {point.response_time}ms · {healthBlockLabel(t, point)}
               </p>
             </TooltipContent>
           </Tooltip>

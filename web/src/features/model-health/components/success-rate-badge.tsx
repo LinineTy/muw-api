@@ -16,7 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useTranslation } from 'react-i18next'
+
 import { StatusBadge, type StatusVariant } from '@/components/status-badge'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 // successRateVariant maps a success percentage (0-100) to a badge color.
 function successRateVariant(rate: number): StatusVariant {
@@ -28,12 +35,17 @@ function successRateVariant(rate: number): StatusVariant {
 
 export function SuccessRateBadge({
   rate,
+  rawRate,
   className,
 }: {
+  /** 技术成功率:(成功+审核拦截)/(总数-client错误),由后端聚合 */
   rate: number
+  /** 原始成功率(成功/总数)。与技术口径不同时 hover 展示,口径透明 */
+  rawRate?: number
   className?: string
 }) {
-  return (
+  const { t } = useTranslation()
+  const badge = (
     <StatusBadge
       label={`${rate.toFixed(1)}%`}
       variant={successRateVariant(rate)}
@@ -41,5 +53,21 @@ export function SuccessRateBadge({
       copyable={false}
       className={className}
     />
+  )
+  if (rawRate === undefined || Math.abs(rawRate - rate) < 0.05) {
+    return badge
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger render={badge} />
+      <TooltipContent side='top' className='max-w-xs'>
+        <p className='text-xs'>
+          {t('Technical success rate')}: {rate.toFixed(1)}%
+        </p>
+        <p className='text-muted-foreground text-xs'>
+          {t('Raw success rate')}: {rawRate.toFixed(1)}%
+        </p>
+      </TooltipContent>
+    </Tooltip>
   )
 }
