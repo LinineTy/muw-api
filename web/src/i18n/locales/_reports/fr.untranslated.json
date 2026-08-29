@@ -60,6 +60,7 @@
   "Conversation is too large to sync": "Conversation is too large to sync",
   "Conversation retention is disabled or empty.": "Conversation retention is disabled or empty.",
   "Covers the whole validity · acts as the subscription total cap": "Covers the whole validity · acts as the subscription total cap",
+  "Credentials live on the bound account and are shared by its channels. Edit the key on the account page.": "Credentials live on the bound account and are shared by its channels. Edit the key on the account page.",
   "Credit score, conversation retention and marker analysis.": "Credit score, conversation retention and marker analysis.",
   "Custom links shown in the top navigation bar. Absolute URLs open in a new tab; paths starting with / stay inside the app.": "Custom links shown in the top navigation bar. Absolute URLs open in a new tab; paths starting with / stay inside the app.",
   "Daily score recovery still follows the passive rules; the pledge is only an active supplement.": "Daily score recovery still follows the passive rules; the pledge is only an active supplement.",

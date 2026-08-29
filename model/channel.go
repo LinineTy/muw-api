@@ -227,6 +227,7 @@ func (channel *Channel) loadAccount() error {
 		common.SysLog(fmt.Sprintf("failed to load account for channel: channel_id=%d, account_id=%d, error=%v", channel.Id, channel.AccountId, err))
 		return err
 	}
+	prefillAccountMasked(account)
 	channel.Account = account
 	return nil
 }
@@ -250,6 +251,7 @@ func loadChannelsAccounts(channels []*Channel) error {
 	}
 	byId := make(map[int]*Account, len(accounts))
 	for _, acc := range accounts {
+		prefillAccountMasked(acc)
 		byId[acc.Id] = acc
 	}
 	for _, ch := range channels {
@@ -258,6 +260,33 @@ func loadChannelsAccounts(channels []*Channel) error {
 		}
 	}
 	return nil
+}
+
+// prefillAccountMasked 填充响应侧脱敏预览（key 多行时展示首个 + 计数）。
+// Account.Key json:"-" 永不下发，前端凭 key_masked 呈现。
+func prefillAccountMasked(account *Account) {
+	if account == nil {
+		return
+	}
+	account.KeyMasked = maskAccountKeyPreview(account.Key)
+	if account.CodingPlanKey != "" {
+		account.CodingPlanKeyMasked = maskAccountKeyPreview(account.CodingPlanKey)
+	}
+}
+
+// maskAccountKeyPreview 脱敏：保留前 6 后 4；多行 key 显示首个 + 总数。
+func maskAccountKeyPreview(key string) string {
+	if key == "" {
+		return ""
+	}
+	if strings.Contains(key, "\n") {
+		parts := strings.Split(strings.Trim(key, "\n"), "\n")
+		return maskAccountKeyPreview(parts[0]) + fmt.Sprintf(" 等 %d 个", len(parts))
+	}
+	if len(key) <= 10 {
+		return strings.Repeat("*", len(key))
+	}
+	return key[:6] + "****" + key[len(key)-4:]
 }
 
 // LoadChannelsAccounts 导出版批量挂载渠道账户（供 controller 在内联列表查询
