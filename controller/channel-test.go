@@ -63,8 +63,10 @@ func resolveChannelTestModel(channel *model.Channel, testModel string) string {
 // recordChannelTest persists one probe result into the channel test history so
 // model/channel health can be aggregated over time. source distinguishes
 // synthetic tests (ChannelTestSourceTest) from real user traffic
-// (ChannelTestSourceUser).
-func recordChannelTest(source string, channel *model.Channel, modelName string, success bool, responseTime int, errMsg string) {
+// (ChannelTestSourceUser). errorKind classifies the failure by responsible
+// party (client/moderation/upstream) so the health page can color failures
+// instead of painting every error red; empty on success.
+func recordChannelTest(source string, channel *model.Channel, modelName string, success bool, responseTime int, errMsg, errorKind string) {
 	record := &model.ChannelTestRecord{
 		ChannelId:    channel.Id,
 		ChannelName:  channel.Name,
@@ -72,11 +74,26 @@ func recordChannelTest(source string, channel *model.Channel, modelName string, 
 		Success:      success,
 		ResponseTime: responseTime,
 		ErrorReason:  errMsg,
+		ErrorKind:    errorKind,
 		Source:       source,
 	}
 	if err := model.DB.Create(record).Error; err != nil {
 		common.SysError(fmt.Sprintf("failed to record channel test for channel %d: %s", channel.Id, err.Error()))
 	}
+}
+
+// classifyProbeError classifies a probe failure for history records. Synthetic
+// probes send well-formed requests, so newAPIError failures are upstream-ish
+// by definition — but the same classifier as user traffic keeps one truth.
+// localErr (request build failures) are system-side, never the caller's fault.
+func classifyProbeError(newAPIError *types.NewAPIError, localErr error) string {
+	if newAPIError != nil {
+		return model.ClassifyRelayError(newAPIError)
+	}
+	if localErr != nil {
+		return model.ErrorKindUpstream
+	}
+	return ""
 }
 
 // runAndRecordChannelTest runs one probe and writes its outcome to history.
@@ -95,7 +112,7 @@ func runAndRecordChannelTest(ctx context.Context, channel *model.Channel, testUs
 		errMsg = result.localErr.Error()
 	}
 	success := result.newAPIError == nil && result.localErr == nil
-	recordChannelTest(model.ChannelTestSourceTest, channel, resolveChannelTestModel(channel, testModel), success, int(milliseconds), errMsg)
+	recordChannelTest(model.ChannelTestSourceTest, channel, resolveChannelTestModel(channel, testModel), success, int(milliseconds), errMsg, classifyProbeError(result.newAPIError, result.localErr))
 	return result, milliseconds
 }
 
@@ -928,7 +945,7 @@ func TestChannel(c *gin.Context) {
 		} else if result.localErr != nil {
 			errMsg = result.localErr.Error()
 		}
-		recordChannelTest(model.ChannelTestSourceTest, channel, resolveChannelTestModel(channel, testModel), result.newAPIError == nil && result.localErr == nil, int(milliseconds), errMsg)
+		recordChannelTest(model.ChannelTestSourceTest, channel, resolveChannelTestModel(channel, testModel), result.newAPIError == nil && result.localErr == nil, int(milliseconds), errMsg, classifyProbeError(result.newAPIError, result.localErr))
 	}
 	if result.localErr != nil {
 		resp := gin.H{
