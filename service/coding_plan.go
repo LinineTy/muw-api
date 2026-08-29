@@ -147,6 +147,34 @@ func ResolveChannelCodingPlanProvider(channel *model.Channel) (CodingPlanProvide
 	return "", errors.New("coding plan quota is not enabled for this channel (set coding_plan_provider)")
 }
 
+// ResolveAccountCodingPlanProvider 账户版套餐厂商解析（凭证与渠道解耦后配置在
+// 账户上），优先级与渠道版一致：显式 provider > base_url 探测 > 类型映射。
+func ResolveAccountCodingPlanProvider(account *model.Account) (CodingPlanProvider, error) {
+	if account.CodingPlanProvider != nil {
+		p := strings.TrimSpace(*account.CodingPlanProvider)
+		if p == string(CodingPlanProviderDisabled) {
+			return "", errors.New("coding plan monitoring is disabled for this account")
+		}
+		if p != "" {
+			if IsKnownCodingPlanProvider(p) {
+				return CodingPlanProvider(p), nil
+			}
+			return "", fmt.Errorf("unsupported coding plan provider: %s", p)
+		}
+	}
+	var baseURL string
+	if account.BaseURL != nil {
+		baseURL = *account.BaseURL
+	}
+	if detected, ok := DetectCodingPlanProvider(baseURL); ok {
+		return detected, nil
+	}
+	if detected, ok := CodingPlanProviderFromChannelType(account.Type); ok {
+		return detected, nil
+	}
+	return "", errors.New("coding plan quota is not enabled for this account (set coding_plan_provider)")
+}
+
 // ── 编码套餐自动启停(按余量)────────────────────────────────────
 
 // 自动禁用/恢复写进渠道 other_info.status_reason 的原因标记,恢复只认本任务禁用过
@@ -202,6 +230,30 @@ func CodingPlanAutoControlThresholds(ch *model.Channel) (disable, enable int) {
 	enable = codingPlanAutoControlDefaultEnableThreshold
 	if ch != nil && ch.CodingPlanEnableThreshold != nil {
 		if v := *ch.CodingPlanEnableThreshold; v >= 0 && v < disable {
+			enable = v
+		}
+	}
+	if enable >= disable {
+		enable = disable - 1
+		if enable < 0 {
+			enable = 0
+		}
+	}
+	return disable, enable
+}
+
+// CodingPlanAccountAutoControlThresholds 账户版阈值读取（凭证与渠道解耦后配置在
+// 账户上），默认值与钳制规则与渠道版一致。
+func CodingPlanAccountAutoControlThresholds(account *model.Account) (disable, enable int) {
+	disable = codingPlanAutoControlDefaultDisableThreshold
+	if account != nil && account.CodingPlanDisableThreshold != nil {
+		if v := *account.CodingPlanDisableThreshold; v >= 1 && v <= 100 {
+			disable = v
+		}
+	}
+	enable = codingPlanAutoControlDefaultEnableThreshold
+	if account != nil && account.CodingPlanEnableThreshold != nil {
+		if v := *account.CodingPlanEnableThreshold; v >= 0 && v < disable {
 			enable = v
 		}
 	}

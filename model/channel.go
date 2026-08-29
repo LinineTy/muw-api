@@ -91,6 +91,16 @@ type Channel struct {
 	// ModelSettings 创建/更新渠道时随请求提交的模型设置（非持久列，写入口
 	// BatchInsertChannels / Channel.Update 落库到 channel_model_settings）。
 	ModelSettings []ChannelModelSetting `json:"model_settings,omitempty" gorm:"-"`
+
+	// AccountId 挂载的账户（凭证与渠道解耦）：>0 时凭证类字段（key/base_url/代理/
+	// 多key状态/套餐/余额）以账户为唯一真相源，本表同名列保留为 legacy 只读降级
+	// （AccountId=0 时访问器回退渠道列）。存量渠道由迁移 backfill 生成私有账户。
+	AccountId int `json:"account_id" gorm:"index"`
+
+	// Account 运行时挂载的账户对象（缓存路径同一账户的多个渠道共享同一指针，
+	// 多 key 轮询状态跨渠道一致；非持久列，由 loadAccount/loadChannelsAccounts
+	// 或 InitChannelCache 填充）。
+	Account *Account `json:"account,omitempty" gorm:"-"`
 }
 
 type ChannelInfo struct {
@@ -206,7 +216,69 @@ func (c *ChannelInfo) Scan(value interface{}) error {
 	return common.Unmarshal(bytesValue, c)
 }
 
+// loadAccount 挂载渠道引用的账户（凭证真相源）。AccountId>0 时查账户并挂到
+// channel.Account；查询失败不阻断（回退 legacy 渠道列降级）但记日志。
+func (channel *Channel) loadAccount() error {
+	if channel.AccountId <= 0 {
+		return nil
+	}
+	account, err := GetAccountById(channel.AccountId, true)
+	if err != nil {
+		common.SysLog(fmt.Sprintf("failed to load account for channel: channel_id=%d, account_id=%d, error=%v", channel.Id, channel.AccountId, err))
+		return err
+	}
+	channel.Account = account
+	return nil
+}
+
+// loadChannelsAccounts 批量挂载渠道账户：一次 IN 查询 + 按 id 去重——同一账户的
+// 多个渠道共享同一 *Account 指针，内存缓存下多 key 轮询状态/启停跨渠道一致。
+// 供 InitChannelCache / 管理端列表路径调用。
+func loadChannelsAccounts(channels []*Channel) error {
+	ids := make(map[int]bool)
+	for _, ch := range channels {
+		if ch.AccountId > 0 {
+			ids[ch.AccountId] = true
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	accounts, err := GetAccountsByIds(lo.Keys(ids))
+	if err != nil {
+		return err
+	}
+	byId := make(map[int]*Account, len(accounts))
+	for _, acc := range accounts {
+		byId[acc.Id] = acc
+	}
+	for _, ch := range channels {
+		if ch.AccountId > 0 {
+			ch.Account = byId[ch.AccountId]
+		}
+	}
+	return nil
+}
+
+// LoadChannelsAccounts 导出版批量挂载渠道账户（供 controller 在内联列表查询
+// ——不走 model.GetAllChannels——后调用，如渠道列表/标签模式）。
+func LoadChannelsAccounts(channels []*Channel) error {
+	return loadChannelsAccounts(channels)
+}
+
+// effectiveChannelInfo 返回多 key 状态的真相源：挂账户时为账户的 ChannelInfo
+// （跨渠道共享），否则为渠道 legacy 列。多 key 读写路径（轮询/启停）统一经此取。
+func (channel *Channel) effectiveChannelInfo() *ChannelInfo {
+	if channel.Account != nil {
+		return &channel.Account.ChannelInfo
+	}
+	return &channel.ChannelInfo
+}
+
 func (channel *Channel) GetKeys() []string {
+	if channel.Account != nil {
+		return channel.Account.GetKeys()
+	}
 	if channel.Key == "" {
 		return []string{}
 	}
@@ -231,6 +303,10 @@ func (channel *Channel) GetKeys() []string {
 }
 
 func (channel *Channel) GetNextEnabledKey() (string, int, *types.NewAPIError) {
+	// 挂账户时凭证与多 key 状态全部委托账户（锁按账户 id，共享账户跨渠道轮询安全）。
+	if channel.Account != nil {
+		return channel.Account.GetNextEnabledKey()
+	}
 	// If not in multi-key mode, return the original key string directly.
 	if !channel.ChannelInfo.IsMultiKey {
 		return channel.Key, 0, nil
@@ -317,6 +393,9 @@ func (channel *Channel) GetNextEnabledKey() (string, int, *types.NewAPIError) {
 }
 
 func (channel *Channel) SaveChannelInfo() error {
+	if channel.Account != nil {
+		return channel.Account.SaveChannelInfo()
+	}
 	return DB.Model(channel).Update("channel_info", channel.ChannelInfo).Error
 }
 
@@ -329,9 +408,15 @@ func (channel *Channel) GetModels() []string {
 
 // loadModelSettings 从 channel_model_settings 加载该渠道的模型覆盖设置：
 // 被禁用的模型集合 + 按模型覆盖的上下文窗口（并填充 ModelSettings 供 API 输出）。
-func (channel *Channel) loadModelSettings() error {
+// db 为 nil 时用全局 DB；事务内调用（BatchInsertChannels → AddAbilities）必须传
+// 事务句柄——单连接库（测试 sqlite MaxOpenConns=1）里用全局 DB 会等不到连接死锁，
+// 多连接库也有"事务内读事务外快照"的一致性隐患。
+func (channel *Channel) loadModelSettings(db *gorm.DB) error {
+	if db == nil {
+		db = DB
+	}
 	var settings []ChannelModelSetting
-	if err := DB.Where("channel_id = ?", channel.Id).Find(&settings).Error; err != nil {
+	if err := db.Where("channel_id = ?", channel.Id).Find(&settings).Error; err != nil {
 		return err
 	}
 	channel.DisabledModels, channel.ModelContextWindows, channel.ModelSettings = splitModelSettings(settings)
@@ -381,8 +466,8 @@ func LoadChannelsModelSettings(channels []*Channel) error {
 }
 
 // ensureDisabledModelsLoaded 保证 DisabledModels 已加载（abilities 重建/缓存索引
-// 展开时调用；已加载则跳过，避免每次重建都查一次 DB）。
-func (channel *Channel) ensureDisabledModelsLoaded() error {
+// 展开时调用；已加载则跳过，避免每次重建都查一次 DB）。db 语义同 loadModelSettings。
+func (channel *Channel) ensureDisabledModelsLoaded(db *gorm.DB) error {
 	if channel.DisabledModels != nil {
 		return nil
 	}
@@ -396,13 +481,13 @@ func (channel *Channel) ensureDisabledModelsLoaded() error {
 		channel.DisabledModels, _, _ = splitModelSettings(channel.ModelSettings)
 		return nil
 	}
-	return channel.loadModelSettings()
+	return channel.loadModelSettings(db)
 }
 
 // LoadModelSettings 加载渠道的模型覆盖设置（禁用/上下文覆盖）。供 controller
 // 在从 gin context 重建渠道对象后调用，保证渠道级 context_window 校验有数据。
 func (channel *Channel) LoadModelSettings() error {
-	return channel.loadModelSettings()
+	return channel.loadModelSettings(nil)
 }
 
 // GetModelContextWindow 返回该渠道内某模型的上下文窗口覆盖；无覆盖返回 (0, false)。
@@ -468,6 +553,7 @@ func (channel *Channel) Save() error {
 // saveStatusState persists only the fields owned by the channel status flow.
 // Keeping this allowlist here prevents a stale channel snapshot from
 // overwriting credentials, accounting counters, or channel configuration.
+// 挂账户时多 key 状态（channel_info）归账户列，渠道只落 status/other_info。
 func (channel *Channel) saveStatusState() error {
 	if channel.Id == 0 {
 		return errors.New("channel ID is 0")
@@ -476,8 +562,14 @@ func (channel *Channel) saveStatusState() error {
 		"status":     channel.Status,
 		"other_info": channel.OtherInfo,
 	}
-	if channel.ChannelInfo.IsMultiKey {
-		updates["channel_info"] = channel.ChannelInfo
+	if channel.effectiveChannelInfo().IsMultiKey {
+		if channel.Account != nil {
+			if err := channel.Account.SaveChannelInfo(); err != nil {
+				return err
+			}
+		} else {
+			updates["channel_info"] = channel.ChannelInfo
+		}
 	}
 	return DB.Model(&Channel{}).Where("id = ?", channel.Id).Updates(updates).Error
 }
@@ -505,6 +597,8 @@ func GetAllChannels(startIdx int, num int, selectAll bool, idSort bool, sortOpti
 	}
 	// 填充渠道内模型设置（禁用/上下文覆盖），供列表展示
 	_ = loadChannelsModelSettings(channels)
+	// 挂载账户（凭证真相源；共享账户的渠道持有同一 *Account 指针）
+	_ = loadChannelsAccounts(channels)
 	return channels, nil
 }
 
@@ -520,6 +614,7 @@ func GetChannelsByTag(tag string, idSort bool, selectAll bool, sortOptions ...Ch
 		return nil, err
 	}
 	_ = loadChannelsModelSettings(channels)
+	_ = loadChannelsAccounts(channels)
 	return channels, nil
 }
 
@@ -554,6 +649,7 @@ func SearchChannels(keyword string, group string, model string, idSort bool, sor
 		return nil, err
 	}
 	_ = loadChannelsModelSettings(channels)
+	_ = loadChannelsAccounts(channels)
 	return channels, nil
 }
 
@@ -569,7 +665,9 @@ func GetChannelById(id int, selectAll bool) (*Channel, error) {
 		return nil, err
 	}
 	// 填充渠道内模型设置（禁用/上下文覆盖），供编辑抽屉回显
-	_ = channel.loadModelSettings()
+	_ = channel.loadModelSettings(nil)
+	// 挂载账户（凭证真相源）
+	_ = channel.loadAccount()
 	return channel, nil
 }
 
@@ -588,6 +686,19 @@ func BatchInsertChannels(channels []Channel) error {
 	}()
 
 	for _, chunk := range lo.Chunk(channels, 50) {
+		for i := range chunk {
+			// 凭证与渠道解耦：未显式绑定账户的渠道在事务内生成私有账户
+			// （凭证字段一一搬运，AutoGenerated=true 标记系统生成，删除渠道后
+			// 孤儿清理只回收此类账户）。显式携带 AccountId（共享账户）跳过。
+			if chunk[i].AccountId == 0 {
+				account := buildPrivateAccountFromChannel(&chunk[i])
+				if err := tx.Create(account).Error; err != nil {
+					tx.Rollback()
+					return err
+				}
+				chunk[i].AccountId = account.Id
+			}
+		}
 		if err := tx.Create(&chunk).Error; err != nil {
 			tx.Rollback()
 			return err
@@ -607,6 +718,31 @@ func BatchInsertChannels(channels []Channel) error {
 		}
 	}
 	return tx.Commit().Error
+}
+
+// buildPrivateAccountFromChannel 从渠道对象生成私有账户（创建路径与
+// ensureChannelAccountBackfill 同一套字段搬运，保持语义一致）。
+func buildPrivateAccountFromChannel(channel *Channel) *Account {
+	return &Account{
+		Name:                       channel.Name + "（私有）",
+		Type:                       channel.Type,
+		Status:                     common.ChannelStatusEnabled,
+		Key:                        channel.Key,
+		OpenAIOrganization:         channel.OpenAIOrganization,
+		BaseURL:                    channel.BaseURL,
+		Other:                      channel.Other,
+		Setting:                    channel.Setting,
+		ChannelInfo:                channel.ChannelInfo,
+		Balance:                    channel.Balance,
+		BalanceUpdatedTime:         channel.BalanceUpdatedTime,
+		CodingPlanProvider:         channel.CodingPlanProvider,
+		CodingPlanKey:              channel.CodingPlanKey,
+		CodingPlanAutoControl:      channel.CodingPlanAutoControl,
+		CodingPlanDisableThreshold: channel.CodingPlanDisableThreshold,
+		CodingPlanEnableThreshold:  channel.CodingPlanEnableThreshold,
+		CreatedTime:                common.GetTimestamp(),
+		AutoGenerated:              true,
+	}
 }
 
 func BatchDeleteChannels(ids []int) (int64, error) {
@@ -652,6 +788,18 @@ func (channel *Channel) GetWeight() int {
 }
 
 func (channel *Channel) GetBaseURL() string {
+	// 挂账户时上游地址以账户为准（语义与渠道列一致：nil=未配置返回空串，
+	// 空串=用厂商默认地址；backfill 时账户列从渠道列指针拷贝，语义等价）。
+	if channel.Account != nil {
+		if channel.Account.BaseURL == nil {
+			return ""
+		}
+		url := *channel.Account.BaseURL
+		if url == "" {
+			url = constant.ChannelBaseURLs[channel.Type]
+		}
+		return url
+	}
 	if channel.BaseURL == nil {
 		return ""
 	}
@@ -750,6 +898,11 @@ func (channel *Channel) UpdateResponseTime(responseTime int64) {
 }
 
 func (channel *Channel) UpdateBalance(balance float64) {
+	// 余额归账户：多渠道共享同一份余额，查一次全刷新。
+	if channel.Account != nil {
+		channel.Account.UpdateBalance(balance)
+		return
+	}
 	err := DB.Model(channel).Select("balance_updated_time", "balance").Updates(Channel{
 		BalanceUpdatedTime: common.GetTimestamp(),
 		Balance:            balance,
@@ -805,7 +958,29 @@ func CleanupChannelPollingLocks() {
 	})
 }
 
+// resolveChannelStateLock 返回渠道状态流（多 key 读写+持久化）应持的锁：
+// 挂账户时为账户锁（共享账户的多渠道互斥，锁的是凭证状态真相源），否则渠道锁。
+// 缓存路径直接读缓存对象的 AccountId；非缓存轻量查一次 account_id 列。
+// 非热路径（状态变更），多一次轻量解析可接受。
+func resolveChannelStateLock(channelId int) *sync.Mutex {
+	if common.MemoryCacheEnabled {
+		if channelCache, _ := CacheGetChannel(channelId); channelCache != nil {
+			if channelCache.Account != nil {
+				return GetAccountPollingLock(channelCache.Account.Id)
+			}
+			return GetChannelPollingLock(channelId)
+		}
+	}
+	var accountId int
+	if err := DB.Model(&Channel{}).Select("account_id").Where("id = ?", channelId).Scan(&accountId).Error; err == nil && accountId > 0 {
+		return GetAccountPollingLock(accountId)
+	}
+	return GetChannelPollingLock(channelId)
+}
+
 func handlerMultiKeyUpdate(channel *Channel, usingKey string, status int, reason string) {
+	// 多 key 状态真相源：挂账户时为账户 ChannelInfo（跨渠道共享），否则渠道列。
+	ci := channel.effectiveChannelInfo()
 	keys := channel.GetKeys()
 	if len(keys) == 0 {
 		channel.Status = status
@@ -829,23 +1004,23 @@ func handlerMultiKeyUpdate(channel *Channel, usingKey string, status int, reason
 			channel.SetOtherInfo(info)
 			return
 		}
-		if channel.ChannelInfo.MultiKeyStatusList == nil {
-			channel.ChannelInfo.MultiKeyStatusList = make(map[int]int)
+		if ci.MultiKeyStatusList == nil {
+			ci.MultiKeyStatusList = make(map[int]int)
 		}
 		if status == common.ChannelStatusEnabled {
-			delete(channel.ChannelInfo.MultiKeyStatusList, keyIndex)
+			delete(ci.MultiKeyStatusList, keyIndex)
 		} else {
-			channel.ChannelInfo.MultiKeyStatusList[keyIndex] = status
-			if channel.ChannelInfo.MultiKeyDisabledReason == nil {
-				channel.ChannelInfo.MultiKeyDisabledReason = make(map[int]string)
+			ci.MultiKeyStatusList[keyIndex] = status
+			if ci.MultiKeyDisabledReason == nil {
+				ci.MultiKeyDisabledReason = make(map[int]string)
 			}
-			if channel.ChannelInfo.MultiKeyDisabledTime == nil {
-				channel.ChannelInfo.MultiKeyDisabledTime = make(map[int]int64)
+			if ci.MultiKeyDisabledTime == nil {
+				ci.MultiKeyDisabledTime = make(map[int]int64)
 			}
-			channel.ChannelInfo.MultiKeyDisabledReason[keyIndex] = reason
-			channel.ChannelInfo.MultiKeyDisabledTime[keyIndex] = common.GetTimestamp()
+			ci.MultiKeyDisabledReason[keyIndex] = reason
+			ci.MultiKeyDisabledTime[keyIndex] = common.GetTimestamp()
 		}
-		if !hasEnabledMultiKey(keys, channel.ChannelInfo.MultiKeyStatusList) {
+		if !hasEnabledMultiKey(keys, ci.MultiKeyStatusList) {
 			channel.Status = common.ChannelStatusAutoDisabled
 			info := channel.GetOtherInfo()
 			info["status_reason"] = "All keys are disabled"
@@ -879,7 +1054,9 @@ func UpdateChannelStatus(channelId int, usingKey string, status int, reason stri
 	// ChannelInfo stores both multi-key status and the polling cursor. Hold the
 	// same per-channel lock from the first read through persistence so neither
 	// writer can save a stale JSON snapshot over the other.
-	pollingLock := GetChannelPollingLock(channelId)
+	// 挂账户时多 key 状态在账户上（跨渠道共享），锁升级为账户锁：共享同一账户的
+	// 多渠道并发写不会互相覆盖。先轻量解析 account_id（缓存优先），再选锁。
+	pollingLock := resolveChannelStateLock(channelId)
 	pollingLock.Lock()
 	defer pollingLock.Unlock()
 
@@ -888,7 +1065,7 @@ func UpdateChannelStatus(channelId int, usingKey string, status int, reason stri
 		if channelCache == nil {
 			return false
 		}
-		if channelCache.ChannelInfo.IsMultiKey {
+		if channelCache.effectiveChannelInfo().IsMultiKey {
 			beforeStatus := channelCache.Status
 			// 如果是多Key模式，更新缓存中的状态
 			handlerMultiKeyUpdate(channelCache, usingKey, status, reason)
@@ -923,7 +1100,7 @@ func UpdateChannelStatus(channelId int, usingKey string, status int, reason stri
 			return false
 		}
 
-		if channel.ChannelInfo.IsMultiKey {
+		if channel.effectiveChannelInfo().IsMultiKey {
 			beforeStatus := channel.Status
 			handlerMultiKeyUpdate(channel, usingKey, status, reason)
 			if beforeStatus != channel.Status {
@@ -1145,6 +1322,10 @@ func (channel *Channel) ValidateSettings() error {
 }
 
 func (channel *Channel) GetSetting() dto.ChannelSettings {
+	// 挂账户时代理等设置以账户为准（backfill 已搬运，账户列语义等价）。
+	if channel.Account != nil {
+		return channel.Account.GetSetting()
+	}
 	setting := dto.ChannelSettings{}
 	if channel.Setting != nil && *channel.Setting != "" {
 		err := common.Unmarshal([]byte(*channel.Setting), &setting)
@@ -1167,6 +1348,41 @@ func (channel *Channel) SetSetting(setting dto.ChannelSettings) {
 }
 
 func (channel *Channel) GetOtherSettings() dto.ChannelOtherSettings {
+	// 挂账户时做 JSON 键级浅合并：账户基底 + 渠道非空键覆盖。AdvancedCustom /
+	// UpstreamModelUpdate*（模型检测状态）等渠道级配置留在渠道列整体覆盖；
+	// Azure 版本、Vertex key type 等凭证侧配置随账户共享。
+	if channel.Account != nil && channel.Account.OtherSettings != "" {
+		merged := dto.ChannelOtherSettings{}
+		base := map[string]any{}
+		if err := common.UnmarshalJsonStr(channel.Account.OtherSettings, &base); err != nil {
+			common.SysLog(fmt.Sprintf("failed to unmarshal account settings: account_id=%d, error=%v", channel.Account.Id, err))
+			return channel.getOwnOtherSettings()
+		}
+		if channel.OtherSettings != "" {
+			overlay := map[string]any{}
+			if err := common.UnmarshalJsonStr(channel.OtherSettings, &overlay); err != nil {
+				common.SysLog(fmt.Sprintf("failed to unmarshal channel settings: channel_id=%d, error=%v", channel.Id, err))
+			} else {
+				for k, v := range overlay {
+					base[k] = v
+				}
+			}
+		}
+		mergedBytes, err := common.Marshal(base)
+		if err == nil {
+			err = common.UnmarshalJsonStr(string(mergedBytes), &merged)
+		}
+		if err == nil {
+			return merged
+		}
+		common.SysLog(fmt.Sprintf("failed to merge channel settings: channel_id=%d, error=%v", channel.Id, err))
+		return channel.getOwnOtherSettings()
+	}
+	return channel.getOwnOtherSettings()
+}
+
+// getOwnOtherSettings 解析渠道自身 OtherSettings 列（legacy 路径 / 合并失败回退）。
+func (channel *Channel) getOwnOtherSettings() dto.ChannelOtherSettings {
 	setting := dto.ChannelOtherSettings{}
 	if channel.OtherSettings != "" {
 		err := common.UnmarshalJsonStr(channel.OtherSettings, &setting)
@@ -1213,7 +1429,11 @@ func (channel *Channel) GetHeaderOverride() map[string]interface{} {
 func GetChannelsByIds(ids []int) ([]*Channel, error) {
 	var channels []*Channel
 	err := DB.Where("id in (?)", ids).Find(&channels).Error
-	return channels, err
+	if err != nil {
+		return nil, err
+	}
+	_ = loadChannelsAccounts(channels)
+	return channels, nil
 }
 
 func BatchSetChannelTag(ids []int, tag *string) error {
