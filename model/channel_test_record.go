@@ -66,12 +66,15 @@ var clientPatterns = []string{
 }
 
 // upstreamPatterns 上游/系统侧文本特征。
+// 注意不含 "bad response status code":那是本站给上游非 2xx 响应加的包装前缀
+// (showBodyWhenFail 时拼在真实 message 前),不能作为上游责任的特征——这类错误
+// 的责任方由状态码兜底判定(语义 4xx→client,429/401/403/5xx→upstream),删掉
+// 后默认落兜底仍是红,行为不回退。
 var upstreamPatterns = []string{
 	"exhausted", // inference tpm exhausted / rpm exhausted
 	"quota exceeded",
 	"exceeded your current quota",
 	"rate limit",
-	"bad response status code",
 	"upstream", // upstream error / Upstream request failed
 	"endpoint is unavailable",
 	"internal server error",
@@ -121,14 +124,26 @@ func ClassifyRelayError(apiErr *types.NewAPIError) string {
 	if matchesAny(lowerMsg, clientPatterns) {
 		return ErrorKindClient
 	}
-	// 上游侧:明确的传输/响应错误码。
+	// 上游侧:明确的传输/响应错误码。BadResponseStatusCode 除外——它是
+	// "上游原样返回非 2xx"的统一包装,真实语义在状态码里,单独分支判定。
 	switch apiErr.GetErrorCode() {
 	case types.ErrorCodeDoRequestFailed,
-		types.ErrorCodeBadResponseStatusCode,
 		types.ErrorCodeBadResponse,
 		types.ErrorCodeBadResponseBody,
 		types.ErrorCodeEmptyResponse,
 		types.ErrorCodeReadResponseBodyFailed:
+		return ErrorKindUpstream
+	}
+	// BadResponseStatusCode(上游非 2xx 包装,含非标准错误体如 Gemini 裸文本):
+	// 状态码就是上游给出的判定。请求语义明确的 4xx(422 参数/格式,400/404/
+	// 405/413/415 等)说明改请求才能过,归 client;401/403/429/5xx 是渠道
+	// key/限流/故障,归 upstream。注意状态码可能已被渠道 status_code_mapping
+	// 改写——那是站长配置的语义,尊重映射后的最终值。
+	if apiErr.GetErrorCode() == types.ErrorCodeBadResponseStatusCode {
+		switch apiErr.StatusCode {
+		case 400, 404, 405, 413, 415, 422:
+			return ErrorKindClient
+		}
 		return ErrorKindUpstream
 	}
 	if matchesAny(lowerMsg, upstreamPatterns) {
