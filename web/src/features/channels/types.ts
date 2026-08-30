@@ -445,6 +445,8 @@ export interface ChannelFormData {
 
 export interface AddChannelRequest {
   mode: 'single' | 'batch' | 'multi_to_single'
+  /** 绑定共享账户(凭证与渠道解耦):>0 时凭证来自账户,仅 single 模式 */
+  account_id?: number
   multi_key_mode?: 'random' | 'polling'
   batch_add_set_key_prefix_2_name?: boolean
   channel: Partial<Channel>

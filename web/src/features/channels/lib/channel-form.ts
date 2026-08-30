@@ -203,6 +203,8 @@ export const channelFormSchema = z
     type: z.number().min(0, ERROR_MESSAGES.REQUIRED_TYPE),
     base_url: z.string().optional(),
     key: z.string(),
+    // 凭证与渠道解耦:新建时选中绑定的共享账户(提交顶层 account_id,凭证走账户)
+    account_id: z.number().nullable().optional(),
     openai_organization: z.string().optional(),
     models: z.string().min(1, ERROR_MESSAGES.REQUIRED_MODELS),
     group: z.array(z.string()).min(1, ERROR_MESSAGES.REQUIRED_GROUP),
@@ -464,6 +466,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   aws_key_type: 'ak_sk',
   azure_responses_version: '',
   opencodezen_clear_key: false,
+  account_id: null,
   // Field passthrough controls
   allow_service_tier: false,
   disable_store: false,
@@ -617,6 +620,7 @@ export function transformChannelToFormDefaults(
     azure_responses_version: azureResponsesVersion,
     aws_key_type: awsKeyType,
     opencodezen_clear_key: false,
+    account_id: null,
     allow_service_tier: allowServiceTier,
     disable_store: disableStore,
     allow_include_obfuscation: allowIncludeObfuscation,
@@ -868,6 +872,7 @@ export function syncModelSettings(
  */
 export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
   mode: 'single' | 'batch' | 'multi_to_single'
+  account_id?: number
   multi_key_mode?: 'random' | 'polling'
   batch_add_set_key_prefix_2_name?: boolean
   coding_plan_key?: string
@@ -875,11 +880,14 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
 } {
   const mode = formData.multi_key_mode || 'single'
 
+  // 绑定共享账户:凭证真相源在账户(仅 single 模式),渠道不带 key
+  const boundAccountId = formData.account_id ?? null
+
   const channel: Partial<Channel> = {
     name: formData.name,
     type: formData.type,
-    base_url: normalizeBaseUrl(formData.base_url) || null,
-    key: formData.key,
+    base_url: boundAccountId ? null : normalizeBaseUrl(formData.base_url) || null,
+    key: boundAccountId ? '' : formData.key,
     openai_organization: formData.openai_organization || null,
     models: formData.models,
     group: formatGroups(formData.group),
@@ -909,11 +917,17 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
   })
 
   return {
-    mode,
+    mode: boundAccountId ? 'single' : mode,
+    account_id: boundAccountId ?? undefined,
+    // 绑定账户时账户已持完整 key 列表,批量/多key合并模式不适用(后端仅认 single)
     multi_key_mode:
-      mode === 'multi_to_single' ? formData.multi_key_type : undefined,
+      !boundAccountId && mode === 'multi_to_single'
+        ? formData.multi_key_type
+        : undefined,
     batch_add_set_key_prefix_2_name:
-      mode === 'batch' ? formData.batch_add_set_key_prefix_2_name : undefined,
+      !boundAccountId && mode === 'batch'
+        ? formData.batch_add_set_key_prefix_2_name
+        : undefined,
     coding_plan_key: formData.coding_plan_key?.trim()
       ? formData.coding_plan_key.trim()
       : undefined,
