@@ -115,6 +115,7 @@ import {
   SecureVerificationDialog,
   useSecureVerification,
 } from '@/features/auth/secure-verification'
+import { getAccounts } from '@/features/accounts/api'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { useHiddenClickUnlock } from '@/hooks/use-hidden-click-unlock'
 import {
@@ -680,6 +681,17 @@ export function ChannelMutateDrawer({
     enabled: isEditing && Boolean(channelId),
   })
 
+  // 绑定共享账户(凭证与渠道解耦):新建时可选,拉账户列表(启用中)
+  const { data: bindableAccountsData } = useQuery({
+    queryKey: ['accounts', 'bindable'],
+    queryFn: () => getAccounts({ page_size: 200 }),
+    enabled: !isEditing,
+    staleTime: 60_000,
+  })
+  const bindableAccounts = (bindableAccountsData?.items ?? [])
+    .map((item) => item.account)
+    .filter((acc) => acc.status === 1)
+
   // Fetch available groups
   const { data: groupsData, isLoading: isLoadingGroups } = useQuery({
     queryKey: ['groups'],
@@ -735,6 +747,11 @@ export function ChannelMutateDrawer({
   const multiKeyType = form.watch('multi_key_type')
   const keyMode = form.watch('key_mode')
   const currentGroups = form.watch('group')
+  // 绑定共享账户后凭证真相源在账户:key 输入区/Add Mode 收敛(仅新建)
+  const boundAccountId =
+    useWatch({ control: form.control, name: 'account_id' }) ?? null
+  const boundNewAccount = !isEditing && boundAccountId !== null
+
   const currentType = form.watch('type')
   const currentStatus = form.watch('status')
   const currentBaseUrl = form.watch('base_url')
@@ -3047,11 +3064,92 @@ export function ChannelMutateDrawer({
                             )}
 
                             <ChannelAuthSection>
+                            {!isEditing && (
+                              <FormField
+                                control={form.control}
+                                name='account_id'
+                                render={({ field }) => (
+                                  <FormItem className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+                                    <FormLabel className='text-muted-foreground text-xs font-medium'>
+                                      {t('Bind existing account')}
+                                    </FormLabel>
+                                    <Select
+                                      items={[
+                                        {
+                                          value: '0',
+                                          label: t('No (use key below)'),
+                                        },
+                                        ...bindableAccounts.map((acc) => ({
+                                          value: String(acc.id),
+                                          label: `${acc.name} · ${
+                                            CHANNEL_TYPE_OPTIONS.find(
+                                              (o) => o.value === acc.type
+                                            )?.label ?? String(acc.type)
+                                          }`,
+                                        })),
+                                      ]}
+                                      onValueChange={(v) => {
+                                        const id = Number(v)
+                                        if (id > 0) {
+                                          const acc = bindableAccounts.find(
+                                            (a) => a.id === id
+                                          )
+                                          // 渠道类型跟随账户(后端强校验一致);账户持完整 key 列表,强制 single
+                                          if (acc) {
+                                            form.setValue('type', acc.type)
+                                          }
+                                          form.setValue('multi_key_mode', 'single')
+                                          field.onChange(id)
+                                        } else {
+                                          field.onChange(null)
+                                        }
+                                      }}
+                                      value={
+                                        field.value != null && field.value > 0
+                                          ? String(field.value)
+                                          : '0'
+                                      }
+                                    >
+                                      <FormControl>
+                                        <SelectTrigger
+                                          size='sm'
+                                          className='w-full sm:w-56'
+                                        >
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent
+                                        alignItemWithTrigger={false}
+                                      >
+                                        <SelectGroup>
+                                          <SelectItem value='0'>
+                                            {t('No (use key below)')}
+                                          </SelectItem>
+                                          {bindableAccounts.map((acc) => (
+                                            <SelectItem
+                                              key={acc.id}
+                                              value={String(acc.id)}
+                                            >
+                                              {acc.name} ·{' '}
+                                              {CHANNEL_TYPE_OPTIONS.find(
+                                                (o) => o.value === acc.type
+                                              )?.label ?? String(acc.type)}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectGroup>
+                                      </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            )}
+
                             {isEditing && channelData?.data?.account ? (
                               <AccountBoundPanel account={channelData.data.account} />
                             ) : (
                               <>
-                              {!isEditing && (
+                              {!isEditing && !boundNewAccount && (
                                 <FormField
                                   control={form.control}
                                   name='multi_key_mode'
@@ -3126,6 +3224,15 @@ export function ChannelMutateDrawer({
                                   />
                                 )}
 
+                              {boundNewAccount && (
+                                <div className='text-muted-foreground rounded-md border border-dashed px-3 py-2.5 text-sm'>
+                                  {t(
+                                    'Credentials come from the bound account. Edit the key on the account page.'
+                                  )}
+                                </div>
+                              )}
+                              {!boundNewAccount && (
+                                <>
                               <FormField
                                 control={form.control}
                                 name='key'
@@ -3336,6 +3443,8 @@ export function ChannelMutateDrawer({
                                     </AlertDescription>
                                   </Alert>
                                 </div>
+                              )}
+                                </>
                               )}
 
                               {isEditing && isMultiKeyChannel && (
