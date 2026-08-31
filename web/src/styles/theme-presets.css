@@ -982,7 +982,11 @@ body[data-theme-preset='liquid-glass'] {
  * 与遮罩强度(向白/黑靠拢)分开,由管理端"背景亮度"滑块控制。非琉璃主题
  * --app-bg-image 为 none,滤镜无可视影响。 */
 body[data-theme-preset='liquid-glass']::before {
-  filter: brightness(var(--app-bg-brightness, 1));
+  /* blur+saturate 原在 [data-slot='public-layout'] 的 backdrop-filter 上——
+   * backdrop-filter 祖先会为后代 fixed 元素创建 containing block,导致公开页
+   * 顶栏(fixed)随页面滚走。挪到背景层自身的 filter 链,视觉等价(模糊的都
+   * 是这张背景图)且不影响任何后代定位。 */
+  filter: brightness(var(--app-bg-brightness, 1)) blur(18px) saturate(160%);
 }
 
 /* ── Liquid Glass — 玻璃模糊与高光 ─────────────────────────────────────────
@@ -1009,11 +1013,11 @@ body[data-theme-preset='liquid-glass']::before {
   background-color: oklch(0.13 0 0 / 0.35);
 }
 /* 公开页画布与内部内容区统一:背景驯服后不需要 55% 白遮罩,降到和 sidebar-inset
- * 相同的 10% 白,玻璃更透、背景图更可见;18px blur 保留(整页画布没有侧栏/卡片
- * 托底,需要更强的柔化压住背景亮度不均,保证长文可读)。 */
+ * 相同的 10% 白,玻璃更透、背景图更可见;整页轻霜的 blur(18px) 由 body::before
+ * 的 filter 链提供(见上方注释),容器自身绝不能带 backdrop-filter——否则内部
+ * fixed 顶栏会随页面滚走。 */
 [data-theme-preset='liquid-glass'] [data-slot='public-layout'] {
   background-color: oklch(1 0 0 / 0.1);
-  backdrop-filter: blur(18px) saturate(160%);
 }
 .dark [data-theme-preset='liquid-glass'] [data-slot='public-layout'] {
   background-color: oklch(0.13 0 0 / 0.35);
