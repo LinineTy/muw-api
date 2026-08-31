@@ -241,6 +241,7 @@
   "Min Amount": "Min Amount",
   "Minimum Claim Amount": "Minimum Claim Amount",
   "Model Health": "Model Health",
+  "No matching models in any group": "No matching models in any group",
   "Models that already support vision, one per line. Requests to these models skip the fallback. Matching is case-insensitive and matches model names containing the entry.": "Models that already support vision, one per line. Requests to these models skip the fallback. Matching is case-insensitive and matches model names containing the entry.",
   "Monthly Quota": "Monthly Quota",
   "Move down": "Move down",

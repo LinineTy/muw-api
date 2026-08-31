@@ -133,13 +133,5 @@ export const TOKEN_UNIT_DIVISORS = {
 /** Default token unit for pricing display */
 export const DEFAULT_TOKEN_UNIT: TokenUnit = 'M'
 
-/** View mode options */
-export const VIEW_MODES = {
-  CARD: 'card',
-  TABLE: 'table',
-} as const
-
-export type ViewMode = (typeof VIEW_MODES)[keyof typeof VIEW_MODES]
-
 /** Default page size for pricing table */
 export const DEFAULT_PRICING_PAGE_SIZE = 20
