@@ -203,106 +203,109 @@ export function Accounts() {
   }
 
   return (
-    <SectionPageLayout fixedContent>
-      <SectionPageLayout.Title>{t('Accounts')}</SectionPageLayout.Title>
-      <SectionPageLayout.Actions>
-        <div className='flex items-center gap-2'>
-          <Input
-            value={keyword}
-            onChange={(e) => {
-              setKeyword(e.target.value)
-              setPage(1)
-            }}
-            placeholder={t('Search accounts...')}
-            className='h-8 w-56'
-          />
-          <Button size='sm' onClick={openCreate}>
-            <Plus className='size-4' />
-            {t('Add Account')}
-          </Button>
-        </div>
-      </SectionPageLayout.Actions>
-      <SectionPageLayout.Content>
-        <div className='border-border overflow-hidden rounded-lg border'>
-          <table className='w-full text-sm'>
-            <thead className='bg-muted/50 text-muted-foreground'>
-              <tr>
-                <th className='px-3 py-2 text-left font-medium'>
-                  {t('Name')}
-                </th>
-                <th className='px-3 py-2 text-left font-medium'>
-                  {t('Provider')}
-                </th>
-                <th className='px-3 py-2 text-left font-medium'>
-                  {t('Key')}
-                </th>
-                <th className='px-3 py-2 text-left font-medium'>
-                  {t('Status')}
-                </th>
-                <th className='px-3 py-2 text-left font-medium'>
-                  {t('Balance')}
-                </th>
-                <th className='px-3 py-2 text-left font-medium'>
-                  {t('Channels')}
-                </th>
-                <th className='px-3 py-2 text-right font-medium'>
-                  {t('Actions')}
-                </th>
-              </tr>
-            </thead>
-            <tbody className='divide-border divide-y'>
-              {renderBody()}
-            </tbody>
-          </table>
-        </div>
-        {totalPages > 1 && (
-          <div className='flex items-center justify-end gap-2 px-1 py-2'>
-            <Button
-              variant='outline'
-              size='sm'
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              {t('Previous')}
-            </Button>
-            <span className='text-muted-foreground text-xs'>
-              {page} / {totalPages}
-            </span>
-            <Button
-              variant='outline'
-              size='sm'
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              {t('Next')}
+    <>
+      <SectionPageLayout fixedContent>
+        <SectionPageLayout.Title>{t('Accounts')}</SectionPageLayout.Title>
+        <SectionPageLayout.Actions>
+          <div className='flex items-center gap-2'>
+            <Input
+              value={keyword}
+              onChange={(e) => {
+                setKeyword(e.target.value)
+                setPage(1)
+              }}
+              placeholder={t('Search accounts...')}
+              className='h-8 w-56'
+            />
+            <Button size='sm' onClick={openCreate}>
+              <Plus className='size-4' />
+              {t('Add Account')}
             </Button>
           </div>
-        )}
-      </SectionPageLayout.Content>
+        </SectionPageLayout.Actions>
+        <SectionPageLayout.Content>
+          <div className='border-border overflow-hidden rounded-lg border'>
+            <table className='w-full text-sm'>
+              <thead className='bg-muted/50 text-muted-foreground'>
+                <tr>
+                  <th className='px-3 py-2 text-left font-medium'>
+                    {t('Name')}
+                  </th>
+                  <th className='px-3 py-2 text-left font-medium'>
+                    {t('Provider')}
+                  </th>
+                  <th className='px-3 py-2 text-left font-medium'>
+                    {t('Key')}
+                  </th>
+                  <th className='px-3 py-2 text-left font-medium'>
+                    {t('Status')}
+                  </th>
+                  <th className='px-3 py-2 text-left font-medium'>
+                    {t('Balance')}
+                  </th>
+                  <th className='px-3 py-2 text-left font-medium'>
+                    {t('Channels')}
+                  </th>
+                  <th className='px-3 py-2 text-right font-medium'>
+                    {t('Actions')}
+                  </th>
+                </tr>
+              </thead>
+              <tbody className='divide-border divide-y'>
+                {renderBody()}
+              </tbody>
+            </table>
+          </div>
+          {totalPages > 1 && (
+            <div className='flex items-center justify-end gap-2 px-1 py-2'>
+              <Button
+                variant='outline'
+                size='sm'
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                {t('Previous')}
+              </Button>
+              <span className='text-muted-foreground text-xs'>
+                {page} / {totalPages}
+              </span>
+              <Button
+                variant='outline'
+                size='sm'
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                {t('Next')}
+              </Button>
+            </div>
+          )}
+        </SectionPageLayout.Content>
+      </SectionPageLayout>
 
-      {drawerOpen && (
-        <AccountMutateDrawer
-          accountId={editingId}
-          onClose={() => setDrawerOpen(false)}
-          onSaved={() => {
-            setDrawerOpen(false)
-            invalidate()
-          }}
-        />
-      )}
-    </SectionPageLayout>
+      <AccountMutateDrawer
+        open={drawerOpen}
+        onOpenChange={(isOpen) => !isOpen && setDrawerOpen(false)}
+        accountId={editingId}
+        onSaved={() => {
+          setDrawerOpen(false)
+          invalidate()
+        }}
+      />
+    </>
   )
 }
 
 // ── 创建/编辑抽屉 ───────────────────────────────────────────────
 
 function AccountMutateDrawer({
+  open,
+  onOpenChange,
   accountId,
-  onClose,
   onSaved,
 }: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
   accountId: number | null
-  onClose: () => void
   onSaved: () => void
 }) {
   const { t } = useTranslation()
@@ -391,7 +394,7 @@ function AccountMutateDrawer({
     .filter(Boolean).length
 
   return (
-    <Sheet open onOpenChange={(open) => !open && onClose()}>
+    <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className='flex w-full flex-col gap-4 sm:max-w-lg'>
         <SheetHeader>
           <SheetTitle>
@@ -425,7 +428,7 @@ function AccountMutateDrawer({
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent alignItemWithTrigger={false}>
                   {CHANNEL_TYPE_OPTIONS.map((option) => (
                     <SelectItem key={option.value} value={String(option.value)}>
                       {option.label}
@@ -472,7 +475,7 @@ function AccountMutateDrawer({
                     <SelectTrigger className='h-8 w-28'>
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent alignItemWithTrigger={false}>
                       <SelectItem value='polling'>{t('Polling')}</SelectItem>
                       <SelectItem value='random'>{t('Random')}</SelectItem>
                     </SelectContent>
@@ -506,7 +509,7 @@ function AccountMutateDrawer({
                   <SelectTrigger className='h-8 w-28'>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent alignItemWithTrigger={false}>
                     <SelectItem value='1'>{t('Enabled')}</SelectItem>
                     <SelectItem value='2'>{t('Manually Disabled')}</SelectItem>
                   </SelectContent>
@@ -516,7 +519,7 @@ function AccountMutateDrawer({
           </div>
         )}
         <div className='flex justify-end gap-2 border-t px-4 py-3'>
-          <Button variant='outline' onClick={onClose}>
+          <Button variant='outline' onClick={() => onOpenChange(false)}>
             {t('Cancel')}
           </Button>
           <Button

@@ -32,7 +32,7 @@ export async function getAccounts(params: {
   keyword?: string
 }): Promise<GetAccountsResponse> {
   const res = await api.get('/api/account/', { params })
-  return res.data
+  return res.data.data
 }
 
 export async function getAccount(id: number): Promise<Account> {
