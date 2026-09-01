@@ -20,7 +20,12 @@ import { ChevronDown } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Button } from '@/components/ui/button'
+import { GroupBadge } from '@/components/group-badge'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
 
 import { EXCLUDED_GROUPS } from '../constants'
@@ -43,6 +48,9 @@ export interface GroupTreeProps {
  * Grouped pricing tree: models are listed under every group they belong to
  * (full-duplication mode) so each group shows its real effective prices.
  * Groups are ordered by the auto-group chain first, then any remaining groups.
+ *
+ * Collapse interaction mirrors subscriptions' GroupCollapsibleSection:
+ * height-transitioned Collapsible + lightweight hover-only group header.
  */
 export function GroupTree(props: GroupTreeProps) {
   const { t } = useTranslation()
@@ -101,49 +109,46 @@ export function GroupTree(props: GroupTreeProps) {
   }
 
   return (
-    <div className='space-y-5'>
+    <div className='space-y-3'>
       {sections.map((section, index) => {
         // Before the first manual toggle, collapse everything except the first group.
         const isCollapsed = collapsed
           ? collapsed.has(section.group)
           : index > 0
         return (
-          <section
+          <Collapsible
             key={section.group}
-            aria-label={section.group}
-            className='border-border/60 border-b pb-5 last:border-b-0'
+            open={!isCollapsed}
+            onOpenChange={() => toggleGroup(section.group)}
           >
-            <Button
-              variant='ghost'
-              size='sm'
-              onClick={() => toggleGroup(section.group)}
-              aria-expanded={!isCollapsed}
-              className='text-foreground hover:bg-muted/40 mb-2.5 h-auto w-full justify-start gap-2 px-0 py-1'
+            <CollapsibleTrigger
+              render={
+                <button
+                  type='button'
+                  data-press-scale='false'
+                  aria-label={section.group}
+                  className='hover:bg-muted/40 flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors'
+                />
+              }
             >
               <ChevronDown
                 className={cn(
-                  'text-muted-foreground/70 size-3.5 shrink-0 transition-transform',
+                  'text-muted-foreground size-4 shrink-0 transition-transform duration-200',
                   isCollapsed && '-rotate-90'
                 )}
               />
-              <span className='font-mono text-sm font-semibold'>
-                {section.group}
-              </span>
-              <span className='text-primary/80 font-mono text-[11px] font-medium'>
-                ×{section.ratio}
-              </span>
-              <span className='text-muted-foreground/90 text-xs font-normal'>
+              <GroupBadge group={section.group} ratio={section.ratio} />
+              <span className='text-muted-foreground shrink-0 text-xs'>
                 {t('{{count}} models', { count: section.models.length })}
               </span>
               {section.desc && (
-                <span className='text-muted-foreground/75 hidden text-xs font-normal sm:inline'>
+                <span className='text-muted-foreground/75 hidden min-w-0 truncate text-xs sm:inline'>
                   · {section.desc}
                 </span>
               )}
-            </Button>
-
-            {!isCollapsed && (
-              <div className='grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3'>
+            </CollapsibleTrigger>
+            <CollapsibleContent className='h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-starting-style:h-0 data-ending-style:h-0'>
+              <div className='grid grid-cols-1 gap-3 pt-3 pb-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'>
                 {section.models.map((model) => (
                   <ModelCard
                     key={`${section.group}-${model.model_name}`}
@@ -157,8 +162,8 @@ export function GroupTree(props: GroupTreeProps) {
                   />
                 ))}
               </div>
-            )}
-          </section>
+            </CollapsibleContent>
+          </Collapsible>
         )
       })}
     </div>
