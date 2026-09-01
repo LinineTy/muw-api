@@ -105,6 +105,8 @@ export type SiteSettings = {
   GlassMaskOpacity: string
   /** 玻璃预设背景图整体亮度(系数小数串,1 = 原样),存 option key GlassBrightness */
   GlassBrightness: string
+  /** 玻璃预设背景图模糊强度(px 整数串,0 = 原图),存 option key GlassBlur */
+  GlassBlur: string
   Footer: string
   About: string
   HomePageContent: string

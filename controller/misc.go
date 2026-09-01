@@ -75,6 +75,8 @@ func GetStatus(c *gin.Context) {
 		"glass_mask_opacity":             common.OptionMap["GlassMaskOpacity"],
 		// 玻璃预设背景图整体亮度(系数,1 = 原样),与遮罩分开调节
 		"glass_brightness":               common.OptionMap["GlassBrightness"],
+		// 玻璃预设背景图模糊强度(px,0 = 原图),与遮罩/亮度分开调节
+		"glass_blur":                     common.OptionMap["GlassBlur"],
 		"wechat_qrcode":                  common.WeChatAccountQRCodeImageURL,
 		"wechat_login":                   common.WeChatAuthEnabled,
 		"server_address":                 system_setting.ServerAddress,

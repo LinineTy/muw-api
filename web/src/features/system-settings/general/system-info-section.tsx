@@ -52,6 +52,7 @@ const _systemInfoSchema = z.object({
   BackgroundImage: z.string().optional(),
   GlassMaskOpacity: z.string().optional(),
   GlassBrightness: z.string().optional(),
+  GlassBlur: z.string().optional(),
   Footer: z.string().optional(),
 })
 
@@ -78,6 +79,7 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
     GlassMaskOpacity:
       normalizeValue(defaultValues.GlassMaskOpacity) || '0.35',
     GlassBrightness: normalizeValue(defaultValues.GlassBrightness) || '1',
+    GlassBlur: normalizeValue(defaultValues.GlassBlur) || '18',
     Footer: normalizeValue(defaultValues.Footer),
   }
 
@@ -90,6 +92,7 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
     BackgroundImage: z.string().optional(),
     GlassMaskOpacity: z.string().optional(),
     GlassBrightness: z.string().optional(),
+    GlassBlur: z.string().optional(),
     Footer: z.string().optional(),
   })
 
@@ -282,6 +285,47 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
                       <FormDescription>
                         {t(
                           'Overall brightness of the background image (100% = as-is)'
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )
+                }}
+              />
+
+              <FormField
+                control={form.control}
+                name='GlassBlur'
+                render={({ field }) => {
+                  const raw = Number(field.value)
+                  // clamp 到滑块 [0,30],防 DB 值被 API 写成越界时滑块 value 超 max
+                  const px = Number.isFinite(raw)
+                    ? Math.min(30, Math.max(0, Math.round(raw)))
+                    : 18
+                  return (
+                    <FormItem>
+                      <FormLabel>{t('Background blur')}</FormLabel>
+                      <div className='flex items-center gap-3'>
+                        <Slider
+                          aria-label={t('Background blur')}
+                          min={0}
+                          max={30}
+                          step={1}
+                          value={[px]}
+                          onValueChange={(nextValue) => {
+                            const first = Array.isArray(nextValue)
+                              ? nextValue[0]
+                              : nextValue
+                            field.onChange(String(Math.round(first)))
+                          }}
+                        />
+                        <span className='text-muted-foreground w-10 shrink-0 text-right text-sm tabular-nums'>
+                          {px}px
+                        </span>
+                      </div>
+                      <FormDescription>
+                        {t(
+                          'How strongly the background image is blurred (0px = sharp original; higher = softer behind the glass)'
                         )}
                       </FormDescription>
                       <FormMessage />

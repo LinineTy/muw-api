@@ -534,6 +534,8 @@
     "Back to sign in": "Back to sign in",
     "Backed up": "Резервная копия создана",
     "Background brightness": "Background brightness",
+    "Background blur": "Background blur",
+    "How strongly the background image is blurred (0px = sharp original; higher = softer behind the glass)": "How strongly the background image is blurred (0px = sharp original; higher = softer behind the glass)",
     "Overall brightness of the background image (100% = as-is)": "Overall brightness of the background image (100% = as-is)",
     "Background image mask": "Background image mask",
     "How strongly the background image is dimmed (0% = shown as-is; higher = softer behind the glass)": "How strongly the background image is dimmed (0% = shown as-is; higher = softer behind the glass)",
