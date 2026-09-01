@@ -985,8 +985,11 @@ body[data-theme-preset='liquid-glass']::before {
   /* blur+saturate 原在 [data-slot='public-layout'] 的 backdrop-filter 上——
    * backdrop-filter 祖先会为后代 fixed 元素创建 containing block,导致公开页
    * 顶栏(fixed)随页面滚走。挪到背景层自身的 filter 链,视觉等价(模糊的都
-   * 是这张背景图)且不影响任何后代定位。 */
-  filter: brightness(var(--app-bg-brightness, 1)) blur(18px) saturate(160%);
+   * 是这张背景图)且不影响任何后代定位。
+   * blur 强度由 --app-bg-blur 控制(管理端"背景模糊"滑块,0 = 锐利原图),
+   * 由 useAppBackground 写到 body 内联变量;未配置时回落 18px 保持默认观感。 */
+  filter: brightness(var(--app-bg-brightness, 1))
+    blur(var(--app-bg-blur, 18px)) saturate(160%);
 }
 
 /* ── Liquid Glass — 玻璃模糊与高光 ─────────────────────────────────────────

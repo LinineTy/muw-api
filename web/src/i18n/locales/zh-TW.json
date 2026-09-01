@@ -534,6 +534,8 @@
     "Back to sign in": "返回登入",
     "Backed up": "已備份",
     "Background brightness": "背景亮度",
+    "Background blur": "背景模糊",
+    "How strongly the background image is blurred (0px = sharp original; higher = softer behind the glass)": "背景圖的模糊強度(0px = 銳利原圖;越大,玻璃後越柔和)",
     "Overall brightness of the background image (100% = as-is)": "背景圖整體亮度(100% = 原樣)",
     "Background image mask": "背景圖遮罩",
     "How strongly the background image is dimmed (0% = shown as-is; higher = softer behind the glass)": "背景圖被壓暗的程度(0% = 原樣顯示;越大,玻璃後越柔和)",

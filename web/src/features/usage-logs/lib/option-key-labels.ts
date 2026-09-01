@@ -143,6 +143,7 @@ export const OPTION_KEY_LABELS: Record<string, string> = {
   BackgroundImage: 'Background image URL',
   GlassMaskOpacity: 'Background image mask',
   GlassBrightness: 'Background brightness',
+  GlassBlur: 'Background blur',
   Footer: 'Footer',
 
   // ---- 通用 · 额度（general/quota-settings-section.tsx）----

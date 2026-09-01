@@ -42,6 +42,7 @@ const STATUS_RELATED_KEYS = new Set([
   'BackgroundImage',
   'GlassMaskOpacity',
   'GlassBrightness',
+  'GlassBlur',
 ])
 
 export function useUpdateOption() {

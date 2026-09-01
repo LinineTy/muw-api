@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useEffect } from 'react'
 
 import {
+  DEFAULT_GLASS_BLUR,
   DEFAULT_GLASS_BRIGHTNESS,
   DEFAULT_GLASS_MASK_OPACITY,
   useSystemConfigStore,
@@ -36,6 +37,9 @@ import {
  *   亮色模式用白色遮罩(把照片向白柔和、深色字更清晰)、暗色模式用黑色遮罩,
  *   颜色由 CSS 决定,这里只写强度。强度由管理员在"系统信息"里用滑块配置。
  * - --app-bg-brightness: 背景图整体亮度系数(0.5~1.5),与遮罩分开调节。
+ * - --app-bg-blur: 背景图自身模糊强度(0~30px)。这个变量源自写死在
+ *   body::before filter 链里的 blur(18px):把它参数化后,管理员把遮罩/亮度/
+ *   模糊都调回中性档(0% / 100% / 0px)就能得到未处理的锐利原图。
  * - data-has-bg-photo: 有配图时挂到 body,通知 CSS 在照片层上方插入遮罩层;
  *   无配图时移除,避免遮罩压到 preset 自带的 aurora 渐变上。
  *
@@ -64,6 +68,14 @@ function clampBrightness(value: number | undefined): number {
   return Math.min(1.5, Math.max(0.5, value))
 }
 
+/** 模糊强度收敛到 [0, 30](px);非法值回落默认 */
+function clampBlur(value: number | undefined): number {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return DEFAULT_GLASS_BLUR
+  }
+  return Math.min(30, Math.max(0, value))
+}
+
 export function useAppBackground() {
   const backgroundImage = useSystemConfigStore(
     (state) => state.config.backgroundImage
@@ -74,6 +86,7 @@ export function useAppBackground() {
   const glassBrightness = useSystemConfigStore(
     (state) => state.config.glassBrightness
   )
+  const glassBlur = useSystemConfigStore((state) => state.config.glassBlur)
 
   useEffect(() => {
     const body = document.body
@@ -86,6 +99,7 @@ export function useAppBackground() {
       '--app-bg-brightness',
       String(clampBrightness(glassBrightness))
     )
+    body.style.setProperty('--app-bg-blur', `${clampBlur(glassBlur)}px`)
     if (backgroundImage?.trim()) {
       body.setAttribute('data-has-bg-photo', '')
     } else {
@@ -95,7 +109,8 @@ export function useAppBackground() {
       body.style.removeProperty('--app-bg-photo')
       body.style.removeProperty('--app-bg-mask-opacity')
       body.style.removeProperty('--app-bg-brightness')
+      body.style.removeProperty('--app-bg-blur')
       body.removeAttribute('data-has-bg-photo')
     }
-  }, [backgroundImage, glassMaskOpacity, glassBrightness])
+  }, [backgroundImage, glassMaskOpacity, glassBrightness, glassBlur])
 }

@@ -13,6 +13,7 @@
   "When enabled, the group is re-synced from the LinuxDO trust level on every login.": "When enabled, the group is re-synced from the LinuxDO trust level on every login.",
   "Auto-renew failed: insufficient balance or plan unavailable. Please top up or renew manually.": "Auto-renew failed: insufficient balance or plan unavailable. Please top up or renew manually.",
   "Back to sign in": "Back to sign in",
+  "How strongly the background image is blurred (0px = sharp original; higher = softer behind the glass)": "How strongly the background image is blurred (0px = sharp original; higher = softer behind the glass)",
   "Overall brightness of the background image (100% = as-is)": "Overall brightness of the background image (100% = as-is)",
   "How strongly the background image is dimmed (0% = shown as-is; higher = softer behind the glass)": "How strongly the background image is dimmed (0% = shown as-is; higher = softer behind the glass)",
   "URL to a global background image shown behind the interface (optional); looks best with the Liquid Glass theme": "URL to a global background image shown behind the interface (optional); looks best with the Liquid Glass theme",

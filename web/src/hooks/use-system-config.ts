@@ -26,6 +26,7 @@ import {
   type CurrencyDisplayType,
   type SystemConfig,
   DEFAULT_CURRENCY_CONFIG,
+  DEFAULT_GLASS_BLUR,
   DEFAULT_GLASS_BRIGHTNESS,
   DEFAULT_GLASS_MASK_OPACITY,
 } from '@/stores/system-config-store'
@@ -44,6 +45,7 @@ interface StatusApiResponse {
     background_image?: string
     glass_mask_opacity?: string
     glass_brightness?: string
+    glass_blur?: string
     demo_site_enabled?: boolean
     display_token_stat_enabled?: boolean
     display_in_currency?: boolean
@@ -107,6 +109,7 @@ export function mapStatusDataToConfig(
       DEFAULT_GLASS_MASK_OPACITY
     ),
     glassBrightness: toNumber(data.glass_brightness, DEFAULT_GLASS_BRIGHTNESS),
+    glassBlur: toNumber(data.glass_blur, DEFAULT_GLASS_BLUR),
     demoSiteEnabled: data.demo_site_enabled,
     displayTokenStatEnabled: data.display_token_stat_enabled,
     currency,

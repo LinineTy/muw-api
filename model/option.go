@@ -87,6 +87,8 @@ func InitOptionMap() {
 	common.OptionMap["GlassMaskOpacity"] = "0.35"
 	// 玻璃预设背景图整体亮度(系数,1 = 原样),与遮罩分开调节
 	common.OptionMap["GlassBrightness"] = "1"
+	// 玻璃预设背景图模糊强度(px,0 = 原图),与遮罩/亮度分开调节
+	common.OptionMap["GlassBlur"] = "18"
 	common.OptionMap["ServerAddress"] = ""
 	common.OptionMap["WorkerUrl"] = system_setting.WorkerUrl
 	common.OptionMap["WorkerValidKey"] = system_setting.WorkerValidKey
@@ -270,6 +272,11 @@ func validateOptionValue(key string, value string) error {
 		f, err := strconv.ParseFloat(value, 64)
 		if err != nil || f <= 0 || math.IsNaN(f) || math.IsInf(f, 0) || f > setting.MaxUserSpacePurchaseRatio {
 			return fmt.Errorf("must be a positive number in (0, %g], got %q", setting.MaxUserSpacePurchaseRatio, value)
+		}
+	case "GlassBlur":
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 0 || n > 30 {
+			return fmt.Errorf("must be an integer in [0, 30], got %q", value)
 		}
 	}
 	return nil
