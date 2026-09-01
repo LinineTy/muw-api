@@ -27,7 +27,7 @@ export function LoadingSkeleton() {
         <Skeleton className='h-4 w-64' />
       </div>
 
-      <div className='flex items-center gap-2 border-b pb-4'>
+      <div className='flex items-center gap-2 pb-1'>
         <Skeleton className='h-9 flex-1 rounded-full sm:max-w-md' />
         <Skeleton className='h-8 w-20 rounded-lg' />
         <Skeleton className='h-8 w-24 rounded-lg' />

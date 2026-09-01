@@ -63,18 +63,20 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const group = props.group
   const selectedGroup = props.selectedGroup
   // Flat grid mode: explicit group > active group filter > the model's best (lowest-ratio) group.
+  const groupRatio = model.group_ratio || {}
   const effectiveGroup =
     group ??
     (selectedGroup &&
     (model.enable_groups || []).includes(selectedGroup)
       ? selectedGroup
       : (model.enable_groups || [])
-          .filter((g) => typeof model.group_ratio?.[g] === 'number')
-          .sort((a, b) => model.group_ratio[a] - model.group_ratio[b])[0]) ??
+          .filter((g) => typeof groupRatio[g] === 'number')
+          .sort((a, b) => groupRatio[a] - groupRatio[b])[0]) ??
     ''
   const isTokenBased = isTokenBasedModel(model)
   const isDynamicPricing =
     model.billing_mode === 'tiered_expr' && Boolean(model.billing_expr)
+  const hasCachedPrice = isTokenBased && model.cache_ratio != null
 
   const modelIconKey = model.icon || model.vendor_icon
   const modelIcon = modelIconKey ? getLobeIcon(modelIconKey, 16) : null
@@ -102,23 +104,37 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
         groupRatioMultiplier: getDynamicDisplayGroupRatio(model, effectiveGroup),
       })
     : null
+
   if (dynamicSummary?.isSpecialExpression) {
     priceSummary = (
       <span className='text-amber-700 dark:text-amber-300'>
         {t('Special billing expression')}
       </span>
     )
-  } else if (dynamicSummary && dynamicSummary.primaryEntries.length > 0) {
+  } else if (dynamicSummary && dynamicSummary.entries.length > 0) {
+    // Dynamic pricing: base entries (input/output) + cache entries (read/write),
+    // joined with the same "·" separator as token-based models.
+    const priceItems = [
+      ...dynamicSummary.primaryEntries,
+      ...dynamicSummary.secondaryEntries.filter(
+        (entry) => entry.variable.group === 'cache'
+      ),
+    ]
     priceSummary = (
       <>
-        {dynamicSummary.primaryEntries.map((entry) => (
+        {priceItems.map((entry, index) => (
           <span
             key={entry.key}
-            className='text-muted-foreground whitespace-nowrap'
+            className='flex items-baseline gap-1.5 whitespace-nowrap'
           >
-            {t(entry.shortLabel)}{' '}
-            <span className='text-foreground font-mono font-semibold'>
-              {entry.formatted}
+            {index > 0 && (
+              <span className='text-muted-foreground/40 -mx-1'>·</span>
+            )}
+            <span className='text-muted-foreground'>
+              {t(entry.shortLabel)}{' '}
+              <span className='text-foreground font-mono font-semibold'>
+                {entry.formatted}
+              </span>
             </span>
           </span>
         ))}
@@ -129,39 +145,72 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
       <span className='text-muted-foreground'>{t('Dynamic Pricing')}</span>
     )
   } else if (isTokenBased) {
+    const priceItems = [
+      {
+        key: 'input',
+        shortLabel: 'Input',
+        value: formatGroupPrice(
+          model,
+          effectiveGroup,
+          'input',
+          tokenUnit,
+          showRechargePrice,
+          priceRate,
+          usdExchangeRate,
+          model.group_ratio || {}
+        ),
+      },
+      {
+        key: 'output',
+        shortLabel: 'Output',
+        value: formatGroupPrice(
+          model,
+          effectiveGroup,
+          'output',
+          tokenUnit,
+          showRechargePrice,
+          priceRate,
+          usdExchangeRate,
+          model.group_ratio || {}
+        ),
+      },
+      ...(hasCachedPrice
+        ? [
+            {
+              key: 'cache',
+              shortLabel: 'Cached',
+              value: formatGroupPrice(
+                model,
+                effectiveGroup,
+                'cache',
+                tokenUnit,
+                showRechargePrice,
+                priceRate,
+                usdExchangeRate,
+                model.group_ratio || {}
+              ),
+            },
+          ]
+        : []),
+    ]
     priceSummary = (
       <>
-        <span className='text-muted-foreground whitespace-nowrap'>
-          {t('Input')}{' '}
-          <span className='text-foreground font-mono font-semibold'>
-            {formatGroupPrice(
-              model,
-              effectiveGroup,
-              'input',
-              tokenUnit,
-              showRechargePrice,
-              priceRate,
-              usdExchangeRate,
-              model.group_ratio || {}
+        {priceItems.map((item, index) => (
+          <span
+            key={item.key}
+            className='flex items-baseline gap-1.5 whitespace-nowrap'
+          >
+            {index > 0 && (
+              <span className='text-muted-foreground/40 -mx-1'>·</span>
             )}
+            <span className='text-muted-foreground'>
+              {t(item.shortLabel)}{' '}
+              <span className='text-foreground font-mono font-semibold'>
+                {item.value}
+              </span>
+            </span>
           </span>
-        </span>
-        <span className='text-muted-foreground/40'>·</span>
-        <span className='text-muted-foreground whitespace-nowrap'>
-          {t('Output')}{' '}
-          <span className='text-foreground font-mono font-semibold'>
-            {formatGroupPrice(
-              model,
-              effectiveGroup,
-              'output',
-              tokenUnit,
-              showRechargePrice,
-              priceRate,
-              usdExchangeRate,
-              model.group_ratio || {}
-            )}
-          </span>
-        </span>
+        ))}
       </>
     )
   } else {
@@ -194,13 +243,13 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
         }
       }}
       className={cn(
-        'hover:border-primary/40 focus-visible:ring-ring/40 flex cursor-pointer flex-col gap-1.5 rounded-xl border bg-card p-3.5 transition-all',
-        'hover:shadow-md focus-visible:ring-2 focus-visible:outline-none'
+        'hover:border-primary/40 flex cursor-pointer flex-col gap-1.5 rounded-xl border bg-card p-3.5 transition-all',
+        'hover:shadow-md focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-ring/40'
       )}
     >
       {/* Layer 1: icon + full model name */}
       <div className='flex min-w-0 items-center gap-2'>
-        <div className='bg-muted/40 flex size-6 shrink-0 items-center justify-center rounded-md'>
+        <div className='flex size-6 shrink-0 items-center justify-center'>
           {modelIcon || (
             <span className='text-muted-foreground text-xs font-bold'>
               {initial}
