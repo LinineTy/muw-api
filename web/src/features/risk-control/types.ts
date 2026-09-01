@@ -1,3 +1,4 @@
+// @muw-owned
 export interface PageInfo<T> {
   items: T[]
   total: number
