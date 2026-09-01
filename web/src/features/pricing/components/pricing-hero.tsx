@@ -38,11 +38,11 @@ export function PricingHero(props: PricingHeroProps) {
   ).length
 
   return (
-    <header className='space-y-2'>
-      <h1 className='text-[clamp(1.75rem,4vw,2.5rem)] leading-[1.15] font-bold tracking-tight'>
+    <header className='space-y-1.5'>
+      <h1 className='text-[clamp(1.5rem,3vw,2rem)] leading-tight font-bold tracking-tight'>
         {t('Model Square')}
       </h1>
-      <p className='text-muted-foreground/80 text-sm'>
+      <p className='text-muted-foreground text-[13px]'>
         {t('{{models}} models · {{vendors}} vendors · {{groups}} groups', {
           models: props.modelCount,
           vendors: props.vendorCount,

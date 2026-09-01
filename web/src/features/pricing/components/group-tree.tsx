@@ -46,7 +46,8 @@ export interface GroupTreeProps {
  */
 export function GroupTree(props: GroupTreeProps) {
   const { t } = useTranslation()
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  // null = not yet interacted: only the first group is expanded by default.
+  const [collapsed, setCollapsed] = useState<Set<string> | null>(null)
 
   const sections = useMemo(() => {
     const chainOrder = props.autoGroups.filter(
@@ -80,7 +81,8 @@ export function GroupTree(props: GroupTreeProps) {
 
   const toggleGroup = useCallback((group: string) => {
     setCollapsed((prev) => {
-      const next = new Set(prev)
+      const base = prev ?? new Set<string>()
+      const next = new Set(base)
       if (next.has(group)) {
         next.delete(group)
       } else {
@@ -99,46 +101,49 @@ export function GroupTree(props: GroupTreeProps) {
   }
 
   return (
-    <div className='space-y-7'>
-      {sections.map((section) => {
-        const isCollapsed = collapsed.has(section.group)
+    <div className='space-y-5'>
+      {sections.map((section, index) => {
+        // Before the first manual toggle, collapse everything except the first group.
+        const isCollapsed = collapsed
+          ? collapsed.has(section.group)
+          : index > 0
         return (
           <section
             key={section.group}
             aria-label={section.group}
-            className='border-border/60 border-b pb-7 last:border-b-0'
+            className='border-border/60 border-b pb-5 last:border-b-0'
           >
             <Button
               variant='ghost'
               size='sm'
               onClick={() => toggleGroup(section.group)}
               aria-expanded={!isCollapsed}
-              className='text-foreground hover:bg-muted/40 mb-3 h-auto w-full justify-start gap-2.5 px-0 py-1'
+              className='text-foreground hover:bg-muted/40 mb-2.5 h-auto w-full justify-start gap-2 px-0 py-1'
             >
               <ChevronDown
                 className={cn(
-                  'text-muted-foreground/60 size-4 shrink-0 transition-transform',
+                  'text-muted-foreground/70 size-3.5 shrink-0 transition-transform',
                   isCollapsed && '-rotate-90'
                 )}
               />
-              <span className='font-mono text-base font-bold'>
+              <span className='font-mono text-sm font-semibold'>
                 {section.group}
               </span>
-              <span className='bg-primary/10 text-primary rounded-full px-2 py-0.5 font-mono text-xs font-semibold'>
+              <span className='text-primary/80 font-mono text-[11px] font-medium'>
                 ×{section.ratio}
               </span>
-              <span className='text-muted-foreground text-sm font-normal'>
+              <span className='text-muted-foreground/90 text-xs font-normal'>
                 {t('{{count}} models', { count: section.models.length })}
               </span>
               {section.desc && (
-                <span className='text-muted-foreground/60 hidden text-xs font-normal sm:inline'>
+                <span className='text-muted-foreground/75 hidden text-xs font-normal sm:inline'>
                   · {section.desc}
                 </span>
               )}
             </Button>
 
             {!isCollapsed && (
-              <div className='grid grid-cols-1 gap-3 md:grid-cols-[repeat(auto-fill,minmax(min(100%,420px),1fr))]'>
+              <div className='grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3'>
                 {section.models.map((model) => (
                   <ModelCard
                     key={`${section.group}-${model.model_name}`}

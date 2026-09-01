@@ -111,7 +111,7 @@ export function Pricing() {
 
   return (
     <PublicLayout showMainContainer={false}>
-      <PageTransition className='mx-auto w-full max-w-[1200px] px-4 pt-16 pb-8 sm:px-6 sm:pt-20 sm:pb-10'>
+      <PageTransition className='mx-auto w-full max-w-[1200px] px-4 pt-12 pb-8 sm:px-6 sm:pt-14 sm:pb-10'>
         <PricingHero
           modelCount={models?.length || 0}
           vendorCount={vendors?.length || 0}
@@ -147,7 +147,7 @@ export function Pricing() {
           onClearFilters={clearFilters}
         />
 
-        <main className='mt-6'>
+        <main className='mt-5'>
           {filteredModels.length === 0 ? (
             <EmptyState
               searchQuery={searchInput}
