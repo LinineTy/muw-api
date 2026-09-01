@@ -29,6 +29,8 @@ import { ModelCard } from './model-card'
 export interface ModelCardGridProps {
   models: PricingModel[]
   onModelClick: (modelName: string) => void
+  /** model_name → 24h 技术成功率;undefined 值 = 无数据,卡片不渲染状态点 */
+  healthMap?: Map<string, number>
   priceRate?: number
   usdExchangeRate?: number
   tokenUnit?: TokenUnit
@@ -65,6 +67,7 @@ export function ModelCardGrid(props: ModelCardGridProps) {
             usdExchangeRate={props.usdExchangeRate}
             showRechargePrice={props.showRechargePrice}
             selectedGroup={props.selectedGroup}
+            healthRate={props.healthMap?.get(model.model_name)}
             onClick={() => props.onModelClick(model.model_name || '')}
           />
         ))}

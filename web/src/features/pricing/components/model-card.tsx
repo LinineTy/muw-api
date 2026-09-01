@@ -22,6 +22,8 @@ import { useTranslation } from 'react-i18next'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 
+import { successRateVariant } from '@/features/model-health/lib/success-rate-tier'
+
 import {
   getDynamicDisplayGroupRatio,
   getDynamicPricingSummary,
@@ -38,6 +40,8 @@ export interface ModelCardProps {
   group?: string
   /** Active group filter — falls back to the model's best group price. */
   selectedGroup?: string
+  /** 24h 技术成功率(0-100)。undefined = 无数据/未登录,不渲染状态点。 */
+  healthRate?: number
   onClick: () => void
   tokenUnit?: TokenUnit
   showRechargePrice?: boolean
@@ -89,6 +93,18 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const bottomItems = [...tags.slice(0, 3), ...endpoints.slice(0, 2)]
   const hiddenCount =
     Math.max(tags.length - 3, 0) + Math.max(endpoints.length - 2, 0)
+
+  // 状态点配色与模型健康页同档(≥99 绿/≥90 蓝/≥70 黄/其余红);
+  // undefined = 未登录或该模型 24h 无记录,不渲染。
+  const healthDotColor =
+    props.healthRate === undefined
+      ? null
+      : {
+          success: 'bg-success',
+          info: 'bg-info',
+          warning: 'bg-warning',
+          danger: 'bg-destructive',
+        }[successRateVariant(props.healthRate)]
 
   const priceOptions = {
     tokenUnit,
@@ -243,10 +259,22 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
         }
       }}
       className={cn(
-        'hover:border-primary/40 flex cursor-pointer flex-col gap-1.5 rounded-xl border bg-card p-3.5 transition-all',
+        'hover:border-primary/40 relative flex cursor-pointer flex-col gap-1.5 rounded-xl border bg-card p-3.5 transition-all',
         'hover:shadow-md focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-ring/40'
       )}
     >
+      {/* 状态点:absolute 钉在卡片右上角,长名字换行也不移位 */}
+      {healthDotColor && (
+        <span
+          aria-hidden
+          title={`${t('24h success rate')}: ${props.healthRate}%`}
+          className={cn(
+            'absolute top-3 right-3 size-1.5 rounded-full',
+            healthDotColor
+          )}
+        />
+      )}
+
       {/* Layer 1: icon + full model name */}
       <div className='flex min-w-0 items-center gap-2'>
         <div className='flex size-6 shrink-0 items-center justify-center'>

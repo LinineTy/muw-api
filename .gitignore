@@ -60,3 +60,4 @@ go.work.sum
 # i18n sync 生成的孤儿键归档(无运行时作用,不跟踪)
 web/src/i18n/locales/_extras/
 HEALTH_COLOR_TODO.md
+STATUS_DOT_TODO.md

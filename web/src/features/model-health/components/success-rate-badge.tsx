@@ -18,20 +18,14 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
-import { StatusBadge, type StatusVariant } from '@/components/status-badge'
+import { StatusBadge } from '@/components/status-badge'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 
-// successRateVariant maps a success percentage (0-100) to a badge color.
-function successRateVariant(rate: number): StatusVariant {
-  if (rate >= 99) return 'success'
-  if (rate >= 90) return 'info'
-  if (rate >= 70) return 'warning'
-  return 'danger'
-}
+import { successRateVariant } from '../lib/success-rate-tier'
 
 export function SuccessRateBadge({
   rate,

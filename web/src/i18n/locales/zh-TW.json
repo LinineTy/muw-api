@@ -6526,6 +6526,7 @@
     "{{count}} model(s) with context window override: {{models}}": "{{count}} 個模型設定了上下文窗口覆寫：{{models}}",
     "Context Window": "上下文窗口",
     "e.g. 131072, 0 or empty = unlimited": "例如 131072，0 或留空 = 不限制",
-    "Maximum context window in tokens. Requests exceeding it are rejected with 400.": "最大上下文窗口（token）。請求超過則回傳 400 拒絕。"
+    "Maximum context window in tokens. Requests exceeding it are rejected with 400.": "最大上下文窗口（token）。請求超過則回傳 400 拒絕。",
+    "24h success rate": "24h 成功率"
   }
 }
