@@ -6526,6 +6526,7 @@
     "{{count}} model(s) with context window override: {{models}}": "{{count}} модель(ей) с переопределением контекстного окна: {{models}}",
     "Context Window": "Context Window",
     "e.g. 131072, 0 or empty = unlimited": "e.g. 131072, 0 or empty = unlimited",
-    "Maximum context window in tokens. Requests exceeding it are rejected with 400.": "Maximum context window in tokens. Requests exceeding it are rejected with 400."
+    "Maximum context window in tokens. Requests exceeding it are rejected with 400.": "Maximum context window in tokens. Requests exceeding it are rejected with 400.",
+    "24h success rate": "Успешность за 24ч"
   }
 }

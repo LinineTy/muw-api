@@ -25,6 +25,7 @@ import { EmptyState, LoadingSkeleton, ModelCardGrid, ModelDetailsDrawer, Pricing
 import { EXCLUDED_GROUPS, VIEW_MODES } from './constants'
 import { PricingHero } from './components/pricing-hero'
 import { useFilters } from './hooks/use-filters'
+import { useModelHealthStatus } from './hooks/use-model-health-status'
 import { usePricingData } from './hooks/use-pricing-data'
 
 export function Pricing() {
@@ -72,6 +73,9 @@ export function Pricing() {
     clearFilters,
     clearSearch,
   } = useFilters(models || [])
+
+  // 卡片状态点:登录后按 24h 成功率分色,未登录/无数据不渲染
+  const healthMap = useModelHealthStatus().data
 
   const handleModelClick = useCallback((modelName: string) => {
     setSelectedModelName(modelName)
@@ -187,6 +191,7 @@ export function Pricing() {
             <ModelCardGrid
               models={filteredModels}
               onModelClick={handleModelClick}
+              healthMap={healthMap}
               priceRate={priceRate}
               usdExchangeRate={usdExchangeRate}
               tokenUnit={tokenUnit}

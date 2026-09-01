@@ -53,7 +53,7 @@ export function ModelHealth() {
     { value: 7, label: t('7 Days') },
     { value: 30, label: t('30 Days') },
   ]
-  const [days, setDays] = useState(7)
+  const [days, setDays] = useState(1)
   const [unhealthyOnly, setUnhealthyOnly] = useState(false)
 
   const healthQuery = useQuery({
@@ -176,14 +176,14 @@ export function ModelHealth() {
             onValueChange={(value) => setDays(Number(value))}
             items={DAY_OPTIONS}
           >
-            <SelectTrigger className='h-9 w-20'>
+            <SelectTrigger className='h-9 w-28'>
               <SelectValue />
             </SelectTrigger>
             <SelectContent alignItemWithTrigger={false}>
               <SelectGroup>
                 {DAY_OPTIONS.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
-                    {option.label}
+                    <span className='whitespace-nowrap'>{option.label}</span>
                   </SelectItem>
                 ))}
               </SelectGroup>
