@@ -35,7 +35,9 @@ import { ModelBillingModeBadge } from './model-billing-mode-badge'
 export interface ModelCardProps {
   model: PricingModel
   /** Group this card is rendered under — prices reflect this group's ratio. */
-  group: string
+  group?: string
+  /** Active group filter — falls back to the model's best group price. */
+  selectedGroup?: string
   onClick: () => void
   tokenUnit?: TokenUnit
   showRechargePrice?: boolean
@@ -59,12 +61,23 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const showRechargePrice = props.showRechargePrice ?? false
   const model = props.model
   const group = props.group
+  const selectedGroup = props.selectedGroup
+  // Flat grid mode: explicit group > active group filter > the model's best (lowest-ratio) group.
+  const effectiveGroup =
+    group ??
+    (selectedGroup &&
+    (model.enable_groups || []).includes(selectedGroup)
+      ? selectedGroup
+      : (model.enable_groups || [])
+          .filter((g) => typeof model.group_ratio?.[g] === 'number')
+          .sort((a, b) => model.group_ratio[a] - model.group_ratio[b])[0]) ??
+    ''
   const isTokenBased = isTokenBasedModel(model)
   const isDynamicPricing =
     model.billing_mode === 'tiered_expr' && Boolean(model.billing_expr)
 
   const modelIconKey = model.icon || model.vendor_icon
-  const modelIcon = modelIconKey ? getLobeIcon(modelIconKey, 20) : null
+  const modelIcon = modelIconKey ? getLobeIcon(modelIconKey, 16) : null
   const initial = model.model_name?.charAt(0).toUpperCase() || '?'
 
   const tags = parseTags(model.tags)
@@ -86,7 +99,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const dynamicSummary = isDynamicPricing
     ? getDynamicPricingSummary(model, {
         ...priceOptions,
-        groupRatioMultiplier: getDynamicDisplayGroupRatio(model, group),
+        groupRatioMultiplier: getDynamicDisplayGroupRatio(model, effectiveGroup),
       })
     : null
   if (dynamicSummary?.isSpecialExpression) {
@@ -123,7 +136,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
           <span className='text-foreground font-mono font-semibold'>
             {formatGroupPrice(
               model,
-              group,
+              effectiveGroup,
               'input',
               tokenUnit,
               showRechargePrice,
@@ -139,7 +152,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
           <span className='text-foreground font-mono font-semibold'>
             {formatGroupPrice(
               model,
-              group,
+              effectiveGroup,
               'output',
               tokenUnit,
               showRechargePrice,
@@ -157,7 +170,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
         <span className='text-foreground font-mono font-semibold'>
           {formatFixedPrice(
             model,
-            group,
+            effectiveGroup,
             showRechargePrice,
             priceRate,
             usdExchangeRate,
@@ -187,7 +200,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     >
       {/* Layer 1: icon + full model name */}
       <div className='flex min-w-0 items-center gap-2'>
-        <div className='bg-muted/40 flex size-7 shrink-0 items-center justify-center rounded-md'>
+        <div className='bg-muted/40 flex size-6 shrink-0 items-center justify-center rounded-md'>
           {modelIcon || (
             <span className='text-muted-foreground text-xs font-bold'>
               {initial}
