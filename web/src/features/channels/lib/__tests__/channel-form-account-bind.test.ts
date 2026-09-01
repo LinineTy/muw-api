@@ -18,9 +18,12 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { describe, expect, test } from 'vitest'
 
+import { channelSchema, type Channel } from '../../types'
 import {
   CHANNEL_FORM_DEFAULT_VALUES,
+  transformChannelToFormDefaults,
   transformFormDataToCreatePayload,
+  transformFormDataToUpdatePayload,
   type ChannelFormValues,
 } from '../channel-form'
 
@@ -35,6 +38,22 @@ function formWith(overrides: Partial<ChannelFormValues>): ChannelFormValues {
     key: 'sk-test-key',
     ...overrides,
   }
+}
+
+function channelWith(overrides: Partial<Channel>): Channel {
+  return channelSchema.parse({
+    id: 1,
+    type: 1,
+    key: 'sk-test',
+    status: 1,
+    name: 'test',
+    created_time: 0,
+    test_time: 0,
+    response_time: 0,
+    base_url: null,
+    balance_updated_time: 0,
+    ...overrides,
+  })
 }
 
 describe('transformFormDataToCreatePayload — 绑定共享账户(凭证与渠道解耦)', () => {
@@ -66,5 +85,37 @@ describe('transformFormDataToCreatePayload — 绑定共享账户(凭证与渠�
     expect(payload.mode).toBe('single')
     expect(payload.account_id).toBeUndefined()
     expect(payload.channel.key).toBe('sk-test-key')
+  })
+})
+
+describe('transformChannelToFormDefaults — 编辑回填 account_id', () => {
+  test('绑定账户的渠道:表单默认 account_id 回填渠道的账户 id', () => {
+    const defaults = transformChannelToFormDefaults(
+      channelWith({ account_id: 5 })
+    )
+    expect(defaults.account_id).toBe(5)
+  })
+
+  test('未绑定账户的渠道:account_id 为 null', () => {
+    const defaults = transformChannelToFormDefaults(channelWith({ account_id: 0 }))
+    expect(defaults.account_id).toBeNull()
+  })
+})
+
+describe('transformFormDataToUpdatePayload — 编辑换绑/解绑 account_id', () => {
+  test('绑定账户(含维持原账户):payload 携带 account_id', () => {
+    const payload = transformFormDataToUpdatePayload(
+      formWith({ account_id: 5 }),
+      1
+    )
+    expect(payload.account_id).toBe(5)
+  })
+
+  test('解绑(选择不使用账户):account_id 传 0,后端视同解绑', () => {
+    const payload = transformFormDataToUpdatePayload(
+      formWith({ account_id: null }),
+      1
+    )
+    expect(payload.account_id).toBe(0)
   })
 })
