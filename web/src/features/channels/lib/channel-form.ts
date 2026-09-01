@@ -620,7 +620,7 @@ export function transformChannelToFormDefaults(
     azure_responses_version: azureResponsesVersion,
     aws_key_type: awsKeyType,
     opencodezen_clear_key: false,
-    account_id: null,
+    account_id: channel.account_id || null,
     allow_service_tier: allowServiceTier,
     disable_store: disableStore,
     allow_include_obfuscation: allowIncludeObfuscation,
@@ -946,6 +946,9 @@ export function transformFormDataToUpdatePayload(
     id: channelId,
     name: formData.name,
     type: formData.type,
+    // 凭证与渠道解耦:显式携带 account_id。=当前账户无操作;换账户=换绑;
+    // 0/null=解绑(凭证字段回落渠道)。编辑默认值已预填当前账户,不会误触。
+    account_id: formData.account_id ?? 0,
     base_url: normalizeBaseUrl(formData.base_url) || null,
     openai_organization: formData.openai_organization || null,
     models: formData.models,

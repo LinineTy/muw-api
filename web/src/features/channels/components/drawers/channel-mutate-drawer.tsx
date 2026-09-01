@@ -681,16 +681,28 @@ export function ChannelMutateDrawer({
     enabled: isEditing && Boolean(channelId),
   })
 
-  // 绑定共享账户(凭证与渠道解耦):新建时可选,拉账户列表(启用中)
+  // 绑定共享账户(凭证与渠道解耦):新建时可选;编辑已绑定渠道时可换绑/解绑,拉账户列表(启用中)。
+  // 当前已绑账户即使被禁用也保留在下拉里,否则编辑时选中值无对应选项。
+  const hasBoundAccount = isEditing && Boolean(channelData?.data?.account)
+  const originalBoundAccount = channelData?.data?.account
   const { data: bindableAccountsData } = useQuery({
     queryKey: ['accounts', 'bindable'],
     queryFn: () => getAccounts({ page_size: 200 }),
-    enabled: !isEditing,
+    enabled: !isEditing || hasBoundAccount,
     staleTime: 60_000,
   })
-  const bindableAccounts = (bindableAccountsData?.items ?? [])
-    .map((item) => item.account)
-    .filter((acc) => acc.status === 1)
+  const bindableAccounts = useMemo(() => {
+    const list = (bindableAccountsData?.items ?? [])
+      .map((item) => item.account)
+      .filter((acc) => acc.status === 1)
+    if (
+      originalBoundAccount &&
+      !list.some((acc) => acc.id === originalBoundAccount.id)
+    ) {
+      return [...list, originalBoundAccount]
+    }
+    return list
+  }, [bindableAccountsData, originalBoundAccount])
 
   // Fetch available groups
   const { data: groupsData, isLoading: isLoadingGroups } = useQuery({
@@ -3064,7 +3076,7 @@ export function ChannelMutateDrawer({
                             )}
 
                             <ChannelAuthSection>
-                            {!isEditing && (
+                            {(!isEditing || hasBoundAccount) && (
                               <FormField
                                 control={form.control}
                                 name='account_id'
@@ -3145,8 +3157,16 @@ export function ChannelMutateDrawer({
                               />
                             )}
 
-                            {isEditing && channelData?.data?.account ? (
-                              <AccountBoundPanel account={channelData.data.account} />
+                            {isEditing &&
+                            originalBoundAccount &&
+                            boundAccountId === originalBoundAccount.id ? (
+                              <AccountBoundPanel account={originalBoundAccount} />
+                            ) : boundAccountId !== null ? (
+                              <div className='text-muted-foreground rounded-md border border-dashed px-3 py-2.5 text-sm'>
+                                {t(
+                                  'Credentials come from the bound account. Edit the key on the account page.'
+                                )}
+                              </div>
                             ) : (
                               <>
                               {!isEditing && !boundNewAccount && (
@@ -3224,15 +3244,6 @@ export function ChannelMutateDrawer({
                                   />
                                 )}
 
-                              {boundNewAccount && (
-                                <div className='text-muted-foreground rounded-md border border-dashed px-3 py-2.5 text-sm'>
-                                  {t(
-                                    'Credentials come from the bound account. Edit the key on the account page.'
-                                  )}
-                                </div>
-                              )}
-                              {!boundNewAccount && (
-                                <>
                               <FormField
                                 control={form.control}
                                 name='key'
@@ -3320,7 +3331,7 @@ export function ChannelMutateDrawer({
                                           {...field}
                                         />
                                       </FormControl>
-                                      <FormDescription>
+                                      <FormDescription block>
                                         <div className='flex flex-col gap-2'>
                                           <span>{keyDescription}</span>
                                           {isBatchMode && (
@@ -3443,8 +3454,6 @@ export function ChannelMutateDrawer({
                                     </AlertDescription>
                                   </Alert>
                                 </div>
-                              )}
-                                </>
                               )}
 
                               {isEditing && isMultiKeyChannel && (
