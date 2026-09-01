@@ -148,7 +148,7 @@ export function PricingToolbar(props: PricingToolbarProps) {
   )
 
   return (
-    <div className='flex flex-col gap-2.5 border-b pb-4 sm:flex-row sm:items-center'>
+    <div className='flex flex-col gap-2.5 pb-1 sm:flex-row sm:items-center'>
       {/* Search */}
       <div className='relative min-w-0 flex-1 sm:max-w-md'>
         <Search className='text-muted-foreground/60 pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2' />
