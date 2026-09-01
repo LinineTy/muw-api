@@ -16,7 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ArrowUpDown, Check, Filter, Search, X } from 'lucide-react'
+import {
+  ArrowUpDown,
+  Check,
+  Filter,
+  Grid2X2,
+  Search,
+  Table2,
+  X,
+  type LucideIcon,
+} from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -42,17 +51,19 @@ import {
 } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
 
-import { getSortLabels, type SortOption } from '../constants'
+import { getSortLabels, VIEW_MODES, type SortOption, type ViewMode } from '../constants'
 import type { PricingModel, PricingVendor, TokenUnit } from '../types'
 import { PricingSidebar } from './pricing-sidebar'
 
-type SegmentOption = { value: string; label: string }
+type SegmentOption = { value: string; label: string; icon?: LucideIcon }
 
 export interface PricingToolbarProps {
   searchInput: string
   onSearchChange: (value: string) => void
   sortBy: string
   onSortChange: (value: string) => void
+  viewMode: ViewMode
+  onViewModeChange: (value: ViewMode) => void
   tokenUnit: TokenUnit
   onTokenUnitChange: (value: TokenUnit) => void
   showRechargePrice: boolean
@@ -91,20 +102,24 @@ function SegmentedControl(props: {
     >
       {props.options.map((option) => {
         const isActive = option.value === props.value
+        const Icon = option.icon
         return (
           <button
             key={option.value}
             type='button'
             onClick={() => props.onChange(option.value)}
             aria-pressed={isActive}
+            title={option.label}
             className={cn(
-              'inline-flex h-full items-center justify-center rounded-md px-3 text-xs font-medium transition-all',
+              'inline-flex h-full items-center justify-center gap-1.5 rounded-md px-3 text-xs font-medium transition-all',
+              Icon && 'px-2.5',
               isActive
                 ? 'bg-primary text-primary-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            {option.label}
+            {Icon && <Icon className='size-3.5' />}
+            {!Icon && option.label}
           </button>
         )
       })}
@@ -124,6 +139,11 @@ export function PricingToolbar(props: PricingToolbarProps) {
 
   const handleRechargePriceChange = useCallback(
     (value: string) => props.onRechargePriceChange(value === 'recharge'),
+    [props]
+  )
+
+  const handleViewModeChange = useCallback(
+    (value: string) => props.onViewModeChange(value as ViewMode),
     [props]
   )
 
@@ -203,6 +223,16 @@ export function PricingToolbar(props: PricingToolbarProps) {
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <SegmentedControl
+          options={[
+            { value: VIEW_MODES.CARD, label: t('Card view'), icon: Grid2X2 },
+            { value: VIEW_MODES.TABLE, label: t('Table view'), icon: Table2 },
+          ]}
+          value={props.viewMode}
+          onChange={handleViewModeChange}
+          ariaLabel={t('View mode')}
+        />
 
         <div className='ml-auto flex items-center gap-2 sm:ml-0'>
           <SegmentedControl

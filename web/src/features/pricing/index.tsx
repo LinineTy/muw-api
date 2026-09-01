@@ -21,10 +21,9 @@ import { useCallback, useMemo, useState } from 'react'
 import { PublicLayout } from '@/components/layout'
 import { PageTransition } from '@/components/page-transition'
 
-import { EmptyState, LoadingSkeleton, ModelDetailsDrawer, PricingToolbar } from './components'
-import { EXCLUDED_GROUPS } from './constants'
+import { EmptyState, LoadingSkeleton, ModelCardGrid, ModelDetailsDrawer, PricingTable, PricingToolbar } from './components'
+import { EXCLUDED_GROUPS, VIEW_MODES } from './constants'
 import { PricingHero } from './components/pricing-hero'
-import { GroupTree } from './components/group-tree'
 import { useFilters } from './hooks/use-filters'
 import { usePricingData } from './hooks/use-pricing-data'
 
@@ -54,6 +53,9 @@ export function Pricing() {
     endpointTypeFilter,
     tagFilter,
     tokenUnit,
+    setTokenUnit,
+    viewMode,
+    setViewMode,
     showRechargePrice,
     setSearchInput,
     setSortBy,
@@ -62,7 +64,6 @@ export function Pricing() {
     setQuotaTypeFilter,
     setEndpointTypeFilter,
     setTagFilter,
-    setTokenUnit,
     setShowRechargePrice,
     filteredModels,
     hasActiveFilters,
@@ -139,6 +140,8 @@ export function Pricing() {
           onSearchChange={setSearchInput}
           sortBy={sortBy}
           onSortChange={setSortBy}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
           tokenUnit={tokenUnit}
           onTokenUnitChange={setTokenUnit}
           showRechargePrice={showRechargePrice}
@@ -170,17 +173,25 @@ export function Pricing() {
               hasActiveFilters={hasActiveFilters}
               onClearFilters={handleClearAll}
             />
-          ) : (
-            <GroupTree
+          ) : viewMode === VIEW_MODES.TABLE ? (
+            <PricingTable
               models={filteredModels}
-              autoGroups={autoGroups || []}
-              groupRatio={groupRatio || {}}
-              usableGroup={usableGroup || {}}
-              onModelClick={handleModelClick}
-              tokenUnit={tokenUnit}
-              showRechargePrice={showRechargePrice}
               priceRate={priceRate}
               usdExchangeRate={usdExchangeRate}
+              tokenUnit={tokenUnit}
+              showRechargePrice={showRechargePrice}
+              selectedGroup={groupFilter}
+              onModelClick={handleModelClick}
+            />
+          ) : (
+            <ModelCardGrid
+              models={filteredModels}
+              onModelClick={handleModelClick}
+              priceRate={priceRate}
+              usdExchangeRate={usdExchangeRate}
+              tokenUnit={tokenUnit}
+              showRechargePrice={showRechargePrice}
+              selectedGroup={groupFilter}
             />
           )}
         </main>

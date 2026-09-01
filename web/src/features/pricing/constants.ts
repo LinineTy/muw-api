@@ -135,3 +135,11 @@ export const DEFAULT_TOKEN_UNIT: TokenUnit = 'M'
 
 /** Default page size for pricing table */
 export const DEFAULT_PRICING_PAGE_SIZE = 20
+
+/** View mode options */
+export const VIEW_MODES = {
+  CARD: 'card',
+  TABLE: 'table',
+} as const
+
+export type ViewMode = (typeof VIEW_MODES)[keyof typeof VIEW_MODES]
