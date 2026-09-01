@@ -1,3 +1,4 @@
+// @muw-owned
 import type { StatusVariant } from '@/components/status-badge'
 
 // 成功率分档色:与模型健康页 SuccessRateBadge 同档。
