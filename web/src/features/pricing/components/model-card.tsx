@@ -64,7 +64,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     model.billing_mode === 'tiered_expr' && Boolean(model.billing_expr)
 
   const modelIconKey = model.icon || model.vendor_icon
-  const modelIcon = modelIconKey ? getLobeIcon(modelIconKey, 28) : null
+  const modelIcon = modelIconKey ? getLobeIcon(modelIconKey, 20) : null
   const initial = model.model_name?.charAt(0).toUpperCase() || '?'
 
   const tags = parseTags(model.tags)
@@ -181,47 +181,47 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
         }
       }}
       className={cn(
-        'hover:border-primary/40 focus-visible:ring-ring/40 flex cursor-pointer flex-col gap-2.5 rounded-2xl border bg-card p-4 transition-all',
-        'hover:shadow-md focus-visible:ring-2 focus-visible:outline-none sm:p-5'
+        'hover:border-primary/40 focus-visible:ring-ring/40 flex cursor-pointer flex-col gap-1.5 rounded-xl border bg-card p-3.5 transition-all',
+        'hover:shadow-md focus-visible:ring-2 focus-visible:outline-none'
       )}
     >
       {/* Layer 1: icon + full model name */}
-      <div className='flex min-w-0 items-start gap-2.5'>
-        <div className='bg-muted/40 flex size-9 shrink-0 items-center justify-center rounded-lg'>
+      <div className='flex min-w-0 items-center gap-2'>
+        <div className='bg-muted/40 flex size-7 shrink-0 items-center justify-center rounded-md'>
           {modelIcon || (
-            <span className='text-muted-foreground text-sm font-bold'>
+            <span className='text-muted-foreground text-xs font-bold'>
               {initial}
             </span>
           )}
         </div>
-        <h3 className='text-foreground min-w-0 flex-1 self-center font-mono text-[15px] leading-snug font-bold break-all'>
+        <h3 className='text-foreground min-w-0 flex-1 font-mono text-[13.5px] leading-tight font-semibold break-all'>
           {model.model_name}
         </h3>
       </div>
 
       {/* Layer 2: one-line effective price for this group */}
-      <div className='flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm'>
+      <div className='flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[13px]'>
         {priceSummary}
         {isTokenBased && (
-          <span className='text-muted-foreground/50 text-xs'>
+          <span className='text-muted-foreground/60 text-[11px]'>
             /{tokenUnit === 'K' ? '1K' : '1M'}
           </span>
         )}
       </div>
 
       {/* Layer 3: billing badge + capability tags + endpoints */}
-      <div className='flex min-w-0 flex-wrap items-center gap-1.5'>
+      <div className='flex min-w-0 flex-wrap items-center gap-1'>
         <ModelBillingModeBadge model={model} />
         {bottomItems.map((item) => (
           <span
             key={item}
-            className='bg-muted/60 text-muted-foreground rounded-full px-2 py-0.5 text-[11px] leading-4'
+            className='bg-muted/60 text-muted-foreground rounded-full px-1.5 py-px text-[10px] leading-4'
           >
             {item}
           </span>
         ))}
         {hiddenCount > 0 && (
-          <span className='text-muted-foreground/50 text-[11px]'>
+          <span className='text-muted-foreground/60 text-[10px]'>
             +{hiddenCount}
           </span>
         )}
