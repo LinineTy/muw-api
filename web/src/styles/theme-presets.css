@@ -1026,9 +1026,11 @@ body[data-theme-preset='liquid-glass']::before {
   background-color: oklch(0.13 0 0 / 0.35);
 }
 /* 轻玻璃面板配方:透明背景 + 极轻模糊,主要靠 --border 边框和圆角区分。
- * 背景图在面板下清晰可见——参考概览页系统负载卡片的透明质感。 */
+ * 背景图在面板下清晰可见——参考概览页系统负载卡片的透明质感。
+ * header(管理端顶栏)与 sidebar-inner(侧栏)不在列表内:两者要求纯透明,
+ * 不做二次模糊(背景层 body::before 已有整页 blur,面板再叠 backdrop-filter
+ * 属于重复处理);header 本身 bg-transparent,直接透出背景。 */
 [data-theme-preset='liquid-glass'] :is(
-  [data-slot='header'],
   [data-slot='card'],
   [data-slot='dialog-content'],
   [data-slot='alert-dialog-content'],
@@ -1044,7 +1046,6 @@ body[data-theme-preset='liquid-glass']::before {
 }
 .dark
   [data-theme-preset='liquid-glass'] :is(
-    [data-slot='header'],
     [data-slot='card'],
     [data-slot='dialog-content'],
     [data-slot='alert-dialog-content'],
@@ -1056,12 +1057,6 @@ body[data-theme-preset='liquid-glass']::before {
   ) {
   box-shadow: none;
   background-image: none;
-}
-/* sidebar-inner 单独给 blur:它原本在 :is() 面板配方里,但那个列表会连 box-shadow
- * 一起清掉,把 floating 变体的浮起阴影 shadow-sm 也抹了;移出后 floating 保留
- * 自己的浮起阴影,inset 侧栏只需 blur(圆角由下方规则补)。 */
-[data-theme-preset='liquid-glass'] [data-slot='sidebar-inner'] {
-  backdrop-filter: blur(8px) saturate(150%);
 }
 
 /* 弹窗(抽屉/对话框/alert)的背景逻辑:
