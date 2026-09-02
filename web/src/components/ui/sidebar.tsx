@@ -28,13 +28,6 @@ import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Tooltip,
@@ -48,7 +41,6 @@ import { cn } from '@/lib/utils'
 const SIDEBAR_COOKIE_NAME = 'sidebar_state'
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 const SIDEBAR_WIDTH = '13rem'
-const SIDEBAR_WIDTH_MOBILE = '17rem'
 const SIDEBAR_WIDTH_ICON = '2.75rem'
 const SIDEBAR_KEYBOARD_SHORTCUT = 'b'
 
@@ -184,6 +176,16 @@ function Sidebar({
 }) {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
 
+  // FAB 弹卡模式下 Sheet 自带的 ESC 关闭不再存在,这里补上
+  React.useEffect(() => {
+    if (!isMobile || !openMobile) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpenMobile(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [isMobile, openMobile, setOpenMobile])
+
   if (collapsible === 'none') {
     return (
       <div
@@ -200,28 +202,46 @@ function Sidebar({
   }
 
   if (isMobile) {
+    // FAB 弹卡模式(参考 cdk-tools):移动端不再用 Sheet 全高抽屉,改为右下角
+    // 悬浮球(MobileNavFab,见 authenticated-layout)触发的弹出导航卡。
+    // 菜单 children 原样复用;ESC 关闭,遮罩点击关闭。
+    // z-[59] 遮罩 / z-60 弹卡(与原 Sheet 层级一致) / FAB z-[70] 常驻可点。
     return (
-      <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
-        <SheetContent
-          dir={dir}
-          data-sidebar='sidebar'
-          data-slot='sidebar'
-          data-mobile='true'
-          className='bg-sidebar text-sidebar-foreground pointer-events-auto z-60 w-(--sidebar-width) p-0 [&>button]:hidden'
-          style={
-            {
-              '--sidebar-width': SIDEBAR_WIDTH_MOBILE,
-            } as React.CSSProperties
-          }
-          side={side}
+      <div
+        dir={dir}
+        data-sidebar='sidebar'
+        data-slot='sidebar'
+        data-mobile='true'
+        data-state={openMobile ? 'open' : 'closed'}
+        {...props}
+      >
+        <div
+          aria-hidden='true'
+          onClick={() => setOpenMobile(false)}
+          className={cn(
+            'bg-black/40 fixed inset-0 z-[59] backdrop-blur-[2px] transition-opacity duration-300',
+            openMobile
+              ? 'pointer-events-auto opacity-100'
+              : 'pointer-events-none opacity-0'
+          )}
+        />
+        <div
+          role='dialog'
+          aria-modal={openMobile || undefined}
+          aria-label='Sidebar'
+          className={cn(
+            'bg-sidebar text-sidebar-foreground border-border/70 fixed right-4 bottom-[5.75rem] z-60 flex max-h-[70svh] w-[min(calc(100vw-2rem),20rem)] origin-bottom-right flex-col overflow-hidden rounded-2xl border shadow-[0_20px_60px_rgba(0,0,0,0.2),0_8px_20px_rgba(0,0,0,0.1)] backdrop-blur-md transition-[opacity,scale,translate] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
+            openMobile
+              ? 'pointer-events-auto scale-100 opacity-100'
+              : 'pointer-events-none scale-[0.3] opacity-0'
+          )}
         >
-          <SheetHeader className='sr-only'>
-            <SheetTitle>Sidebar</SheetTitle>
-            <SheetDescription>Displays the mobile sidebar.</SheetDescription>
-          </SheetHeader>
-          <div className='flex h-full w-full flex-col'>{children}</div>
-        </SheetContent>
-      </Sheet>
+          <span className='sr-only'>Sidebar</span>
+          <div className='flex min-h-0 w-full flex-1 flex-col overflow-y-auto overscroll-contain'>
+            {children}
+          </div>
+        </div>
+      </div>
     )
   }
 
