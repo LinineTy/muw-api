@@ -17,11 +17,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { SidebarTrigger } from '@/components/ui/sidebar'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
 
 type HeaderProps = React.HTMLAttributes<HTMLElement>
 
 export function Header({ className, children, ...props }: HeaderProps) {
+  // 移动端导航入口交给右下角悬浮球(MobileNavFab),header 里不再渲染汉堡按钮
+  const isMobile = useIsMobile()
+
   return (
     <header
       data-slot='header'
@@ -32,7 +36,7 @@ export function Header({ className, children, ...props }: HeaderProps) {
       {...props}
     >
       <div className='flex h-full items-center gap-1.5 px-2 sm:gap-2 sm:px-3'>
-        <SidebarTrigger variant='ghost' className='size-8' />
+        {!isMobile && <SidebarTrigger variant='ghost' className='size-8' />}
         {children}
       </div>
     </header>
