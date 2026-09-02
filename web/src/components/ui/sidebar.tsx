@@ -230,7 +230,7 @@ function Sidebar({
           aria-modal={openMobile || undefined}
           aria-label='Sidebar'
           className={cn(
-            'bg-sidebar text-sidebar-foreground border-border/70 fixed right-4 bottom-[5.75rem] z-60 flex max-h-[70svh] w-[min(calc(100vw-2rem),20rem)] origin-bottom-right flex-col overflow-hidden rounded-2xl border shadow-[0_20px_60px_rgba(0,0,0,0.2),0_8px_20px_rgba(0,0,0,0.1)] backdrop-blur-md transition-[opacity,scale,translate] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
+            'bg-sidebar text-sidebar-foreground border-border/70 fixed right-4 bottom-[5.25rem] z-60 flex max-h-[70svh] w-[min(calc(100vw-2rem),20rem)] origin-bottom-right flex-col overflow-hidden rounded-2xl border shadow-[0_20px_60px_rgba(0,0,0,0.2),0_8px_20px_rgba(0,0,0,0.1)] backdrop-blur-md transition-[opacity,scale,translate] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
             openMobile
               ? 'pointer-events-auto scale-100 opacity-100'
               : 'pointer-events-none scale-[0.3] opacity-0'
