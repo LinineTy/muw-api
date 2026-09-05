@@ -96,7 +96,10 @@ export function OsWindowFrame({
       style={style}
       onPointerDown={() => !active && activateWindow(win.id)}
       className={cn(
-        'bg-card/70 dark:bg-popover/80 border-border/60 absolute flex flex-col overflow-hidden rounded-2xl border backdrop-blur-[8px] saturate-150',
+        'bg-card/70 dark:bg-popover border-border/60 absolute flex flex-col overflow-hidden rounded-2xl border backdrop-blur-[8px] saturate-150 dark:backdrop-blur-none',
+        // 琉璃主题暗色 token(--popover 等)自带 ~40% 透明度,亮壁纸会从标题栏透上来,
+        // 与 iframe 内容的实色黑骨架断成两截;垫一层近实黑让暗色窗口整体成实色深底
+        'before:absolute before:inset-0 before:z-[-1] before:content-[""] before:bg-transparent dark:before:bg-black/90',
         active
           ? 'shadow-[0_24px_80px_rgba(0,0,0,0.22)]'
           : 'shadow-[0_12px_40px_rgba(0,0,0,0.12)] opacity-95'

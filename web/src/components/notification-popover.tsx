@@ -147,18 +147,21 @@ export function NotificationPopover({
   announcements,
   loading,
   className,
-}: NotificationPopoverProps) {
+  trigger,
+}: NotificationPopoverProps & { trigger?: React.ReactElement }) {
   const { t } = useTranslation()
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger
         render={
-          <Button
-            variant='ghost'
-            size='icon'
-            className={cn('relative size-9', className)}
-            aria-label={t('Notifications')}
-          />
+          trigger ?? (
+            <Button
+              variant='ghost'
+              size='icon'
+              className={cn('relative size-9', className)}
+              aria-label={t('Notifications')}
+            />
+          )
         }
       >
         <Bell className='size-[1.2rem]' />

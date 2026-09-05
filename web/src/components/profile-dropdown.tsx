@@ -40,7 +40,11 @@ import { useAuthStore } from '@/stores/auth-store'
 
 const avatarFallbackClassName = 'font-semibold text-white'
 
-export function ProfileDropdown() {
+export function ProfileDropdown({
+  trigger,
+}: {
+  trigger?: React.ReactElement
+}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [open, setOpen] = useDialogState()
@@ -59,7 +63,11 @@ export function ProfileDropdown() {
     <>
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger
-          render={<Button variant='ghost' className='relative size-6 p-0' />}
+          render={
+            trigger ?? (
+              <Button variant='ghost' className='relative size-6 p-0' />
+            )
+          }
         >
           <Avatar className='size-6'>
             {user?.avatar ? (

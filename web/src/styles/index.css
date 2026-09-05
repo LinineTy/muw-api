@@ -764,3 +764,18 @@ html.os-in-window body {
 html.os-in-window body::before {
   display: none;
 }
+
+/* 窗口内页面骨架透明化(仅亮色玻璃窗):SidebarInset(bg-background)、
+ * 侧栏材质与 Main 会盖住窗口玻璃底。
+ * 暗色不透明化:浅色文字配亮壁纸不可读,暗色窗口走实色深底。 */
+html.os-in-window:not(.dark) [data-slot='sidebar-inset'] {
+  background: transparent;
+}
+
+html.os-in-window:not(.dark) [data-slot='sidebar'] {
+  background: transparent;
+}
+
+html.os-in-window:not(.dark) [data-slot='sidebar-gap'] {
+  background: transparent;
+}

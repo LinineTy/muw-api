@@ -2,23 +2,19 @@
 import { create } from 'zustand'
 
 /**
- * OS 壳左下双球互斥状态:
- * 导航球(nav)与顶栏球(topbar)的弹卡同时展开会相互遮挡,
- * 用全局 store 保证同一时刻至多展开一个。
+ * OS 壳左下导航球弹卡开关:
+ * 功能球(搜索/公告/语言/主题/个人)已拆为独立 Radix 弹层自管理,
+ * 此 store 只服务导航球自建弹卡;功能球点击时调 close('nav') 收起它。
  */
 type OsBallStore = {
-  /** 当前展开的球;'null'=全部收起 */
-  active: 'nav' | 'topbar' | null
-  /** 切换指定球:已展开则收起,否则展开并收起另一个 */
-  toggle: (ball: 'nav' | 'topbar') => void
-  /** 收起指定球(菜单项点击后收自己) */
-  close: (ball: 'nav' | 'topbar') => void
+  /** 导航球弹卡是否展开 */
+  active: boolean
+  toggle: () => void
+  close: () => void
 }
 
 export const useOsBallStore = create<OsBallStore>((set, get) => ({
-  active: null,
-  toggle: (ball) =>
-    set({ active: get().active === ball ? null : ball }),
-  close: (ball) =>
-    set({ active: get().active === ball ? null : get().active }),
+  active: false,
+  toggle: () => set({ active: !get().active }),
+  close: () => set({ active: false }),
 }))
