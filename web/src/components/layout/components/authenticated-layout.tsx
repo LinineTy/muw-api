@@ -62,25 +62,6 @@ function useIframeTransparentBackground(enabled: boolean) {
   }, [enabled])
 }
 
-/**
- * OS 桌面壳下的主层设置页(仅 PC):画布去霜标记。
- * 设置页退出多窗口走主层完整布局,是 PC 上唯一保留 sidebar-inset
- * 琉璃画布轻霜(blur 8px + 10% 白)的主层页面——其他页面都在窗口里
- * 透壁纸,唯独它留一层磨砂,观感上像"侧栏模糊没去干净"。
- * 挂 class 由 CSS 透明化(背景+backdrop-filter),移动端不挂(整页
- * 画布的霜是壁纸上文字可读性的保障,且移动端无桌面壳对比场景)。
- */
-function useOsSettingsHost(enabled: boolean) {
-  useEffect(() => {
-    if (!enabled) return
-    const html = document.documentElement
-    html.classList.add('os-settings-host')
-    return () => {
-      html.classList.remove('os-settings-host')
-    }
-  }, [enabled])
-}
-
 export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
   const defaultOpen = getCookie('sidebar_state') !== 'false'
   const isMobile = useIsMobile()
@@ -90,7 +71,6 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
     useLocation({ select: (s) => s.pathname })
   )
   useIframeTransparentBackground(IN_OS_WINDOW)
-  useOsSettingsHost(!IN_OS_WINDOW && !isMobile && isSettingsRoute)
 
   // 主层(OS 壳 PC 分支)安装认证桥:窗口 iframe 的 session 刷新委托主层,
   // N 窗共享一次 /api/user/auth/refresh,避免烧穿 CriticalRateLimit(429)
