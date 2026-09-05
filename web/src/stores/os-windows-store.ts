@@ -225,8 +225,10 @@ export const useOsWindowsStore = create<OsWindowsStore>((set, get) => ({
 
   minimizeWindow: (id) => {
     const { windows, activeId } = get()
+    // 藏入同时清 minimizing——残留会让恢复后重播缩退动画且 forwards
+    // 定格在透明(出来一下又缩回去,之后再也出不来)
     const next = windows.map((w) =>
-      w.id === id ? { ...w, minimized: true } : w
+      w.id === id ? { ...w, minimized: true, minimizing: false } : w
     )
     set({
       windows: next,
