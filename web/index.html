@@ -34,9 +34,16 @@
         document.documentElement.classList.add('os-in-window')
         document.documentElement.style.background = 'transparent'
         document.body.style.background = 'transparent'
+        // spinner 跟主题色:读主层(已渲染完)的 --primary 计算值,任何预设自动跟随
+        var spinColor = '#888a'
+        try {
+          var _p = window.parent
+          var _c = _p.getComputedStyle(_p.document.body).getPropertyValue('--primary')
+          if (_c) spinColor = _c.trim()
+        } catch (e) { /* 跨域兜底中性灰 */ }
         document.getElementById('root').innerHTML =
           '<style>#boot-loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}#boot-loading svg{animation:boot-spin 0.9s linear infinite}@keyframes boot-spin{to{transform:rotate(360deg)}}</style>' +
-          '<div id="boot-loading"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#888a" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9" stroke-opacity="0.15"/><path d="M21 12a9 9 0 0 0-9-9"/></svg></div>'
+          '<div id="boot-loading"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="' + spinColor + '" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9" stroke-opacity="0.15"/><path d="M21 12a9 9 0 0 0-9-9" stroke-opacity="0.75"/></svg></div>'
       }
     </script>
   </body>
