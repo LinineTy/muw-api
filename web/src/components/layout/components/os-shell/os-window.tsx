@@ -96,9 +96,8 @@ export function OsWindowFrame({
       style={style}
       onPointerDown={() => !active && activateWindow(win.id)}
       className={cn(
-        // 暗色 bg-black/70:琉璃暗色 token 自带 ~40% 透明度太透,亮壁纸直透;
-        // 纯黑玻璃+blur 头身一体且白字可读(macOS 暗色材质思路)
-        'bg-card/70 dark:bg-black/70 border-border/60 absolute flex flex-col overflow-hidden rounded-2xl border backdrop-blur-[8px] saturate-150',
+        // 亮暗统一琉璃配方:暗色 --card 自带低透明度,壁纸可透出
+        'bg-card/70 border-border/60 absolute flex flex-col overflow-hidden rounded-2xl border backdrop-blur-[8px] saturate-150',
         active
           ? 'shadow-[0_24px_80px_rgba(0,0,0,0.22)]'
           : 'shadow-[0_12px_40px_rgba(0,0,0,0.12)] opacity-95'
