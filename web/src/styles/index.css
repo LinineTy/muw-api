@@ -772,6 +772,9 @@ html.os-in-window body::before {
  * 会盖住窗口玻璃底;亮暗都透明,头身统一透窗口容器的玻璃/暗玻璃底 */
 html.os-in-window [data-slot='sidebar-inset'] {
   background: transparent;
+  /* 琉璃画布配方的 blur(8px) 轻霜在窗口里会二次模糊主层玻璃底,
+   * 与"窗口统一透出壁纸"的目标冲突,一并清掉(仅设置窗有 sidebar-inset) */
+  backdrop-filter: none !important;
   /* inset variant 自带 m-2+圆角+阴影(浮卡),窗口内会形成画布叠画布;
    * 平铺到窗口玻璃上 */
   margin: 0 !important;
@@ -785,6 +788,16 @@ html.os-in-window [data-slot='sidebar'] {
 
 html.os-in-window [data-slot='sidebar-gap'] {
   background: transparent;
+}
+
+/* OS 桌面壳下的主层设置页(PC):sidebar-inset 画布去霜。
+ * 琉璃画布配方(theme-presets.css)给 sidebar-inset 挂 blur(8px)+10% 白底,
+ * 窗口化 v2 后其他页面都在窗口里透壁纸,主层设置页是唯一剩霜的页面,
+ * 观感像"模糊没去干净"——与窗口内画布同规则:背景透明+无二次模糊。
+ * 布局几何(inset 浮卡 margin/圆角)保留,仅去视觉层。 */
+html.os-settings-host [data-slot='sidebar-inset'] {
+  background: transparent !important;
+  backdrop-filter: none !important;
 }
 
 /* OS 窗口开/关动画(纯 CSS,不依赖 motion——AnimatePresence 对包裹组件的
