@@ -5584,7 +5584,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "相关项目",
     "footer.defaultCopyright": "版权所有。",
-    "footer.new\u0061pi.projectAttributionSuffix": "版权所有，由项目贡献者设计与开发。",
+    "footer.newapi.projectAttributionSuffix": "版权所有，由项目贡献者设计与开发。",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -6527,6 +6527,8 @@
     "Context Window": "上下文窗口",
     "e.g. 131072, 0 or empty = unlimited": "例如 131072，0 或留空 = 不限制",
     "Maximum context window in tokens. Requests exceeding it are rejected with 400.": "最大上下文窗口（token）。请求超过则返回 400 拒绝。",
-    "24h success rate": "24h 成功率"
+    "24h success rate": "24h 成功率",
+    "Quick links": "快速导航",
+    "os-shell.desktop-hint": "所有窗口已关闭 · 从底部 Dock 或左下角导航球打开页面"
   }
 }

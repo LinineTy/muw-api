@@ -5584,7 +5584,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "Các Dự Án Liên Quan",
     "footer.defaultCopyright": "Bản quyền được bảo lưu.",
-    "footer.new\u0061pi.projectAttributionSuffix": "Bản quyền được bảo lưu. Được thiết kế và phát triển bởi các cộng tác viên dự án.",
+    "footer.newapi.projectAttributionSuffix": "Bản quyền được bảo lưu. Được thiết kế và phát triển bởi các cộng tác viên dự án.",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -6527,6 +6527,8 @@
     "Context Window": "Context Window",
     "e.g. 131072, 0 or empty = unlimited": "e.g. 131072, 0 or empty = unlimited",
     "Maximum context window in tokens. Requests exceeding it are rejected with 400.": "Maximum context window in tokens. Requests exceeding it are rejected with 400.",
-    "24h success rate": "Tỷ lệ thành công 24h"
+    "24h success rate": "Tỷ lệ thành công 24h",
+    "Quick links": "Liên kết nhanh",
+    "os-shell.desktop-hint": "Tất cả cửa sổ đã đóng · Mở trang từ Dock hoặc quả cầu điều hướng ở góc dưới bên trái"
   }
 }
