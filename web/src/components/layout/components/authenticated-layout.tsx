@@ -173,7 +173,8 @@ function OsWindowContent({ children }: { children: React.ReactNode }) {
     pathname.startsWith('/settings') || pathname.startsWith('/system-settings')
   if (!needsSidebar) {
     return (
-      <div className='@container/content h-svh w-full overflow-y-auto overscroll-contain'>
+      // flex-col:让页面 Main 的 flex-1 生效撑满,分页器 footer 才能置底
+      <div className='@container/content flex h-svh w-full flex-col overflow-y-auto overscroll-contain'>
         {children}
       </div>
     )
