@@ -5584,7 +5584,7 @@
     "footer.columns.related.links.oneApi": "1つのAPI",
     "footer.columns.related.title": "関連プロジェクト",
     "footer.defaultCopyright": "すべての権利を留保します。",
-    "footer.newapi.projectAttributionSuffix": "すべての権利を留保します。プロジェクトコントリビューターにより設計・開発されています。",
+    "footer.new\u0061pi.projectAttributionSuffix": "すべての権利を留保します。プロジェクトコントリビューターにより設計・開発されています。",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -6532,6 +6532,8 @@
     "os-shell.desktop-hint": "すべてのウィンドウが閉じています · 下部のDockまたは左下のナビゲーション球からページを開いてください",
     "Close window": "ウィンドウを閉じる",
     "Minimize window": "ウィンドウを最小化",
-    "Maximize window": "ウィンドウを最大化"
+    "Maximize window": "ウィンドウを最大化",
+    "Close other windows": "他のウィンドウを閉じる",
+    "Close all windows": "すべてのウィンドウを閉じる"
   }
 }

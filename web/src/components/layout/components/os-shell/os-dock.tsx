@@ -18,6 +18,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { NotificationPopover } from '@/components/notification-popover'
@@ -354,7 +360,19 @@ export function OsDock() {
     activateWindow,
     restoreWindow,
     requestMinimizeWindow,
+    requestCloseWindow,
   } = useOsWindowsStore()
+  const { t } = useTranslation()
+
+  // 批量关闭:逐窗走两段式(各窗组件自带 240ms 兜底 timer),动画同播
+  const closeOthers = (id: string) => {
+    windows.forEach((w) => {
+      if (w.id !== id) requestCloseWindow(w.id)
+    })
+  }
+  const closeAll = () => {
+    windows.forEach((w) => requestCloseWindow(w.id))
+  }
 
   const DOT_CLS = {
     active: 'bg-foreground size-1.5',
@@ -405,43 +423,61 @@ export function OsDock() {
             if (win.minimized) dotKey = 'minimized'
             else if (activeHere) dotKey = 'active'
             return (
-              <button
-                key={win.id}
-                type='button'
-                aria-label={win.title}
-                title={win.title}
-                onClick={() => onDockClick(win.id)}
-                onMouseEnter={() => setHovered(win.id)}
-                onMouseLeave={() => setHovered(null)}
-                className={cn(
-                  'text-muted-foreground hover:text-foreground relative flex size-10 items-center justify-center rounded-xl pb-0.5 transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1.5 hover:bg-accent',
-                  activeHere && 'text-foreground'
-                )}
-              >
-                {Icon ? (
-                  <Icon className='size-[1.15rem]' aria-hidden='true' />
-                ) : null}
-                <span
-                  className={cn(
-                    'absolute bottom-0.5 rounded-full transition-all',
-                    DOT_CLS[dotKey]
-                  )}
-                />
-                <AnimatePresence>
-                  {hovered === win.id ? (
-                    <motion.span
-                      initial='hidden'
-                      animate='visible'
-                      exit='hidden'
-                      variants={MOTION_VARIANTS}
-                      transition={MOTION_TRANSITION}
-                      className='bg-popover border-border/60 text-foreground pointer-events-none absolute -top-9 whitespace-nowrap rounded-md border px-2 py-1 text-xs shadow-md backdrop-blur'
+              <ContextMenu key={win.id}>
+                <ContextMenuTrigger
+                  render={
+                    <button
+                      type='button'
+                      aria-label={win.title}
+                      title={win.title}
+                      onClick={() => onDockClick(win.id)}
+                      onMouseEnter={() => setHovered(win.id)}
+                      onMouseLeave={() => setHovered(null)}
+                      className={cn(
+                        'text-muted-foreground hover:text-foreground relative flex size-10 items-center justify-center rounded-xl pb-0.5 transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1.5 hover:bg-accent',
+                        activeHere && 'text-foreground'
+                      )}
                     >
-                      {win.title}
-                    </motion.span>
-                  ) : null}
-                </AnimatePresence>
-              </button>
+                      {Icon ? (
+                        <Icon className='size-[1.15rem]' aria-hidden='true' />
+                      ) : null}
+                      <span
+                        className={cn(
+                          'absolute bottom-0.5 rounded-full transition-all',
+                          DOT_CLS[dotKey]
+                        )}
+                      />
+                      <AnimatePresence>
+                        {hovered === win.id ? (
+                          <motion.span
+                            initial='hidden'
+                            animate='visible'
+                            exit='hidden'
+                            variants={MOTION_VARIANTS}
+                            transition={MOTION_TRANSITION}
+                            className='bg-popover border-border/60 text-foreground pointer-events-none absolute -top-9 whitespace-nowrap rounded-md border px-2 py-1 text-xs shadow-md backdrop-blur'
+                          >
+                            {win.title}
+                          </motion.span>
+                        ) : null}
+                      </AnimatePresence>
+                    </button>
+                  }
+                />
+                <ContextMenuContent>
+                  <ContextMenuItem
+                    onClick={() => requestCloseWindow(win.id)}
+                  >
+                    {t('Close window')}
+                  </ContextMenuItem>
+                  <ContextMenuItem onClick={() => closeOthers(win.id)}>
+                    {t('Close other windows')}
+                  </ContextMenuItem>
+                  <ContextMenuItem onClick={closeAll}>
+                    {t('Close all windows')}
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
             )
           })}
         </>

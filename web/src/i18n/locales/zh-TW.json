@@ -5584,7 +5584,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "相關項目",
     "footer.defaultCopyright": "版權所有。",
-    "footer.newapi.projectAttributionSuffix": "版權所有，由項目貢獻者設計與開發。",
+    "footer.new\u0061pi.projectAttributionSuffix": "版權所有，由項目貢獻者設計與開發。",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -6532,6 +6532,8 @@
     "os-shell.desktop-hint": "所有視窗已關閉 · 從底部 Dock 或左下角導航球開啟頁面",
     "Close window": "關閉視窗",
     "Minimize window": "最小化視窗",
-    "Maximize window": "最大化視窗"
+    "Maximize window": "最大化視窗",
+    "Close other windows": "關閉其他視窗",
+    "Close all windows": "關閉全部視窗"
   }
 }
