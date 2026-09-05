@@ -213,7 +213,11 @@ export function OsWindowFrame({
       {/* 内容:同源 iframe(self!==top 时子应用渲染纯内容)
           lazy=恢复后未唤起的窗,挂 about:blank 占位,唤起才真加载;
           load 完成前保持透明,内容就绪后淡入(消除窗口展开后白屏闪现) */}
-      <IframePane src={win.lazy ? 'about:blank' : win.url} title={win.title} />
+      <IframePane
+        id={win.id}
+        src={win.lazy ? 'about:blank' : win.url}
+        title={win.title}
+      />
 
       {/* 右下角缩放把手 */}
       {!win.maximized ? (
@@ -239,14 +243,27 @@ export function OsWindowFrame({
  * 每个窗只挂一次(src 不变,SPA 内部导航不触发 load);
  * lazy 窗挂 about:blank 先立即 load,唤起换真 src 后再走一次淡入。
  */
-function IframePane({ src, title }: { src: string; title: string }) {
+function IframePane({
+  id,
+  src,
+  title,
+}: {
+  id: string
+  src: string
+  title: string
+}) {
   const [ready, setReady] = useState(false)
+  // lazy 窗唤起换真 src 时重置:about:blank 的 load 已把 ready 置真,
+  // 不重置则新内容加载期间透明度 100,白屏闪现回归
+  useEffect(() => {
+    setReady(false)
+  }, [src])
   return (
     // 窗口化依赖同源登录态/localStorage,不能加 sandbox(规则误伤,行级豁免)
     // oxlint-disable-next-line react/iframe-missing-sandbox
     <iframe
       src={src}
-      data-os-window-id={title}
+      data-os-window-id={id}
       title={title}
       onLoad={() => setReady(true)}
       className={cn(

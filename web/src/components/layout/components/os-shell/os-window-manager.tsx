@@ -72,6 +72,18 @@ export function OsWindowManager() {
         return
       }
       // 深链:该页面开成窗口,主层回到桌面
+      // 同时恢复上次会话的窗(全部最小化藏 Dock,不打扰深链窗)
+      const persisted = readPersistedWindows().filter(
+        (p) => !isSettingsUrl(p.url)
+      )
+      if (persisted.length > 0) {
+        restoreWindows(
+          persisted.map((p) => {
+            const nav = matchOsNavItem(items, p.url)
+            return { url: p.url, title: nav?.title ?? p.title }
+          })
+        )
+      }
       const nav = matchOsNavItem(items, path)
       openWindow(
         nav ? { url: nav.url, title: nav.title } : { url: path, title: path }

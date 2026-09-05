@@ -192,7 +192,7 @@ export const useOsWindowsStore = create<OsWindowsStore>((set, get) => ({
 
   requestCloseWindow: (id) => {
     const win = get().windows.find((w) => w.id === id)
-    if (!win || win.closing) return
+    if (!win || win.closing || win.minimizing) return
     set({
       windows: get().windows.map((w) =>
         w.id === id ? { ...w, closing: true } : w
@@ -215,7 +215,7 @@ export const useOsWindowsStore = create<OsWindowsStore>((set, get) => ({
 
   requestMinimizeWindow: (id) => {
     const win = get().windows.find((w) => w.id === id)
-    if (!win || win.minimizing || win.minimized) return
+    if (!win || win.closing || win.minimizing || win.minimized) return
     set({
       windows: get().windows.map((w) =>
         w.id === id ? { ...w, minimizing: true } : w
