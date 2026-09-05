@@ -66,7 +66,8 @@ export function NavTiles() {
                     <div className='text-muted-foreground/70 px-1 pb-1.5 pt-1 text-[0.7rem] font-medium tracking-wide'>
                       {group.title}
                     </div>
-                    <div className='grid grid-cols-5 gap-1'>
+                    {/* 6 列:面板加宽到 40rem 后一行多容一个磁贴 */}
+                    <div className='grid grid-cols-6 gap-1'>
                       {group.items.map((item) => {
                         const Icon = item.icon
                         return (
