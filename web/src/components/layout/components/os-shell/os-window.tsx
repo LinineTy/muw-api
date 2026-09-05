@@ -77,7 +77,13 @@ export function OsWindowFrame({
   const onResizeDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (win.maximized) return
     setInteracting(true)
-    drag.current = { mode: 'resize', sx: e.clientX, sy: e.clientY, w: win.w, h: win.h }
+    drag.current = {
+      mode: 'resize',
+      sx: e.clientX,
+      sy: e.clientY,
+      w: win.w ?? MIN_W,
+      h: win.h ?? MIN_H,
+    }
     try {
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     } catch {
@@ -184,6 +190,8 @@ export function OsWindowFrame({
 
       {/* 内容:同源 iframe(self!==top 时子应用渲染纯内容)
           lazy=恢复后未唤起的窗,挂 about:blank 占位,唤起才真加载 */}
+      {/* 窗口化依赖同源登录态/localStorage,不能加 sandbox(规则误伤,行级豁免) */}
+      {/* oxlint-disable-next-line react/iframe-missing-sandbox */}
       <iframe
         src={win.lazy ? 'about:blank' : win.url}
         data-os-window-id={win.id}

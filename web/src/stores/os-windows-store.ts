@@ -242,8 +242,8 @@ export const useOsWindowsStore = create<OsWindowsStore>((set, get) => ({
 
   resizeWindow: (id, w, h) => {
     set({
-      windows: get().windows.map((w) =>
-        w.id === id ? { ...w, w, h, maximized: false } : w
+      windows: get().windows.map((win) =>
+        win.id === id ? { ...win, w, h, maximized: false } : win
       ),
     })
   },
