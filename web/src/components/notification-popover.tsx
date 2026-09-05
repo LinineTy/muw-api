@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import type { TFunction } from 'i18next'
 import { Bell, Megaphone } from 'lucide-react'
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -149,6 +150,23 @@ export function NotificationPopover({
   className,
   trigger,
 }: NotificationPopoverProps & { trigger?: React.ReactElement }) {
+  // 叠放面板强制 display:block!important:Tailwind v4 preflight 给
+  // [hidden] 挂了 display:none!important,常规层叠(含更高特异性+动态注入)
+  // 实测均压不过,唯 setProperty 第三参必胜;React style 不支持 important。
+  // 弹层 content 经 Portal 延迟挂载,双 rAF 等面板就位;一次设置终身有效
+  useEffect(() => {
+    if (!open) return
+    const id = requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        document
+          .querySelectorAll<HTMLElement>('.os-tabs-stack > div')
+          .forEach((el) =>
+            el.style.setProperty('display', 'block', 'important')
+          )
+      })
+    )
+    return () => cancelAnimationFrame(id)
+  }, [open])
   const { t } = useTranslation()
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
@@ -202,16 +220,23 @@ export function NotificationPopover({
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value='notice' className='mt-2'>
-            <NoticeContent notice={notice} loading={loading} t={t} />
-          </TabsContent>
+          {/* 双面板 grid 叠放:容器高度取两者最大值,tab 切换不跳高度
+              (hidden 面板覆盖 display 占位但 invisible 不可见) */}
+          <div className='os-tabs-stack mt-2'>
+            {/* 内联 display!important 压过 Tailwind v4 preflight 对
+                [hidden] 的 display:none!important(层叠行为异常,内联必胜);
+                inactive 面板靠 visibility 占位不可见,天然不拦交互 */}
+            <TabsContent keepMounted value='notice'>
+              <NoticeContent notice={notice} loading={loading} t={t} />
+            </TabsContent>
 
-          <TabsContent value='announcements' className='mt-2'>
-            <AnnouncementsContent
-              announcements={announcements}
-              loading={loading}
-            />
-          </TabsContent>
+            <TabsContent keepMounted value='announcements'>
+              <AnnouncementsContent
+                announcements={announcements}
+                loading={loading}
+              />
+            </TabsContent>
+          </div>
         </Tabs>
 
         <div className='flex justify-end'>

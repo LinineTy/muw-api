@@ -41,3 +41,24 @@ export function syncOsWindowThemes(resolvedTheme?: 'light' | 'dark') {
     }
   })
 }
+
+/**
+ * 把界面语言镜像到 OS 壳全部窗口 iframe(含最小化保活的)。
+ * iframe 是独立文档、独立 i18n 实例,主层 changeLanguage 不会传播;
+ * 通过 postMessage 通知(iframe 侧在 i18n/config.ts 监听并切语言)。
+ */
+export function syncOsWindowLanguages(lang: string) {
+  if (typeof document === 'undefined') return
+  document
+    .querySelectorAll<HTMLIFrameElement>('iframe[data-os-window-id]')
+    .forEach((frame) => {
+      try {
+        frame.contentWindow?.postMessage(
+          { type: 'muw:sync-language', lang },
+          window.location.origin
+        )
+      } catch {
+        /* 跨域/已卸载防御性忽略 */
+      }
+    })
+}
