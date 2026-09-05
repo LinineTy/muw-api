@@ -1,5 +1,14 @@
 // @muw-owned
-import { Globe, Search as SearchIcon } from 'lucide-react'
+import {
+  ExternalLink,
+  Globe,
+  Link2,
+  Loader2,
+  MessageSquare,
+  Search as SearchIcon,
+} from 'lucide-react'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
@@ -19,6 +28,19 @@ import { MOTION_TRANSITION, MOTION_VARIANTS } from '@/lib/motion'
 import { useSearch } from '@/context/search-provider'
 import { useTranslation } from 'react-i18next'
 import { useNotifications } from '@/hooks/use-notifications'
+import { fetchActiveChatKey } from '@/features/chat/hooks/use-active-chat-key'
+import { useChatPresets } from '@/features/chat/hooks/use-chat-presets'
+import {
+  chatLinkRequiresApiKey,
+  resolveChatUrl,
+  type ChatPreset,
+} from '@/features/chat/lib/chat-links'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 import { useOsBallStore } from './os-ball-store'
 import { useOsWindowsStore } from '@/stores/os-windows-store'
@@ -47,6 +69,123 @@ function closeNavCard() {
 }
 
 /** 连接组:一颗球收纳管理端 HeaderNavModules 配置的顶栏页面链接 */
+/**
+ * OS 桌面壳 · 聊天预设球:第三方聊天客户端接入为独立模块,不与聊天窗绑定。
+ * web 类型预设=站内对话(开窗);其余=带 key 拉起外部客户端(原逻辑)。
+ */
+function ChatPresetsBall() {
+  const { t } = useTranslation()
+  const { chatPresets, serverAddress } = useChatPresets()
+  const [loadingPresetId, setLoadingPresetId] = useState<string | null>(null)
+  const loadingRef = useRef<string | null>(null)
+
+  const visiblePresets = useMemo(
+    () => chatPresets.filter((preset) => preset.type !== 'fluent'),
+    [chatPresets]
+  )
+
+  const handleOpenExternal = useCallback(
+    async (preset: ChatPreset) => {
+      if (preset.type === 'web') return
+
+      const needsKey = chatLinkRequiresApiKey(preset.url)
+      let activeKey: string | undefined
+
+      if (needsKey && loadingRef.current) {
+        toast.info(t('Preparing your chat link, please try again in a moment.'))
+        return
+      }
+
+      if (needsKey) {
+        loadingRef.current = preset.id
+        setLoadingPresetId(preset.id)
+        try {
+          activeKey = await fetchActiveChatKey()
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : t(
+                  'Unable to prepare chat link. Please ensure you have an enabled API key.'
+                )
+          toast.error(message)
+          return
+        } finally {
+          loadingRef.current = null
+          setLoadingPresetId(null)
+        }
+      }
+
+      const url = resolveChatUrl({
+        template: preset.url,
+        apiKey: needsKey ? activeKey : undefined,
+        serverAddress,
+      })
+
+      if (!url) {
+        toast.error(t('Invalid chat link. Please contact the administrator.'))
+        return
+      }
+
+      window.open(url, '_blank', 'noopener')
+    },
+    [serverAddress, t]
+  )
+
+  if (visiblePresets.length === 0) return null
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <button
+            type='button'
+            aria-label={t('Third-party Integration')}
+            title={t('Third-party Integration')}
+            onClick={closeNavCard}
+            className={FAB_BALL}
+          />
+        }
+      >
+        <MessageSquare className='size-[1.15rem]' aria-hidden='true' />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align='start' side='top'>
+        {visiblePresets.map((preset) =>
+          preset.type === 'web' ? (
+            <DropdownMenuItem
+              key={preset.id}
+              render={
+                <Link
+                  to='/chat/$chatId'
+                  params={{ chatId: preset.id }}
+                  onClick={closeNavCard}
+                />
+              }
+            >
+              <Link2 className='size-4' aria-hidden='true' />
+              {preset.name}
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              key={preset.id}
+              onClick={() => {
+                if (!loadingPresetId) void handleOpenExternal(preset)
+              }}
+            >
+              {loadingPresetId === preset.id ? (
+                <Loader2 className='size-4 animate-spin' aria-hidden='true' />
+              ) : (
+                <ExternalLink className='size-4' aria-hidden='true' />
+              )}
+              {preset.name}
+            </DropdownMenuItem>
+          )
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 function NavJumpGroup() {
   const { t } = useTranslation()
   const links = useTopNavLinks()
@@ -154,6 +293,9 @@ function DockFixedItems() {
           />
         }
       />
+
+      {/* 聊天预设(第三方接入) */}
+      <ChatPresetsBall />
 
       {/* 主题/配置 */}
       <ConfigDrawer

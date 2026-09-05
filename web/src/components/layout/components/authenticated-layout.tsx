@@ -167,13 +167,10 @@ function OsShellDesktopHost() {
 /** OS 窗口内容:仅系统设置页保留侧栏(分区导航需要),其余页面全宽铺窗口 */
 function OsWindowContent({ children }: { children: React.ReactNode }) {
   const pathname = useLocation({ select: (s) => s.pathname })
-  // 需要侧栏的页面:设置页(分区导航)+聊天页(会话列表/聊天预设在侧栏,
-  // 聊天导航项路由为 /playground)
+  // 需要侧栏的页面:仅设置页(分区导航)。
+  // 聊天预设是独立模块,走 Dock 预设球,不在聊天窗里塞全量导航
   const needsSidebar =
-    pathname.startsWith('/settings') ||
-    pathname.startsWith('/system-settings') ||
-    pathname.startsWith('/chat') ||
-    pathname.startsWith('/playground')
+    pathname.startsWith('/settings') || pathname.startsWith('/system-settings')
   if (!needsSidebar) {
     return (
       <div className='@container/content h-svh w-full overflow-y-auto overscroll-contain'>
