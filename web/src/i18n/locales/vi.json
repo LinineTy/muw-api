@@ -6529,6 +6529,9 @@
     "Maximum context window in tokens. Requests exceeding it are rejected with 400.": "Maximum context window in tokens. Requests exceeding it are rejected with 400.",
     "24h success rate": "Tỷ lệ thành công 24h",
     "Quick links": "Liên kết nhanh",
-    "os-shell.desktop-hint": "Tất cả cửa sổ đã đóng · Mở trang từ Dock hoặc quả cầu điều hướng ở góc dưới bên trái"
+    "os-shell.desktop-hint": "Tất cả cửa sổ đã đóng · Mở trang từ Dock hoặc quả cầu điều hướng ở góc dưới bên trái",
+    "Close window": "Đóng cửa sổ",
+    "Minimize window": "Thu nhỏ cửa sổ",
+    "Maximize window": "Phóng to cửa sổ"
   }
 }

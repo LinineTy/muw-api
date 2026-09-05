@@ -6529,6 +6529,9 @@
     "Maximum context window in tokens. Requests exceeding it are rejected with 400.": "Maximum context window in tokens. Requests exceeding it are rejected with 400.",
     "24h success rate": "24時間の成功率",
     "Quick links": "クイックリンク",
-    "os-shell.desktop-hint": "すべてのウィンドウが閉じています · 下部のDockまたは左下のナビゲーション球からページを開いてください"
+    "os-shell.desktop-hint": "すべてのウィンドウが閉じています · 下部のDockまたは左下のナビゲーション球からページを開いてください",
+    "Close window": "ウィンドウを閉じる",
+    "Minimize window": "ウィンドウを最小化",
+    "Maximize window": "ウィンドウを最大化"
   }
 }

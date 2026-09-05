@@ -1,8 +1,13 @@
 // @muw-owned
 import { useRef } from 'react'
-import { Minus, Plus, X } from 'lucide-react'
+import {
+  Minus,
+  Square,
+  X,
+} from 'lucide-react'
 
 import { cn } from '@/lib/utils'
+import { useTranslation } from 'react-i18next'
 import {
   useOsWindowsStore,
   type OsWindowState,
@@ -35,6 +40,7 @@ export function OsWindowFrame({
   icon?: React.ElementType
 }) {
   const drag = useRef<DragState>(null)
+  const { t } = useTranslation()
   const { closeWindow, minimizeWindow, activateWindow, toggleMaximize, moveWindow, resizeWindow } =
     useOsWindowsStore()
 
@@ -114,30 +120,19 @@ export function OsWindowFrame({
           !win.maximized && 'cursor-grab active:cursor-grabbing'
         )}
       >
-        <div className='flex items-center gap-1.5'>
+        {/* Win 风格排布:左=最大化,右=[最小化,关闭];hover 只变亮不做彩色底 */}
+        <div className='flex items-center gap-0.5'>
           <button
             type='button'
-            aria-label='Close window'
-            onClick={() => closeWindow(win.id)}
-            className='group/red flex size-3 items-center justify-center rounded-full bg-[#ff5f57] shadow-inner transition-transform hover:scale-110'
-          >
-            <X className='text-[#7d0905] size-2 opacity-0 group-hover/red:opacity-100' aria-hidden='true' />
-          </button>
-          <button
-            type='button'
-            aria-label='Minimize window'
-            onClick={() => minimizeWindow(win.id)}
-            className='group/yellow flex size-3 items-center justify-center rounded-full bg-[#febc2e] shadow-inner transition-transform hover:scale-110'
-          >
-            <Minus className='text-[#7d4a00] size-2 opacity-0 group-hover/yellow:opacity-100' aria-hidden='true' />
-          </button>
-          <button
-            type='button'
-            aria-label='Toggle maximize'
+            aria-label={t('Maximize window')}
+            title={t('Maximize window')}
             onClick={() => toggleMaximize(win.id)}
-            className='group/green flex size-3 items-center justify-center rounded-full bg-[#28c840] shadow-inner transition-transform hover:scale-110'
+            className='text-muted-foreground hover:text-foreground hover:bg-accent flex size-6 items-center justify-center rounded-md transition-colors'
           >
-            <Plus className='text-[#0b5d17] size-2 opacity-0 group-hover/green:opacity-100' aria-hidden='true' />
+            <Square
+              className={cn('size-3', win.maximized && 'fill-current')}
+              aria-hidden='true'
+            />
           </button>
         </div>
         <div className='text-muted-foreground pointer-events-none flex min-w-0 flex-1 items-center justify-center gap-1.5 text-sm'>
@@ -146,8 +141,26 @@ export function OsWindowFrame({
           ) : null}
           <span className='truncate'>{win.title}</span>
         </div>
-        {/* 右侧留白对称占位(三点宽度) */}
-        <div className='w-[3.4rem]' aria-hidden='true' />
+        <div className='flex items-center gap-0.5'>
+          <button
+            type='button'
+            aria-label={t('Minimize window')}
+            title={t('Minimize window')}
+            onClick={() => minimizeWindow(win.id)}
+            className='text-muted-foreground hover:text-foreground hover:bg-accent flex size-6 items-center justify-center rounded-md transition-colors'
+          >
+            <Minus className='size-3' aria-hidden='true' />
+          </button>
+          <button
+            type='button'
+            aria-label={t('Close window')}
+            title={t('Close window')}
+            onClick={() => closeWindow(win.id)}
+            className='text-muted-foreground hover:text-foreground hover:bg-accent flex size-6 items-center justify-center rounded-md transition-colors'
+          >
+            <X className='size-3' aria-hidden='true' />
+          </button>
+        </div>
       </div>
 
       {/* 内容:同源 iframe(self!==top 时子应用渲染纯内容)
