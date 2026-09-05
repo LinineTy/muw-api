@@ -1,120 +1,166 @@
 // @muw-owned
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
 import { Minus, Plus, X } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
-import { useActiveOsNavItem } from './use-os-nav'
+import {
+  useOsWindowsStore,
+  type OsWindowState,
+} from '@/stores/os-windows-store'
 
-/** 拖拽缩放下限/上限(px) */
+/** 拖拽/缩放下限(px) */
 const MIN_W = 480
 const MIN_H = 320
 
+type DragState =
+  | { mode: 'move'; dx: number; dy: number }
+  | { mode: 'resize'; sx: number; sy: number; w: number; h: number }
+  | null
+
 /**
- * OS 窗口容器(画布→窗口):
- * - macOS 式标题栏:左侧三点(红=关闭/绿=最大化,hover 浮现符号)+居中页名
- * - 右下角拖拽把手自由缩放(nwse-resize),默认尺寸自适应居中
- * - 玻璃卡片配方贴合琉璃主题(backdrop-blur + saturate,bg-card)
- * - v1 为形态试验:单激活窗口;内容区透传 @container/content
- *   (页面内 container query 布局依赖此类,不能丢)
- * - 背后两层"影子窗口"右下错位,营造堆叠层次(纯视觉)
- * - 注:黄点(最小化)留待 v2 多窗口时接真语义
+ * OS 受控窗口(多窗口版):
+ * - macOS 三色点全语义:红=关闭(销毁) 黄=最小化(藏到Dock,iframe保活) 绿=最大化
+ * - 标题栏拖动移动,右下把手缩放;非激活窗口点击任意处置顶
+ * - 内容=同源 iframe:保活完美(切窗/最小化状态全保留),关闭即销毁
+ * - iframe 内 AuthenticatedLayout 检测 self!==top 退化为纯内容模式(无壳)
+ * - 最小化窗口 display:none 常驻 DOM,保 iframe 会话
  */
-export function OsWindow({
-  children,
-  onClose,
+export function OsWindowFrame({
+  win,
+  active,
+  icon: TitleIcon,
 }: {
-  children: React.ReactNode
-  onClose?: () => void
+  win: OsWindowState
+  active: boolean
+  icon?: React.ElementType
 }) {
-  const active = useActiveOsNavItem()
-  const [maximized, setMaximized] = useState(false)
-  const [size, setSize] = useState<{ w: number; h: number } | null>(null)
-  const dragStart = useRef<{ x: number; y: number; w: number; h: number } | null>(
-    null
-  )
-  const TitleIcon = active?.icon
+  const drag = useRef<DragState>(null)
+  const { closeWindow, minimizeWindow, activateWindow, toggleMaximize, moveWindow, resizeWindow } =
+    useOsWindowsStore()
+
+  const onTitleDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (win.maximized) return
+    if ((e.target as HTMLElement).closest('button')) return
+    drag.current = { mode: 'move', dx: e.clientX - win.x, dy: e.clientY - win.y }
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  }
+  const onTitleMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current
+    if (d?.mode !== 'move') return
+    const x = Math.min(
+      Math.max(e.clientX - d.dx, -40),
+      window.innerWidth - MIN_W + 40
+    )
+    const y = Math.min(Math.max(e.clientY - d.dy, 0), window.innerHeight - 80)
+    moveWindow(win.id, x, y)
+  }
+  const onTitleUp = () => {
+    drag.current = null
+  }
 
   const onResizeDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (maximized) return
-    const rect = e.currentTarget.closest('[data-os-window]')?.getBoundingClientRect()
-    if (!rect) return
-    dragStart.current = { x: e.clientX, y: e.clientY, w: rect.width, h: rect.height }
-    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+    if (win.maximized) return
+    drag.current = { mode: 'resize', sx: e.clientX, sy: e.clientY, w: win.w, h: win.h }
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
   }
   const onResizeMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const s = dragStart.current
-    if (!s) return
-    const w = Math.min(Math.max(s.w + (e.clientX - s.x), MIN_W), window.innerWidth - 120)
-    const h = Math.min(Math.max(s.h + (e.clientY - s.y), MIN_H), window.innerHeight - 140)
-    setSize({ w, h })
+    const d = drag.current
+    if (d?.mode !== 'resize' || d.w == null || d.h == null) return
+    const w = Math.min(Math.max(d.w + (e.clientX - d.sx), MIN_W), window.innerWidth - 120)
+    const h = Math.min(Math.max(d.h + (e.clientY - d.sy), MIN_H), window.innerHeight - 140)
+    resizeWindow(win.id, w, h)
   }
   const onResizeUp = () => {
-    dragStart.current = null
+    drag.current = null
   }
+
+  if (win.minimized) {
+    // 保活:iframe 常驻 DOM 但不可见
+    return (
+      <div className='pointer-events-none absolute h-0 w-0 overflow-hidden' aria-hidden='true'>
+        <iframe src={win.url} title={win.title} tabIndex={-1} />
+      </div>
+    )
+  }
+
+  const style: React.CSSProperties = win.maximized
+    ? { left: 0, top: 0, width: '100%', height: '100%', zIndex: win.zIndex }
+    : { left: win.x, top: win.y, width: win.w ?? undefined, height: win.h ?? undefined, zIndex: win.zIndex }
 
   return (
     <div
-      data-os-window
-      style={size && !maximized ? { width: size.w, height: size.h } : undefined}
+      data-os-window={win.id}
+      style={style}
+      onPointerDown={() => !active && activateWindow(win.id)}
       className={cn(
-        'relative z-10 flex min-h-0 flex-col transition-[max-width,inset] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
-        maximized || size
-          ? 'h-full w-full'
-          : 'h-full w-[min(1160px,calc(100%-10rem))] self-center'
+        'bg-card/70 border-border/60 absolute flex flex-col overflow-hidden rounded-2xl border backdrop-blur-[8px] saturate-150',
+        active
+          ? 'shadow-[0_24px_80px_rgba(0,0,0,0.22)]'
+          : 'shadow-[0_12px_40px_rgba(0,0,0,0.12)] opacity-95'
       )}
     >
-      {/* 影子窗口 ×2:右下错位露出边缘,营造 macOS 堆叠层次(纯视觉) */}
-      <div className='bg-card/45 border-border/40 pointer-events-none absolute inset-0 -z-10 translate-x-3.5 translate-y-3.5 rounded-2xl border shadow-[0_16px_48px_rgba(0,0,0,0.10)] backdrop-blur-sm' />
-      <div className='bg-card/30 border-border/30 pointer-events-none absolute inset-0 -z-20 translate-x-7 translate-y-7 rounded-2xl border shadow-[0_16px_48px_rgba(0,0,0,0.08)] backdrop-blur-sm' />
-
-      <div className='bg-card/70 border-border/60 flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border shadow-[0_24px_80px_rgba(0,0,0,0.18)] backdrop-blur-[8px] saturate-150'>
-        {/* 标题栏:macOS 三色点 + 居中页名 */}
-        <div className='border-border/40 flex h-10 shrink-0 items-center gap-2 border-b px-3'>
-          <div className='flex items-center gap-1.5'>
-            <button
-              type='button'
-              aria-label='Close window'
-              onClick={onClose}
-              className='group/red flex size-3 items-center justify-center rounded-full bg-[#ff5f57] shadow-inner transition-transform hover:scale-110'
-            >
-              <X className='text-[#7d0905] size-2 opacity-0 group-hover/red:opacity-100' aria-hidden='true' />
-            </button>
-            <span className='flex size-3 items-center justify-center rounded-full bg-[#febc2e] shadow-inner'>
-              <Minus className='text-[#7d4a00] size-2 opacity-0' aria-hidden='true' />
-            </span>
-            <button
-              type='button'
-              aria-label='Toggle maximize'
-              onClick={() => setMaximized((v) => !v)}
-              className='group/green flex size-3 items-center justify-center rounded-full bg-[#28c840] shadow-inner transition-transform hover:scale-110'
-            >
-              <Plus className='text-[#0b5d17] size-2 opacity-0 group-hover/green:opacity-100' aria-hidden='true' />
-            </button>
-          </div>
-          <div className='text-muted-foreground flex min-w-0 flex-1 items-center justify-center gap-1.5 text-sm'>
-            {TitleIcon ? (
-              <TitleIcon className='size-4 shrink-0' aria-hidden='true' />
-            ) : null}
-            <span className='truncate'>{active?.title ?? 'muw'}</span>
-          </div>
-          {/* 右侧留白对称占位(三点宽度) */}
-          <div className='w-[3.4rem]' aria-hidden='true' />
+      {/* 标题栏:三色点 + 居中页名,可拖动 */}
+      <div
+        onPointerDown={onTitleDown}
+        onPointerMove={onTitleMove}
+        onPointerUp={onTitleUp}
+        onPointerCancel={onTitleUp}
+        className={cn(
+          'border-border/40 flex h-10 shrink-0 items-center gap-2 border-b px-3',
+          !win.maximized && 'cursor-grab active:cursor-grabbing'
+        )}
+      >
+        <div className='flex items-center gap-1.5'>
+          <button
+            type='button'
+            aria-label='Close window'
+            onClick={() => closeWindow(win.id)}
+            className='group/red flex size-3 items-center justify-center rounded-full bg-[#ff5f57] shadow-inner transition-transform hover:scale-110'
+          >
+            <X className='text-[#7d0905] size-2 opacity-0 group-hover/red:opacity-100' aria-hidden='true' />
+          </button>
+          <button
+            type='button'
+            aria-label='Minimize window'
+            onClick={() => minimizeWindow(win.id)}
+            className='group/yellow flex size-3 items-center justify-center rounded-full bg-[#febc2e] shadow-inner transition-transform hover:scale-110'
+          >
+            <Minus className='text-[#7d4a00] size-2 opacity-0 group-hover/yellow:opacity-100' aria-hidden='true' />
+          </button>
+          <button
+            type='button'
+            aria-label='Toggle maximize'
+            onClick={() => toggleMaximize(win.id)}
+            className='group/green flex size-3 items-center justify-center rounded-full bg-[#28c840] shadow-inner transition-transform hover:scale-110'
+          >
+            <Plus className='text-[#0b5d17] size-2 opacity-0 group-hover/green:opacity-100' aria-hidden='true' />
+          </button>
         </div>
-        {/* 内容区:继承原 SidebarInset 的 container 语义 */}
-        <div className='@container/content min-h-0 flex-1 overflow-y-auto overscroll-contain'>
-          {children}
+        <div className='text-muted-foreground pointer-events-none flex min-w-0 flex-1 items-center justify-center gap-1.5 text-sm'>
+          {TitleIcon ? (
+            <TitleIcon className='size-4 shrink-0' aria-hidden='true' />
+          ) : null}
+          <span className='truncate'>{win.title}</span>
         </div>
+        {/* 右侧留白对称占位(三点宽度) */}
+        <div className='w-[3.4rem]' aria-hidden='true' />
       </div>
 
+      {/* 内容:同源 iframe(self!==top 时子应用渲染纯内容) */}
+      <iframe
+        src={win.url}
+        title={win.title}
+        className='min-h-0 flex-1 border-0 bg-transparent'
+      />
+
       {/* 右下角缩放把手 */}
-      {!maximized ? (
+      {!win.maximized ? (
         <div
           onPointerDown={onResizeDown}
           onPointerMove={onResizeMove}
           onPointerUp={onResizeUp}
           onPointerCancel={onResizeUp}
           className='absolute right-0 bottom-0 z-20 size-4 cursor-nwse-resize touch-none'
-          aria-label='Resize window'
           role='presentation'
         >
           <svg viewBox='0 0 16 16' className='text-border size-4' fill='none' aria-hidden='true'>

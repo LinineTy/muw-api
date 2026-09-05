@@ -16,9 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useState } from 'react'
-import { useLocation } from '@tanstack/react-router'
-
+import { useEffect } from 'react'
 import { AnimatedOutlet } from '@/components/page-transition'
 import { SkipToMain } from '@/components/skip-to-main'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
@@ -31,26 +29,51 @@ import { cn } from '@/lib/utils'
 import { AppHeader } from './app-header'
 import { AppSidebar } from './app-sidebar'
 import { MobileNavFab } from './mobile-nav-fab'
-import { OsDesktopPlaceholder } from './os-shell/os-desktop-placeholder'
 import { OsDock } from './os-shell/os-dock'
 import { OsNavBall } from './os-shell/os-nav-ball'
 import { OsTopbarBall } from './os-shell/os-topbar-ball'
-import { OsWindow } from './os-shell/os-window'
+import { OsWindowManager } from './os-shell/os-window-manager'
 
 type AuthenticatedLayoutProps = {
   children?: React.ReactNode
 }
 
+/** OS 壳多窗口的 iframe 内容检测:子应用退化为纯内容模式(无壳) */
+const IN_OS_WINDOW =
+  typeof window !== 'undefined' && window.self !== window.top
+
+/** iframe 内容模式:文档背景+壁纸层透明化(class 驱动,规则在 index.css),
+ * 让窗口标题栏与主体统一透出主层玻璃底(避免分体感) */
+function useIframeTransparentBackground(enabled: boolean) {
+  useEffect(() => {
+    if (!enabled) return
+    const html = document.documentElement
+    html.classList.add('os-in-window')
+    return () => {
+      html.classList.remove('os-in-window')
+    }
+  }, [enabled])
+}
+
 export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
   const defaultOpen = getCookie('sidebar_state') !== 'false'
   const isMobile = useIsMobile()
-  const pathname = useLocation({ select: (l) => l.pathname })
+  useIframeTransparentBackground(IN_OS_WINDOW)
 
-  // OS 壳窗口开关:红点关闭→空桌面;路由变化( Dock/导航球跳页 )→自动重开
-  const [windowOpen, setWindowOpen] = useState(true)
-  useEffect(() => {
-    setWindowOpen(true)
-  }, [pathname])
+  // iframe 内容模式:OS 窗口内的页面,渲染纯内容(球/Dock/窗口框都在主层)
+  if (IN_OS_WINDOW) {
+    return (
+      <LayoutProvider>
+        <SearchProvider>
+          <SidebarProvider defaultOpen={defaultOpen} className='flex-col'>
+            <div className='@container/content h-svh w-full overflow-y-auto overscroll-contain'>
+              {props.children ?? <AnimatedOutlet />}
+            </div>
+          </SidebarProvider>
+        </SearchProvider>
+      </LayoutProvider>
+    )
+  }
 
   return (
     <LayoutProvider>
@@ -75,17 +98,10 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
               </div>
             </>
           ) : (
-            // OS 桌面壳(v1 形态试验):无顶栏无侧栏,画布→窗口,
-            // 左下双球(顶栏球+导航球),底部悬浮 Dock;
-            // 画布区下缘给 Dock 让位(窗口不被 Dock 遮挡)
-            <div className='flex h-svh min-h-0 w-full flex-col px-4 pt-4 pb-[5.5rem]'>
-              {windowOpen ? (
-                <OsWindow onClose={() => setWindowOpen(false)}>
-                  {props.children ?? <AnimatedOutlet />}
-                </OsWindow>
-              ) : (
-                <OsDesktopPlaceholder />
-              )}
+            // OS 桌面壳(v2 多窗口):无顶栏无侧栏,窗口=iframe 保活多开,
+            // 左下双球(顶栏球+导航球),底部悬浮 Dock(macOS 行为)
+            <div className='relative h-svh w-full overflow-hidden'>
+              <OsWindowManager />
               <OsTopbarBall />
               <OsNavBall />
               <OsDock />
