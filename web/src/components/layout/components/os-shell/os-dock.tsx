@@ -4,6 +4,12 @@ import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { NotificationPopover } from '@/components/notification-popover'
@@ -18,56 +24,72 @@ import { useOsWindowsStore } from '@/stores/os-windows-store'
 import { matchOsNavItem, useOsNavItems } from './use-os-nav'
 
 /**
- * OS 桌面壳 · 底部 Dock(一段式,原顶栏功能并入固定区):
+ * OS 桌面壳 · 底部 Dock(一段式):
  *   [ 搜索 公告 语言 主题 头像 连接组 | 已打开页面… ]
- * - 固定区与窗口区同尺寸同配方(size-10 rounded-xl / 头像圆),
- *   分隔线隔开;固定项点击时收起左下导航球弹卡,Radix 弹层靠
- *   dismiss 自动互斥
+ * - 固定区球体走移动端 FAB 同款配方(bg-popover 玻璃 + blur/saturate,
+ *   无容器底色;琉璃主题下透出背景),弹层打开时圆→圆角方(data-state)
+ * - 连接组:一颗球弹出菜单,收纳管理端 HeaderNavModules 配置的页面链接
  * - 窗口区(macOS 行为):已最小化→恢复置顶;已激活→最小化;
  *   已开未激活→置顶;激活窗图标实心高亮,其余运行小点
  */
 
-const ITEM_BTN =
-  'text-muted-foreground hover:text-foreground relative flex size-10 items-center justify-center rounded-xl transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1.5 hover:bg-accent'
+const FAB_BALL =
+  'bg-popover text-primary border-border/60 flex size-10 items-center justify-center border shadow-[0_8px_24px_rgba(0,0,0,0.15)] backdrop-blur saturate-150' +
+  ' transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]' +
+  ' hover:scale-[1.08] active:scale-95 rounded-full data-[state=open]:rounded-lg'
 
 function closeNavCard() {
   useOsBallStore.getState().close()
 }
 
-/** 连接组:管理端 HeaderNavModules 配置的顶栏页面链接(首页/定价/文档等) */
-function NavJumpItems() {
+/** 连接组:一颗球收纳管理端 HeaderNavModules 配置的顶栏页面链接 */
+function NavJumpGroup() {
   const links = useTopNavLinks()
-  const cls = cn(ITEM_BTN, 'text-primary')
+  if (links.length === 0) return null
   return (
-    <>
-      {links.map((link) =>
-        link.external ? (
-          <a
-            key={link.href}
-            href={link.href}
-            target='_blank'
-            rel='noreferrer'
-            title={link.title}
-            aria-label={link.title}
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <button
+            type='button'
+            aria-label='Quick links'
+            title='Quick links'
             onClick={closeNavCard}
-            className={cls}
-          >
-            <Globe className='size-[1.15rem]' aria-hidden='true' />
-          </a>
-        ) : (
-          <Link
-            key={link.href}
-            to={link.href}
-            title={link.title}
-            aria-label={link.title}
-            onClick={closeNavCard}
-            className={cls}
-          >
-            <Globe className='size-[1.15rem]' aria-hidden='true' />
-          </Link>
-        )
-      )}
-    </>
+            className={FAB_BALL}
+          />
+        }
+      >
+        <Globe className='size-[1.15rem]' aria-hidden='true' />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align='start' side='top'>
+        {links.map((link) =>
+          link.external ? (
+            <DropdownMenuItem
+              key={link.href}
+              render={
+                <a
+                  href={link.href}
+                  target='_blank'
+                  rel='noreferrer'
+                  onClick={closeNavCard}
+                />
+              }
+            >
+              <Globe className='size-4' aria-hidden='true' />
+              {link.title}
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              key={link.href}
+              render={<Link to={link.href} onClick={closeNavCard} />}
+            >
+              <Globe className='size-4' aria-hidden='true' />
+              {link.title}
+            </DropdownMenuItem>
+          )
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -87,7 +109,7 @@ function DockFixedItems() {
           closeNavCard()
           setSearchOpen(true)
         }}
-        className={ITEM_BTN}
+        className={FAB_BALL}
       >
         <SearchIcon className='size-[1.15rem]' aria-hidden='true' />
       </button>
@@ -108,7 +130,7 @@ function DockFixedItems() {
             aria-label='Notifications'
             title='Notifications'
             onClick={closeNavCard}
-            className={ITEM_BTN}
+            className={FAB_BALL}
           />
         }
       />
@@ -121,7 +143,7 @@ function DockFixedItems() {
             aria-label='Change language'
             title='Change language'
             onClick={closeNavCard}
-            className={ITEM_BTN}
+            className={FAB_BALL}
           />
         }
       />
@@ -134,24 +156,24 @@ function DockFixedItems() {
             aria-label='Open theme settings'
             title='Open theme settings'
             onClick={closeNavCard}
-            className={ITEM_BTN}
+            className={FAB_BALL}
           />
         }
       />
 
-      {/* 个人(头像,圆形) */}
+      {/* 个人(头像) */}
       <ProfileDropdown
         trigger={
           <button
             type='button'
             onClick={closeNavCard}
             aria-label='Profile'
-            className={cn(ITEM_BTN, 'rounded-full')}
+            className={FAB_BALL}
           />
         }
       />
 
-      <NavJumpItems />
+      <NavJumpGroup />
     </>
   )
 }
@@ -179,7 +201,7 @@ export function OsDock() {
   return (
     <nav
       aria-label='Dock'
-      className='bg-popover/70 border-border/60 fixed bottom-3 left-1/2 z-[70] flex -translate-x-1/2 items-end gap-1 rounded-2xl border px-2 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.16)] backdrop-blur-[8px] saturate-150'
+      className='fixed bottom-3 left-1/2 z-[70] flex -translate-x-1/2 items-end gap-2'
     >
       <DockFixedItems />
 
@@ -187,7 +209,7 @@ export function OsDock() {
         <>
           <span
             aria-hidden='true'
-            className='bg-border/80 mx-1 h-8 w-px self-center'
+            className='bg-border/60 mx-0.5 h-8 w-px self-center'
           />
           {windows.map((win) => {
             const nav = matchOsNavItem(items, win.url)
@@ -203,8 +225,7 @@ export function OsDock() {
                 onMouseEnter={() => setHovered(win.id)}
                 onMouseLeave={() => setHovered(null)}
                 className={cn(
-                  ITEM_BTN,
-                  'pb-0.5',
+                  'text-muted-foreground hover:text-foreground relative flex size-10 items-center justify-center rounded-xl pb-0.5 transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1.5 hover:bg-accent',
                   activeHere && 'text-foreground'
                 )}
               >
