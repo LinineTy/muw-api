@@ -20,6 +20,23 @@
   </head>
 
   <body>
+    <!-- OS 桌面壳窗口内文档(self!==top)的最早透明化:
+         React mount 前该文档不知道自己在窗口里,会按主题闪纯色底
+         (暗色琉璃=黑实底),与主层玻璃观感割裂。同步脚本先挂
+         os-in-window(class 同名规则在 index.css)+内联透明,再在 root 内
+         放一个纯 CSS spinner(透明底透出主层窗口玻璃,中性灰两主题可读),
+         React createRoot 首次 render 会清空 root,spinner 自动消失,零清理。
+         muw 调整,上游同步留意。 -->
+    <script>
+      if (window.self !== window.top) {
+        document.documentElement.classList.add('os-in-window')
+        document.documentElement.style.background = 'transparent'
+        document.body.style.background = 'transparent'
+        document.getElementById('root').innerHTML =
+          '<style>#boot-loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}#boot-loading svg{animation:boot-spin 0.9s linear infinite}@keyframes boot-spin{to{transform:rotate(360deg)}}</style>' +
+          '<div id="boot-loading"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#888a" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9" stroke-opacity="0.15"/><path d="M21 12a9 9 0 0 0-9-9"/></svg></div>'
+      }
+    </script>
     <div id="root" translate="no" class="notranslate"></div>
   </body>
 </html>
