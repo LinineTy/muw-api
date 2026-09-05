@@ -1,8 +1,9 @@
 // @muw-owned
 import { useRef } from 'react'
 import {
+  Maximize2,
+  Minimize2,
   Minus,
-  Square,
   X,
 } from 'lucide-react'
 
@@ -132,10 +133,11 @@ export function OsWindowFrame({
             onClick={() => toggleMaximize(win.id)}
             className='text-muted-foreground hover:text-foreground hover:bg-accent flex size-6 items-center justify-center rounded-md transition-colors'
           >
-            <Square
-              className={cn('size-3', win.maximized && 'fill-current')}
-              aria-hidden='true'
-            />
+            {win.maximized ? (
+              <Minimize2 className='size-3' aria-hidden='true' />
+            ) : (
+              <Maximize2 className='size-3' aria-hidden='true' />
+            )}
           </button>
         </div>
         <div className='text-muted-foreground pointer-events-none flex min-w-0 flex-1 items-center justify-center gap-1.5 text-sm'>
