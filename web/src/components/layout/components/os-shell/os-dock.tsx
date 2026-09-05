@@ -137,7 +137,7 @@ function DockFixedItems() {
             aria-label={t('Notifications')}
             title={t('Notifications')}
             onClick={closeNavCard}
-            className={FAB_BALL}
+            className={cn(FAB_BALL, 'relative')}
           />
         }
       />
