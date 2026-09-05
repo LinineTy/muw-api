@@ -17,9 +17,8 @@ import { useOsBallStore } from './os-ball-store'
 export function OsNavBall() {
   const groups = useOsNavGroups()
   const openWindow = useOsWindowsStore((s) => s.openWindow)
-  const open = useOsBallStore((s) => s.active) === 'nav'
+  const open = useOsBallStore((s) => s.active)
   const { toggle, close } = useOsBallStore()
-  const setOpen = (v: boolean) => (v ? toggle('nav') : close('nav'))
 
   return (
     <>
@@ -27,7 +26,7 @@ export function OsNavBall() {
         type='button'
         aria-label='Open navigation'
         aria-expanded={open}
-        onClick={() => toggle('nav')}
+        onClick={() => toggle()}
         className={cn(
           'bg-popover text-primary border-border/60 fixed bottom-4 left-4 z-[70] flex size-11 items-center justify-center border shadow-[0_8px_24px_rgba(0,0,0,0.15)] backdrop-blur saturate-150',
           'transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
@@ -47,7 +46,7 @@ export function OsNavBall() {
           <>
             <div
               className='fixed inset-0 z-[69]'
-              onClick={() => setOpen(false)}
+              onClick={() => close()}
             />
             <motion.div
               initial={{ opacity: 0, x: -10, scale: 0.96 }}

@@ -31,8 +31,8 @@ import { AppHeader } from './app-header'
 import { AppSidebar } from './app-sidebar'
 import { MobileNavFab } from './mobile-nav-fab'
 import { OsDock } from './os-shell/os-dock'
+import { OsFuncBalls } from './os-shell/os-func-balls'
 import { OsNavBall } from './os-shell/os-nav-ball'
-import { OsTopbarBall } from './os-shell/os-topbar-ball'
 import { OsWindowManager } from './os-shell/os-window-manager'
 
 type AuthenticatedLayoutProps = {
@@ -115,8 +115,8 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
             // 左下双球(顶栏球+导航球),底部悬浮 Dock(macOS 行为)
             <div className='relative h-svh w-full overflow-hidden'>
               <OsWindowManager />
-              <OsTopbarBall />
               <OsNavBall />
+              <OsFuncBalls />
               <OsDock />
             </div>
           )}

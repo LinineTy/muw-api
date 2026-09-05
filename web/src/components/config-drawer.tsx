@@ -66,7 +66,7 @@ import { useSidebar } from './ui/sidebar'
 
 const Item = RadioPrimitive.Root
 
-export function ConfigDrawer() {
+export function ConfigDrawer({ trigger }: { trigger?: React.ReactElement }) {
   const { t } = useTranslation()
   const { setOpen } = useSidebar()
   const { resetDir } = useDirection()
@@ -86,13 +86,15 @@ export function ConfigDrawer() {
     <Sheet>
       <SheetTrigger
         render={
-          <Button
-            size='icon'
-            variant='ghost'
-            aria-label={t('Open theme settings')}
-            aria-describedby='config-drawer-description'
-            className='max-md:hidden'
-          />
+          trigger ?? (
+            <Button
+              size='icon'
+              variant='ghost'
+              aria-label={t('Open theme settings')}
+              aria-describedby='config-drawer-description'
+              className='max-md:hidden'
+            />
+          )
         }
       >
         <Palette className='size-[1.2rem]' aria-hidden='true' />
