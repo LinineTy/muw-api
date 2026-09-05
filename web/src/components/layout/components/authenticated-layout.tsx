@@ -24,6 +24,7 @@ import { LayoutProvider } from '@/context/layout-provider'
 import { SearchProvider } from '@/context/search-provider'
 import { getCookie } from '@/lib/cookies'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { installParentAuthBridge } from '@/lib/auth-session'
 import { cn } from '@/lib/utils'
 
 import { AppHeader } from './app-header'
@@ -59,6 +60,12 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
   const defaultOpen = getCookie('sidebar_state') !== 'false'
   const isMobile = useIsMobile()
   useIframeTransparentBackground(IN_OS_WINDOW)
+
+  // 主层(OS 壳 PC 分支)安装认证桥:窗口 iframe 的 session 刷新委托主层,
+  // N 窗共享一次 /api/user/auth/refresh,避免烧穿 CriticalRateLimit(429)
+  useEffect(() => {
+    if (!IN_OS_WINDOW && !isMobile) installParentAuthBridge()
+  }, [isMobile])
 
   // iframe 内容模式:OS 窗口内的页面,渲染纯内容(球/Dock/窗口框都在主层)
   if (IN_OS_WINDOW) {

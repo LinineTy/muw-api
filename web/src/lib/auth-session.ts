@@ -331,6 +331,11 @@ async function performRefreshWithBrowserLock(
 }
 
 export function refreshAuthentication(): Promise<RefreshOutcome> {
+  // OS 壳窗口(iframe)不自己刷:session cookie 同源共享,主层刷一次全端生效,
+  // 委托主层可让 N 个窗口共享同一次 /api/user/auth/refresh 请求,
+  // 否则多开窗口会烧穿 CriticalRateLimit(20 次/20 分钟/IP)触发 429
+  const bridge = parentAuthBridge()
+  if (bridge) return adoptBridgeRefresh(bridge)
   if (!refreshPromise) {
     const refreshEpoch = authEpoch
     refreshPromise = performRefreshWithBrowserLock(refreshEpoch).finally(() => {
@@ -338,6 +343,75 @@ export function refreshAuthentication(): Promise<RefreshOutcome> {
     })
   }
   return refreshPromise
+}
+
+/** 主层挂到 window 上的认证桥,供 OS 壳 iframe 委托刷新 */
+type MuwAuthBridge = {
+  refresh: () => Promise<
+    | { ok: true; bundle: AuthBundle }
+    | { ok: false; kind: 'anonymous' | 'transient_error' | 'out_of_sync' }
+  >
+}
+
+/** iframe 内取主层认证桥;主层文档返回 null,跨域异常时兜底 null */
+function parentAuthBridge(): MuwAuthBridge | null {
+  try {
+    if (window.self === window.top) return null
+    const bridge = (window.parent as Window & { __muwAuthBridge?: MuwAuthBridge })
+      ?.__muwAuthBridge
+    return bridge ?? null
+  } catch {
+    return null
+  }
+}
+
+/** iframe 委托主层刷新:主层 refreshPromise 自带去重,多窗并发只发一次请求 */
+async function adoptBridgeRefresh(bridge: MuwAuthBridge): Promise<RefreshOutcome> {
+  try {
+    const result = await bridge.refresh()
+    if (result.ok) {
+      applyAuthBundle(result.bundle, false)
+      return { kind: 'authenticated', bundle: result.bundle }
+    }
+    if (result.kind === 'anonymous') {
+      clearAuthentication(true)
+      return { kind: 'anonymous' }
+    }
+    return { kind: 'transient_error', error: new Error('bridge refresh failed') }
+  } catch (error) {
+    // 主层桥异常(极端时序),退回自刷
+    return { kind: 'transient_error', error }
+  }
+}
+
+/** 主层安装认证桥(OS 壳 PC 分支挂载时调用);iframe 内调用无效果 */
+export function installParentAuthBridge(): void {
+  try {
+    if (window.self === window.top) {
+      ;(window as Window & { __muwAuthBridge?: MuwAuthBridge }).__muwAuthBridge = {
+        refresh: async () => {
+          // token 仍有 ≥60s 余量时直接复用,串行开窗零额外请求
+          const fresh = currentValidAuthBundle()
+          if (
+            fresh &&
+            fresh.access_expires_at > Math.floor(Date.now() / 1000) + 60
+          ) {
+            return { ok: true, bundle: fresh }
+          }
+          const outcome = await refreshAuthentication()
+          if (outcome.kind === 'authenticated') {
+            const bundle = currentValidAuthBundle()
+            if (bundle) return { ok: true, bundle }
+          }
+          if (outcome.kind === 'anonymous') return { ok: false, kind: 'anonymous' }
+          if (outcome.kind === 'out_of_sync') return { ok: false, kind: 'out_of_sync' }
+          return { ok: false, kind: 'transient_error' }
+        },
+      }
+    }
+  } catch {
+    /* 忽略 */
+  }
 }
 
 function currentValidAuthBundle(): AuthBundle | null {

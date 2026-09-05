@@ -42,7 +42,11 @@ export function OsWindowFrame({
     if (win.maximized) return
     if ((e.target as HTMLElement).closest('button')) return
     drag.current = { mode: 'move', dx: e.clientX - win.x, dy: e.clientY - win.y }
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    try {
+      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    } catch {
+      /* 个别环境对合成/异常 pointerId 会 throw;drag 状态已就绪,仅失去强制捕获 */
+    }
   }
   const onTitleMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = drag.current
@@ -61,7 +65,11 @@ export function OsWindowFrame({
   const onResizeDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (win.maximized) return
     drag.current = { mode: 'resize', sx: e.clientX, sy: e.clientY, w: win.w, h: win.h }
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    try {
+      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    } catch {
+      /* 同 onTitleDown */
+    }
   }
   const onResizeMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = drag.current
@@ -74,18 +82,13 @@ export function OsWindowFrame({
     drag.current = null
   }
 
-  if (win.minimized) {
-    // 保活:iframe 常驻 DOM 但不可见
-    return (
-      <div className='pointer-events-none absolute h-0 w-0 overflow-hidden' aria-hidden='true'>
-        <iframe src={win.url} title={win.title} tabIndex={-1} />
-      </div>
-    )
-  }
-
   const style: React.CSSProperties = win.maximized
     ? { left: 0, top: 0, width: '100%', height: '100%', zIndex: win.zIndex }
     : { left: win.x, top: win.y, width: win.w ?? undefined, height: win.h ?? undefined, zIndex: win.zIndex }
+
+  // 最小化保活:DOM 结构保持不变,仅 display:none——若走条件渲染换结构,
+  // React 会卸载重建 iframe,导致每次最小化/恢复整页重载(请求风暴 429)
+  if (win.minimized) style.display = 'none'
 
   return (
     <div
@@ -93,7 +96,7 @@ export function OsWindowFrame({
       style={style}
       onPointerDown={() => !active && activateWindow(win.id)}
       className={cn(
-        'bg-card/70 border-border/60 absolute flex flex-col overflow-hidden rounded-2xl border backdrop-blur-[8px] saturate-150',
+        'bg-card/70 dark:bg-popover/80 border-border/60 absolute flex flex-col overflow-hidden rounded-2xl border backdrop-blur-[8px] saturate-150',
         active
           ? 'shadow-[0_24px_80px_rgba(0,0,0,0.22)]'
           : 'shadow-[0_12px_40px_rgba(0,0,0,0.12)] opacity-95'
@@ -146,9 +149,11 @@ export function OsWindowFrame({
         <div className='w-[3.4rem]' aria-hidden='true' />
       </div>
 
-      {/* 内容:同源 iframe(self!==top 时子应用渲染纯内容) */}
+      {/* 内容:同源 iframe(self!==top 时子应用渲染纯内容)
+          lazy=恢复后未唤起的窗,挂 about:blank 占位,唤起才真加载 */}
       <iframe
-        src={win.url}
+        src={win.lazy ? 'about:blank' : win.url}
+        data-os-window-id={win.id}
         title={win.title}
         className='min-h-0 flex-1 border-0 bg-transparent'
       />

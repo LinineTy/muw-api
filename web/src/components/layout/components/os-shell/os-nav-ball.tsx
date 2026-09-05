@@ -1,11 +1,11 @@
 // @muw-owned
-import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { LayoutGrid, X } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { useOsNavGroups } from './use-os-nav'
 import { useOsWindowsStore } from '@/stores/os-windows-store'
+import { useOsBallStore } from './os-ball-store'
 
 /**
  * OS 桌面壳 · 导航球(侧栏→球):
@@ -17,7 +17,9 @@ import { useOsWindowsStore } from '@/stores/os-windows-store'
 export function OsNavBall() {
   const groups = useOsNavGroups()
   const openWindow = useOsWindowsStore((s) => s.openWindow)
-  const [open, setOpen] = useState(false)
+  const open = useOsBallStore((s) => s.active) === 'nav'
+  const { toggle, close } = useOsBallStore()
+  const setOpen = (v: boolean) => (v ? toggle('nav') : close('nav'))
 
   return (
     <>
@@ -25,7 +27,7 @@ export function OsNavBall() {
         type='button'
         aria-label='Open navigation'
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => toggle('nav')}
         className={cn(
           'bg-popover text-primary border-border/60 fixed bottom-4 left-4 z-[70] flex size-11 items-center justify-center border shadow-[0_8px_24px_rgba(0,0,0,0.15)] backdrop-blur saturate-150',
           'transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
@@ -52,7 +54,7 @@ export function OsNavBall() {
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: -10, scale: 0.96 }}
               transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              className='bg-sidebar/80 border-border/70 fixed bottom-4 left-[4.25rem] z-[69] flex max-h-[calc(100svh-14rem)] w-64 origin-bottom-left flex-col overflow-hidden rounded-2xl border shadow-[0_20px_60px_rgba(0,0,0,0.2)] backdrop-blur-md saturate-150'
+              data-os-ball-card='nav' className='bg-sidebar/80 border-border/70 fixed bottom-4 left-[4.25rem] z-[69] flex max-h-[calc(100svh-14rem)] w-64 origin-bottom-left flex-col overflow-hidden rounded-2xl border shadow-[0_20px_60px_rgba(0,0,0,0.2)] backdrop-blur-md saturate-150'
             >
               <div className='min-h-0 flex-1 overflow-y-auto p-2'>
                 {groups.map((group) => (

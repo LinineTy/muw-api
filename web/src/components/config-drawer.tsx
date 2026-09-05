@@ -97,7 +97,7 @@ export function ConfigDrawer() {
       >
         <Palette className='size-[1.2rem]' aria-hidden='true' />
       </SheetTrigger>
-      <SheetContent className={sideDrawerContentClassName('sm:max-w-md')}>
+      <SheetContent className={cn(sideDrawerContentClassName('sm:max-w-md'), 'z-[80]')}>
         <SheetHeader className={sideDrawerHeaderClassName()}>
           <SheetTitle>{t('Theme Settings')}</SheetTitle>
           <SheetDescription id='config-drawer-description'>

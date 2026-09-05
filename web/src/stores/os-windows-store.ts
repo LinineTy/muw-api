@@ -14,6 +14,8 @@ export type OsWindowState = {
   maximized: boolean
   minimized: boolean
   zIndex: number
+  /** 懒加载:恢复的最小化窗口尚未被唤起过,iframe 不挂真 src(避免刷新后 N 窗齐发请求) */
+  lazy?: boolean
 }
 
 /** 窗口数量上限(超限时忽略并保持现状) */
@@ -62,7 +64,25 @@ type OsWindowsStore = {
   resizeWindow: (id: string, w: number, h: number) => void
 }
 
-let zCounter = 10
+/**
+ * 窗口 z 序分配:
+ * - 区间 [10, Z_CAP],窗口层整体必须压在球(70)/弹卡(69)/Radix 二级弹窗(50+)之下,
+ *   否则反复激活后窗口爬升会反过来盖住控制球(实测 bug)
+ * - 超过 Z_CAP 时全窗归一化重排(按原相对顺序紧凑到 10..n),zCounter 回位
+ */
+const Z_BASE = 10
+const Z_CAP = 45
+let zCounter = Z_BASE
+
+function nextZ(windows: OsWindowState[]): number {
+  if (zCounter < Z_CAP) return ++zCounter
+  const sorted = [...windows].sort((a, b) => a.zIndex - b.zIndex)
+  sorted.forEach((w, i) => {
+    w.zIndex = Z_BASE + i
+  })
+  zCounter = Z_BASE + sorted.length
+  return ++zCounter
+}
 
 /** 默认几何:画布内居中 + 级联偏移(每窗右下错 28px,6 轮回绕) */
 function defaultGeometry(index: number) {
@@ -85,12 +105,13 @@ export const useOsWindowsStore = create<OsWindowsStore>((set, get) => ({
     const { windows } = get()
     const existed = windows.find((w) => w.url === nav.url)
     if (existed) {
-      // 已开:恢复最小化并置顶激活
+      // 已开:恢复最小化并置顶激活(解除懒加载,让 iframe 挂真 src)
+      const z = nextZ(windows)
       set({
         activeId: existed.id,
         windows: windows.map((w) =>
           w.id === existed.id
-            ? { ...w, minimized: false, zIndex: ++zCounter }
+            ? { ...w, minimized: false, lazy: false, zIndex: z }
             : w
         ),
       })
@@ -115,7 +136,7 @@ export const useOsWindowsStore = create<OsWindowsStore>((set, get) => ({
           h,
           maximized: false,
           minimized: false,
-          zIndex: ++zCounter,
+          zIndex: nextZ(windows),
         },
       ],
     })
@@ -138,7 +159,9 @@ export const useOsWindowsStore = create<OsWindowsStore>((set, get) => ({
         h: geo.h,
         maximized: false,
         minimized: false,
-        zIndex: ++zCounter,
+        zIndex: nextZ(current),
+        /** 恢复窗标懒加载:唤起时才挂真 src,避免刷新后 N 个 iframe 齐发请求(429) */
+        lazy: true,
       }
     })
     if (restored.length === 0) return
@@ -175,20 +198,22 @@ export const useOsWindowsStore = create<OsWindowsStore>((set, get) => ({
 
   restoreWindow: (id) => {
     const { windows } = get()
+    const z = nextZ(windows)
     set({
       activeId: id,
       windows: windows.map((w) =>
-        w.id === id ? { ...w, minimized: false, zIndex: ++zCounter } : w
+        w.id === id ? { ...w, minimized: false, lazy: false, zIndex: z } : w
       ),
     })
   },
 
   activateWindow: (id) => {
     const { windows } = get()
+    const z = nextZ(windows)
     set({
       activeId: id,
       windows: windows.map((w) =>
-        w.id === id ? { ...w, zIndex: ++zCounter } : w
+        w.id === id ? { ...w, zIndex: z } : w
       ),
     })
   },
