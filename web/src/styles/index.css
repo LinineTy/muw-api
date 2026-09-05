@@ -825,3 +825,17 @@ html.os-in-window [data-slot='sidebar-gap'] {
   animation: os-window-out 0.22s ease-in forwards;
   pointer-events: none;
 }
+
+/* 通知弹层 tab 双面板叠放:容器高度取两者最大值,tab 切换零跳动。
+   display 靠组件内联 block!important 保占位;这里只管叠放与
+   inactive 面板不可见(visibility 保占位且不拦交互) */
+.os-tabs-stack {
+  display: grid;
+}
+.os-tabs-stack > div {
+  grid-area: 1 / 1;
+}
+.os-tabs-stack > div[hidden],
+.os-tabs-stack > div[inert] {
+  visibility: hidden;
+}
