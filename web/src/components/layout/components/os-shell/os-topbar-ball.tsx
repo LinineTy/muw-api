@@ -1,5 +1,4 @@
 // @muw-owned
-import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
 import { ArrowUpRight, Settings2, X } from 'lucide-react'
@@ -13,6 +12,7 @@ import { useNotifications } from '@/hooks/use-notifications'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 import { cn } from '@/lib/utils'
 import { SystemBrand } from '../system-brand'
+import { useOsBallStore } from './os-ball-store'
 
 /**
  * OS 桌面壳 · 顶栏球(顶栏→球):
@@ -21,7 +21,9 @@ import { SystemBrand } from '../system-brand'
  * - 页面级上下文(面包屑/页名)职责已转移给窗口标题栏
  */
 export function OsTopbarBall() {
-  const [open, setOpen] = useState(false)
+  const open = useOsBallStore((s) => s.active) === 'topbar'
+  const { toggle, close } = useOsBallStore()
+  const setOpen = (v: boolean) => (v ? toggle('topbar') : close('topbar'))
   const notifications = useNotifications()
   // 原顶栏的页面跳转(后端 HeaderNavModules 配置驱动:首页/定价/模型广场等)
   const topLinks = useTopNavLinks()
@@ -32,7 +34,7 @@ export function OsTopbarBall() {
         type='button'
         aria-label='Open system menu'
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => toggle('topbar')}
         className={cn(
           'bg-popover text-primary border-border/60 fixed bottom-[4.25rem] left-4 z-[70] flex size-11 items-center justify-center border shadow-[0_8px_24px_rgba(0,0,0,0.15)] backdrop-blur saturate-150',
           'transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
@@ -59,7 +61,7 @@ export function OsTopbarBall() {
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: -10, scale: 0.96 }}
               transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              className='bg-sidebar/80 border-border/70 fixed bottom-[4.25rem] left-[4.25rem] z-[69] flex w-72 origin-bottom-left flex-col gap-2 overflow-hidden rounded-2xl border p-3 shadow-[0_20px_60px_rgba(0,0,0,0.2)] backdrop-blur-md saturate-150'
+              data-os-ball-card='topbar' className='bg-sidebar/80 border-border/70 fixed bottom-[4.25rem] left-[4.25rem] z-[69] flex w-72 origin-bottom-left flex-col gap-2 overflow-hidden rounded-2xl border p-3 shadow-[0_20px_60px_rgba(0,0,0,0.2)] backdrop-blur-md saturate-150'
             >
               <div className='border-border/40 flex items-center justify-center border-b pb-2.5'>
                 <SystemBrand variant='inline' />

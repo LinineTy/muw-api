@@ -20,8 +20,44 @@ import { OsDesktopPlaceholder } from './os-desktop-placeholder'
 export function OsWindowManager() {
   const navigate = useNavigate()
   const items = useOsNavItems()
-  const { windows, activeId, openWindow, restoreWindows } = useOsWindowsStore()
+  const { windows, activeId, openWindow, restoreWindows, activateWindow } =
+    useOsWindowsStore()
   const booted = useRef(false)
+
+  // 点击 iframe 内部时,事件落在子文档里不会冒泡到父层;焦点转移的可见信号:
+  // - focusin(target=iframe):主→iframe 及 iframeA→iframeB 都会触发
+  // - focusout 后 activeElement 变为 iframe:focusin 缺失时兜底
+  // - window blur + activeElement:最老牌的 hack,覆盖个别不派发 focusin 的环境
+  useEffect(() => {
+    const activateFromElement = () => {
+      const el = document.activeElement
+      if (el instanceof HTMLIFrameElement) {
+        const id = el.dataset.osWindowId
+        if (id) activateWindow(id)
+      }
+    }
+    const onFocusIn = (e: FocusEvent) => {
+      const el = e.target as HTMLElement
+      if (el instanceof HTMLIFrameElement && el.dataset.osWindowId) {
+        activateWindow(el.dataset.osWindowId)
+      }
+    }
+    const onFocusOut = () => {
+      setTimeout(activateFromElement, 0)
+    }
+    const onBlur = () => {
+      setTimeout(activateFromElement, 0)
+    }
+    document.addEventListener('focusin', onFocusIn)
+    document.addEventListener('focusout', onFocusOut)
+    window.addEventListener('blur', onBlur)
+    return () => {
+      document.removeEventListener('focusin', onFocusIn)
+      document.removeEventListener('focusout', onFocusOut)
+      window.removeEventListener('blur', onBlur)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (booted.current) return

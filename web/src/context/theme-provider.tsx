@@ -26,6 +26,7 @@ import {
 } from 'react'
 
 import { getCookie, setCookie, removeCookie } from '@/lib/cookies'
+import { syncOsWindowThemes } from '@/lib/os-window-theme'
 
 type Theme = 'dark' | 'light' | 'system'
 type ResolvedTheme = Exclude<Theme, 'system'>
@@ -97,6 +98,8 @@ export function ThemeProvider({
       root.classList.remove('light', 'dark')
       root.classList.add(nextResolvedTheme)
       setResolvedTheme(nextResolvedTheme)
+      // OS 壳:同步亮暗到已打开的窗口 iframe(独立文档不会自动跟随)
+      syncOsWindowThemes(nextResolvedTheme)
     }
 
     applyTheme()
