@@ -67,14 +67,20 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
     if (!IN_OS_WINDOW && !isMobile) installParentAuthBridge()
   }, [isMobile])
 
-  // iframe 内容模式:OS 窗口内的页面,渲染纯内容(球/Dock/窗口框都在主层)
+  // iframe 内容模式:OS 窗口内的页面 = 原布局去顶栏(保留 AppSidebar,
+  // 否则系统设置等依赖侧栏分区导航的页面在窗口里会迷路)
   if (IN_OS_WINDOW) {
     return (
       <LayoutProvider>
         <SearchProvider>
           <SidebarProvider defaultOpen={defaultOpen} className='flex-col'>
-            <div className='@container/content h-svh w-full overflow-y-auto overscroll-contain'>
-              {props.children ?? <AnimatedOutlet />}
+            <div className='flex min-h-0 w-full flex-1'>
+              <AppSidebar />
+              <SidebarInset className='@container/content h-svh min-h-0 flex-1 overflow-hidden peer-data-[variant=inset]:h-svh'>
+                <div className='h-svh w-full overflow-y-auto overscroll-contain'>
+                  {props.children ?? <AnimatedOutlet />}
+                </div>
+              </SidebarInset>
             </div>
           </SidebarProvider>
         </SearchProvider>
