@@ -88,12 +88,14 @@ function nextZ(windows: OsWindowState[]): number {
 function defaultGeometry(index: number) {
   const vw = typeof window !== 'undefined' ? window.innerWidth : 1440
   const vh = typeof window !== 'undefined' ? window.innerHeight : 900
-  // 画布可视区:左右各 32px padding + 右侧影子余量,顶部 16px,底部给 Dock 让 104px
-  const w = Math.min(1100, vw - 64 - 48)
-  const h = Math.max(360, vh - 16 - 104 - 28)
+  // PC 大屏利用:默认窗宽吃满可用宽(≥xl 断点,窗口内页面保持 PC 布局)
+  const w = Math.max(1120, Math.min(1600, vw - 112))
+  // 底边给 Dock 让 104px;高度=顶 16px 到 Dock 上沿
+  const h = Math.max(360, vh - 16 - 104 - 24)
   const k = index % 6
   const x = Math.max(24, (vw - w) / 2 - 24 + k * 28)
-  const y = Math.max(12, 8 + k * 28)
+  // 安卓平板式:窗口底边距 Dock 固定间距,而非固定距顶——视觉不偏上
+  const y = Math.max(12, vh - 104 - 16 - h + k * 24)
   return { x, y, w, h }
 }
 

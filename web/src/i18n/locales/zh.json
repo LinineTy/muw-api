@@ -6529,6 +6529,9 @@
     "Maximum context window in tokens. Requests exceeding it are rejected with 400.": "最大上下文窗口（token）。请求超过则返回 400 拒绝。",
     "24h success rate": "24h 成功率",
     "Quick links": "快速导航",
-    "os-shell.desktop-hint": "所有窗口已关闭 · 从底部 Dock 或左下角导航球打开页面"
+    "os-shell.desktop-hint": "所有窗口已关闭 · 从底部 Dock 或左下角导航球打开页面",
+    "Close window": "关闭窗口",
+    "Minimize window": "最小化窗口",
+    "Maximize window": "最大化窗口"
   }
 }

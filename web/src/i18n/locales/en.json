@@ -6529,6 +6529,9 @@
     "Maximum context window in tokens. Requests exceeding it are rejected with 400.": "Maximum context window in tokens. Requests exceeding it are rejected with 400.",
     "24h success rate": "24h success rate",
     "Quick links": "Quick links",
-    "os-shell.desktop-hint": "All windows closed · Open pages from the Dock or the nav ball at the bottom-left"
+    "os-shell.desktop-hint": "All windows closed · Open pages from the Dock or the nav ball at the bottom-left",
+    "Close window": "Close window",
+    "Minimize window": "Minimize window",
+    "Maximize window": "Maximize window"
   }
 }
