@@ -273,6 +273,9 @@ function DockTools() {
       aria-label='Dock Tools'
       className='bg-popover/70 border-border/60 fixed right-3 bottom-3 z-[70] flex items-end gap-1 rounded-2xl border px-2 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.16)] backdrop-blur-[8px] saturate-150'
     >
+      {/* 快速导航(链接聚合) */}
+      <NavJumpGroup />
+
       {/* 公告 */}
       <NotificationPopover
         open={notifications.popoverOpen}
@@ -336,8 +339,6 @@ function DockTools() {
         }
       />
 
-      {/* 快速导航 */}
-      <NavJumpGroup />
     </nav>
   )
 }
