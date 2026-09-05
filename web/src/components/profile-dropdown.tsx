@@ -42,8 +42,11 @@ const avatarFallbackClassName = 'font-semibold text-white'
 
 export function ProfileDropdown({
   trigger,
+  onNavigate,
 }: {
   trigger?: React.ReactElement
+  /** 桌面壳开窗钩子:返回 true 表示已处理,跳过内置路由跳转 */
+  onNavigate?: (path: string) => boolean
 }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -116,13 +119,23 @@ export function ProfileDropdown({
 
           <DropdownMenuSeparator />
 
-          <DropdownMenuItem onClick={() => navigate({ to: '/profile' })}>
+          <DropdownMenuItem
+            onClick={() => {
+              if (onNavigate?.('/profile')) return
+              navigate({ to: '/profile' })
+            }}
+          >
             <User className='size-4' />
             {t('Profile')}
           </DropdownMenuItem>
 
           {isWalletVisible && (
-            <DropdownMenuItem onClick={() => navigate({ to: '/wallet' })}>
+            <DropdownMenuItem
+              onClick={() => {
+                if (onNavigate?.('/wallet')) return
+                navigate({ to: '/wallet' })
+              }}
+            >
               <Wallet className='size-4' />
               {t('Wallet')}
             </DropdownMenuItem>
@@ -130,12 +143,13 @@ export function ProfileDropdown({
 
           {isSuperAdmin && (
             <DropdownMenuItem
-              onClick={() =>
+              onClick={() => {
+                if (onNavigate?.('/system-settings/site/system-info')) return
                 navigate({
                   to: '/system-settings/site/$section',
                   params: { section: 'system-info' },
                 })
-              }
+              }}
             >
               <Settings className='size-4' />
               {t('System Settings')}

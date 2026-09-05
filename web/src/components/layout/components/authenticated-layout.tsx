@@ -31,6 +31,8 @@ import { cn } from '@/lib/utils'
 import { AppHeader } from './app-header'
 import { AppSidebar } from './app-sidebar'
 import { MobileNavFab } from './mobile-nav-fab'
+import { matchOsNavItem, useOsNavItems } from './os-shell/use-os-nav'
+import { useOsWindowsStore } from '@/stores/os-windows-store'
 import { OsDock } from './os-shell/os-dock'
 import { OsNavBall } from './os-shell/os-nav-ball'
 import { OsWindowManager } from './os-shell/os-window-manager'
@@ -106,18 +108,50 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
             </>
           ) : (
             // OS 桌面壳(v2 多窗口):无顶栏无侧栏,窗口=iframe 保活多开,
-            // 左下双球(顶栏球+导航球),底部悬浮 Dock(macOS 行为)
-            <div className='relative h-svh w-full overflow-hidden'>
-              <OsWindowManager />
-              <OsNavBall />
-              {/* 一段式 Dock:[ 搜索 公告 语言 主题 头像 连接组 | 已打开页面 ] */}
-              <OsDock />
-            </div>
+            // 左下导航球,底部一段式 Dock [ 固定功能区 | 已打开页面 ]
+            <OsShellDesktopHost />
           )}
           <MobileNavFab />
         </SidebarProvider>
       </SearchProvider>
     </LayoutProvider>
+  )
+}
+
+/**
+ * OS 桌面壳宿主:挂载 window.__osShellOpenWindow 注入开窗能力,
+ * 供头像菜单/搜索结果等全局组件把"路由跳转"转成"开新窗口"
+ * (见 os-shell/os-open.ts 的说明)
+ */
+function OsShellDesktopHost() {
+  const items = useOsNavItems()
+  const openWindow = useOsWindowsStore((s) => s.openWindow)
+
+  useEffect(() => {
+    ;(
+      window as unknown as {
+        __osShellOpenWindow?: (url: string) => void
+      }
+    ).__osShellOpenWindow = (url: string) => {
+      const nav = matchOsNavItem(items, url)
+      openWindow({ url, title: nav?.title ?? url })
+    }
+    return () => {
+      delete (
+        window as unknown as {
+          __osShellOpenWindow?: unknown
+        }
+      ).__osShellOpenWindow
+    }
+  }, [items, openWindow])
+
+  return (
+    <div className='relative h-svh w-full overflow-hidden'>
+      <OsWindowManager />
+      <OsNavBall />
+      {/* 一段式 Dock:[ 搜索 公告 语言 主题 头像 连接组 | 已打开页面 ] */}
+      <OsDock />
+    </div>
   )
 }
 

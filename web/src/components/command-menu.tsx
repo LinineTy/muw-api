@@ -16,8 +16,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useLocation, useNavigate } from '@tanstack/react-router'
+import { useLocation } from '@tanstack/react-router'
 import { ArrowRight, ChevronRight, Laptop, Moon, Sun } from 'lucide-react'
+import { useOsShellNavigate } from '@/components/layout/components/os-shell/os-open'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -40,11 +41,11 @@ import { ScrollArea } from './ui/scroll-area'
 
 export function CommandMenu() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const { setTheme } = useTheme()
   const { open, setOpen } = useSearch()
   const { pathname } = useLocation()
   const sidebarData = useSidebarData()
+  const osNavigate = useOsShellNavigate()
 
   // Use the active nested sidebar view's nav groups when one matches
   // the current URL; otherwise fall back to the root navigation.
@@ -74,7 +75,7 @@ export function CommandMenu() {
                         key={`${navItem.url}-${i}`}
                         value={navItem.title}
                         onSelect={() => {
-                          runCommand(() => navigate({ to: navItem.url }))
+                          runCommand(() => osNavigate(navItem.url as string))
                         }}
                       >
                         <div className='flex size-4 items-center justify-center'>
@@ -89,7 +90,7 @@ export function CommandMenu() {
                       key={`${navItem.title}-${subItem.url}-${i}`}
                       value={`${navItem.title}-${subItem.url}`}
                       onSelect={() => {
-                        runCommand(() => navigate({ to: subItem.url }))
+                        runCommand(() => osNavigate(subItem.url as string))
                       }}
                     >
                       <div className='flex size-4 items-center justify-center'>

@@ -22,6 +22,7 @@ import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 import { useOsBallStore } from './os-ball-store'
 import { useOsWindowsStore } from '@/stores/os-windows-store'
 import { matchOsNavItem, useOsNavItems } from './use-os-nav'
+import { useOsShellNavigate } from './os-open'
 
 /**
  * OS 桌面壳 · 底部 Dock(一段式):
@@ -98,6 +99,7 @@ function NavJumpGroup() {
 function DockFixedItems() {
   const notifications = useNotifications()
   const { setOpen: setSearchOpen } = useSearch()
+  const osNavigate = useOsShellNavigate()
 
   return (
     <>
@@ -164,6 +166,10 @@ function DockFixedItems() {
 
       {/* 个人(头像) */}
       <ProfileDropdown
+        onNavigate={(path) => {
+          osNavigate(path)
+          return true
+        }}
         trigger={
           <button
             type='button'
@@ -202,7 +208,7 @@ export function OsDock() {
   return (
     <nav
       aria-label='Dock'
-      className='fixed bottom-3 left-1/2 z-[70] flex -translate-x-1/2 items-end gap-2'
+      className='bg-popover/70 border-border/60 fixed bottom-3 left-1/2 z-[70] flex -translate-x-1/2 items-end gap-1 rounded-2xl border px-2 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.16)] backdrop-blur-[8px] saturate-150'
     >
       <DockFixedItems />
 

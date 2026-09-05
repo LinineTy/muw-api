@@ -772,6 +772,11 @@ html.os-in-window body::before {
  * 会盖住窗口玻璃底;亮暗都透明,头身统一透窗口容器的玻璃/暗玻璃底 */
 html.os-in-window [data-slot='sidebar-inset'] {
   background: transparent;
+  /* inset variant 自带 m-2+圆角+阴影(浮卡),窗口内会形成画布叠画布;
+   * 平铺到窗口玻璃上 */
+  margin: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
 }
 
 html.os-in-window [data-slot='sidebar'] {
