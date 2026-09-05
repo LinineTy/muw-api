@@ -387,14 +387,11 @@ export function OsDock() {
       <SearchBall />
 
       {/* 开始磁贴(原左下导航球,面板从 Dock 上方居中弹出) */}
-      <span
-        aria-hidden='true'
-        className='bg-border/60 mx-0.5 h-8 w-px self-center'
-      />
       <NavTiles />
 
       {windows.length > 0 ? (
         <>
+          {/* 固定功能区 | 窗口区 分界(有窗口才显示) */}
           <span
             aria-hidden='true'
             className='bg-border/60 mx-0.5 h-8 w-px self-center'
