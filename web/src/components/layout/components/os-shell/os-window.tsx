@@ -69,19 +69,6 @@ export function OsWindowFrame({
     return () => clearTimeout(t)
   }, [win.minimizing, win.id, minimizeWindow])
 
-  // 恢复动画:minimized true→false 切换时播一次自 Dock 浮入(类从无到有才触发)
-  const prevMinimized = useRef(win.minimized)
-  const [restoreAnim, setRestoreAnim] = useState(false)
-  useEffect(() => {
-    if (prevMinimized.current && !win.minimized) {
-      setRestoreAnim(true)
-      const t = setTimeout(() => setRestoreAnim(false), 360)
-      prevMinimized.current = win.minimized
-      return () => clearTimeout(t)
-    }
-    prevMinimized.current = win.minimized
-  }, [win.minimized])
-
   const onTitleDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (win.maximized) return
     if ((e.target as HTMLElement).closest('button')) return
@@ -157,10 +144,9 @@ export function OsWindowFrame({
           'transition-[left,top,width,height] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
         // 开/关窗动画:入场默认播(会话恢复的窗除外),关闭播退出,
         // 最小化播缩退,从 Dock 恢复播浮入
-        !win.restored && !win.closing && 'os-window-enter',
-        win.closing && 'os-window-exit',
+        !win.minimized && !win.closing && !win.restored && 'os-window-restore',
         win.minimizing && 'os-window-minimize',
-        restoreAnim && 'os-window-restore',
+        win.closing && 'os-window-exit',
         // 最大化贴边:去圆角;激活窗加淡描边置前强调
         win.maximized && 'rounded-none',
         active && 'border-primary/40 ring-primary/25 ring-1',
