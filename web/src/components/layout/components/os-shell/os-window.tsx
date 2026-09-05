@@ -104,6 +104,9 @@ export function OsWindowFrame({
       className={cn(
         // 亮暗统一琉璃配方:暗色 --card 自带低透明度,壁纸可透出
         'bg-card/70 border-border/60 absolute flex flex-col overflow-hidden rounded-2xl border backdrop-blur-[8px] saturate-150',
+        // 最大化贴边:去圆角;激活窗加淡描边置前强调
+        win.maximized && 'rounded-none',
+        active && 'border-primary/40 ring-primary/25 ring-1',
         active
           ? 'shadow-[0_24px_80px_rgba(0,0,0,0.22)]'
           : 'shadow-[0_12px_40px_rgba(0,0,0,0.12)] opacity-95'
