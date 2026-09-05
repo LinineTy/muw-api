@@ -751,3 +751,16 @@ input[type='number'] {
     display: none;
   }
 }
+
+/* ===== OS 桌面壳 · iframe 内容模式 =====
+ * 窗口内的子应用(self!==top)由布局挂 html.os-in-window:
+ * 文档底色与壁纸层全部透明,让窗口标题栏与内容主体统一透出
+ * 主层窗口容器的玻璃底,消除分体感。 */
+html.os-in-window,
+html.os-in-window body {
+  background: transparent;
+}
+
+html.os-in-window body::before {
+  display: none;
+}
