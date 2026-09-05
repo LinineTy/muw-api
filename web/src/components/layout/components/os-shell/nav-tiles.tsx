@@ -82,7 +82,9 @@ export function NavTiles() {
                             {Icon ? (
                               <Icon className='size-6 shrink-0' aria-hidden='true' />
                             ) : null}
-                            <span className='w-full truncate text-center text-xs leading-tight'>
+                            {/* 两行截断:truncate 强制单行会让长标题永远截断,
+                             * 加宽卡片也救不了;磁贴标签放宽到两行(Win11 同款) */}
+                            <span className='w-full line-clamp-2 break-words text-center text-xs leading-tight'>
                               {item.title}
                             </span>
                           </button>
