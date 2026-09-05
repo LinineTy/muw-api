@@ -152,7 +152,8 @@ function ChatPresetsBall() {
       <DropdownMenuContent
         align='end'
         side='top'
-        className='min-w-64'
+        sideOffset={8}
+        className='min-w-64 z-[80]'
       >
         {visiblePresets.map((preset) =>
           preset.type === 'web' ? (
@@ -209,7 +210,7 @@ function NavJumpGroup() {
       >
         <Globe className='size-[1.15rem]' aria-hidden='true' />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align='end' side='top'>
+      <DropdownMenuContent align='end' side='top' sideOffset={8} className='z-[80]'>
         {links.map((link) =>
           link.external ? (
             <DropdownMenuItem
