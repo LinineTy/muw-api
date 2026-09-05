@@ -3,6 +3,12 @@
 本文件记录 muw fork 的发布版本与变更。版本号格式：`vYY.MM.DD.muw.N`
 （发版日期 + muw 小标记），自 v26.08.14.muw.1 起从上游 semver 版本号迁移到日期制。
 
+## v26.09.06.muw.5 (2026-09-06)
+
+### 修复
+
+- **修复**：OS 窗口内容永转圈不渲染（muw.4 回归）——窗口加载早期主题色 spinner 此前直接写进 `#root`，实测会令窗口 iframe 里 React 静默拒绝 mount（无任何报错，主层无此现象），窗口内容永空白、spinner 永转圈；现改为注入 root 的兄弟节点，由 MutationObserver 在 React mount 后自删，加载占位观感不变
+
 ## v26.09.06.muw.4 (2026-09-06)
 
 ### OS 桌面壳（Dock 三区重构）与主题修正
