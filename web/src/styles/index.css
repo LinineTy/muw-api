@@ -755,10 +755,13 @@ input[type='number'] {
 /* ===== OS 桌面壳 · iframe 内容模式 =====
  * 窗口内的子应用(self!==top)由布局挂 html.os-in-window:
  * 文档底色与壁纸层全部透明,让窗口标题栏与内容主体统一透出
- * 主层窗口容器的玻璃底,消除分体感。 */
+ * 主层窗口容器的玻璃底,消除分体感。
+ * !important 必须:暗色琉璃 body 实底规则
+ * (html.dark body[data-theme-preset='liquid-glass'] 特异性更高)
+ * 会把这里的透明压掉,导致暗色窗口底黑实、壁纸透不出来。 */
 html.os-in-window,
 html.os-in-window body {
-  background: transparent;
+  background: transparent !important;
 }
 
 html.os-in-window body::before {

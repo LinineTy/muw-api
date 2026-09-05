@@ -32,7 +32,6 @@ import { AppHeader } from './app-header'
 import { AppSidebar } from './app-sidebar'
 import { MobileNavFab } from './mobile-nav-fab'
 import { OsDock } from './os-shell/os-dock'
-import { OsFuncBalls } from './os-shell/os-func-balls'
 import { OsNavBall } from './os-shell/os-nav-ball'
 import { OsWindowManager } from './os-shell/os-window-manager'
 
@@ -111,11 +110,8 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
             <div className='relative h-svh w-full overflow-hidden'>
               <OsWindowManager />
               <OsNavBall />
-              {/* 功能球组横向贴 Dock 左侧,同一底线(替代原顶栏) */}
-              <div className='fixed bottom-3 left-1/2 z-[70] flex -translate-x-1/2 items-end gap-2'>
-                <OsFuncBalls />
-                <OsDock />
-              </div>
+              {/* 一段式 Dock:[ 搜索 公告 语言 主题 头像 连接组 | 已打开页面 ] */}
+              <OsDock />
             </div>
           )}
           <MobileNavFab />
