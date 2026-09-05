@@ -36,10 +36,11 @@ import { useOsShellNavigate } from './os-open'
  */
 
 const FAB_BALL =
-  // 无底色磨砂玻璃:不带 bg-popover 白/黑蒙层,纯 border+blur 采样壁纸
-  'text-primary border-border/60 flex size-10 items-center justify-center border shadow-[0_8px_24px_rgba(0,0,0,0.15)] backdrop-blur saturate-150' +
+  // 纯图标球:无 border 无自带底色(深色下圈套圈很脏),hover 微亮,
+  // 容器感交给 Dock 胶囊;弹层打开时圆→圆角方(data-state)
+  'text-primary flex size-10 items-center justify-center' +
   ' transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]' +
-  ' hover:scale-[1.08] active:scale-95 rounded-full data-[state=open]:rounded-lg'
+  ' hover:bg-accent hover:scale-[1.08] active:scale-95 rounded-full data-[state=open]:rounded-lg'
 
 function closeNavCard() {
   useOsBallStore.getState().close()
