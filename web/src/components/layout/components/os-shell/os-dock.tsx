@@ -17,6 +17,7 @@ import { ProfileDropdown } from '@/components/profile-dropdown'
 import { cn } from '@/lib/utils'
 import { MOTION_TRANSITION, MOTION_VARIANTS } from '@/lib/motion'
 import { useSearch } from '@/context/search-provider'
+import { useTranslation } from 'react-i18next'
 import { useNotifications } from '@/hooks/use-notifications'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 import { useOsBallStore } from './os-ball-store'
@@ -46,6 +47,7 @@ function closeNavCard() {
 
 /** 连接组:一颗球收纳管理端 HeaderNavModules 配置的顶栏页面链接 */
 function NavJumpGroup() {
+  const { t } = useTranslation()
   const links = useTopNavLinks()
   if (links.length === 0) return null
   return (
@@ -54,8 +56,8 @@ function NavJumpGroup() {
         render={
           <button
             type='button'
-            aria-label='Quick links'
-            title='Quick links'
+            aria-label={t('Quick links')}
+            title={t('Quick links')}
             onClick={closeNavCard}
             className={FAB_BALL}
           />
@@ -100,14 +102,15 @@ function DockFixedItems() {
   const notifications = useNotifications()
   const { setOpen: setSearchOpen } = useSearch()
   const osNavigate = useOsShellNavigate()
+  const { t } = useTranslation()
 
   return (
     <>
       {/* 搜索 */}
       <button
         type='button'
-        aria-label='Search'
-        title='Search'
+        aria-label={t('Search')}
+        title={t('Search')}
         onClick={() => {
           closeNavCard()
           setSearchOpen(true)
@@ -130,8 +133,8 @@ function DockFixedItems() {
         trigger={
           <button
             type='button'
-            aria-label='Notifications'
-            title='Notifications'
+            aria-label={t('Notifications')}
+            title={t('Notifications')}
             onClick={closeNavCard}
             className={FAB_BALL}
           />
@@ -143,8 +146,8 @@ function DockFixedItems() {
         trigger={
           <button
             type='button'
-            aria-label='Change language'
-            title='Change language'
+            aria-label={t('Change language')}
+            title={t('Change language')}
             onClick={closeNavCard}
             className={FAB_BALL}
           />
@@ -156,8 +159,8 @@ function DockFixedItems() {
         trigger={
           <button
             type='button'
-            aria-label='Open theme settings'
-            title='Open theme settings'
+            aria-label={t('Open theme settings')}
+            title={t('Open theme settings')}
             onClick={closeNavCard}
             className={FAB_BALL}
           />
@@ -166,15 +169,12 @@ function DockFixedItems() {
 
       {/* 个人(头像) */}
       <ProfileDropdown
-        onNavigate={(path) => {
-          osNavigate(path)
-          return true
-        }}
+        onNavigate={(path) => osNavigate(path)}
         trigger={
           <button
             type='button'
             onClick={closeNavCard}
-            aria-label='Profile'
+            aria-label={t('Profile')}
             className={FAB_BALL}
           />
         }

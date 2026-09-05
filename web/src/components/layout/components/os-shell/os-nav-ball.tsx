@@ -4,19 +4,19 @@ import { LayoutGrid, X } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { useOsNavGroups } from './use-os-nav'
-import { useOsWindowsStore } from '@/stores/os-windows-store'
+import { useOsShellNavigate } from './os-open'
 import { useOsBallStore } from './os-ball-store'
 
 /**
  * OS 桌面壳 · 导航球(侧栏→球):
  * - 左下角垂直球组下位(最贴角),点击向球右侧弹出玻璃导航卡
  * - 菜单数据复用 useOsNavGroups(侧栏同源,权限/i18n/分组小标题继承)
- * - 点击菜单项=开窗(已开则置顶),不再做路由跳转
+ * - 点击菜单项=开窗(已开则置顶);设置页例外(走主层完整布局,不进窗口)
  * - 球本体配方与移动端 FAB 同款(bg-popover + blur + saturate)
  */
 export function OsNavBall() {
   const groups = useOsNavGroups()
-  const openWindow = useOsWindowsStore((s) => s.openWindow)
+  const osNavigate = useOsShellNavigate()
   const open = useOsBallStore((s) => s.active)
   const { toggle, close } = useOsBallStore()
 
@@ -68,7 +68,7 @@ export function OsNavBall() {
                           key={item.url}
                           type='button'
                           onClick={() => {
-                            openWindow({ url: item.url, title: item.title })
+                            osNavigate(item.url)
                             close()
                           }}
                           className='text-muted-foreground hover:bg-accent hover:text-foreground flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors'

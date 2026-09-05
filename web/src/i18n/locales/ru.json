@@ -5584,7 +5584,7 @@
     "footer.columns.related.links.oneApi": "Один API",
     "footer.columns.related.title": "Связанные проекты",
     "footer.defaultCopyright": "Все права защищены.",
-    "footer.new\u0061pi.projectAttributionSuffix": "Все права защищены. Разработано участниками проекта.",
+    "footer.newapi.projectAttributionSuffix": "Все права защищены. Разработано участниками проекта.",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -6527,6 +6527,8 @@
     "Context Window": "Context Window",
     "e.g. 131072, 0 or empty = unlimited": "e.g. 131072, 0 or empty = unlimited",
     "Maximum context window in tokens. Requests exceeding it are rejected with 400.": "Maximum context window in tokens. Requests exceeding it are rejected with 400.",
-    "24h success rate": "Успешность за 24ч"
+    "24h success rate": "Успешность за 24ч",
+    "Quick links": "Быстрые ссылки",
+    "os-shell.desktop-hint": "Все окна закрыты · Открывайте страницы через Dock или навигационный шар в левом нижнем углу"
   }
 }

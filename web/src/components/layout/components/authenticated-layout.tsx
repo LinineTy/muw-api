@@ -31,6 +31,10 @@ import { cn } from '@/lib/utils'
 import { AppHeader } from './app-header'
 import { AppSidebar } from './app-sidebar'
 import { MobileNavFab } from './mobile-nav-fab'
+import {
+  isSettingsUrl,
+  type OsShellOpenWindow,
+} from './os-shell/os-open'
 import { matchOsNavItem, useOsNavItems } from './os-shell/use-os-nav'
 import { useOsWindowsStore } from '@/stores/os-windows-store'
 import { OsDock } from './os-shell/os-dock'
@@ -61,6 +65,11 @@ function useIframeTransparentBackground(enabled: boolean) {
 export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
   const defaultOpen = getCookie('sidebar_state') !== 'false'
   const isMobile = useIsMobile()
+  // 设置页退出多窗口:始终主层完整布局(侧栏分区导航复杂度高,窗口化收益低,
+  // 且仅管理员可见)——多窗口只对非设置页生效
+  const isSettingsRoute = isSettingsUrl(
+    useLocation({ select: (s) => s.pathname })
+  )
   useIframeTransparentBackground(IN_OS_WINDOW)
 
   // 主层(OS 壳 PC 分支)安装认证桥:窗口 iframe 的 session 刷新委托主层,
@@ -89,7 +98,7 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
       <SearchProvider>
         <SidebarProvider defaultOpen={defaultOpen} className='flex-col'>
           <SkipToMain />
-          {isMobile ? (
+          {isMobile || isSettingsRoute ? (
             <>
               <AppHeader />
               <div className='flex min-h-0 w-full flex-1'>
@@ -130,17 +139,17 @@ function OsShellDesktopHost() {
   useEffect(() => {
     ;(
       window as unknown as {
-        __osShellOpenWindow?: (url: string) => void
+        __osShellOpenWindow?: OsShellOpenWindow
       }
     ).__osShellOpenWindow = (url: string) => {
+      if (isSettingsUrl(url)) return false
       const nav = matchOsNavItem(items, url)
       openWindow({ url, title: nav?.title ?? url })
+      return true
     }
     return () => {
       delete (
-        window as unknown as {
-          __osShellOpenWindow?: unknown
-        }
+        window as unknown as { __osShellOpenWindow?: unknown }
       ).__osShellOpenWindow
     }
   }, [items, openWindow])

@@ -5584,7 +5584,7 @@
     "footer.columns.related.links.oneApi": "1つのAPI",
     "footer.columns.related.title": "関連プロジェクト",
     "footer.defaultCopyright": "すべての権利を留保します。",
-    "footer.new\u0061pi.projectAttributionSuffix": "すべての権利を留保します。プロジェクトコントリビューターにより設計・開発されています。",
+    "footer.newapi.projectAttributionSuffix": "すべての権利を留保します。プロジェクトコントリビューターにより設計・開発されています。",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -6527,6 +6527,8 @@
     "Context Window": "Context Window",
     "e.g. 131072, 0 or empty = unlimited": "e.g. 131072, 0 or empty = unlimited",
     "Maximum context window in tokens. Requests exceeding it are rejected with 400.": "Maximum context window in tokens. Requests exceeding it are rejected with 400.",
-    "24h success rate": "24時間の成功率"
+    "24h success rate": "24時間の成功率",
+    "Quick links": "クイックリンク",
+    "os-shell.desktop-hint": "すべてのウィンドウが閉じています · 下部のDockまたは左下のナビゲーション球からページを開いてください"
   }
 }

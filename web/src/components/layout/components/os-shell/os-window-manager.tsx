@@ -2,6 +2,7 @@
 import { useEffect, useRef } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 
+import { isSettingsUrl } from './os-open'
 import { useOsNavItems, matchOsNavItem } from './use-os-nav'
 import {
   useOsWindowsStore,
@@ -73,7 +74,9 @@ export function OsWindowManager() {
       navigate({ to: '/console', replace: true })
     } else {
       // 恢复上次窗口(标题/图标用当前 nav 数据回填)
-      const persisted = readPersistedWindows()
+      const persisted = readPersistedWindows().filter(
+        (p) => !isSettingsUrl(p.url)
+      )
       if (persisted.length > 0) {
         restoreWindows(
           persisted.map((p) => {
