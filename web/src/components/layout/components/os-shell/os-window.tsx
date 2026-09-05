@@ -1,6 +1,5 @@
 // @muw-owned
-import { useRef, useState } from 'react'
-import { motion } from 'motion/react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Maximize2,
   Minimize2,
@@ -45,8 +44,15 @@ export function OsWindowFrame({
   // 拖动/缩放中禁几何过渡(否则指针追不上),最大化/恢复切换时才有平滑动画
   const [interacting, setInteracting] = useState(false)
   const { t } = useTranslation()
-  const { closeWindow, minimizeWindow, activateWindow, toggleMaximize, moveWindow, resizeWindow } =
+  const { closeWindow, requestCloseWindow, minimizeWindow, activateWindow, toggleMaximize, moveWindow, resizeWindow } =
     useOsWindowsStore()
+
+  // 两段式关闭:closing 置位播退出动画,220ms 后真正移除(兜底定时器防动画事件丢失)
+  useEffect(() => {
+    if (!win.closing) return
+    const t = setTimeout(() => closeWindow(win.id), 240)
+    return () => clearTimeout(t)
+  }, [win.closing, win.id, closeWindow])
 
   const onTitleDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (win.maximized) return
@@ -111,20 +117,19 @@ export function OsWindowFrame({
   if (win.minimized) style.display = 'none'
 
   return (
-    <motion.div
+    <div
       data-os-window={win.id}
       style={style}
       onPointerDown={() => !active && activateWindow(win.id)}
-      initial={{ opacity: 0, scale: 0.96, y: 12 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.97, y: 8 }}
-      transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
       className={cn(
         // 亮暗统一琉璃配方:暗色 --card 自带低透明度,壁纸可透出
         'bg-card/70 border-border/60 absolute flex flex-col overflow-hidden rounded-2xl border backdrop-blur-[8px] saturate-150',
         // 几何变化过渡:最大化/恢复平滑展开;拖动缩放中禁用
         !interacting &&
           'transition-[left,top,width,height] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
+        // 开/关窗动画:入场默认播(会话恢复的窗除外),关闭播退出
+        !win.restored && 'os-window-enter',
+        win.closing && 'os-window-exit',
         // 最大化贴边:去圆角;激活窗加淡描边置前强调
         win.maximized && 'rounded-none',
         active && 'border-primary/40 ring-primary/25 ring-1',
@@ -180,7 +185,7 @@ export function OsWindowFrame({
             type='button'
             aria-label={t('Close window')}
             title={t('Close window')}
-            onClick={() => closeWindow(win.id)}
+            onClick={() => requestCloseWindow(win.id)}
             className='text-muted-foreground hover:text-foreground hover:bg-accent flex size-6 items-center justify-center rounded-md transition-colors'
           >
             <X className='size-3' aria-hidden='true' />
@@ -214,6 +219,6 @@ export function OsWindowFrame({
           </svg>
         </div>
       ) : null}
-    </motion.div>
+    </div>
   )
 }

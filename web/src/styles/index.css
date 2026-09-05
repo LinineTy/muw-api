@@ -786,3 +786,33 @@ html.os-in-window [data-slot='sidebar'] {
 html.os-in-window [data-slot='sidebar-gap'] {
   background: transparent;
 }
+
+/* OS 窗口开/关动画(纯 CSS,不依赖 motion——AnimatePresence 对包裹组件的
+   initial/exit 传播在生产构建下不生效,最大化/恢复仍走 CSS transition) */
+@keyframes os-window-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes os-window-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.97) translateY(8px);
+  }
+}
+.os-window-enter {
+  animation: os-window-in 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.os-window-exit {
+  animation: os-window-out 0.2s ease-in forwards;
+  pointer-events: none;
+}
