@@ -6,15 +6,19 @@ import { cn } from '@/lib/utils'
 import { useOsNavGroups } from './use-os-nav'
 import { useOsShellNavigate } from './os-open'
 import { useOsBallStore } from './os-ball-store'
+import { FAB_BALL } from './os-ball-style'
 
 /**
- * OS 桌面壳 · 导航球(侧栏→球):
- * - 左下角垂直球组下位(最贴角),点击向球右侧弹出玻璃导航卡
+ * OS 桌面壳 · 磁贴开始面板(原左下导航球迁入 Dock):
+ * - 入口按钮在 Dock 固定功能区(Win11 开始按钮位),点击向上弹出磁贴卡
  * - 菜单数据复用 useOsNavGroups(侧栏同源,权限/i18n/分组小标题继承)
- * - 点击菜单项=开窗(已开则置顶);设置页例外(走主层完整布局,不进窗口)
- * - 球本体配方与移动端 FAB 同款(bg-popover + blur + saturate)
+ * - 点击磁贴=开窗(已开则置顶);设置页例外(走主层完整布局,不进窗口)
+ * - z-[90] 全场最高:开始面板必须盖住一切窗口(≤45)与 Radix 弹卡(80),
+ *   否则被窗口挡住就失去存在意义(maintainer拍板)
+ * - 面板锚 Dock 上方居中:bottom-4.5rem + motion x:'-50%'(tailwind translate
+ *   会被 motion 的 transform 覆盖,居中必须交给 motion 自己)
  */
-export function OsNavBall() {
+export function NavTiles() {
   const groups = useOsNavGroups()
   const osNavigate = useOsShellNavigate()
   const open = useOsBallStore((s) => s.active)
@@ -26,18 +30,17 @@ export function OsNavBall() {
         type='button'
         aria-label='Open navigation'
         aria-expanded={open}
+        title='Start'
         onClick={() => toggle()}
         className={cn(
-          'bg-popover text-primary border-border/60 fixed bottom-4 left-4 z-[70] flex size-11 items-center justify-center border shadow-[0_8px_24px_rgba(0,0,0,0.15)] backdrop-blur saturate-150',
-          'transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
-          'hover:scale-[1.08] active:scale-95',
-          open ? 'rotate-90 rounded-lg' : 'rounded-full'
+          FAB_BALL,
+          open ? 'rounded-lg' : 'rounded-full'
         )}
       >
         {open ? (
-          <X className='size-5' aria-hidden='true' />
+          <X className='size-[1.15rem]' aria-hidden='true' />
         ) : (
-          <LayoutGrid className='size-5' aria-hidden='true' />
+          <LayoutGrid className='size-[1.15rem]' aria-hidden='true' />
         )}
       </button>
 
@@ -45,15 +48,16 @@ export function OsNavBall() {
         {open ? (
           <>
             <div
-              className='fixed inset-0 z-[69]'
+              className='fixed inset-0 z-[89]'
               onClick={() => close()}
             />
             <motion.div
-              initial={{ opacity: 0, x: -10, scale: 0.96 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: -10, scale: 0.96 }}
+              initial={{ opacity: 0, y: 10, scale: 0.96, x: '-50%' }}
+              animate={{ opacity: 1, y: 0, scale: 1, x: '-50%' }}
+              exit={{ opacity: 0, y: 10, scale: 0.96, x: '-50%' }}
               transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              data-os-ball-card='nav' className='bg-sidebar/80 border-border/70 fixed bottom-4 left-[4.25rem] z-[69] flex max-h-[calc(100svh-8rem)] w-[30rem] origin-bottom-left flex-col overflow-hidden rounded-2xl border shadow-[0_20px_60px_rgba(0,0,0,0.2)] backdrop-blur-md saturate-150'
+              data-os-ball-card='nav'
+              className='bg-sidebar/80 border-border/70 fixed bottom-[4.25rem] left-1/2 z-[90] flex max-h-[calc(100svh-8rem)] w-[30rem] origin-bottom flex-col overflow-hidden rounded-2xl border shadow-[0_20px_60px_rgba(0,0,0,0.2)] backdrop-blur-md saturate-150'
             >
               <div className='min-h-0 flex-1 overflow-y-auto p-3'>
                 {/* Win 开始页风格:分类标题 + 图标上文字下的磁贴网格 */}

@@ -38,7 +38,6 @@ import {
 import { matchOsNavItem, useOsNavItems } from './os-shell/use-os-nav'
 import { useOsWindowsStore } from '@/stores/os-windows-store'
 import { OsDock } from './os-shell/os-dock'
-import { OsNavBall } from './os-shell/os-nav-ball'
 import { OsWindowManager } from './os-shell/os-window-manager'
 
 type AuthenticatedLayoutProps = {
@@ -157,8 +156,7 @@ function OsShellDesktopHost() {
   return (
     <div className='relative h-svh w-full overflow-hidden'>
       <OsWindowManager />
-      <OsNavBall />
-      {/* 一段式 Dock:[ 搜索 公告 语言 主题 头像 连接组 | 已打开页面 ] */}
+      {/* 底部三区:[ 左工具簇 | 中Dock(搜索+开始磁贴+窗口区) | 右托盘簇 ] */}
       <OsDock />
     </div>
   )

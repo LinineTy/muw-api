@@ -36,28 +36,23 @@ import {
 } from '@/features/chat/lib/chat-links'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 import { useOsBallStore } from './os-ball-store'
+import { FAB_BALL } from './os-ball-style'
+import { NavTiles } from './nav-tiles'
 import { useOsWindowsStore } from '@/stores/os-windows-store'
 import { matchOsNavItem, useOsNavItems } from './use-os-nav'
 import { useOsShellNavigate } from './os-open'
 
 /**
- * OS 桌面壳 · 底部 Dock(一段式):
- *   [ 搜索 公告 语言 主题 头像 连接组 | 已打开页面… ]
+ * OS 桌面壳 · 底部三区(Windows 任务栏语义):
+ *   [ 左工具簇: 快速导航 通知 第三方接入 ]
+ *   [ 中 Dock: 搜索 开始磁贴 | 已打开页面… ]
+ *   [ 右托盘簇: 语言 主题 头像 ]
  * - 固定区球体走移动端 FAB 同款配方(bg-popover 玻璃 + blur/saturate,
- *   无容器底色;琉璃主题下透出背景),弹层打开时圆→圆角方(data-state)
- * - 连接组:一颗球弹出菜单,收纳管理端 HeaderNavModules 配置的页面链接
+   无容器底色;琉璃主题下透出背景),弹层打开时圆→圆角方(data-state)
+ * - 开始磁贴:原左下导航球迁入,磁贴卡从 Dock 上方居中弹出(z-90 置顶)
  * - 窗口区(macOS 行为):已最小化→恢复置顶;已激活→最小化;
  *   已开未激活→置顶;激活窗图标实心高亮,其余运行小点
  */
-
-const FAB_BALL =
-  // 纯图标球:无 border 无自带底色(深色下圈套圈很脏),hover 微亮,
-  // 容器感交给 Dock 胶囊;弹层打开时圆→圆角方(data-state)
-  'text-primary flex size-10 items-center justify-center' +
-  ' transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]' +
-  // 弹层打开期间锁缩放:hover 进出/点击若带动按钮尺寸,弹层锚点会跟着位移
-  ' hover:bg-accent not-data-[state=open]:hover:scale-[1.08]' +
-  ' not-data-[state=open]:active:scale-95 rounded-full data-[state=open]:rounded-lg'
 
 function closeNavCard() {
   useOsBallStore.getState().close()
@@ -145,7 +140,7 @@ function ChatPresetsBall() {
         <MessageSquare className='size-[1.15rem]' aria-hidden='true' />
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        align='end'
+        align='start'
         side='top'
         sideOffset={8}
         className='min-w-64 z-[80]'
@@ -205,7 +200,7 @@ function NavJumpGroup() {
       >
         <Globe className='size-[1.15rem]' aria-hidden='true' />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align='end' side='top' sideOffset={8} className='z-[80]'>
+      <DropdownMenuContent align='start' side='top' sideOffset={8} className='z-[80]'>
         {links.map((link) =>
           link.external ? (
             <DropdownMenuItem
@@ -258,16 +253,15 @@ function SearchBall() {
   )
 }
 
-/** 右下工具簇(横排类 Dock):公告/语言/预设/主题/头像/快速导航 */
-function DockTools() {
+/** 左下工具簇:快速导航(链接聚合)/公告/第三方接入 */
+function DockToolsLeft() {
   const notifications = useNotifications()
-  const osNavigate = useOsShellNavigate()
   const { t } = useTranslation()
 
   return (
     <nav
-      aria-label='Dock Tools'
-      className='bg-popover/70 border-border/60 fixed right-3 bottom-3 z-[70] flex items-end gap-1 rounded-2xl border px-2 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.16)] backdrop-blur-[8px] saturate-150'
+      aria-label='Dock Tools Left'
+      className='bg-popover/70 border-border/60 fixed left-3 bottom-3 z-[70] flex items-end gap-1 rounded-2xl border px-2 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.16)] backdrop-blur-[8px] saturate-150'
     >
       {/* 快速导航(链接聚合) */}
       <NavJumpGroup />
@@ -293,6 +287,22 @@ function DockTools() {
         }
       />
 
+      {/* 聊天预设(第三方接入) */}
+      <ChatPresetsBall />
+    </nav>
+  )
+}
+
+/** 右下托盘簇:语言/主题/头像(系统托盘语义) */
+function DockToolsRight() {
+  const osNavigate = useOsShellNavigate()
+  const { t } = useTranslation()
+
+  return (
+    <nav
+      aria-label='Dock Tools Right'
+      className='bg-popover/70 border-border/60 fixed right-3 bottom-3 z-[70] flex items-end gap-1 rounded-2xl border px-2 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.16)] backdrop-blur-[8px] saturate-150'
+    >
       {/* 语言 */}
       <LanguageSwitcher
         trigger={
@@ -305,9 +315,6 @@ function DockTools() {
           />
         }
       />
-
-      {/* 聊天预设(第三方接入) */}
-      <ChatPresetsBall />
 
       {/* 主题/配置 */}
       <ConfigDrawer
@@ -334,7 +341,6 @@ function DockTools() {
           />
         }
       />
-
     </nav>
   )
 }
@@ -372,12 +378,20 @@ export function OsDock() {
 
   return (
     <>
-      <DockTools />
+      <DockToolsLeft />
+      <DockToolsRight />
       <nav
       aria-label='Dock'
       className='bg-popover/70 border-border/60 fixed bottom-3 left-1/2 z-[70] flex -translate-x-1/2 items-end gap-1 rounded-2xl border px-2 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.16)] backdrop-blur-[8px] saturate-150'
     >
       <SearchBall />
+
+      {/* 开始磁贴(原左下导航球,面板从 Dock 上方居中弹出) */}
+      <span
+        aria-hidden='true'
+        className='bg-border/60 mx-0.5 h-8 w-px self-center'
+      />
+      <NavTiles />
 
       {windows.length > 0 ? (
         <>
