@@ -90,13 +90,14 @@ function defaultGeometry(index: number) {
   const vh = typeof window !== 'undefined' ? window.innerHeight : 900
   // PC 大屏利用:默认窗宽吃满可用宽(≥xl 断点,窗口内页面保持 PC 布局)
   const w = Math.max(1120, Math.min(1600, vw - 112))
-  // 可用区=顶 16px 到 Dock 上沿(104px 区);窗口在区内垂直居中,上下等距不偏上
+  // 可用区=顶 16px 到 Dock 上沿(Dock 胶囊 12+52=64px 区);安卓平板式:
+  // 底边几乎贴 Dock(8px),级联只做 x 偏移
   const availTop = 16
-  const availH = vh - availTop - 104
-  const h = Math.max(360, availH - 2 * 24)
+  const availH = vh - availTop - 64
+  const h = Math.max(360, availH - 8)
   const k = index % 6
   const x = Math.max(24, (vw - w) / 2 - 24 + k * 28)
-  const y = availTop + Math.max(0, (availH - h) / 2) + k * 20
+  const y = availTop
   return { x, y, w, h }
 }
 

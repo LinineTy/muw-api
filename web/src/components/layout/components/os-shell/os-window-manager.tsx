@@ -66,6 +66,11 @@ export function OsWindowManager() {
 
     const path = window.location.pathname
     if (path !== '/console') {
+      // 设置页已退出多窗口:回桌面壳空态,不开窗
+      if (isSettingsUrl(path)) {
+        navigate({ to: '/console', replace: true })
+        return
+      }
       // 深链:该页面开成窗口,主层回到桌面
       const nav = matchOsNavItem(items, path)
       openWindow(
