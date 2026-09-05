@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 
 import { Sidebar, SidebarContent, SidebarRail } from '@/components/ui/sidebar'
+import { useDirection } from '@/context/direction-provider'
 import { useLayout } from '@/context/layout-provider'
 import { useSidebarView } from '@/hooks/use-sidebar-view'
 import { MOTION_TRANSITION, MOTION_VARIANTS } from '@/lib/motion'
@@ -45,11 +46,20 @@ import { SidebarViewHeader } from './sidebar-view-header'
  */
 export function AppSidebar() {
   const { collapsible, variant } = useLayout()
+  const { dir } = useDirection()
   const { key, view, navGroups } = useSidebarView()
   const shouldReduce = useReducedMotion()
 
   return (
-    <Sidebar collapsible={collapsible} variant={variant}>
+    // RTL 下侧栏必须换边:sidebar.tsx 的 fixed 容器按 data-side 钉物理边
+    // (side=left → left-0),gap 占位元素却随文档流走——dir=rtl 时 flex 行
+    // 从右往左排,gap 落在物理右侧而 fixed 侧栏仍钉左边,右边空一条侧栏位、
+    // 左边侧栏盖住内容。side 跟随 dir 翻转,gap 与容器重新对齐。
+    <Sidebar
+      collapsible={collapsible}
+      variant={variant}
+      side={dir === 'rtl' ? 'right' : 'left'}
+    >
       {view && <SidebarViewHeader view={view} />}
 
       <SidebarContent className='py-2'>
