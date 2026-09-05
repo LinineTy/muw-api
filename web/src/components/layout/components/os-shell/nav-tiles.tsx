@@ -57,7 +57,7 @@ export function NavTiles() {
               exit={{ opacity: 0, y: 10, scale: 0.96, x: '-50%' }}
               transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
               data-os-ball-card='nav'
-              className='bg-sidebar/80 border-border/70 fixed bottom-[4.25rem] left-1/2 z-[90] flex max-h-[calc(100svh-8rem)] w-[30rem] origin-bottom flex-col overflow-hidden rounded-2xl border shadow-[0_20px_60px_rgba(0,0,0,0.2)] backdrop-blur-md saturate-150'
+              className='bg-sidebar/80 border-border/70 fixed bottom-[4.25rem] left-1/2 z-[90] flex max-h-[calc(100svh-8rem)] w-[40rem] origin-bottom flex-col overflow-hidden rounded-2xl border shadow-[0_20px_60px_rgba(0,0,0,0.2)] backdrop-blur-md saturate-150'
             >
               <div className='min-h-0 flex-1 overflow-y-auto p-3'>
                 {/* Win 开始页风格:分类标题 + 图标上文字下的磁贴网格 */}
