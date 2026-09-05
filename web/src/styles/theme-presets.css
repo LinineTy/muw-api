@@ -1029,7 +1029,18 @@ body[data-theme-preset='liquid-glass']::before {
  * 背景图在面板下清晰可见——参考概览页系统负载卡片的透明质感。
  * header(管理端顶栏)与 sidebar-inner(侧栏)不在列表内:两者要求纯透明,
  * 不做二次模糊(背景层 body::before 已有整页 blur,面板再叠 backdrop-filter
- * 属于重复处理);header 本身 bg-transparent,直接透出背景。 */
+ * 属于重复处理);header 本身 bg-transparent,直接透出背景。
+ * sidebar-inner 连 bg-sidebar 底色也一并去掉(maintainer拍板:侧栏是框架,框架
+ * 全透——底色去掉后菜单直接坐在驯服过的壁纸上,与顶栏透明同一语言;
+ * 68fd67c9a 去掉的是它的 backdrop-filter,这里补全底色。移动端不受影响:
+ * 移动端弹卡外壳自带 bg-sidebar+backdrop-blur-md,内部不渲染
+ * sidebar-inner。非琉璃预设不动——实色侧栏底是各预设 token 的语义。) */
+[data-theme-preset='liquid-glass'] [data-slot='sidebar-inner'] {
+  background-color: transparent;
+}
+.dark [data-theme-preset='liquid-glass'] [data-slot='sidebar-inner'] {
+  background-color: transparent;
+}
 [data-theme-preset='liquid-glass'] :is(
   [data-slot='card'],
   [data-slot='dialog-content'],

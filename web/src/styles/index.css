@@ -790,16 +790,6 @@ html.os-in-window [data-slot='sidebar-gap'] {
   background: transparent;
 }
 
-/* OS 桌面壳下的主层设置页(PC):sidebar-inset 画布去霜。
- * 琉璃画布配方(theme-presets.css)给 sidebar-inset 挂 blur(8px)+10% 白底,
- * 窗口化 v2 后其他页面都在窗口里透壁纸,主层设置页是唯一剩霜的页面,
- * 观感像"模糊没去干净"——与窗口内画布同规则:背景透明+无二次模糊。
- * 布局几何(inset 浮卡 margin/圆角)保留,仅去视觉层。 */
-html.os-settings-host [data-slot='sidebar-inset'] {
-  background: transparent !important;
-  backdrop-filter: none !important;
-}
-
 /* OS 窗口开/关动画(纯 CSS,不依赖 motion——AnimatePresence 对包裹组件的
    initial/exit 传播在生产构建下不生效,最大化/恢复仍走 CSS transition) */
 @keyframes os-window-restore {
