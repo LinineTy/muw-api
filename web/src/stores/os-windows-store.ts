@@ -16,6 +16,10 @@ export type OsWindowState = {
   zIndex: number
   /** 懒加载:恢复的最小化窗口尚未被唤起过,iframe 不挂真 src(避免刷新后 N 窗齐发请求) */
   lazy?: boolean
+  /** 关闭中:先播退出动画,动画结束才真正从数组移除 */
+  closing?: boolean
+  /** 会话恢复的窗口:不播入场动画(刷新后一屏窗口糊脸闪一遍) */
+  restored?: boolean
 }
 
 /** 窗口数量上限(超限时忽略并保持现状) */
@@ -56,6 +60,8 @@ type OsWindowsStore = {
   /** 兼容恢复:只按 url 恢复 */
   restoreWindows: (navs: { url: string; title: string; icon?: string }[]) => void
   closeWindow: (id: string) => void
+  /** 关闭第一步:置 closing 播退出动画;动画结束再调 closeWindow 真正移除 */
+  requestCloseWindow: (id: string) => void
   minimizeWindow: (id: string) => void
   restoreWindow: (id: string) => void
   activateWindow: (id: string) => void
@@ -169,6 +175,7 @@ export const useOsWindowsStore = create<OsWindowsStore>((set, get) => ({
         zIndex: nextZ(current),
         /** 恢复窗标懒加载:唤起时才挂真 src,避免刷新后 N 个 iframe 齐发请求(429) */
         lazy: true,
+        restored: true,
       }
     })
     if (restored.length === 0) return
@@ -176,6 +183,16 @@ export const useOsWindowsStore = create<OsWindowsStore>((set, get) => ({
     set({
       windows: restored.map((w) => ({ ...w, minimized: true })),
       activeId: null,
+    })
+  },
+
+  requestCloseWindow: (id) => {
+    const win = get().windows.find((w) => w.id === id)
+    if (!win || win.closing) return
+    set({
+      windows: get().windows.map((w) =>
+        w.id === id ? { ...w, closing: true } : w
+      ),
     })
   },
 
