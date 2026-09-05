@@ -340,8 +340,13 @@ function DockTools() {
 export function OsDock() {
   const items = useOsNavItems()
   const [hovered, setHovered] = useState<string | null>(null)
-  const { windows, activeId, activateWindow, restoreWindow, minimizeWindow } =
-    useOsWindowsStore()
+  const {
+    windows,
+    activeId,
+    activateWindow,
+    restoreWindow,
+    requestMinimizeWindow,
+  } = useOsWindowsStore()
 
   const DOT_CLS = {
     active: 'bg-foreground size-1.5',
@@ -357,7 +362,7 @@ export function OsDock() {
       return
     }
     if (win.id === activeId) {
-      minimizeWindow(win.id)
+      requestMinimizeWindow(win.id)
       return
     }
     activateWindow(win.id)
