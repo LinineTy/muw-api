@@ -39,7 +39,7 @@ export function OsDock() {
   return (
     <nav
       aria-label='Dock'
-      className='bg-popover/70 border-border/60 fixed bottom-3 left-1/2 z-[70] flex -translate-x-1/2 items-end gap-1 rounded-2xl border px-2 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.16)] backdrop-blur-[8px] saturate-150'
+      className='bg-popover/70 border-border/60 flex items-end gap-1 rounded-2xl border px-2 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.16)] backdrop-blur-[8px] saturate-150'
     >
       {windows.map((win) => {
         const nav = matchOsNavItem(items, win.url)

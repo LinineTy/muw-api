@@ -765,17 +765,16 @@ html.os-in-window body::before {
   display: none;
 }
 
-/* 窗口内页面骨架透明化(仅亮色玻璃窗):SidebarInset(bg-background)、
- * 侧栏材质与 Main 会盖住窗口玻璃底。
- * 暗色不透明化:浅色文字配亮壁纸不可读,暗色窗口走实色深底。 */
-html.os-in-window:not(.dark) [data-slot='sidebar-inset'] {
+/* 窗口内页面骨架透明化:SidebarInset(bg-background)、侧栏材质与 Main
+ * 会盖住窗口玻璃底;亮暗都透明,头身统一透窗口容器的玻璃/暗玻璃底 */
+html.os-in-window [data-slot='sidebar-inset'] {
   background: transparent;
 }
 
-html.os-in-window:not(.dark) [data-slot='sidebar'] {
+html.os-in-window [data-slot='sidebar'] {
   background: transparent;
 }
 
-html.os-in-window:not(.dark) [data-slot='sidebar-gap'] {
+html.os-in-window [data-slot='sidebar-gap'] {
   background: transparent;
 }

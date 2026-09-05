@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect } from 'react'
+import { useLocation } from '@tanstack/react-router'
 import { AnimatedOutlet } from '@/components/page-transition'
 import { SkipToMain } from '@/components/skip-to-main'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
@@ -67,21 +68,15 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
     if (!IN_OS_WINDOW && !isMobile) installParentAuthBridge()
   }, [isMobile])
 
-  // iframe 内容模式:OS 窗口内的页面 = 原布局去顶栏(保留 AppSidebar,
-  // 否则系统设置等依赖侧栏分区导航的页面在窗口里会迷路)
+  // iframe 内容模式:OS 窗口内的页面 = 原布局去顶栏。
+  // AppSidebar 只给系统设置类页面(/settings)——侧栏分区导航仅设置页需要,
+  // 其他页面全宽铺窗口,避免每页都顶一条侧栏
   if (IN_OS_WINDOW) {
     return (
       <LayoutProvider>
         <SearchProvider>
           <SidebarProvider defaultOpen={defaultOpen} className='flex-col'>
-            <div className='flex min-h-0 w-full flex-1'>
-              <AppSidebar />
-              <SidebarInset className='@container/content h-svh min-h-0 flex-1 overflow-hidden peer-data-[variant=inset]:h-svh'>
-                <div className='h-svh w-full overflow-y-auto overscroll-contain'>
-                  {props.children ?? <AnimatedOutlet />}
-                </div>
-              </SidebarInset>
-            </div>
+            <OsWindowContent>{props.children ?? <AnimatedOutlet />}</OsWindowContent>
           </SidebarProvider>
         </SearchProvider>
       </LayoutProvider>
@@ -116,13 +111,40 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
             <div className='relative h-svh w-full overflow-hidden'>
               <OsWindowManager />
               <OsNavBall />
-              <OsFuncBalls />
-              <OsDock />
+              {/* 功能球组横向贴 Dock 左侧,同一底线(替代原顶栏) */}
+              <div className='fixed bottom-3 left-1/2 z-[70] flex -translate-x-1/2 items-end gap-2'>
+                <OsFuncBalls />
+                <OsDock />
+              </div>
             </div>
           )}
           <MobileNavFab />
         </SidebarProvider>
       </SearchProvider>
     </LayoutProvider>
+  )
+}
+
+/** OS 窗口内容:仅系统设置页保留侧栏(分区导航需要),其余页面全宽铺窗口 */
+function OsWindowContent({ children }: { children: React.ReactNode }) {
+  const pathname = useLocation({ select: (s) => s.pathname })
+  const isSettings =
+    pathname.startsWith('/settings') || pathname.startsWith('/system-settings')
+  if (!isSettings) {
+    return (
+      <div className='@container/content h-svh w-full overflow-y-auto overscroll-contain'>
+        {children}
+      </div>
+    )
+  }
+  return (
+    <div className='flex min-h-0 w-full flex-1'>
+      <AppSidebar />
+      <SidebarInset className='@container/content h-svh min-h-0 flex-1 overflow-hidden peer-data-[variant=inset]:h-svh'>
+        <div className='h-svh w-full overflow-y-auto overscroll-contain'>
+          {children}
+        </div>
+      </SidebarInset>
+    </div>
   )
 }
