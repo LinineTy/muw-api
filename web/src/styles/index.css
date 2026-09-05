@@ -810,9 +810,31 @@ html.os-in-window [data-slot='sidebar-gap'] {
   }
 }
 .os-window-enter {
-  animation: os-window-in 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: os-window-in 0.34s cubic-bezier(0.22, 1.2, 0.36, 1);
 }
 .os-window-exit {
-  animation: os-window-out 0.2s ease-in forwards;
+  animation: os-window-out 0.22s ease-in forwards;
   pointer-events: none;
+}
+@keyframes os-window-minimize {
+  to {
+    opacity: 0;
+    transform: scale(0.88) translateY(90px);
+  }
+}
+.os-window-minimize {
+  animation: os-window-minimize 0.2s ease-in forwards;
+}
+@keyframes os-window-restore {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(46px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.os-window-restore {
+  animation: os-window-restore 0.32s cubic-bezier(0.22, 1.2, 0.36, 1);
 }

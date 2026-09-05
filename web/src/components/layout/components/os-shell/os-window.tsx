@@ -44,8 +44,16 @@ export function OsWindowFrame({
   // 拖动/缩放中禁几何过渡(否则指针追不上),最大化/恢复切换时才有平滑动画
   const [interacting, setInteracting] = useState(false)
   const { t } = useTranslation()
-  const { closeWindow, requestCloseWindow, minimizeWindow, activateWindow, toggleMaximize, moveWindow, resizeWindow } =
-    useOsWindowsStore()
+  const {
+    closeWindow,
+    requestCloseWindow,
+    minimizeWindow,
+    requestMinimizeWindow,
+    activateWindow,
+    toggleMaximize,
+    moveWindow,
+    resizeWindow,
+  } = useOsWindowsStore()
 
   // 两段式关闭:closing 置位播退出动画,220ms 后真正移除(兜底定时器防动画事件丢失)
   useEffect(() => {
@@ -53,6 +61,26 @@ export function OsWindowFrame({
     const t = setTimeout(() => closeWindow(win.id), 240)
     return () => clearTimeout(t)
   }, [win.closing, win.id, closeWindow])
+
+  // 两段式最小化:minimizing 置位播缩退动画,200ms 后真正藏入 Dock
+  useEffect(() => {
+    if (!win.minimizing) return
+    const t = setTimeout(() => minimizeWindow(win.id), 210)
+    return () => clearTimeout(t)
+  }, [win.minimizing, win.id, minimizeWindow])
+
+  // 恢复动画:minimized true→false 切换时播一次自 Dock 浮入(类从无到有才触发)
+  const prevMinimized = useRef(win.minimized)
+  const [restoreAnim, setRestoreAnim] = useState(false)
+  useEffect(() => {
+    if (prevMinimized.current && !win.minimized) {
+      setRestoreAnim(true)
+      const t = setTimeout(() => setRestoreAnim(false), 360)
+      prevMinimized.current = win.minimized
+      return () => clearTimeout(t)
+    }
+    prevMinimized.current = win.minimized
+  }, [win.minimized])
 
   const onTitleDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (win.maximized) return
@@ -127,9 +155,12 @@ export function OsWindowFrame({
         // 几何变化过渡:最大化/恢复平滑展开;拖动缩放中禁用
         !interacting &&
           'transition-[left,top,width,height] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
-        // 开/关窗动画:入场默认播(会话恢复的窗除外),关闭播退出
-        !win.restored && 'os-window-enter',
+        // 开/关窗动画:入场默认播(会话恢复的窗除外),关闭播退出,
+        // 最小化播缩退,从 Dock 恢复播浮入
+        !win.restored && !win.closing && 'os-window-enter',
         win.closing && 'os-window-exit',
+        win.minimizing && 'os-window-minimize',
+        restoreAnim && 'os-window-restore',
         // 最大化贴边:去圆角;激活窗加淡描边置前强调
         win.maximized && 'rounded-none',
         active && 'border-primary/40 ring-primary/25 ring-1',
@@ -176,7 +207,7 @@ export function OsWindowFrame({
             type='button'
             aria-label={t('Minimize window')}
             title={t('Minimize window')}
-            onClick={() => minimizeWindow(win.id)}
+            onClick={() => requestMinimizeWindow(win.id)}
             className='text-muted-foreground hover:text-foreground hover:bg-accent flex size-6 items-center justify-center rounded-md transition-colors'
           >
             <Minus className='size-3' aria-hidden='true' />
@@ -194,15 +225,9 @@ export function OsWindowFrame({
       </div>
 
       {/* 内容:同源 iframe(self!==top 时子应用渲染纯内容)
-          lazy=恢复后未唤起的窗,挂 about:blank 占位,唤起才真加载 */}
-      {/* 窗口化依赖同源登录态/localStorage,不能加 sandbox(规则误伤,行级豁免) */}
-      {/* oxlint-disable-next-line react/iframe-missing-sandbox */}
-      <iframe
-        src={win.lazy ? 'about:blank' : win.url}
-        data-os-window-id={win.id}
-        title={win.title}
-        className='min-h-0 flex-1 border-0 bg-transparent'
-      />
+          lazy=恢复后未唤起的窗,挂 about:blank 占位,唤起才真加载;
+          load 完成前保持透明,内容就绪后淡入(消除窗口展开后白屏闪现) */}
+      <IframePane src={win.lazy ? 'about:blank' : win.url} title={win.title} />
 
       {/* 右下角缩放把手 */}
       {!win.maximized ? (
@@ -220,5 +245,28 @@ export function OsWindowFrame({
         </div>
       ) : null}
     </div>
+  )
+}
+
+/**
+ * 窗口内容面板:iframe onLoad 前保持透明,就绪后淡入。
+ * 每个窗只挂一次(src 不变,SPA 内部导航不触发 load);
+ * lazy 窗挂 about:blank 先立即 load,唤起换真 src 后再走一次淡入。
+ */
+function IframePane({ src, title }: { src: string; title: string }) {
+  const [ready, setReady] = useState(false)
+  return (
+    // 窗口化依赖同源登录态/localStorage,不能加 sandbox(规则误伤,行级豁免)
+    // oxlint-disable-next-line react/iframe-missing-sandbox
+    <iframe
+      src={src}
+      data-os-window-id={title}
+      title={title}
+      onLoad={() => setReady(true)}
+      className={cn(
+        'min-h-0 flex-1 border-0 bg-transparent transition-opacity duration-300',
+        ready ? 'opacity-100' : 'opacity-0'
+      )}
+    />
   )
 }

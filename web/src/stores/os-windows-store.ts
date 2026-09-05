@@ -18,6 +18,8 @@ export type OsWindowState = {
   lazy?: boolean
   /** 关闭中:先播退出动画,动画结束才真正从数组移除 */
   closing?: boolean
+  /** 最小化中:先播缩退动画,动画结束才真正藏入 Dock */
+  minimizing?: boolean
   /** 会话恢复的窗口:不播入场动画(刷新后一屏窗口糊脸闪一遍) */
   restored?: boolean
 }
@@ -63,6 +65,8 @@ type OsWindowsStore = {
   /** 关闭第一步:置 closing 播退出动画;动画结束再调 closeWindow 真正移除 */
   requestCloseWindow: (id: string) => void
   minimizeWindow: (id: string) => void
+  /** 最小化第一步:置 minimizing 播缩退动画;动画结束再调 minimizeWindow 藏入 Dock */
+  requestMinimizeWindow: (id: string) => void
   restoreWindow: (id: string) => void
   activateWindow: (id: string) => void
   toggleMaximize: (id: string) => void
@@ -207,6 +211,16 @@ export const useOsWindowsStore = create<OsWindowsStore>((set, get) => ({
           : activeId,
     })
     persist(next)
+  },
+
+  requestMinimizeWindow: (id) => {
+    const win = get().windows.find((w) => w.id === id)
+    if (!win || win.minimizing || win.minimized) return
+    set({
+      windows: get().windows.map((w) =>
+        w.id === id ? { ...w, minimizing: true } : w
+      ),
+    })
   },
 
   minimizeWindow: (id) => {
