@@ -149,7 +149,11 @@ function ChatPresetsBall() {
       >
         <MessageSquare className='size-[1.15rem]' aria-hidden='true' />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align='start' side='top'>
+      <DropdownMenuContent
+        align='end'
+        side='top'
+        className='min-w-64'
+      >
         {visiblePresets.map((preset) =>
           preset.type === 'web' ? (
             <DropdownMenuItem
@@ -162,8 +166,8 @@ function ChatPresetsBall() {
                 />
               }
             >
-              <Link2 className='size-4' aria-hidden='true' />
-              {preset.name}
+              <Link2 className='size-4 shrink-0' aria-hidden='true' />
+              <span className='whitespace-nowrap'>{preset.name}</span>
             </DropdownMenuItem>
           ) : (
             <DropdownMenuItem
@@ -175,9 +179,9 @@ function ChatPresetsBall() {
               {loadingPresetId === preset.id ? (
                 <Loader2 className='size-4 animate-spin' aria-hidden='true' />
               ) : (
-                <ExternalLink className='size-4' aria-hidden='true' />
+                <ExternalLink className='size-4 shrink-0' aria-hidden='true' />
               )}
-              {preset.name}
+              <span className='whitespace-nowrap'>{preset.name}</span>
             </DropdownMenuItem>
           )
         )}
@@ -205,7 +209,7 @@ function NavJumpGroup() {
       >
         <Globe className='size-[1.15rem]' aria-hidden='true' />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align='start' side='top'>
+      <DropdownMenuContent align='end' side='top'>
         {links.map((link) =>
           link.external ? (
             <DropdownMenuItem
@@ -237,29 +241,38 @@ function NavJumpGroup() {
   )
 }
 
-/** 固定功能区:原顶栏的搜索/公告/语言/主题/个人 + 连接组 */
-function DockFixedItems() {
-  const notifications = useNotifications()
+/** 搜索球:唯一留在中 Dock 的固定功能 */
+function SearchBall() {
   const { setOpen: setSearchOpen } = useSearch()
+  const { t } = useTranslation()
+
+  return (
+    <button
+      type='button'
+      aria-label={t('Search')}
+      title={t('Search')}
+      onClick={() => {
+        closeNavCard()
+        setSearchOpen(true)
+      }}
+      className={FAB_BALL}
+    >
+      <SearchIcon className='size-[1.15rem]' aria-hidden='true' />
+    </button>
+  )
+}
+
+/** 右下工具簇(横排类 Dock):公告/语言/预设/主题/头像/快速导航 */
+function DockTools() {
+  const notifications = useNotifications()
   const osNavigate = useOsShellNavigate()
   const { t } = useTranslation()
 
   return (
-    <>
-      {/* 搜索 */}
-      <button
-        type='button'
-        aria-label={t('Search')}
-        title={t('Search')}
-        onClick={() => {
-          closeNavCard()
-          setSearchOpen(true)
-        }}
-        className={FAB_BALL}
-      >
-        <SearchIcon className='size-[1.15rem]' aria-hidden='true' />
-      </button>
-
+    <nav
+      aria-label='Dock Tools'
+      className='bg-popover/70 border-border/60 fixed right-3 bottom-3 z-[70] flex items-end gap-1 rounded-2xl border px-2 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.16)] backdrop-blur-[8px] saturate-150'
+    >
       {/* 公告 */}
       <NotificationPopover
         open={notifications.popoverOpen}
@@ -323,8 +336,9 @@ function DockFixedItems() {
         }
       />
 
+      {/* 快速导航 */}
       <NavJumpGroup />
-    </>
+    </nav>
   )
 }
 
@@ -349,11 +363,13 @@ export function OsDock() {
   }
 
   return (
-    <nav
+    <>
+      <DockTools />
+      <nav
       aria-label='Dock'
       className='bg-popover/70 border-border/60 fixed bottom-3 left-1/2 z-[70] flex -translate-x-1/2 items-end gap-1 rounded-2xl border px-2 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.16)] backdrop-blur-[8px] saturate-150'
     >
-      <DockFixedItems />
+      <SearchBall />
 
       {windows.length > 0 ? (
         <>
@@ -411,6 +427,7 @@ export function OsDock() {
           })}
         </>
       ) : null}
-    </nav>
+      </nav>
+    </>
   )
 }

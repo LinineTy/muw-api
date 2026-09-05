@@ -53,33 +53,38 @@ export function OsNavBall() {
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: -10, scale: 0.96 }}
               transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              data-os-ball-card='nav' className='bg-sidebar/80 border-border/70 fixed bottom-4 left-[4.25rem] z-[69] flex max-h-[calc(100svh-14rem)] w-64 origin-bottom-left flex-col overflow-hidden rounded-2xl border shadow-[0_20px_60px_rgba(0,0,0,0.2)] backdrop-blur-md saturate-150'
+              data-os-ball-card='nav' className='bg-sidebar/80 border-border/70 fixed bottom-4 left-[4.25rem] z-[69] flex max-h-[calc(100svh-8rem)] w-[30rem] origin-bottom-left flex-col overflow-hidden rounded-2xl border shadow-[0_20px_60px_rgba(0,0,0,0.2)] backdrop-blur-md saturate-150'
             >
-              <div className='min-h-0 flex-1 overflow-y-auto p-2'>
+              <div className='min-h-0 flex-1 overflow-y-auto p-3'>
+                {/* Win 开始页风格:分类标题 + 图标上文字下的磁贴网格 */}
                 {groups.map((group) => (
-                  <div key={group.id} className='mb-1.5 last:mb-0'>
-                    <div className='text-muted-foreground/70 px-2.5 pb-1 pt-2 text-[0.68rem] font-medium tracking-wide'>
+                  <div key={group.id} className='mb-2 last:mb-0'>
+                    <div className='text-muted-foreground/70 px-1 pb-1.5 pt-1 text-[0.7rem] font-medium tracking-wide'>
                       {group.title}
                     </div>
-                    {group.items.map((item) => {
-                      const Icon = item.icon
-                      return (
-                        <button
-                          key={item.url}
-                          type='button'
-                          onClick={() => {
-                            osNavigate(item.url)
-                            close()
-                          }}
-                          className='text-muted-foreground hover:bg-accent hover:text-foreground flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors'
-                        >
-                          {Icon ? (
-                            <Icon className='size-4 shrink-0' aria-hidden='true' />
-                          ) : null}
-                          <span className='truncate'>{item.title}</span>
-                        </button>
-                      )
-                    })}
+                    <div className='grid grid-cols-5 gap-1'>
+                      {group.items.map((item) => {
+                        const Icon = item.icon
+                        return (
+                          <button
+                            key={item.url}
+                            type='button'
+                            onClick={() => {
+                              osNavigate(item.url)
+                              close()
+                            }}
+                            className='text-muted-foreground hover:bg-accent hover:text-foreground flex flex-col items-center gap-1.5 rounded-xl px-1 py-3 transition-colors'
+                          >
+                            {Icon ? (
+                              <Icon className='size-6 shrink-0' aria-hidden='true' />
+                            ) : null}
+                            <span className='w-full truncate text-center text-xs leading-tight'>
+                              {item.title}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
                 ))}
               </div>

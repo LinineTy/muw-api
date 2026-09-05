@@ -1,5 +1,6 @@
 // @muw-owned
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
+import { motion } from 'motion/react'
 import {
   Maximize2,
   Minimize2,
@@ -41,6 +42,8 @@ export function OsWindowFrame({
   icon?: React.ElementType
 }) {
   const drag = useRef<DragState>(null)
+  // 拖动/缩放中禁几何过渡(否则指针追不上),最大化/恢复切换时才有平滑动画
+  const [interacting, setInteracting] = useState(false)
   const { t } = useTranslation()
   const { closeWindow, minimizeWindow, activateWindow, toggleMaximize, moveWindow, resizeWindow } =
     useOsWindowsStore()
@@ -48,6 +51,7 @@ export function OsWindowFrame({
   const onTitleDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (win.maximized) return
     if ((e.target as HTMLElement).closest('button')) return
+    setInteracting(true)
     drag.current = { mode: 'move', dx: e.clientX - win.x, dy: e.clientY - win.y }
     try {
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
@@ -67,10 +71,12 @@ export function OsWindowFrame({
   }
   const onTitleUp = () => {
     drag.current = null
+    setInteracting(false)
   }
 
   const onResizeDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (win.maximized) return
+    setInteracting(true)
     drag.current = { mode: 'resize', sx: e.clientX, sy: e.clientY, w: win.w, h: win.h }
     try {
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
@@ -87,6 +93,7 @@ export function OsWindowFrame({
   }
   const onResizeUp = () => {
     drag.current = null
+    setInteracting(false)
   }
 
   const style: React.CSSProperties = win.maximized
@@ -98,13 +105,20 @@ export function OsWindowFrame({
   if (win.minimized) style.display = 'none'
 
   return (
-    <div
+    <motion.div
       data-os-window={win.id}
       style={style}
       onPointerDown={() => !active && activateWindow(win.id)}
+      initial={{ opacity: 0, scale: 0.96, y: 12 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.97, y: 8 }}
+      transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
       className={cn(
         // 亮暗统一琉璃配方:暗色 --card 自带低透明度,壁纸可透出
         'bg-card/70 border-border/60 absolute flex flex-col overflow-hidden rounded-2xl border backdrop-blur-[8px] saturate-150',
+        // 几何变化过渡:最大化/恢复平滑展开;拖动缩放中禁用
+        !interacting &&
+          'transition-[left,top,width,height] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
         // 最大化贴边:去圆角;激活窗加淡描边置前强调
         win.maximized && 'rounded-none',
         active && 'border-primary/40 ring-primary/25 ring-1',
@@ -192,6 +206,6 @@ export function OsWindowFrame({
           </svg>
         </div>
       ) : null}
-    </div>
+    </motion.div>
   )
 }

@@ -1,4 +1,5 @@
 // @muw-owned
+import { AnimatePresence } from 'motion/react'
 import { useEffect, useRef } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 
@@ -98,6 +99,7 @@ export function OsWindowManager() {
 
   return (
     <>
+      <AnimatePresence>
       {windows.map((w) => {
         const nav = matchOsNavItem(items, w.url)
         return (
@@ -109,6 +111,7 @@ export function OsWindowManager() {
           />
         )
       })}
+      </AnimatePresence>
       {visible.length === 0 ? <OsDesktopPlaceholder /> : null}
     </>
   )

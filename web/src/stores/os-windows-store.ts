@@ -91,12 +91,15 @@ function defaultGeometry(index: number) {
   // PC 大屏利用:默认窗宽吃满可用宽(≥xl 断点,窗口内页面保持 PC 布局)
   const w = Math.max(1120, Math.min(1600, vw - 112))
   // 可用区=顶 16px 到 Dock 上沿(Dock 胶囊 12+52=64px 区);安卓平板式:
-  // 底边几乎贴 Dock(8px),级联只做 x 偏移
+  // 底边几乎贴 Dock(8px);水平真居中,级联=左中右小循环不跑偏
   const availTop = 16
   const availH = vh - availTop - 64
   const h = Math.max(360, availH - 8)
   const k = index % 6
-  const x = Math.max(24, (vw - w) / 2 - 24 + k * 28)
+  const x = Math.min(
+    Math.max((vw - w) / 2 + (((k + 1) % 3) - 1) * 28, 24),
+    vw - w - 24
+  )
   const y = availTop
   return { x, y, w, h }
 }
