@@ -69,7 +69,7 @@ export function OsNavBall() {
                           type='button'
                           onClick={() => {
                             openWindow({ url: item.url, title: item.title })
-                            setOpen(false)
+                            close()
                           }}
                           className='text-muted-foreground hover:bg-accent hover:text-foreground flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors'
                         >
