@@ -10,7 +10,6 @@ import {
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Link } from '@tanstack/react-router'
-import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 
 import {
@@ -35,12 +34,6 @@ import {
   resolveChatUrl,
   type ChatPreset,
 } from '@/features/chat/lib/chat-links'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 import { useOsBallStore } from './os-ball-store'
 import { useOsWindowsStore } from '@/stores/os-windows-store'
@@ -350,6 +343,12 @@ export function OsDock() {
   const { windows, activeId, activateWindow, restoreWindow, minimizeWindow } =
     useOsWindowsStore()
 
+  const DOT_CLS = {
+    active: 'bg-foreground size-1.5',
+    minimized: 'bg-muted-foreground/40 size-1',
+    running: 'bg-muted-foreground/70 size-1',
+  } as const
+
   const onDockClick = (id: string) => {
     const win = windows.find((w) => w.id === id)
     if (!win) return
@@ -383,6 +382,10 @@ export function OsDock() {
             const nav = matchOsNavItem(items, win.url)
             const Icon = nav?.icon
             const activeHere = win.id === activeId && !win.minimized
+            // 运行状态点:查表消除嵌套三元
+            let dotKey: keyof typeof DOT_CLS = 'running'
+            if (win.minimized) dotKey = 'minimized'
+            else if (activeHere) dotKey = 'active'
             return (
               <button
                 key={win.id}
@@ -403,11 +406,7 @@ export function OsDock() {
                 <span
                   className={cn(
                     'absolute bottom-0.5 rounded-full transition-all',
-                    activeHere
-                      ? 'bg-foreground size-1.5'
-                      : win.minimized
-                        ? 'bg-muted-foreground/40 size-1'
-                        : 'bg-muted-foreground/70 size-1'
+                    DOT_CLS[dotKey]
                   )}
                 />
                 <AnimatePresence>

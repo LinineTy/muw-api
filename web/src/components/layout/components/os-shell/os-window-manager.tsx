@@ -69,7 +69,7 @@ export function OsWindowManager() {
     if (path !== '/console') {
       // 设置页已退出多窗口:回桌面壳空态,不开窗
       if (isSettingsUrl(path)) {
-        navigate({ to: '/console', replace: true })
+        navigate({ to: '/dashboard', replace: true })
         return
       }
       // 深链:该页面开成窗口,主层回到桌面
@@ -77,7 +77,7 @@ export function OsWindowManager() {
       openWindow(
         nav ? { url: nav.url, title: nav.title } : { url: path, title: path }
       )
-      navigate({ to: '/console', replace: true })
+      navigate({ to: '/dashboard', replace: true })
     } else {
       // 恢复上次窗口(标题/图标用当前 nav 数据回填)
       const persisted = readPersistedWindows().filter(
