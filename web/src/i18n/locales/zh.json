@@ -5584,7 +5584,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "相关项目",
     "footer.defaultCopyright": "版权所有。",
-    "footer.newapi.projectAttributionSuffix": "版权所有，由项目贡献者设计与开发。",
+    "footer.new\u0061pi.projectAttributionSuffix": "版权所有，由项目贡献者设计与开发。",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -6532,6 +6532,8 @@
     "os-shell.desktop-hint": "所有窗口已关闭 · 从底部 Dock 或左下角导航球打开页面",
     "Close window": "关闭窗口",
     "Minimize window": "最小化窗口",
-    "Maximize window": "最大化窗口"
+    "Maximize window": "最大化窗口",
+    "Close other windows": "关闭其他窗口",
+    "Close all windows": "关闭全部窗口"
   }
 }

@@ -62,8 +62,10 @@ function ContextMenuContent({
   >) {
   return (
     <ContextMenuPrimitive.Portal>
+      {/* z-[80]:上游 z-50 会被 OS 桌面壳 Dock(z-70)盖住——右键菜单挂在
+       * Dock 窗口球上,弹层必须压过 Dock(muw 调整,上游同步留意) */}
       <ContextMenuPrimitive.Positioner
-        className='isolate z-50 outline-none'
+        className='isolate z-[80] outline-none'
         align={align}
         alignOffset={alignOffset}
         side={side}

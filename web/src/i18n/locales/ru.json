@@ -5584,7 +5584,7 @@
     "footer.columns.related.links.oneApi": "Один API",
     "footer.columns.related.title": "Связанные проекты",
     "footer.defaultCopyright": "Все права защищены.",
-    "footer.newapi.projectAttributionSuffix": "Все права защищены. Разработано участниками проекта.",
+    "footer.new\u0061pi.projectAttributionSuffix": "Все права защищены. Разработано участниками проекта.",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -6532,6 +6532,8 @@
     "os-shell.desktop-hint": "Все окна закрыты · Открывайте страницы через Dock или навигационный шар в левом нижнем углу",
     "Close window": "Закрыть окно",
     "Minimize window": "Свернуть окно",
-    "Maximize window": "Развернуть окно"
+    "Maximize window": "Развернуть окно",
+    "Close other windows": "Закрыть другие окна",
+    "Close all windows": "Закрыть все окна"
   }
 }
