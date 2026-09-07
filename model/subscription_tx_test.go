@@ -53,7 +53,7 @@ func TestPostConsumeUserSubscriptionDeltaJoinsCallerTransaction(t *testing.T) {
 	db := openSubscriptionDeltaTestDB(t)
 	require.NoError(t, db.AutoMigrate(&UserSubscription{}))
 
-	sub := &UserSubscription{UserId: 1, AmountTotal: 1000, AmountUsed: 100, Status: "active"}
+	sub := &UserSubscription{UserId: 1, PeriodUsed: 100, Status: "active"}
 	require.NoError(t, db.Create(sub).Error)
 
 	rollbackErr := errors.New("force rollback")
@@ -65,7 +65,7 @@ func TestPostConsumeUserSubscriptionDeltaJoinsCallerTransaction(t *testing.T) {
 
 	var after UserSubscription
 	require.NoError(t, db.First(&after, sub.Id).Error)
-	assert.Equal(t, int64(100), after.AmountUsed, "delta 必须随外层事务一起回滚")
+	assert.Equal(t, int64(100), after.PeriodUsed, "delta 必须随外层事务一起回滚")
 }
 
 // TestPostConsumeUserSubscriptionDeltaDefaultUsesGlobalDB 验证 nil 时走全局 DB，
@@ -78,7 +78,7 @@ func TestPostConsumeUserSubscriptionDeltaDefaultUsesGlobalDB(t *testing.T) {
 	db := openSubscriptionDeltaTestDB(t)
 	require.NoError(t, db.AutoMigrate(&UserSubscription{}))
 
-	sub := &UserSubscription{UserId: 1, AmountTotal: 1000, AmountUsed: 100, Status: "active"}
+	sub := &UserSubscription{UserId: 1, PeriodUsed: 100, Status: "active"}
 	require.NoError(t, db.Create(sub).Error)
 
 	prevDB := DB
@@ -89,5 +89,5 @@ func TestPostConsumeUserSubscriptionDeltaDefaultUsesGlobalDB(t *testing.T) {
 
 	var after UserSubscription
 	require.NoError(t, db.First(&after, sub.Id).Error)
-	assert.Equal(t, int64(90), after.AmountUsed)
+	assert.Equal(t, int64(90), after.PeriodUsed)
 }

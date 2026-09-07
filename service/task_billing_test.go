@@ -97,13 +97,12 @@ func seedToken(t *testing.T, id int, userId int, key string, remainQuota int) {
 	require.NoError(t, model.DB.Create(token).Error)
 }
 
-func seedSubscription(t *testing.T, id int, userId int, amountTotal int64, amountUsed int64) {
+func seedSubscription(t *testing.T, id int, userId int, periodUsed int64) {
 	t.Helper()
 	sub := &model.UserSubscription{
 		Id:          id,
 		UserId:      userId,
-		AmountTotal: amountTotal,
-		AmountUsed:  amountUsed,
+		PeriodUsed:  periodUsed,
 		Status:      "active",
 		StartTime:   time.Now().Unix(),
 		EndTime:     time.Now().Add(30 * 24 * time.Hour).Unix(),
@@ -296,8 +295,8 @@ func getTokenUsedQuota(t *testing.T, id int) int {
 func getSubscriptionUsed(t *testing.T, id int) int64 {
 	t.Helper()
 	var sub model.UserSubscription
-	require.NoError(t, model.DB.Select("amount_used").Where("id = ?", id).First(&sub).Error)
-	return sub.AmountUsed
+	require.NoError(t, model.DB.Select("period_used").Where("id = ?", id).First(&sub).Error)
+	return sub.PeriodUsed
 }
 
 func getTaskQuota(t *testing.T, id int64) int {
@@ -665,13 +664,13 @@ func TestRefundTaskQuota_Subscription(t *testing.T) {
 
 	const userID, tokenID, channelID, subID = 2, 2, 2, 1
 	const preConsumed = 2000
-	const subTotal, subUsed int64 = 100000, 50000
+	const subUsed int64 = 50000
 	const tokenRemain = 8000
 
 	seedUser(t, userID, 0)
 	seedToken(t, tokenID, userID, "sk-sub-key", tokenRemain)
 	seedChannel(t, channelID)
-	seedSubscription(t, subID, userID, subTotal, subUsed)
+	seedSubscription(t, subID, userID, subUsed)
 	seedChargedAccounting(t, userID, channelID, tokenID, preConsumed, 1)
 
 	task := makeTask(userID, channelID, preConsumed, tokenID, BillingSourceSubscription, subID)
@@ -894,13 +893,13 @@ func TestRecalculate_Subscription_NegativeDelta(t *testing.T) {
 	const userID, tokenID, channelID, subID = 14, 14, 14, 2
 	const preConsumed = 5000
 	const actualQuota = 2000 // over-charged by 3000
-	const subTotal, subUsed int64 = 100000, 50000
+	const subUsed int64 = 50000
 	const tokenRemain = 8000
 
 	seedUser(t, userID, 0)
 	seedToken(t, tokenID, userID, "sk-sub-recalc", tokenRemain)
 	seedChannel(t, channelID)
-	seedSubscription(t, subID, userID, subTotal, subUsed)
+	seedSubscription(t, subID, userID, subUsed)
 	seedChargedAccounting(t, userID, channelID, tokenID, preConsumed, 1)
 
 	task := makeTask(userID, channelID, preConsumed, tokenID, BillingSourceSubscription, subID)

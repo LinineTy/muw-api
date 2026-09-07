@@ -134,7 +134,7 @@ type RelayInfo struct {
 	SubscriptionId int
 	// SubscriptionPreConsumed is the amount pre-consumed on subscription item (quota units or 1)
 	SubscriptionPreConsumed int64
-	// SubscriptionPostDelta is the post-consume delta applied to amount_used (quota units; can be negative).
+	// SubscriptionPostDelta is the post-consume delta applied to period_used (quota units; can be negative).
 	SubscriptionPostDelta int64
 	// SubscriptionPlanId / SubscriptionPlanTitle are used for logging/UI display.
 	SubscriptionPlanId    int

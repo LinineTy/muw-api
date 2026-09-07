@@ -50,7 +50,7 @@ func TestSQLiteConcurrentReadThenWriteNoBusy(t *testing.T) {
 	sqlDB.SetMaxIdleConns(8)
 	require.NoError(t, db.AutoMigrate(&UserSubscription{}))
 
-	sub := &UserSubscription{UserId: 1, AmountTotal: 1 << 40, AmountUsed: 0, Status: "active"}
+	sub := &UserSubscription{UserId: 1, PeriodUsed: 0, Status: "active"}
 	require.NoError(t, db.Create(sub).Error)
 
 	var errCount int64
@@ -67,7 +67,7 @@ func TestSQLiteConcurrentReadThenWriteNoBusy(t *testing.T) {
 					if err := tx.First(&s, sub.Id).Error; err != nil {
 						return err
 					}
-					s.AmountUsed++
+					s.PeriodUsed++
 					return tx.Save(&s).Error
 				})
 				if err != nil {

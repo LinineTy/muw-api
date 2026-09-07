@@ -408,9 +408,10 @@ type UserSubscription struct {
 	UserId int `json:"user_id" gorm:"index;index:idx_user_sub_active,priority:1"`
 	PlanId int `json:"plan_id" gorm:"index"`
 
-	// 动态模型下仅作展示（额度全部来自窗口）：AmountTotal 恒为 0，AmountUsed 为累计消费。
-	AmountTotal int64 `json:"amount_total" gorm:"type:bigint;not null;default:0"`
-	AmountUsed  int64 `json:"amount_used" gorm:"type:bigint;not null;default:0"`
+	// 单期账本：PeriodUsed 是当前预付期（购买/最近一次续费）内的累计消耗（quota units），
+	// 续费清零重开。退款 clamp 用它折算已消耗价值，防"烧爆额度→降级退款"套利。
+	// 展示额度来自窗口（buildLimitRows），本字段是账本不是额度。
+	PeriodUsed int64 `json:"period_used" gorm:"column:period_used;type:bigint;not null;default:0"`
 
 	StartTime int64  `json:"start_time" gorm:"bigint"`
 	EndTime   int64  `json:"end_time" gorm:"bigint;index;index:idx_user_sub_active,priority:3"`
@@ -931,7 +932,6 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 	sub := &UserSubscription{
 		UserId:        userId,
 		PlanId:        plan.Id,
-		AmountUsed:    0,
 		StartTime:     nowUnixAtCreate,
 		EndTime:       endUnix,
 		Status:        "active",
@@ -942,7 +942,6 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 		MonthUsed:     0,
 		UpgradeGroup:  upgradeGroup,
 		PrevUserGroup: prevGroup,
-		// 动态模型下 AmountTotal 恒为 0（总额度来自窗口），仅保留作展示字段。
 		DowngradeGroup:      strings.TrimSpace(plan.DowngradeGroup),
 		AllowWalletOverflow: allowWalletOverflow,
 		ExclusiveGroup:      strings.TrimSpace(plan.ExclusiveGroup),
@@ -1255,8 +1254,16 @@ func invalidateSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now int64) (st
 
 // calcSubscriptionRemainingValue returns the prorated monetary value of a
 // subscription based on the fraction of time remaining. Quota already consumed is
-// intentionally ignored.
+// intentionally ignored here — the period-ledger clamp 在升降配入口（PurchaseWithStrategy）
+// 另行生效，避免"烧爆当期额度后降级仍按时间全额退款"的套利。
 func calcSubscriptionRemainingValue(sub *UserSubscription, plan *SubscriptionPlan) (float64, error) {
+	return calcSubscriptionRemainingValueAt(sub, plan, GetDBTimestamp())
+}
+
+// calcSubscriptionRemainingValueAt 是 calcSubscriptionRemainingValue 的可注入时钟版本。
+// 事务内必须传应用时钟 now：GetDBTimestamp() 是一次全局 DB 往返，在事务内需要第二个
+// 连接——单连接池（SQLite 测试库）直接死锁，生产上也引入跨连接时钟漂移。
+func calcSubscriptionRemainingValueAt(sub *UserSubscription, plan *SubscriptionPlan, now int64) (float64, error) {
 	if sub == nil || plan == nil {
 		return 0, errors.New("invalid subscription or plan")
 	}
@@ -1267,7 +1274,7 @@ func calcSubscriptionRemainingValue(sub *UserSubscription, plan *SubscriptionPla
 	if terms.DurationSeconds <= 0 {
 		return 0, nil
 	}
-	remain := sub.EndTime - GetDBTimestamp()
+	remain := sub.EndTime - now
 	if remain < 0 {
 		remain = 0
 	}
@@ -1494,9 +1501,20 @@ func PurchaseWithStrategy(userId int, planId int, subscriptionId int) (string, e
 			if err != nil {
 				return err
 			}
-			value, err := calcSubscriptionRemainingValue(&sameGroup, oldPlan)
+			value, err := calcSubscriptionRemainingValueAt(&sameGroup, oldPlan, now)
 			if err != nil {
 				return err
+			}
+			// 单期账本 clamp：按时间折算的剩余价值不得超过"当前预付期未消耗的预付"
+			// （快照价格 − period_used 折算已消耗价值）。否则用户可烧爆当期额度后降级，
+			// 按时间比例拿回接近全款的退款（消耗即时、退款线性 = 套利）。clamp 对升级
+			// 方向同样生效：已超耗的订阅切换时剩余价值为 0，补差价按新套餐全价计。
+			terms := sameGroup.RenewTermsOrPlan(oldPlan)
+			if cap := terms.PriceAmount - float64(sameGroup.PeriodUsed)/common.QuotaPerUnit; value > cap {
+				value = cap
+			}
+			if value < 0 {
+				value = 0
 			}
 			diff := plan.PriceAmount - value
 			var user User
@@ -1652,6 +1670,9 @@ func RenewSubscriptionTx(tx *gorm.DB, sub *UserSubscription, plan *SubscriptionP
 		return errors.New("已达该套餐最长可续时长，无法继续续费")
 	}
 	sub.EndTime = endUnix
+	// 单期账本：续费开启新的预付期，period_used 清零重开。退款 clamp 按"当前预付期
+	// 快照价格 − period_used 折算已消耗"封顶，清零保证续费后的退款不会误用上一期的
+	// 消耗；提前续费的误差方向是少退（用户当期未用完的预付不作退款），不会放大退款。
 	// 注意：不改各窗口 next_reset_at——续费只延长订阅，重置窗口照常按各自 cadence 推进
 	// （动态窗口的"封顶态重算"由 advanceSubscriptionWindows 在续费后的下一次预扣时惰性
 	// 处理）；若在此重新武装，会吞掉已排期的下一次重置（用户损失一个周期的重置额度）。
@@ -1659,6 +1680,7 @@ func RenewSubscriptionTx(tx *gorm.DB, sub *UserSubscription, plan *SubscriptionP
 	// previous auto-renew failure so the task may retry.
 	sub.CancelAtEnd = false
 	sub.AutoRenewFailed = false
+	sub.PeriodUsed = 0
 	return tx.Save(sub).Error
 }
 
@@ -2512,10 +2534,10 @@ func AdminResetPlanSubscriptions(planId int, advanceResetTime bool) (*Subscripti
 type SubscriptionPreConsumeResult struct {
 	UserSubscriptionId int
 	PreConsumed        int64
-	// AmountTotal / AmountUsedBefore / AmountUsedAfter 仅作展示（动态模型下 AmountTotal 恒 0）。
-	AmountTotal      int64
-	AmountUsedBefore int64
-	AmountUsedAfter  int64
+	// PeriodUsedBefore / PeriodUsedAfter 是单期账本（当前预付期累计消耗）的预扣前后值，
+	// 仅作展示/审计。
+	PeriodUsedBefore int64
+	PeriodUsedAfter  int64
 	// Remaining 是预扣后的窗口剩余额度（subscriptionRemaining 的 min-over-windows；
 	// 无限额度 = math.MaxInt64）。告警/消费日志据此展示真实剩余，替代已移除的总额模型。
 	Remaining int64
@@ -2760,9 +2782,8 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 			}
 			returnValue.UserSubscriptionId = sub.Id
 			returnValue.PreConsumed = existing.PreConsumed
-			returnValue.AmountTotal = sub.AmountTotal
-			returnValue.AmountUsedBefore = sub.AmountUsed
-			returnValue.AmountUsedAfter = sub.AmountUsed
+			returnValue.PeriodUsedBefore = sub.PeriodUsed
+			returnValue.PeriodUsedAfter = sub.PeriodUsed
 			plan, _ := getSubscriptionPlanByIdTx(tx, sub.PlanId)
 			returnValue.Remaining = subscriptionRemaining(&sub, plan)
 			return nil
@@ -2793,7 +2814,7 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 			if subscriptionRemaining(&sub, plan) < amount {
 				continue
 			}
-			usedBefore := sub.AmountUsed
+			usedBefore := sub.PeriodUsed
 			record := &SubscriptionPreConsumeRecord{
 				RequestId:          requestId,
 				UserId:             userId,
@@ -2809,17 +2830,16 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 					}
 					returnValue.UserSubscriptionId = sub.Id
 					returnValue.PreConsumed = dup.PreConsumed
-					returnValue.AmountTotal = sub.AmountTotal
-					returnValue.AmountUsedBefore = sub.AmountUsed
-					returnValue.AmountUsedAfter = sub.AmountUsed
+					returnValue.PeriodUsedBefore = sub.PeriodUsed
+					returnValue.PeriodUsedAfter = sub.PeriodUsed
 					plan, _ := getSubscriptionPlanByIdTx(tx, sub.PlanId)
 					returnValue.Remaining = subscriptionRemaining(&sub, plan)
 					return nil
 				}
 				return err
 			}
-			sub.AmountUsed += amount
-			// 累加到全部窗口计数（AmountUsed 仅保留作累计展示）；自然周/月计数同步累加，
+			sub.PeriodUsed += amount
+			// 累加到全部窗口计数（PeriodUsed 是单期账本，续费清零）；自然周/月计数同步累加，
 			// 供钱包卡「订阅抵扣」按日历月统计（不作上限）。
 			addWindowUsage(&sub, windows, amount)
 			sub.WeekUsed += amount
@@ -2829,9 +2849,8 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 			}
 			returnValue.UserSubscriptionId = sub.Id
 			returnValue.PreConsumed = amount
-			returnValue.AmountTotal = sub.AmountTotal
-			returnValue.AmountUsedBefore = usedBefore
-			returnValue.AmountUsedAfter = sub.AmountUsed
+			returnValue.PeriodUsedBefore = usedBefore
+			returnValue.PeriodUsedAfter = sub.PeriodUsed
 			returnValue.Remaining = subscriptionRemaining(&sub, plan)
 			return nil
 		}
@@ -2935,9 +2954,9 @@ func PostConsumeUserSubscriptionDelta(db *gorm.DB, userSubscriptionId int, delta
 		if plan != nil {
 			windows = plan.ResetWindows()
 		}
-		// 动态模型：对窗口计数反向回填（正数补扣、负数退还）。AmountUsed 仅作累计展示，
-		// 不再有 legacy 的总额门限 guard。
-		sub.AmountUsed = clampNonNegative(sub.AmountUsed + delta)
+		// 动态模型：对窗口计数反向回填（正数补扣、负数退还）。PeriodUsed 是单期账本，
+		// 同步 delta 修正并 clamp 非负。
+		sub.PeriodUsed = clampNonNegative(sub.PeriodUsed + delta)
 		states := sub.WindowStates()
 		changed := false
 		for i := range windows {
