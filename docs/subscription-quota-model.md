@@ -18,14 +18,20 @@
 - **额度全部来自套餐的窗口列表**：`reset_windows`（JSON 数组，`ResetWindow{unit,value,limit}`，
   unit: hour/day/week/month）。每个窗口独立计数、按各自 cadence 刷新。
 - **订阅计数**：`window_state`（`WindowState{idx,cycle_used,cycle_start_at,next_reset_at}`
-  数组，按 index 对应套餐窗口）。`amount_total`/`amount_used` 仅作展示；`week_used`/`month_used`
-  是自然日历展示统计（钱包卡「订阅抵扣」），**不是**上限。
+  数组，按 index 对应套餐窗口）。`period_used` 是单期账本（当前预付期内累计消耗，quota
+  units，续费清零）——只供退款 clamp 与审计，不是额度上限；`week_used`/`month_used`
+  是自然日历展示统计（钱包卡「订阅抵扣」），也不是上限。
 - **剩余额度**：`subscriptionRemainingWindows` = 所有窗口 `limit − cycle_used` 取最小。
 - **无限额度**：全部窗口 `limit ≤ 0` → `subscriptionRemainingWindows` 返回 `math.MaxInt64`，
   预扣不设额度门。运行时天然支持，校验层也放行（见下）。
 - **封顶语义**：窗口时长 ≥ 订阅剩余有效期 → `next_reset_at=0` 封顶，该窗口 limit 即本订阅
   总上限（订阅期内不刷新；续费拉长 EndTime 后可能恢复按 cadence 重置）。
-- **续费**：只延长 `end_time`，不累加、不清空窗口（不吞掉下一次重置）。
+- **续费**：延长 `end_time`、清零 `period_used`（开启新预付期），不累加、不清空窗口
+  （不吞掉下一次重置）。
+- **单期账本与退款 clamp**：`period_used` 与窗口计数是两本账——窗口计数响应运营操作
+  （管理端手动重置、"改动即重置"），账本只进不退（除结算 delta 修正）。同互斥组升降配
+  退款 = min(按时间折算的剩余价值, max(0, 快照价格 − period_used/QuotaPerUnit))：
+  已消耗价值抵扣退款上限，堵"消耗即时、退款线性"的烧爆降级套利；误差方向恒为少退。
 
 ### 窗口状态机（`advanceWindowState`）
 
@@ -47,12 +53,13 @@
 
 | 操作 | 行为 |
 |---|---|
-| 预扣 `PreConsumeUserSubscription` | 各窗口 `cycle_used` 累加 + 日历 `week_used/month_used` 展示累加 |
-| 结算 `PostConsumeUserSubscriptionDelta` | 窗口计数按 delta 修正（正补负退、clamp），日历计数 clamp |
+| 预扣 `PreConsumeUserSubscription` | 各窗口 `cycle_used` 累加 + 单期账本 `period_used` 累加 + 日历 `week_used/month_used` 展示累加 |
+| 结算 `PostConsumeUserSubscriptionDelta` | 窗口计数按 delta 修正（正补负退、clamp），`period_used` delta 修正，日历计数 clamp |
 | 退款 `RefundSubscriptionPreConsume` | 幂等，对全部窗口 clamp |
-| 续费 `RenewSubscriptionTx` | 只延长 `end_time`，不累加、不清空窗口 |
+| 续费 `RenewSubscriptionTx` | 延长 `end_time` + 清零 `period_used`（新预付期），窗口不动 |
+| 升降配切换 `PurchaseWithStrategy` | 退款 = min(时间剩余价值, max(0, 快照价格 − period_used 折算))，clamp 双向生效 |
 | 窗口推进 `advanceSubscriptionWindows` | 各窗口按 cadence 独立推进 + 日历周/月仅作展示清零 |
-| 管理端手动重置 | 全部窗口清零重锚 |
+| 管理端手动重置 | 全部窗口清零重锚（不动 `period_used`——窗口与账本是两本账） |
 
 > **惰性推进**：窗口重置只发生在预扣路径（`PreConsumeUserSubscription` 先推进再判额度），
 > 维护任务不扫动态窗口（`ResetDueSubscriptions` 已随 legacy 移除）。因此没有新请求时，
@@ -73,8 +80,8 @@
   cycle_start_at>0`）优先按后端状态标「Total cap」；无订阅状态（套餐目录、购买/续费弹窗）
   才用 `isCapWindow` 时长估算（月≈30 天、`duration > validity`，与后端 `next > end` 对齐）。
 - 管理端订阅列表 / 历史订阅 `usage` 列与「用户订阅」弹窗的额度列同样走 `buildLimitRows`：
-  逐窗口渲染用量（套餐快照 `reset_windows` + 订阅 `window_state`），不再依赖
-  `amount_total/amount_used`（动态模型下恒 0）。管理列表接口在 `AdminUserSubscriptionSummary`
+  逐窗口渲染用量（套餐快照 `reset_windows` + 订阅 `window_state`）。`period_used` 是
+  单期账本，不是展示额度。管理列表接口在 `AdminUserSubscriptionSummary`
   里附带完整套餐快照（`plan`），套餐被删时缺省并按 `Unlimited` 显示。
 - 目录/弹窗窗口摘要：`{{amount}} every {{period}}`（普通窗口）/ `{{amount}} total`（封顶）。
 - 行 key 用 `unit-value`，多个封顶窗口不会 key 冲突。

@@ -386,6 +386,9 @@ func migrateDB() error {
 		if err := ensureDropLegacyUserSubscriptionColumns(DB); err != nil {
 			return err
 		}
+		if err := ensureDropLegacySubscriptionLedgerColumns(DB); err != nil {
+			return err
+		}
 		common.SysLog(fmt.Sprintf("schema already at version %d, skipping migration", applied))
 		return nil
 	}
@@ -435,6 +438,9 @@ func migrateDB() error {
 		return err
 	}
 	if err := ensureDropLegacyUserSubscriptionColumns(DB); err != nil {
+		return err
+	}
+	if err := ensureDropLegacySubscriptionLedgerColumns(DB); err != nil {
 		return err
 	}
 	if err := applyPendingMigrations(DB, applied, migrations); err != nil {
@@ -796,6 +802,13 @@ var legacyUserSubscriptionColumns = []string{
 	"cycle_start_at", "cycle_used", "next_cycle_reset_at",
 }
 
+// legacySubscriptionLedgerColumns 是单期账本改造（period_used）移除的累计展示列：
+// amount_total 在动态窗口模型下恒为 0；amount_used 曾是跨期累计展示，单期语义由
+// period_used 取代（迁移清零起步，不搬历史值）。
+var legacySubscriptionLedgerColumns = []string{
+	"amount_total", "amount_used",
+}
+
 // existingColumnsOf 返回 table 中实际存在的目标列（跨 SQLite/MySQL/PostgreSQL）。
 // table 与列名来自上方固定清单（非用户输入），直接拼接 SQL 与 dropLegacyQuotaClaimColumns 一致。
 func existingColumnsOf(db *gorm.DB, table string, columns []string) ([]string, error) {
@@ -863,6 +876,13 @@ func ensureDropLegacySubscriptionPlanColumns(db *gorm.DB) error {
 func ensureDropLegacyUserSubscriptionColumns(db *gorm.DB) error {
 	return dropLegacySubscriptionColumns(db, "user_subscriptions", legacyUserSubscriptionColumns,
 		[]string{"idx_user_subscriptions_next_cycle_reset_at"})
+}
+
+// ensureDropLegacySubscriptionLedgerColumns 删除 user_subscriptions 上单期账本改造
+// 移除的累计展示列（amount_total / amount_used，被 period_used 取代）。amount_used 无
+// 单列索引，SQLite 直接逐列 DROP 即可。
+func ensureDropLegacySubscriptionLedgerColumns(db *gorm.DB) error {
+	return dropLegacySubscriptionColumns(db, "user_subscriptions", legacySubscriptionLedgerColumns, nil)
 }
 
 func migrateLOGDB() error {

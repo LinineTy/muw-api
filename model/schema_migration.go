@@ -72,7 +72,12 @@ func (SchemaMigration) TableName() string { return "schema_migrations" }
 // 只写非默认值行）+ models.context_window 列（模型级上下文窗口）。表/列由 AutoMigrate
 // （升版本路径）或 ensureChannelModelSettingsTable / ensureModelsContextWindowColumn
 // （已最新版本库的跳过路径）创建，无需数据转换——无行 = 启用 + 继承模型默认。
-const CurrentSchemaVersion = 17
+// v18：订阅账本单期化——user_subscriptions 新增 period_used 列（当前预付期累计消耗，
+// 续费清零；由 AutoMigrate 添加，存量行默认 0 起步，不搬 amount_used 的跨期历史值），
+// 移除累计展示列 amount_total（动态模型下恒 0）与 amount_used（被 period_used 取代）。
+// 删列由 ensureDropLegacySubscriptionLedgerColumns 幂等执行（挂在 migrateDB 两条分支，
+// 每次启动自检）；此处只打版本戳记录 schema 变更。
+const CurrentSchemaVersion = 18
 
 // Migration 是一个可单独应用、记录版本戳的迁移步骤。Up 按版本升序执行，
 // 用于 AutoMigrate 补不了的结构改造（换类型、删列）与数据迁移/特殊适配。
@@ -171,6 +176,9 @@ var migrations = []Migration{
 	// 或 ensureChannelModelSettingsTable / ensureModelsContextWindowColumn（已最新版本库的
 	// 跳过路径）创建，无需数据转换；只打版本戳推进 shouldSkipMigration。
 	{Version: 17, Name: "channel-model-settings-context-window", Up: func(db *gorm.DB) error { return nil }},
+	// v18：订阅账本单期化。period_used 列由 AutoMigrate 添加（存量清零起步）；删列由
+	// ensureDropLegacySubscriptionLedgerColumns 幂等执行。只打版本戳推进 shouldSkipMigration。
+	{Version: 18, Name: "subscription-period-ledger", Up: func(db *gorm.DB) error { return nil }},
 }
 
 // ensureSchemaMigrationsTable 用纯 SQL 建版本表，避免对版本表自身跑 AutoMigrate。
