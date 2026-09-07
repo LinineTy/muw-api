@@ -402,3 +402,61 @@ func TestPurchaseSwitchDowngradeRefundClamp(t *testing.T) {
 	assert.EqualValues(t, 1_000_000+2_500_000, walletOf(793), "退款 = min($5 时间价值, $10 未消耗预付) = $5")
 	assertOldCancelledAndNewFree(t, 7836, 793)
 }
+
+// TestRenewThenDowngradeRefundCappedAtPrice 烧爆→续费→立即降级的组合场景：
+// 提前续费是叠期（第二期从原 EndTime 起算），降级时 remain 44/45d 必然 > 周期 30d，
+// 时间项超过快照价格，退款被 cap 压到快照价格 = 第二期实付 = **全额退还**——
+// 用户第二期一天没用，一分折价不扣。同时钉死不变量：退款 ≤ cap ≤ 快照价格 ≤
+// 续费实付，"续费洗水表"零增益（洗回的钱恰等于刚付的钱）。
+func TestRenewThenDowngradeRefundCappedAtPrice(t *testing.T) {
+	truncateTables(t)
+
+	oldQuotaPerUnit := common.QuotaPerUnit
+	common.QuotaPerUnit = 500000
+	t.Cleanup(func() { common.QuotaPerUnit = oldQuotaPerUnit })
+
+	now := GetDBTimestamp()
+	seedQuotaPlan(t, 7840, &SubscriptionPlan{
+		Title: "cap-mini", PriceAmount: 10, Enabled: true,
+		DurationUnit: SubscriptionDurationDay, DurationValue: 30,
+		ResetWindowsRaw: capWindowJSON(1000),
+		ExclusiveGroup:  "std",
+	})
+	seedQuotaPlan(t, 7841, &SubscriptionPlan{
+		Title: "cap-free", PriceAmount: 0, Enabled: true,
+		DurationUnit: SubscriptionDurationDay, DurationValue: 30,
+		ResetWindowsRaw: capWindowJSON(1000),
+		ExclusiveGroup:  "std",
+	})
+	miniPlan, err := GetSubscriptionPlanById(7840)
+	require.NoError(t, err)
+
+	// 第 15 天、已烧爆（period_used = 10M units = $20，超付一倍）。
+	startUnix := now - 15 * 86400
+	sub := &UserSubscription{
+		UserId: 794, PlanId: 7840, Status: "active",
+		PeriodUsed: 10_000_000,
+		StartTime:  startUnix, EndTime: startUnix + 30*86400,
+	}
+	sub.SnapshotRenewTerms(miniPlan, startUnix)
+	seedQuotaSub(t, 7842, sub)
+	require.NoError(t, DB.Create(&User{Id: 794, Username: "clamp-renew-user", AffCode: "c794", Quota: 1_000_000}).Error)
+
+	// 立即续费：EndTime 延长到 now+45d（提前续费叠期），period_used 清零。
+	require.NoError(t, DB.Transaction(func(tx *gorm.DB) error {
+		var locked UserSubscription
+		require.NoError(t, tx.Where("id = ?", 7842).First(&locked).Error)
+		return RenewSubscriptionTx(tx, &locked, miniPlan, now)
+	}))
+	var renewed UserSubscription
+	require.NoError(t, DB.Where("id = ?", 7842).First(&renewed).Error)
+	assert.Zero(t, renewed.PeriodUsed, "续费清零账本")
+	assert.Greater(t, renewed.EndTime, now+30*86400, "提前续费应叠期延长")
+
+	// 次日降级：第二期未开始使用，时间项 $15 被 cap $10 压平 → 全额退还续费款。
+	_, err = PurchaseWithStrategy(794, 7841, 0)
+	require.NoError(t, err)
+	var u User
+	require.NoError(t, DB.Where("id = ?", 794).First(&u).Error)
+	assert.Equal(t, 1_000_000+5_000_000, u.Quota, "第二期零使用，退续费全款 $10（cap=快照价格=实付）")
+}
