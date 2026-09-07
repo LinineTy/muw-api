@@ -93,6 +93,12 @@ Do NOT directly import or call `encoding/json` in business code. `json.RawMessag
 - Migrations must work on all three databases. For SQLite, use `ALTER TABLE ... ADD COLUMN` instead of `ALTER COLUMN` (see `model/main.go` for patterns).
 - Avoid GORM boolean default tags such as `gorm:"default:true"` when the default is a business rule already enforced by code. MySQL and PostgreSQL can normalize boolean defaults differently, causing GORM `AutoMigrate` to repeatedly issue `ALTER TABLE` on restart. Prefer setting these defaults in request/model normalization, hooks, constructors, or service logic; do not replace `default:true` with `default:1` unless the behavior is verified across SQLite, MySQL, and PostgreSQL.
 
+**Transactions and app-time discipline:** Code inside a `DB.Transaction(...)` closure MUST NOT touch the global handles (`DB`, `LOG_DB`) — every such round trip needs a second pool connection and deadlocks the single-connection SQLite test database. It also breaks clock consistency in production (each connection can observe a different time).
+
+- Inside a transaction, query only through the `tx` handle. This includes indirect calls: a "pure" helper can hide a global-DB round trip inside (real cases: `loadModelSettings` inside `BatchInsertChannels`, `GetDBTimestamp()` inside `calcSubscriptionRemainingValue` — both deadlocked tests and had to be refactored). When reviewing transactional code, drill one level into every helper it calls.
+- Never call `GetDBTimestamp()` (a live SQL query) inside a transaction. Use `common.GetTimestamp()` (app clock) at transaction start and thread it through as a parameter — see `calcSubscriptionRemainingValueAt(sub, plan, now)` for the injectable-clock pattern.
+- New transactional paths MUST get a test that runs them on the single-connection SQLite fixture; that is what exposes this deadlock class.
+
 **Relay and provider behavior:**
 
 - When implementing a new channel, confirm whether the provider supports `StreamOptions`; if supported, add the channel to `streamSupportedChannels`.
