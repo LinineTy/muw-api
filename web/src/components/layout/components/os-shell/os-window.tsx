@@ -219,17 +219,18 @@ export function OsWindowFrame({
         title={win.title}
       />
 
-      {/* 右下角缩放把手 */}
+      {/* 右下角缩放把手:内缩 12px 避开 36px 圆角裁剪曲线(贴角会被 overflow-hidden
+          裁掉大半,实测 elementFromPoint 命中的是容器而非把手),热区 24px */}
       {!win.maximized ? (
         <div
           onPointerDown={onResizeDown}
           onPointerMove={onResizeMove}
           onPointerUp={onResizeUp}
           onPointerCancel={onResizeUp}
-          className='text-muted-foreground/60 hover:text-foreground absolute right-0 bottom-0 z-20 flex size-5 cursor-nwse-resize touch-none items-center justify-center transition-colors'
+          className='text-muted-foreground/70 hover:text-foreground absolute right-3 bottom-3 z-20 flex size-6 cursor-nwse-resize touch-none items-center justify-center rounded-md transition-colors'
           role='presentation'
         >
-          <svg viewBox='0 0 16 16' className='size-3.5' fill='none' aria-hidden='true'>
+          <svg viewBox='0 0 16 16' className='size-4' fill='none' aria-hidden='true'>
             <path d='M14 6 L6 14 M14 10 L10 14' stroke='currentColor' strokeWidth='1.5' strokeLinecap='round' />
           </svg>
         </div>
