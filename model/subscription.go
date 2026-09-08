@@ -845,14 +845,22 @@ func downgradeUserGroupForSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now
 	if err != nil {
 		return "", err
 	}
-	// If another active upgraded subscription exists, keep the current group.
-	var activeSub UserSubscription
-	activeQuery := tx.Where("user_id = ? AND status = ? AND end_time > ? AND id <> ? AND upgrade_group <> ''",
+	// 其他活跃订阅赋予的最高优先级组（降级终点不得低于它——有订阅撑着就降到那个组）。
+	var otherSubs []UserSubscription
+	if err := tx.Where("user_id = ? AND status = ? AND end_time > ? AND id <> ? AND upgrade_group <> ''",
 		sub.UserId, "active", now, sub.Id).
 		Order("end_time desc, id desc").
-		Limit(1).
-		Find(&activeSub)
-	if activeQuery.Error == nil && activeQuery.RowsAffected > 0 {
+		Find(&otherSubs).Error; err != nil {
+		return "", err
+	}
+	bestGroup, bestPriority := "", -1
+	for _, other := range otherSubs {
+		if p := GroupPriority(strings.TrimSpace(other.UpgradeGroup)); p > bestPriority {
+			bestGroup, bestPriority = strings.TrimSpace(other.UpgradeGroup), p
+		}
+	}
+	// 当前组正被其他活跃订阅撑着 → 不降（v2+v1 共存、v1 过期保持 v2）。
+	if bestGroup == currentGroup {
 		return "", nil
 	}
 	// Determine the downgrade target: an explicit downgrade group takes precedence,
@@ -866,6 +874,14 @@ func downgradeUserGroupForSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now
 		target = strings.TrimSpace(sub.PrevUserGroup)
 	}
 	if target == "" || target == currentGroup {
+		return "", nil
+	}
+	// 其他订阅撑着比显式目标更高的组 → 降到那个组（v2 过期、v1 还活着 → 回 v1 而非底组）。
+	if bestPriority > GroupPriority(target) {
+		target = bestGroup
+	}
+	// 目标优先级 ≥ 当前 → 不降（同级也拦：过期还组不换同档组；防错配把人往高处"降"）。
+	if GroupPriority(target) >= GroupPriority(currentGroup) {
 		return "", nil
 	}
 	if err := tx.Model(&User{}).Where("id = ?", sub.UserId).
@@ -915,7 +931,10 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 			if err != nil {
 				return nil, err
 			}
-			if currentGroup != upgradeGroup {
+			// 组优先级（统一 ≥ 语义）：目标组优先级 ≥ 当前组才改组。
+			// 低级订阅不拉低当前组（v2 用户买 v1 订阅保持 v2，订阅额度照常生效）；
+			// 同级放行（跟随用户主动选择）；高买低照常升级。
+			if currentGroup != upgradeGroup && GroupPriority(upgradeGroup) >= GroupPriority(currentGroup) {
 				prevGroup = currentGroup
 				if err := tx.Model(&User{}).Where("id = ?", userId).
 					Update("group", upgradeGroup).Error; err != nil {
@@ -2566,18 +2585,10 @@ func expireUserSubscriptionsTx(tx *gorm.DB, userId int, now int64) (int, string,
 		// 组升降级功能关闭：到期只标记状态，不改用户组。
 		return expired, "", nil
 	}
-	// If there's an active upgraded subscription, keep current group.
-	var activeSub UserSubscription
-	activeQuery := tx.Where("user_id = ? AND status = ? AND end_time > ? AND upgrade_group <> ''",
-		userId, "active", now).
-		Order("end_time desc, id desc").
-		Limit(1).
-		Find(&activeSub)
-	if activeQuery.Error == nil && activeQuery.RowsAffected > 0 {
-		return expired, "", nil
-	}
 	// Find the most recently expired subscription that defines a group transition
-	// (an explicit downgrade target or an upgrade snapshot to revert).
+	// (an explicit downgrade target or an upgrade snapshot to revert). 组变更判定
+	// 全部委托 downgradeUserGroupForSubscriptionTx——撑组检查与组优先级规则单点维护，
+	// 批量任务与惰性路径、取消/管理端作废共享同一套语义。
 	var lastExpired UserSubscription
 	expiredQuery := tx.Where("user_id = ? AND status = ? AND (downgrade_group <> '' OR upgrade_group <> '')",
 		userId, "expired").
@@ -2587,30 +2598,8 @@ func expireUserSubscriptionsTx(tx *gorm.DB, userId int, now int64) (int, string,
 	if expiredQuery.Error != nil || expiredQuery.RowsAffected == 0 {
 		return expired, "", nil
 	}
-	currentGroup, err := getUserGroupByIdTx(tx, userId)
+	target, err := downgradeUserGroupForSubscriptionTx(tx, &lastExpired, now)
 	if err != nil {
-		return expired, "", err
-	}
-	// An explicit downgrade group takes precedence; otherwise revert to the
-	// group held before purchase (legacy behavior, only when the subscription
-	// actually elevated the user).
-	target := strings.TrimSpace(lastExpired.DowngradeGroup)
-	if target == "" {
-		upgradeGroup := strings.TrimSpace(lastExpired.UpgradeGroup)
-		prevGroup := strings.TrimSpace(lastExpired.PrevUserGroup)
-		if upgradeGroup == "" || prevGroup == "" {
-			return expired, "", nil
-		}
-		if currentGroup != upgradeGroup {
-			return expired, "", nil
-		}
-		target = prevGroup
-	}
-	if target == "" || target == currentGroup {
-		return expired, "", nil
-	}
-	if err := tx.Model(&User{}).Where("id = ?", userId).
-		Update("group", target).Error; err != nil {
 		return expired, "", err
 	}
 	return expired, target, nil
