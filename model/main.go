@@ -300,8 +300,13 @@ func is64BitIntegerType(dbType common.DatabaseType, dataType string) bool {
 }
 
 func migrateDB() error {
-	// 版本化迁移：已应用过（版本戳 >= CurrentSchemaVersion）就跳过 AutoMigrate
-	// 与迁移，避免 SQLite 每次启动整表重建；旧库/无戳库走完整迁移并打戳。
+	// 迁移身份 = 名称（YYMMDD-slug），启动按两步校验决定跑哪些：
+	// ① 先按时间：只执行日期 >= 当前已执行最大日期的迁移；
+	// ② 再按名称：已执行（name 已在 schema_migrations）的跳过、未执行的执行。
+	// 无待执行即"已最新"，跳过 AutoMigrate，避免 SQLite 每次启动整表重建。
+	if err := validateMigrations(migrations); err != nil {
+		panic("invalid schema migration list: " + err.Error())
+	}
 	if err := ensureSchemaMigrationsTable(DB); err != nil {
 		return err
 	}
@@ -331,12 +336,14 @@ func migrateDB() error {
 	if err := ensureModelsContextWindowColumn(DB); err != nil {
 		return err
 	}
-	applied, err := appliedSchemaVersion(DB)
+	applied, err := readAppliedMigrationNames(DB)
 	if err != nil {
 		return err
 	}
-	if shouldSkipMigration(applied) {
-		// 已最新版本：表已存在，仍需补幂等 DDL（LONGTEXT 升级），否则经中间版本
+	head := migrations[len(migrations)-1]
+	pending := pendingMigrationList(migrations, applied)
+	if len(pending) == 0 && !common.DebugEnabled {
+		// 已最新：表已存在，仍需补幂等 DDL（LONGTEXT 升级），否则经中间版本
 		// 发布的库升级后永远补不上，&gt;64KB 消息会在 MySQL 写入失败。
 		if err := ensurePlaygroundConversationMessagesLongText(DB); err != nil {
 			return err
@@ -380,6 +387,12 @@ func migrateDB() error {
 		if err := ensureUserSubscriptionWindowState(DB); err != nil {
 			return err
 		}
+		if err := ensureUserSubscriptionPeriodUsedColumn(DB); err != nil {
+			return err
+		}
+		if err := ensureUserSubscriptionRenewTermsColumn(DB); err != nil {
+			return err
+		}
 		if err := ensureDropLegacySubscriptionPlanColumns(DB); err != nil {
 			return err
 		}
@@ -389,7 +402,7 @@ func migrateDB() error {
 		if err := ensureDropLegacySubscriptionLedgerColumns(DB); err != nil {
 			return err
 		}
-		common.SysLog(fmt.Sprintf("schema already at version %d, skipping migration", applied))
+		common.SysLog(fmt.Sprintf("schema up to date at migration %q (%d), skipping AutoMigrate", head.Name, migrationDate(head.Name)))
 		return nil
 	}
 	if err := autoMigrateAll(); err != nil {
@@ -434,6 +447,12 @@ func migrateDB() error {
 	if err := ensureUserSubscriptionWindowState(DB); err != nil {
 		return err
 	}
+	if err := ensureUserSubscriptionPeriodUsedColumn(DB); err != nil {
+		return err
+	}
+	if err := ensureUserSubscriptionRenewTermsColumn(DB); err != nil {
+		return err
+	}
 	if err := ensureDropLegacySubscriptionPlanColumns(DB); err != nil {
 		return err
 	}
@@ -443,10 +462,10 @@ func migrateDB() error {
 	if err := ensureDropLegacySubscriptionLedgerColumns(DB); err != nil {
 		return err
 	}
-	if err := applyPendingMigrations(DB, applied, migrations); err != nil {
+	if err := runMigrations(DB, pending); err != nil {
 		return err
 	}
-	common.SysLog(fmt.Sprintf("database migrated to schema version %d", CurrentSchemaVersion))
+	common.SysLog(fmt.Sprintf("database migrated; head migration %q (%d) applied", head.Name, migrationDate(head.Name)))
 	return nil
 }
 
@@ -722,6 +741,31 @@ func ensureUserSubscriptionWindowState(db *gorm.DB) error {
 	return db.Model(&UserSubscription{}).
 		Where("window_state IS NULL").
 		Update("window_state", "").Error
+}
+
+// ensureUserSubscriptionPeriodUsedColumn 幂等补 user_subscriptions.period_used 列（单期账本，
+// 当前预付期累计消耗）。列带 NOT NULL DEFAULT 0（model tag），存量行 ALTER 时已回填 0。
+// AutoMigrate 只在日期戳变化时执行；已最新库走 skip 路径不重跑，需显式补列，否则查询
+// period_used 报表列不存在。
+func ensureUserSubscriptionPeriodUsedColumn(db *gorm.DB) error {
+	if db.Migrator().HasColumn(&UserSubscription{}, "period_used") {
+		return nil
+	}
+	return db.Migrator().AddColumn(&UserSubscription{}, "period_used")
+}
+
+// ensureUserSubscriptionRenewTermsColumn 幂等补 user_subscriptions.renew_terms 列（续费条款
+// 快照，JSON 文本）。理由同 ensureUserSubscriptionPeriodUsedColumn：skip 路径的已最新库需
+// 显式补列。补列后把存量 NULL 归一空串（无快照 = 续费/估值回退套餐当前条款）。
+func ensureUserSubscriptionRenewTermsColumn(db *gorm.DB) error {
+	if !db.Migrator().HasColumn(&UserSubscription{}, "renew_terms") {
+		if err := db.Migrator().AddColumn(&UserSubscription{}, "renew_terms"); err != nil {
+			return err
+		}
+	}
+	return db.Model(&UserSubscription{}).
+		Where("renew_terms IS NULL").
+		Update("renew_terms", "").Error
 }
 
 // ensureQuotaClaimLockSeeded 确保额度池全局锁行存在（id=1），供 MySQL/PG 并发领取串行化

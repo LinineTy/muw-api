@@ -27,15 +27,14 @@ import (
 	"gorm.io/gorm"
 )
 
-// openCodingPlanQuotaUpToDateDB 模拟"已到最新 schema 版本"的库:schema_migrations
-// 已打上 CurrentSchemaVersion 的戳,版本门控会跳过 autoMigrateAll,新增列只能靠
-// 幂等 ensure 补上。
+// openCodingPlanQuotaUpToDateDB 模拟"已到最新 schema"的库:schema_migrations 已打上
+// 最新 head 迁移(名称戳),两步校验会跳过 autoMigrateAll,新增列只能靠幂等 ensure 补上。
 func openCodingPlanQuotaUpToDateDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, ensureSchemaMigrationsTable(db))
-	require.NoError(t, db.Create(&SchemaMigration{Version: CurrentSchemaVersion, Name: "current"}).Error)
+	require.NoError(t, db.Create(&SchemaMigration{Name: migrations[len(migrations)-1].Name}).Error)
 	return db
 }
 
