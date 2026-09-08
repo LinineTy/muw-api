@@ -95,7 +95,7 @@ export function OsWindowFrame({
     setInteracting(false)
   }
 
-  const onResizeDown = (e: React.PointerEvent<HTMLDivElement>) => {
+  const onResizeDown = (e: React.PointerEvent<Element>) => {
     if (win.maximized) return
     setInteracting(true)
     drag.current = {
@@ -106,12 +106,12 @@ export function OsWindowFrame({
       h: win.h ?? MIN_H,
     }
     try {
-      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+      ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
     } catch {
       /* 同 onTitleDown */
     }
   }
-  const onResizeMove = (e: React.PointerEvent<HTMLDivElement>) => {
+  const onResizeMove = (e: React.PointerEvent<Element>) => {
     const d = drag.current
     if (d?.mode !== 'resize' || d.w == null || d.h == null) return
     const w = Math.min(Math.max(d.w + (e.clientX - d.sx), MIN_W), window.innerWidth - 120)
@@ -132,13 +132,13 @@ export function OsWindowFrame({
   if (win.minimized) style.display = 'none'
 
   return (
+    // 外层=定位/动画层:无视觉无裁剪,缩放弧线把手悬浮在这一层的窗口圆角外
     <div
       data-os-window={win.id}
       style={style}
       onPointerDown={() => !active && activateWindow(win.id)}
       className={cn(
-        // 亮暗统一琉璃配方:暗色 --card 自带低透明度,壁纸可透出
-        'bg-card/70 border-border/60 absolute flex flex-col overflow-hidden rounded-2xl border backdrop-blur-[8px] saturate-150',
+        'absolute flex flex-col',
         // 几何变化过渡:最大化/恢复平滑展开;拖动缩放中禁用
         !interacting &&
           'transition-[left,top,width,height] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
@@ -146,15 +146,24 @@ export function OsWindowFrame({
         // 最小化播缩退,从 Dock 恢复播浮入
         !win.minimized && !win.closing && !win.restored && 'os-window-restore',
         win.minimizing && 'os-window-minimize',
-        win.closing && 'os-window-exit',
-        // 最大化贴边:去圆角;激活窗加淡描边置前强调
-        win.maximized && 'rounded-none',
-        active && 'border-primary/40 ring-primary/25 ring-1',
-        active
-          ? 'shadow-[0_24px_80px_rgba(0,0,0,0.22)]'
-          : 'shadow-[0_12px_40px_rgba(0,0,0,0.12)] opacity-95'
+        win.closing && 'os-window-exit'
       )}
     >
+      {/* 内层=视觉裁剪层:圆角/玻璃材质/边框/影子/描边都在这层,
+          overflow-hidden 负责把 iframe 内容裁进圆角——缩放把手必须留在
+          这层之外,否则贴角部分会被圆角曲线物理裁掉(实测 36px 圆角) */}
+      <div
+        className={cn(
+          // 亮暗统一琉璃配方:暗色 --card 自带低透明度,壁纸可透出
+          'border-border/60 relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border bg-card/70 backdrop-blur-[8px] saturate-150',
+          // 最大化贴边:去圆角;激活窗加淡描边置前强调
+          win.maximized && 'rounded-none',
+          active && 'border-primary/40 ring-primary/25 ring-1',
+          active
+            ? 'shadow-[0_24px_80px_rgba(0,0,0,0.22)]'
+            : 'shadow-[0_12px_40px_rgba(0,0,0,0.12)] opacity-95'
+        )}
+      >
       {/* 标题栏:三色点 + 居中页名,可拖动 */}
       <div
         onPointerDown={onTitleDown}
@@ -218,20 +227,38 @@ export function OsWindowFrame({
         src={win.lazy ? 'about:blank' : win.url}
         title={win.title}
       />
+      </div>
 
-      {/* 右下角缩放把手:内缩 12px 避开 36px 圆角裁剪曲线(贴角会被 overflow-hidden
-          裁掉大半,实测 elementFromPoint 命中的是容器而非把手),热区 24px */}
+      {/* 右下角缩放把手:书名号弧线——与窗口圆角(36px)同心平行的外弧,
+          悬浮于窗口圆角外 6px,像包住窗口角的一道弧。热区=透明宽描边
+          (16px),可见线 2.5px 仅展示;pointer-events 只在弧线上,不挡
+          弧线圈内的桌面交互。挂在定位层,不被内层 overflow-hidden 裁剪 */}
       {!win.maximized ? (
         <div
-          onPointerDown={onResizeDown}
-          onPointerMove={onResizeMove}
-          onPointerUp={onResizeUp}
-          onPointerCancel={onResizeUp}
-          className='text-muted-foreground/70 hover:text-foreground absolute right-3 bottom-3 z-20 flex size-6 cursor-nwse-resize touch-none items-center justify-center rounded-md transition-colors'
+          className='group pointer-events-none absolute -right-3.5 -bottom-3.5 z-30 size-14 text-muted-foreground/70 transition-colors group-hover:text-foreground'
           role='presentation'
         >
-          <svg viewBox='0 0 16 16' className='size-4' fill='none' aria-hidden='true'>
-            <path d='M14 6 L6 14 M14 10 L10 14' stroke='currentColor' strokeWidth='1.5' strokeLinecap='round' />
+          <svg viewBox='0 0 56 56' fill='none' aria-hidden='true'>
+            {/* 热区:透明宽弧,负责拖拽交互 */}
+            <path
+              d='M 17 46.6 A 42 42 0 0 0 46.6 17'
+              stroke='transparent'
+              strokeWidth='18'
+              strokeLinecap='round'
+              className='pointer-events-auto cursor-nwse-resize touch-none'
+              onPointerDown={onResizeDown}
+              onPointerMove={onResizeMove}
+              onPointerUp={onResizeUp}
+              onPointerCancel={onResizeUp}
+            />
+            {/* 可见弧线 */}
+            <path
+              d='M 17 46.6 A 42 42 0 0 0 46.6 17'
+              stroke='currentColor'
+              strokeWidth='2.5'
+              strokeLinecap='round'
+              className='pointer-events-none'
+            />
           </svg>
         </div>
       ) : null}

@@ -1,11 +1,13 @@
 // @muw-owned
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Trash2 } from 'lucide-react'
 import { useMemo, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import * as z from 'zod'
 
+import { Button } from '@/components/ui/button'
 import {
   Form,
   FormControl,
@@ -16,7 +18,6 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { JsonCodeEditor } from '@/components/json-code-editor'
 
 import {
   SettingsForm,
@@ -28,32 +29,12 @@ import { SettingsSection } from '../components/settings-section'
 import { useResetForm } from '../hooks/use-reset-form'
 import { useUpdateOption } from '../hooks/use-update-option'
 
-// 组优先级 JSON：{"v2":30,"v1":20}——组名 → 整数优先级，未配置的组 = 0。
-const groupPrioritiesSchema = z
-  .string()
-  .refine((v) => {
-    if (!v.trim()) return true
-    try {
-      const parsed: unknown = JSON.parse(v)
-      if (
-        typeof parsed !== 'object' ||
-        parsed === null ||
-        Array.isArray(parsed)
-      ) {
-        return false
-      }
-      return Object.values(parsed).every((n) => Number.isInteger(n))
-    } catch {
-      return false
-    }
-  })
-
 const subscriptionSettingsSchema = z.object({
   SubscriptionAutoRenewEnabled: z.boolean(),
   SubscriptionPriorityEnabled: z.boolean(),
   SubscriptionGroupUpgradeEnabled: z.boolean(),
   SubscriptionExclusiveGroupEnabled: z.boolean(),
-  SubscriptionGroupPriorities: groupPrioritiesSchema,
+  SubscriptionGroupPriorities: z.string(),
   SubscriptionMaxSimultaneous: z.number().int().min(0),
 })
 
@@ -87,6 +68,97 @@ const buildFormDefaults = (
   SubscriptionGroupPriorities: defaults.SubscriptionGroupPriorities,
   SubscriptionMaxSimultaneous: defaults.SubscriptionMaxSimultaneous ?? 0,
 })
+
+/** 解析组优先级 JSON → 行数组（非法输入容忍为空）。 */
+function parsePriorityRows(
+  value: string
+): { group: string; priority: number }[] {
+  try {
+    const parsed: unknown = JSON.parse(value || '{}')
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
+      return []
+    return Object.entries(parsed).map(([group, priority]) => ({
+      group,
+      priority: Number(priority) || 0,
+    }))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * 组优先级结构化编辑器:每行 = 组名 + 优先级 + 删除,底部添加行。
+ * 对外交付 JSON 字符串(空组名行不入序列),管理员不用手写 JSON。
+ */
+function GroupPrioritiesEditor({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (v: string) => void
+}) {
+  const { t } = useTranslation()
+  const rows = useMemo(() => parsePriorityRows(value), [value])
+
+  const emit = (next: { group: string; priority: number }[]) => {
+    const obj: Record<string, number> = {}
+    for (const r of next) {
+      const name = r.group.trim()
+      if (name) obj[name] = r.priority
+    }
+    onChange(JSON.stringify(obj))
+  }
+
+  return (
+    <div className='space-y-2'>
+      {rows.map((row, i) => (
+        <div key={i} className='flex items-center gap-2'>
+          <Input
+            className='max-w-48'
+            value={row.group}
+            placeholder={t('Group name')}
+            onChange={(e) => {
+              const next = [...rows]
+              next[i] = { ...row, group: e.target.value }
+              emit(next)
+            }}
+          />
+          <Input
+            className='max-w-32'
+            type='number'
+            step={1}
+            value={row.priority}
+            onChange={(e) => {
+              const next = [...rows]
+              next[i] = {
+                ...row,
+                priority: Number.parseInt(e.target.value, 10) || 0,
+              }
+              emit(next)
+            }}
+          />
+          <Button
+            type='button'
+            variant='ghost'
+            size='icon'
+            aria-label={t('Remove group')}
+            onClick={() => emit(rows.filter((_, j) => j !== i))}
+          >
+            <Trash2 className='size-4' aria-hidden='true' />
+          </Button>
+        </div>
+      ))}
+      <Button
+        type='button'
+        variant='outline'
+        size='sm'
+        onClick={() => emit([...rows, { group: '', priority: 0 }])}
+      >
+        {t('Add group')}
+      </Button>
+    </div>
+  )
+}
 
 export function SubscriptionSettingsSection({
   defaultValues,
@@ -243,17 +315,14 @@ export function SubscriptionSettingsSection({
               <FormItem>
                 <FormLabel>{t('Subscription group priorities')}</FormLabel>
                 <FormControl>
-                  <JsonCodeEditor
+                  <GroupPrioritiesEditor
                     value={field.value}
                     onChange={field.onChange}
-                    name={field.name}
-                    onBlur={field.onBlur}
-                    textareaRef={field.ref}
                   />
                 </FormControl>
                 <FormDescription>
                   {t(
-                    'JSON mapping group name to integer priority (higher wins, unlisted groups = 0). Purchases only change the user group when the target priority is not lower; group fallback on expiry never lands on an equal-or-higher group and prefers the highest group still backed by an active subscription. Example: {"v2":30,"v1":20}.'
+                    'Higher priority wins (unlisted groups = 0). A purchase only changes the user group when the target priority is not lower; group fallback on expiry never lands on an equal-or-higher group and prefers the highest group still backed by an active subscription.'
                   )}
                 </FormDescription>
               </FormItem>
