@@ -290,10 +290,14 @@ export async function getGroups(): Promise<ApiResponse<string[]>> {
 export interface AdminGroupPinProduct {
   id: number
   title: string
+  subtitle: string
   group: string
   price_amount: number
   enabled: boolean
+  is_recommended: boolean
+  allow_balance_pay?: boolean
   sort_order: number
+  allowed_groups: string
 }
 
 export interface AdminGroupPin {

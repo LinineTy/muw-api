@@ -229,10 +229,14 @@ export async function getMyGroupPin(): Promise<ApiResponse<GroupPin | null>> {
 export interface GroupPinProduct {
   id: number
   title: string
+  subtitle: string
   group: string
   price_amount: number
   enabled: boolean
+  is_recommended: boolean
+  allow_balance_pay?: boolean
   sort_order: number
+  allowed_groups: string
 }
 
 export async function getGroupPinProducts(): Promise<

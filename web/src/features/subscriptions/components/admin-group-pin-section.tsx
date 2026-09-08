@@ -51,9 +51,13 @@ function ProductEditorDialog({
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [title, setTitle] = useState(editing?.title ?? '')
+  const [subtitle, setSubtitle] = useState(editing?.subtitle ?? '')
   const [group, setGroup] = useState(editing?.group ?? '')
   const [price, setPrice] = useState(String(editing?.price_amount ?? '0'))
   const [sortOrder, setSortOrder] = useState(String(editing?.sort_order ?? '0'))
+  const [recommended, setRecommended] = useState(editing?.is_recommended ?? false)
+  const [allowBalance, setAllowBalance] = useState(editing?.allow_balance_pay ?? true)
+  const [allowedGroups, setAllowedGroups] = useState('')
 
   const saveMutation = useMutation({
     mutationFn: adminSaveGroupPinProduct,
@@ -82,6 +86,13 @@ function ProductEditorDialog({
             <Input value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
           <div className='grid gap-1.5'>
+            <Label>{t('Subtitle')}</Label>
+            <Input
+              value={subtitle}
+              onChange={(e) => setSubtitle(e.target.value)}
+            />
+          </div>
+          <div className='grid gap-1.5'>
             <Label>{t('Group')}</Label>
             <Input
               value={group}
@@ -108,6 +119,33 @@ function ProductEditorDialog({
               />
             </div>
           </div>
+          <div className='grid gap-1.5'>
+            <Label>{t('Allowed Groups')}</Label>
+            <Input
+              value={allowedGroups}
+              onChange={(e) => setAllowedGroups(e.target.value)}
+              placeholder={'["tier0","default"]'}
+            />
+            <p className='text-muted-foreground text-xs'>
+              {t('JSON array of user groups allowed to purchase. Empty = all groups')}
+            </p>
+          </div>
+          <label className='flex items-center gap-2 text-sm'>
+            <input
+              type='checkbox'
+              checked={recommended}
+              onChange={(e) => setRecommended(e.target.checked)}
+            />
+            {t('Recommended')}
+          </label>
+          <label className='flex items-center gap-2 text-sm'>
+            <input
+              type='checkbox'
+              checked={allowBalance}
+              onChange={(e) => setAllowBalance(e.target.checked)}
+            />
+            {t('Allow balance redemption')}
+          </label>
         </div>
         <DialogFooter>
           <Button variant='outline' onClick={onClose}>
@@ -119,10 +157,14 @@ function ProductEditorDialog({
               saveMutation.mutate({
                 id: editing?.id,
                 title,
+                subtitle,
                 group,
                 price_amount: Number(price) || 0,
                 enabled: true,
+                is_recommended: recommended,
+                allow_balance_pay: allowBalance,
                 sort_order: Number(sortOrder) || 0,
+                allowed_groups: allowedGroups,
               })
             }
           >

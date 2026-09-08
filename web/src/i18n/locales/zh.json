@@ -6555,6 +6555,8 @@
     "Group pin released": "固定分组已解除",
     "Title": "名称",
     "profile.group_pin.title": "固定分组",
-    "profile.group_pin.description": "你的账户被固定在以下分组，订阅到期后不会回落"
+    "profile.group_pin.description": "你的账户被固定在以下分组，订阅到期后不会回落",
+    "Subtitle": "副标题",
+    "JSON array of user groups allowed to purchase. Empty = all groups": "允许购买的用户组 JSON 数组，留空 = 不限"
   }
 }

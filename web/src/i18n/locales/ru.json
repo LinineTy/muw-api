@@ -6555,6 +6555,8 @@
     "Group pin released": "Закрепление группы снято",
     "Title": "Название",
     "profile.group_pin.title": "Фиксированная группа",
-    "profile.group_pin.description": "Ваш аккаунт закреплён за указанной группой и не вернётся обратно после истечения подписки"
+    "profile.group_pin.description": "Ваш аккаунт закреплён за указанной группой и не вернётся обратно после истечения подписки",
+    "Subtitle": "Подзаголовок",
+    "JSON array of user groups allowed to purchase. Empty = all groups": "JSON-массив групп, которым разрешена покупка. Пусто = все группы"
   }
 }

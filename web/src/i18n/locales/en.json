@@ -6555,6 +6555,8 @@
     "Group pin released": "Group pin released",
     "Title": "Title",
     "profile.group_pin.title": "Fixed Group",
-    "profile.group_pin.description": "Your account is pinned to the group below and will not fall back when subscriptions expire"
+    "profile.group_pin.description": "Your account is pinned to the group below and will not fall back when subscriptions expire",
+    "Subtitle": "Subtitle",
+    "JSON array of user groups allowed to purchase. Empty = all groups": "JSON array of user groups allowed to purchase. Empty = all groups"
   }
 }

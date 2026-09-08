@@ -6555,6 +6555,8 @@
     "Group pin released": "固定グループを解除しました",
     "Title": "名称",
     "profile.group_pin.title": "固定グループ",
-    "profile.group_pin.description": "アカウントは以下のグループに固定されており、サブスクリプションの期限切れ後も戻りません"
+    "profile.group_pin.description": "アカウントは以下のグループに固定されており、サブスクリプションの期限切れ後も戻りません",
+    "Subtitle": "サブタイトル",
+    "JSON array of user groups allowed to purchase. Empty = all groups": "購入を許可するユーザーグループの JSON 配列。空欄 = 全グループ可"
   }
 }

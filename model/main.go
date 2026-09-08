@@ -1445,19 +1445,15 @@ func PingDB() error {
 	return nil
 }
 
-// ensureGroupPinTables 幂等建固定分组两表（group_pin_products / group_pins）。
+// ensureGroupPinTables 幂等建固定分组两表（group_pin_products / group_pins）并补列。
 // 表由 AutoMigrate（升日期路径）创建；存量已最新库走"跳过迁移"路径不重跑
-// AutoMigrate，需在这里显式建表（260909-group-pin）。
+// AutoMigrate，需在这里显式补齐。AutoMigrate 幂等：表存在只补缺失列
+// （260909-group-pin 之后商品模型新增 subtitle/is_recommended 等列即靠这里兜底）。
 func ensureGroupPinTables(db *gorm.DB) error {
-	if !db.Migrator().HasTable(&GroupPinProduct{}) {
-		if err := db.AutoMigrate(&GroupPinProduct{}); err != nil {
-			return err
-		}
+	if err := db.AutoMigrate(&GroupPinProduct{}); err != nil {
+		return err
 	}
-	if !db.Migrator().HasTable(&GroupPin{}) {
-		return db.AutoMigrate(&GroupPin{})
-	}
-	return nil
+	return db.AutoMigrate(&GroupPin{})
 }
 
 // ensureSubscriptionOrderPinColumns 幂等补 subscription_orders.kind / pin_product_id

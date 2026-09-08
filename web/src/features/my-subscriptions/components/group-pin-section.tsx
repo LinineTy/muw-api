@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { Sparkles } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -51,13 +52,17 @@ function GroupPinPayDialog({
   const insufficientBalance = balance < balanceCost
 
   const hasEpay = epayMethods.length > 0
-  const [method, setMethod] = useState(hasEpay ? `epay:${epayMethods[0].type}` : 'balance')
+  const allowBalance = product.allow_balance_pay !== false
+  const [method, setMethod] = useState(
+    hasEpay ? `epay:${epayMethods[0].type}` : allowBalance ? 'balance' : ''
+  )
   const [paying, setPaying] = useState(false)
   const isBalance = method === 'balance'
 
   useEffect(() => {
-    if (!hasEpay) setMethod('balance')
-  }, [hasEpay])
+    if (!hasEpay && allowBalance) setMethod('balance')
+    if (!allowBalance && method === 'balance') setMethod(hasEpay ? `epay:${epayMethods[0].type}` : '')
+  }, [hasEpay, allowBalance])
 
   const finish = () => {
     toast.success(t('Fixed group activated'))
@@ -147,16 +152,18 @@ function GroupPinPayDialog({
                 </button>
               )
             })}
-          <button
-            type='button'
-            className={optionClass(isBalance)}
-            onClick={() => setMethod('balance')}
-          >
-            <span>{t('Balance')}</span>
-            <span className='text-muted-foreground text-xs'>
-              {formatQuota(balance)}
-            </span>
-          </button>
+          {allowBalance && (
+            <button
+              type='button'
+              className={optionClass(isBalance)}
+              onClick={() => setMethod('balance')}
+            >
+              <span>{t('Balance')}</span>
+              <span className='text-muted-foreground text-xs'>
+                {formatQuota(balance)}
+              </span>
+            </button>
+          )}
           {isBalance && insufficientBalance && (
             <p className='text-destructive text-xs'>
               {t('Insufficient balance')}
@@ -200,12 +207,33 @@ function GroupPinCard({
   ]
 
   return (
-    <div className='bg-card flex h-full min-h-[280px] flex-col justify-between gap-4 rounded-xl border border-border/70 p-5'>
-      {/* 头部：标题 + 副标题（无说明时淡色占位，与套餐卡片对齐） */}
+    <div
+      className={cn(
+        'bg-card flex h-full min-h-[280px] flex-col justify-between gap-4 rounded-xl border border-border/70 p-5',
+        product.is_recommended && 'border-primary/40'
+      )}
+    >
+      {/* 头部：标题 + 推荐 tag + 副标题（无说明时淡色占位，与套餐卡片对齐） */}
       <div className='flex flex-col gap-2'>
-        <h3 className='truncate text-lg font-medium'>{product.title}</h3>
-        <p className='text-muted-foreground/50 min-h-5 truncate text-xs'>
-          {t('No description')}
+        <div className='flex flex-wrap items-center gap-2'>
+          <h3 className='truncate text-lg font-medium'>{product.title}</h3>
+          {product.is_recommended && (
+            <span className='bg-primary/10 text-primary inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium'>
+              <Sparkles className='size-3' />
+              {t('Recommended')}
+            </span>
+          )}
+        </div>
+        <p
+          className={cn(
+            'min-h-5 truncate text-xs',
+            product.subtitle
+              ? 'text-muted-foreground'
+              : 'text-muted-foreground/50'
+          )}
+          title={product.subtitle}
+        >
+          {product.subtitle || t('No description')}
         </p>
 
         {/* 价格行：无周期（固定分组没有时长概念） */}

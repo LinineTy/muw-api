@@ -6555,6 +6555,8 @@
     "Group pin released": "固定分組已解除",
     "Title": "名稱",
     "profile.group_pin.title": "固定分組",
-    "profile.group_pin.description": "你的帳戶被固定在以下分組，訂閱到期後不會回落"
+    "profile.group_pin.description": "你的帳戶被固定在以下分組，訂閱到期後不會回落",
+    "Subtitle": "副標題",
+    "JSON array of user groups allowed to purchase. Empty = all groups": "允許購買的使用者組 JSON 陣列，留空 = 不限"
   }
 }
