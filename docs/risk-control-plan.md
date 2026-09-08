@@ -75,7 +75,7 @@
 - 写入点：`service/text_quota.go:526`（PostTextConsumeQuota，写消费日志处，`relayInfo.Request` 还在）。
 - 可见性：内容塞 `admin_info` 或独立接口，普通用户不暴露（照 `model/log.go:116-132 formatUserLogs` 剥离模式）。
 - 清理：照 `DeleteOldLogBatch` 按 created_at TTL。
-- 新表走 `model/schema_migration.go` 迁移（升 `CurrentSchemaVersion` + noop/回填占位）。
+- 新表走 `model/schema_migration.go` 迁移（在 `migrations` 末尾加 `<YYMMDD>-<slug>` 条目，纯建表靠 AutoMigrate/幂等 ensure、需转换写进 `Up`）。
 
 ## 前置审查
 
