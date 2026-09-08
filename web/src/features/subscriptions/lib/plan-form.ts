@@ -257,3 +257,83 @@ export function planValiditySeconds(values: {
       return v * 30 * 86400
   }
 }
+
+// ---------------------------------------------------------------------------
+// 固定分组商品（GroupPin product）表单：与套餐表单共用同一套 drawer/Form 基建，
+// 仅字段子集不同；提交/回填映射对齐 AdminGroupPinProduct。
+// ---------------------------------------------------------------------------
+
+export function getGroupPinFormSchema(t: TFunction) {
+  return z.object({
+    title: z.string().min(1, t('Please enter plan title')),
+    subtitle: z.string(),
+    group: z.string().min(1, t('Please select a group')),
+    price_amount: z.coerce.number().min(0, t('Please enter amount')),
+    sort_order: z.coerce.number(),
+    allowed_groups: z.array(z.string()),
+    is_recommended: z.boolean(),
+    allow_balance_pay: z.boolean(),
+  })
+}
+
+export type GroupPinFormValues = z.infer<
+  ReturnType<typeof getGroupPinFormSchema>
+>
+
+export const GROUP_PIN_FORM_DEFAULTS: GroupPinFormValues = {
+  title: '',
+  subtitle: '',
+  group: '',
+  price_amount: 0,
+  sort_order: 0,
+  allowed_groups: [],
+  is_recommended: false,
+  allow_balance_pay: true,
+}
+
+export function groupPinToFormValues(
+  product: GroupPinProductLike
+): GroupPinFormValues {
+  return {
+    title: product.title || '',
+    subtitle: product.subtitle || '',
+    group: product.group || '',
+    price_amount: Number(product.price_amount || 0),
+    sort_order: Number(product.sort_order || 0),
+    allowed_groups: parseAllowedGroups(product.allowed_groups),
+    is_recommended: product.is_recommended === true,
+    allow_balance_pay: product.allow_balance_pay !== false,
+  }
+}
+
+// 结构子集：AdminGroupPinProduct 满足即可，避免 lib 反向依赖 api 层类型。
+export interface GroupPinProductLike {
+  title?: string
+  subtitle?: string
+  group?: string
+  price_amount?: number
+  sort_order?: number
+  allowed_groups?: string
+  is_recommended?: boolean
+  allow_balance_pay?: boolean
+}
+
+export function groupPinFormToPayload(
+  values: GroupPinFormValues,
+  id?: number
+): GroupPinProductLike & { id?: number; enabled: true } {
+  return {
+    id,
+    title: values.title,
+    subtitle: values.subtitle,
+    group: values.group,
+    price_amount: Number(values.price_amount || 0),
+    sort_order: Number(values.sort_order || 0),
+    allowed_groups: values.allowed_groups.length
+      ? JSON.stringify(values.allowed_groups)
+      : '',
+    is_recommended: values.is_recommended,
+    allow_balance_pay: values.allow_balance_pay,
+    enabled: true,
+  }
+}

@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { CalendarClock, Plus, RefreshCw, Settings2, Trash2 } from 'lucide-react'
+import { CalendarClock, Plus, RefreshCw, Settings2, ShieldCheck, Trash2 } from 'lucide-react'
 import { nanoid } from 'nanoid'
 import { useEffect, useState } from 'react'
 import { useForm, type FieldErrors, type Resolver } from 'react-hook-form'
@@ -36,6 +36,7 @@ import {
 } from '@/components/drawer-layout'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Form,
   FormControl,
@@ -78,6 +79,8 @@ import {
   updatePlan,
   getGroups,
   getAdminPlans,
+  adminSaveGroupPinProduct,
+  type AdminGroupPinProduct,
 } from '../api'
 import { getDurationUnitOptions } from '../constants'
 import {
@@ -85,10 +88,15 @@ import {
   PLAN_FORM_DEFAULTS,
   planToFormValues,
   formValuesToPlanPayload,
+  getGroupPinFormSchema,
+  GROUP_PIN_FORM_DEFAULTS,
+  groupPinToFormValues,
+  groupPinFormToPayload,
   planValiditySeconds,
   resetWindowsRawEqual,
   windowRowDurationSeconds,
   type PlanFormValues,
+  type GroupPinFormValues,
   type ResetWindowFormRow,
 } from '../lib'
 import type { PlanRecord } from '../types'
@@ -98,12 +106,17 @@ interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
   currentRow?: PlanRecord
+  /** 固定分组商品（特殊订阅）：传入时抽屉以商品模式打开/回填。 */
+  groupPinProduct?: AdminGroupPinProduct
 }
+
+export type GroupPinProductType = 'plan' | 'group_pin'
 
 export function SubscriptionsMutateDrawer({
   open,
   onOpenChange,
   currentRow,
+  groupPinProduct,
 }: Props) {
   const { t } = useTranslation()
   const isEdit = !!currentRow?.plan?.id
@@ -123,12 +136,46 @@ export function SubscriptionsMutateDrawer({
     defaultValues: PLAN_FORM_DEFAULTS,
   })
 
+  // 固定分组商品（特殊订阅）共用本抽屉：顶部 Tabs 切换字段面。
+  const [productType, setProductType] = useState<GroupPinProductType>(
+    groupPinProduct ? 'group_pin' : 'plan'
+  )
+  const groupPinSchema = getGroupPinFormSchema(t)
+  const groupPinForm = useForm<GroupPinFormValues>({
+    resolver: zodResolver(groupPinSchema) as unknown as Resolver<GroupPinFormValues>,
+    defaultValues: GROUP_PIN_FORM_DEFAULTS,
+  })
+  const [savingGroupPin, setSavingGroupPin] = useState(false)
+  // 编辑已有对象（任一类型）时锁定类型，只允许"全新建"时切换。
+  const productTypeLocked = Boolean(currentRow || groupPinProduct)
+
+  const submitGroupPin = (values: GroupPinFormValues) => {
+    setSavingGroupPin(true)
+    adminSaveGroupPinProduct(groupPinFormToPayload(values, groupPinProduct?.id))
+      .then((res) => {
+        if (res.success) {
+          toast.success(t('Saved'))
+          triggerRefresh()
+          onOpenChange(false)
+        } else {
+          toast.error(res.message)
+        }
+      })
+      .catch(() => toast.error(t('Save failed')))
+      .finally(() => setSavingGroupPin(false))
+  }
+
   useEffect(() => {
     if (open) {
-      if (currentRow?.plan) {
+      if (groupPinProduct) {
+        setProductType('group_pin')
+        groupPinForm.reset(groupPinToFormValues(groupPinProduct))
+      } else if (currentRow?.plan) {
+        setProductType('plan')
         form.reset(planToFormValues(currentRow.plan))
       } else {
         form.reset(PLAN_FORM_DEFAULTS)
+        groupPinForm.reset(GROUP_PIN_FORM_DEFAULTS)
       }
       setNewExclusiveGroup(false)
       setNewExclusiveGroupValue('')
@@ -150,7 +197,7 @@ export function SubscriptionsMutateDrawer({
         })
         .catch(() => {})
     }
-  }, [open, currentRow, form])
+  }, [open, currentRow, groupPinProduct, form])
 
   const durationUnit = form.watch('duration_unit')
   const resetWindows = form.watch('reset_windows')
@@ -277,16 +324,291 @@ export function SubscriptionsMutateDrawer({
       <SheetContent className={sideDrawerContentClassName('sm:max-w-[600px]')}>
         <SheetHeader className={sideDrawerHeaderClassName()}>
           <SheetTitle>
-            {isEdit ? t('Update plan info') : t('Create new subscription plan')}
+            {productType === 'group_pin'
+              ? groupPinProduct
+                ? t('Edit Product')
+                : t('New Product')
+              : isEdit
+                ? t('Update plan info')
+                : t('Create new subscription plan')}
           </SheetTitle>
           <SheetDescription>
-            {isEdit
-              ? t('Modify existing subscription plan configuration')
-              : t(
-                  'Fill in the following info to create a new subscription plan'
-                )}
+            {productType === 'group_pin'
+              ? t(
+                  'Fixed group products: one-time purchase pins the user to the group permanently'
+                )
+              : isEdit
+                ? t('Modify existing subscription plan configuration')
+                : t(
+                    'Fill in the following info to create a new subscription plan'
+                  )}
           </SheetDescription>
         </SheetHeader>
+        <Tabs
+          value={productType}
+          onValueChange={(v) =>
+            v === 'plan' || v === 'group_pin'
+              ? setProductType(v)
+              : undefined
+          }
+          className='px-4 pt-3 sm:px-6'
+        >
+          <TabsList className='w-full'>
+            <TabsTrigger value='plan' className='flex-1' disabled={productTypeLocked && productType !== 'plan'}>
+              {t('Plans')}
+            </TabsTrigger>
+            <TabsTrigger value='group_pin' className='flex-1' disabled={productTypeLocked && productType !== 'group_pin'}>
+              {t('Fixed Groups')}
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+        {productType === 'group_pin' ? (
+          <Form {...groupPinForm}>
+            <form
+              id='group-pin-form'
+              onSubmit={groupPinForm.handleSubmit(
+                submitGroupPin,
+                () => undefined
+              )}
+              className={sideDrawerFormClassName()}
+            >
+              <SideDrawerSection>
+                <h3 className='flex items-center gap-2 text-sm font-medium'>
+                  <IconBadge tone='info' size='xs'>
+                    <Settings2 />
+                  </IconBadge>
+                  {t('Basic Info')}
+                </h3>
+
+                <FormField
+                  control={groupPinForm.control}
+                  name='title'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Plan Title')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder={t('e.g. Basic Plan')}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={groupPinForm.control}
+                  name='subtitle'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Plan Subtitle')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder={t('e.g. Suitable for light usage')}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
+                  <FormField
+                    control={groupPinForm.control}
+                    name='price_amount'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Plan Price')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type='number'
+                            step='0.01'
+                            min={0}
+                            onChange={(e) =>
+                              field.onChange(
+                                Number.parseFloat(e.target.value) || 0
+                              )
+                            }
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'Amount the user pays to purchase this plan; the actual currency depends on the payment gateway.'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
+                  <FormField
+                    control={groupPinForm.control}
+                    name='group'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Upgrade Group')}</FormLabel>
+                        <Select
+                          items={[
+                            ...(groupOptions || []).map((g) => ({
+                              value: g,
+                              label: g,
+                            })),
+                            ...(field.value &&
+                            !(groupOptions || []).includes(field.value)
+                              ? [{ value: field.value, label: field.value }]
+                              : []),
+                          ]}
+                          onValueChange={(v) => v !== null && field.onChange(v)}
+                          value={field.value || ''}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue
+                                placeholder={t('Please select a group')}
+                              />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent alignItemWithTrigger={false}>
+                            <SelectGroup>
+                              {(groupOptions || []).map((g) => (
+                                <SelectItem key={g} value={g}>
+                                  {g}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={groupPinForm.control}
+                    name='sort_order'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Sort Order')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type='number'
+                            onChange={(e) =>
+                              field.onChange(
+                                Number.parseInt(e.target.value, 10) || 0
+                              )
+                            }
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className='flex flex-col gap-3'>
+                  <FormField
+                    control={groupPinForm.control}
+                    name='is_recommended'
+                    render={({ field }) => (
+                      <FormItem className={sideDrawerSwitchItemClassName()}>
+                        <FormLabel className='!mt-0'>
+                          {t('Recommended')}
+                        </FormLabel>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={groupPinForm.control}
+                    name='allow_balance_pay'
+                    render={({ field }) => (
+                      <FormItem className={sideDrawerSwitchItemClassName()}>
+                        <FormLabel className='!mt-0'>
+                          {t('Allow balance redemption')}
+                        </FormLabel>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </SideDrawerSection>
+
+              <SideDrawerSection>
+                <h3 className='flex items-center gap-2 text-sm font-medium'>
+                  <IconBadge tone='success' size='xs'>
+                    <ShieldCheck />
+                  </IconBadge>
+                  {t('Purchase access')}
+                </h3>
+
+                <FormField
+                  control={groupPinForm.control}
+                  name='allowed_groups'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Allowed Groups')}</FormLabel>
+                      <FormControl>
+                        <div className='flex max-h-40 flex-wrap gap-x-4 gap-y-2 overflow-y-auto rounded-md border p-2.5'>
+                          {(groupOptions || []).length === 0 ? (
+                            <span className='text-muted-foreground text-xs'>
+                              {t('No groups available')}
+                            </span>
+                          ) : (
+                            (groupOptions || []).map((g) => {
+                              const checked = (field.value || []).includes(g)
+                              return (
+                                <label
+                                  key={g}
+                                  className='flex cursor-pointer items-center gap-1.5 text-sm'
+                                >
+                                  <Checkbox
+                                    checked={checked}
+                                    onCheckedChange={(v) => {
+                                      const cur = field.value || []
+                                      field.onChange(
+                                        v
+                                          ? [...cur, g]
+                                          : cur.filter((x) => x !== g)
+                                      )
+                                    }}
+                                  />
+                                  <span>{g}</span>
+                                </label>
+                              )
+                            })
+                          )}
+                        </div>
+                      </FormControl>
+                      <FormDescription>
+                        {t(
+                          'Purchase gate: only users in the selected groups can subscribe to this plan. Leave empty to allow all groups.'
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </SideDrawerSection>
+            </form>
+          </Form>
+        ) : (
         <Form {...form}>
           <form
             id='subscription-form'
@@ -1077,17 +1399,28 @@ export function SubscriptionsMutateDrawer({
             </SideDrawerSection>
           </form>
         </Form>
+        )}
         <SheetFooter className={sideDrawerFooterClassName()}>
           <SheetClose render={<Button variant='outline' />}>
             {t('Close')}
           </SheetClose>
-          <Button
-            form='subscription-form'
-            type='submit'
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? t('Saving...') : t('Save changes')}
-          </Button>
+          {productType === 'group_pin' ? (
+            <Button
+              form='group-pin-form'
+              type='submit'
+              disabled={savingGroupPin}
+            >
+              {savingGroupPin ? t('Saving...') : t('Save changes')}
+            </Button>
+          ) : (
+            <Button
+              form='subscription-form'
+              type='submit'
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? t('Saving...') : t('Save changes')}
+            </Button>
+          )}
         </SheetFooter>
       </SheetContent>
 
