@@ -173,11 +173,11 @@ function GroupPrioritiesEditor({
               value={row.group}
             >
               <FormControl>
-                <SelectTrigger className='max-w-48'>
+                <SelectTrigger className='w-48'>
                   <SelectValue placeholder={t('Group name')} />
                 </SelectTrigger>
               </FormControl>
-              <SelectContent>
+              <SelectContent side='bottom' align='start' alignItemWithTrigger={false}>
                 {options.map((g) => (
                   <SelectItem key={g} value={g}>
                     {g}
@@ -186,7 +186,7 @@ function GroupPrioritiesEditor({
               </SelectContent>
             </Select>
             <Input
-              className='max-w-32'
+              className='w-32'
               type='number'
               step={1}
               value={row.priority}
