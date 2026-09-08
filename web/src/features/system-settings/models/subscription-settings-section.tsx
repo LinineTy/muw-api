@@ -1,7 +1,7 @@
 // @muw-owned
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Trash2 } from 'lucide-react'
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -89,6 +89,8 @@ function parsePriorityRows(
 /**
  * 组优先级结构化编辑器:每行 = 组名 + 优先级 + 删除,底部添加行。
  * 对外交付 JSON 字符串(空组名行不入序列),管理员不用手写 JSON。
+ * 草稿行(组名未填)存本地 state——若直接依赖 value 派生,空行会被
+ * 序列化过滤掉导致"添加组"永远渲染不出新行。
  */
 function GroupPrioritiesEditor({
   value,
@@ -98,15 +100,33 @@ function GroupPrioritiesEditor({
   onChange: (v: string) => void
 }) {
   const { t } = useTranslation()
-  const rows = useMemo(() => parsePriorityRows(value), [value])
-
-  const emit = (next: { group: string; priority: number }[]) => {
+  const serialize = (rows: { group: string; priority: number }[]) => {
     const obj: Record<string, number> = {}
-    for (const r of next) {
+    for (const r of rows) {
       const name = r.group.trim()
       if (name) obj[name] = r.priority
     }
-    onChange(JSON.stringify(obj))
+    return JSON.stringify(obj)
+  }
+
+  const [draft, setDraft] = useState<
+    { group: string; priority: number }[] | null
+  >(null)
+  const draftSerialized = useMemo(
+    () => (draft === null ? null : serialize(draft)),
+    [draft]
+  )
+  // 外部改写 value(表单重置/加载)且不等于草稿序列化结果 → 丢弃草稿重新解析
+  useEffect(() => {
+    if (draft !== null && draftSerialized !== value) setDraft(null)
+  }, [value, draft, draftSerialized])
+
+  const rows =
+    draft ?? parsePriorityRows(value)
+
+  const commit = (next: { group: string; priority: number }[]) => {
+    setDraft(next)
+    onChange(serialize(next))
   }
 
   return (
@@ -120,7 +140,7 @@ function GroupPrioritiesEditor({
             onChange={(e) => {
               const next = [...rows]
               next[i] = { ...row, group: e.target.value }
-              emit(next)
+              commit(next)
             }}
           />
           <Input
@@ -134,7 +154,7 @@ function GroupPrioritiesEditor({
                 ...row,
                 priority: Number.parseInt(e.target.value, 10) || 0,
               }
-              emit(next)
+              commit(next)
             }}
           />
           <Button
@@ -142,7 +162,7 @@ function GroupPrioritiesEditor({
             variant='ghost'
             size='icon'
             aria-label={t('Remove group')}
-            onClick={() => emit(rows.filter((_, j) => j !== i))}
+            onClick={() => commit(rows.filter((_, j) => j !== i))}
           >
             <Trash2 className='size-4' aria-hidden='true' />
           </Button>
@@ -152,7 +172,7 @@ function GroupPrioritiesEditor({
         type='button'
         variant='outline'
         size='sm'
-        onClick={() => emit([...rows, { group: '', priority: 0 }])}
+        onClick={() => commit([...rows, { group: '', priority: 0 }])}
       >
         {t('Add group')}
       </Button>
