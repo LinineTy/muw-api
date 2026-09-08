@@ -49,3 +49,13 @@ func GroupPriority(group string) int {
 	defer subscriptionGroupPriorityMu.RUnlock()
 	return subscriptionGroupPriorities[group]
 }
+
+// SubscriptionGroupPrioritiesEnabled 运营是否配置了组优先级。未配置 = 功能整体关闭：
+// 降级路径必须跳过全部优先级比较（含"同级拦"），组回退走 legacy 语义——否则"未配置
+// 全为 0"会把"同级不降"误伤成"过期永不回退"，用户被永久卡在升级组（2026-09-09
+// LazyExpire 系列测试在 main 上暴露的存量回归）。
+func SubscriptionGroupPrioritiesEnabled() bool {
+	subscriptionGroupPriorityMu.RLock()
+	defer subscriptionGroupPriorityMu.RUnlock()
+	return len(subscriptionGroupPriorities) > 0
+}

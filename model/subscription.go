@@ -846,6 +846,10 @@ func downgradeUserGroupForSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now
 		return "", err
 	}
 	// 其他活跃订阅赋予的最高优先级组（降级终点不得低于它——有订阅撑着就降到那个组）。
+	// 撑组判定（legacy 行为：有其他活跃升级订阅就保组）无条件生效；两处优先级数值
+	// 比较仅在运营配置了组优先级时生效——未配置全为 0，"同级拦"会把"过期回退"
+	// 误伤成"永不回退"，用户被永久卡在升级组（2026-09-09 main 存量回归）。
+	prioritiesEnabled := SubscriptionGroupPrioritiesEnabled()
 	var otherSubs []UserSubscription
 	if err := tx.Where("user_id = ? AND status = ? AND end_time > ? AND id <> ? AND upgrade_group <> ''",
 		sub.UserId, "active", now, sub.Id).
@@ -877,11 +881,11 @@ func downgradeUserGroupForSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now
 		return "", nil
 	}
 	// 其他订阅撑着比显式目标更高的组 → 降到那个组（v2 过期、v1 还活着 → 回 v1 而非底组）。
-	if bestPriority > GroupPriority(target) {
+	if prioritiesEnabled && bestPriority > GroupPriority(target) {
 		target = bestGroup
 	}
 	// 目标优先级 ≥ 当前 → 不降（同级也拦：过期还组不换同档组；防错配把人往高处"降"）。
-	if GroupPriority(target) >= GroupPriority(currentGroup) {
+	if prioritiesEnabled && GroupPriority(target) >= GroupPriority(currentGroup) {
 		return "", nil
 	}
 	if err := tx.Model(&User{}).Where("id = ?", sub.UserId).
