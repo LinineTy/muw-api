@@ -133,3 +133,11 @@ export async function fetchUpstreamRatios(request: FetchUpstreamRatiosRequest) {
   )
   return res.data
 }
+
+/** 全部用户分组名(订阅组优先级选择器数据源,与套餐表单 UpgradeGroup 同源) */
+export async function getGroupOptions(): Promise<string[]> {
+  const res = await api.get<{ data?: string[]; success?: boolean }>(
+    '/api/group'
+  )
+  return res.data?.data ?? []
+}

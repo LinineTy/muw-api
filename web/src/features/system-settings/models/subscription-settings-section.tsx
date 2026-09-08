@@ -17,7 +17,16 @@ import {
   FormLabel,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+
+import { getGroupOptions } from '../api'
 
 import {
   SettingsForm,
@@ -87,10 +96,12 @@ function parsePriorityRows(
 }
 
 /**
- * 组优先级结构化编辑器:每行 = 组名 + 优先级 + 删除,底部添加行。
- * 对外交付 JSON 字符串(空组名行不入序列),管理员不用手写 JSON。
- * 草稿行(组名未填)存本地 state——若直接依赖 value 派生,空行会被
- * 序列化过滤掉导致"添加组"永远渲染不出新行。
+ * 组优先级结构化编辑器:每行 = 组选择 + 优先级 + 删除,底部添加行。
+ * 组列表从 /api/group 拉取(与套餐表单 UpgradeGroup 同源);已有配置里
+ * 不在列表中的组(历史/已删组)合并进选项兜底;其他行已选的组被排除,
+ * 防同组重复配置。对外交付 JSON 字符串,管理员不手写。
+ * 草稿行存本地 state——若直接依赖 value 派生,空行会被序列化过滤掉
+ * 导致"添加组"永远渲染不出新行。
  */
 function GroupPrioritiesEditor({
   value,
@@ -100,6 +111,14 @@ function GroupPrioritiesEditor({
   onChange: (v: string) => void
 }) {
   const { t } = useTranslation()
+  const [groupOptions, setGroupOptions] = useState<string[]>([])
+
+  useEffect(() => {
+    getGroupOptions()
+      .then(setGroupOptions)
+      .catch(() => {})
+  }, [])
+
   const serialize = (rows: { group: string; priority: number }[]) => {
     const obj: Record<string, number> = {}
     for (const r of rows) {
@@ -121,8 +140,7 @@ function GroupPrioritiesEditor({
     if (draft !== null && draftSerialized !== value) setDraft(null)
   }, [value, draft, draftSerialized])
 
-  const rows =
-    draft ?? parsePriorityRows(value)
+  const rows = draft ?? parsePriorityRows(value)
 
   const commit = (next: { group: string; priority: number }[]) => {
     setDraft(next)
@@ -131,43 +149,68 @@ function GroupPrioritiesEditor({
 
   return (
     <div className='space-y-2'>
-      {rows.map((row, i) => (
-        <div key={i} className='flex items-center gap-2'>
-          <Input
-            className='max-w-48'
-            value={row.group}
-            placeholder={t('Group name')}
-            onChange={(e) => {
-              const next = [...rows]
-              next[i] = { ...row, group: e.target.value }
-              commit(next)
-            }}
-          />
-          <Input
-            className='max-w-32'
-            type='number'
-            step={1}
-            value={row.priority}
-            onChange={(e) => {
-              const next = [...rows]
-              next[i] = {
-                ...row,
-                priority: Number.parseInt(e.target.value, 10) || 0,
-              }
-              commit(next)
-            }}
-          />
-          <Button
-            type='button'
-            variant='ghost'
-            size='icon'
-            aria-label={t('Remove group')}
-            onClick={() => commit(rows.filter((_, j) => j !== i))}
-          >
-            <Trash2 className='size-4' aria-hidden='true' />
-          </Button>
-        </div>
-      ))}
+      {rows.map((row, i) => {
+        // 该行可选组 = 全部组 ∪ 本行当前值(兜底历史组) − 其他行已选组
+        const takenByOthers = new Set(
+          rows.filter((_, j) => j !== i).map((r) => r.group.trim())
+        )
+        const options = [
+          ...new Set(
+            [...groupOptions, row.group.trim()].filter(
+              (g) => g && !takenByOthers.has(g)
+            )
+          ),
+        ]
+        return (
+          <div key={i} className='flex items-center gap-2'>
+            <Select
+              items={options.map((g) => ({ value: g, label: g }))}
+              onValueChange={(v) => {
+                const next = [...rows]
+                next[i] = { ...row, group: v ?? '' }
+                commit(next)
+              }}
+              value={row.group}
+            >
+              <FormControl>
+                <SelectTrigger className='max-w-48'>
+                  <SelectValue placeholder={t('Group name')} />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {options.map((g) => (
+                  <SelectItem key={g} value={g}>
+                    {g}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              className='max-w-32'
+              type='number'
+              step={1}
+              value={row.priority}
+              onChange={(e) => {
+                const next = [...rows]
+                next[i] = {
+                  ...row,
+                  priority: Number.parseInt(e.target.value, 10) || 0,
+                }
+                commit(next)
+              }}
+            />
+            <Button
+              type='button'
+              variant='ghost'
+              size='icon'
+              aria-label={t('Remove group')}
+              onClick={() => commit(rows.filter((_, j) => j !== i))}
+            >
+              <Trash2 className='size-4' aria-hidden='true' />
+            </Button>
+          </div>
+        )
+      })}
       <Button
         type='button'
         variant='outline'
