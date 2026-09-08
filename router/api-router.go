@@ -165,6 +165,25 @@ func SetApiRouter(router *gin.Engine) {
 			subscriptionRoute.GET("/expiring", controller.GetSubscriptionExpiring)
 			subscriptionRoute.GET("/orders", middleware.DisableCache(), controller.GetUserSubscriptionOrders)
 		}
+
+		// Group pin (固定分组：商品/我的钉/余额购买 + 管理端商品与钉子管理)
+		groupPinRoute := apiRouter.Group("/group_pin")
+		groupPinRoute.Use(middleware.UserAuth())
+		{
+			groupPinRoute.GET("/products", controller.GetGroupPinProducts)
+			groupPinRoute.GET("/self", middleware.DisableCache(), controller.GetMyGroupPin)
+			groupPinRoute.POST("/balance/pay", middleware.SubscriptionActionRateLimit(), controller.GroupPinBalancePay)
+			groupPinRoute.POST("/epay/pay", middleware.SubscriptionActionRateLimit(), controller.GroupPinRequestEpay)
+		}
+		groupPinAdminRoute := apiRouter.Group("/group_pin/admin")
+		groupPinAdminRoute.Use(middleware.AdminAuth())
+		{
+			groupPinAdminRoute.GET("/products", controller.AdminListGroupPinProducts)
+			groupPinAdminRoute.POST("/product/save", controller.AdminSaveGroupPinProduct)
+			groupPinAdminRoute.DELETE("/product/:id", controller.AdminDeleteGroupPinProduct)
+			groupPinAdminRoute.GET("/pins", controller.AdminListUserGroupPins)
+			groupPinAdminRoute.POST("/pin/release", controller.AdminReleaseGroupPin)
+		}
 		subscriptionAdminRoute := apiRouter.Group("/subscription/admin")
 		subscriptionAdminRoute.Use(middleware.AdminAuth())
 		{

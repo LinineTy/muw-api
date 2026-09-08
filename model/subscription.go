@@ -338,7 +338,18 @@ type SubscriptionOrder struct {
 	// When > 0, completing this order renews/extends the target subscription
 	// instead of creating a new one. 0 = create a new subscription.
 	ExtendSubscriptionId int `json:"extend_subscription_id" gorm:"type:int;not null;default:0"`
+
+	// 订单种类（订阅 / 固定分组）。group_pin 订单完成时创建 GroupPin（固定分组钉）
+	// 而非订阅，PinProductId 指向 group_pin_products 行；PlanId 此时不使用。
+	Kind         string `json:"kind" gorm:"type:varchar(20);not null;default:'subscription'"`
+	PinProductId int    `json:"pin_product_id" gorm:"type:int;not null;default:0"`
 }
+
+// SubscriptionOrderKind 订单种类常量。
+const (
+	OrderKindSubscription = "subscription"
+	OrderKindGroupPin     = "group_pin"
+)
 
 func (o *SubscriptionOrder) Insert() error {
 	if o.CreateTime == 0 {
@@ -895,23 +906,10 @@ func downgradeUserGroupForSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now
 	return target, nil
 }
 
-// subscriptionIsPinned 报告订阅是否为"钉子（永久）档"：升档与降档目标相同
-// （如 upgrade v2 + downgrade v2 = 等效不降级）。钉子订阅自然到期后锚点仍保留，
-// 用户被钉在该档；只有同互斥组替换（自愿放弃）、管理端作废或立即取消才解钉。
-// 仅在已配置组优先级（锚点态）下有意义。
-func subscriptionIsPinned(s *UserSubscription) bool {
-	if s == nil {
-		return false
-	}
-	up := strings.TrimSpace(s.UpgradeGroup)
-	down := strings.TrimSpace(s.DowngradeGroup)
-	return up != "" && down == up
-}
-
 // subscriptionAnchorGroup 返回订阅当前贡献的用户组锚点（空串 = 不贡献）：
-//   - active：其 upgrade_group（订阅生效期间拿到的档）；
-//   - expired 且为钉子：仍返回 upgrade_group（永久锚，自然到期不消失）；
-//   - cancelled / deleted：不贡献（同组替换解钉、主动放弃、管理端作废）。
+// 仅 active 订阅贡献其 upgrade_group（订阅生效期间拿到的档）；expired/cancelled/deleted
+// 一律不贡献——"到期仍固定在档"的诉求由固定分组钉（GroupPin，见 group_pin.go）承载，
+// 订阅行自身不再有钉子语义。
 func subscriptionAnchorGroup(s *UserSubscription) string {
 	if s == nil {
 		return ""
@@ -923,48 +921,39 @@ func subscriptionAnchorGroup(s *UserSubscription) string {
 	if s.Status == "active" {
 		return up
 	}
-	if s.Status == "expired" && subscriptionIsPinned(s) {
-		return up
-	}
 	return ""
 }
 
 // subscriptionDrainGroup 返回订阅结束导致"彻底无锚"时的断档兜底组（仅锚点态使用）。
-// 钉子订阅被取消/作废时其 downgrade==upgrade 没有"放弃"意义，直接回基底
-// （prev_user_group / default）；普通订阅按 downgrade_group → prev_user_group 回退；
-// 无降级目标/基底的阶梯订阅落 default 兜底（防幽灵高档）。完全非阶梯订阅
-// （三字段全空）返回空串 = 不移动组，避免清掉非订阅来源的手动分组。
+// 按 downgrade_group → prev_user_group 回退；无降级目标/基底的阶梯订阅落 default
+// 兜底（防幽灵高档）。完全非阶梯订阅（三字段全空）返回空串 = 不移动组，避免清掉
+// 非订阅来源的手动分组。
 func subscriptionDrainGroup(s *UserSubscription) string {
 	if s == nil {
 		return ""
 	}
-	up := strings.TrimSpace(s.UpgradeGroup)
 	down := strings.TrimSpace(s.DowngradeGroup)
 	prev := strings.TrimSpace(s.PrevUserGroup)
-	if up == "" && down == "" && prev == "" {
-		return ""
-	}
-	if subscriptionIsPinned(s) {
-		if prev != "" {
-			return prev
+	if down == "" && prev == "" {
+		if strings.TrimSpace(s.UpgradeGroup) == "" {
+			return ""
 		}
 		return "default"
 	}
 	if down != "" {
 		return down
 	}
-	if prev != "" {
-		return prev
-	}
-	return "default"
+	return prev
 }
 
 // settleUserSubscriptionGroupTx 是锚点态（已配置组优先级）下订阅生命周期事件后的组收敛：
-// 组 = 现存最高锚点（active 订阅 + 自然到期的钉子订阅，见 subscriptionAnchorGroup）；
-// 现存无锚点（彻底断档）时按 ended 的降级目标兜底（见 subscriptionDrainGroup），且只允许
+// 组 = 现存最高锚点（active 订阅 upgrade_group + active 固定分组钉，见 subscriptionAnchorGroup
+// 与 activeGroupPinGroupTx）；现存无锚点（彻底断档）时按 drainTarget 兜底，且只允许
 // "真降"（目标优先级 < 当前，同级也拦——防错配把人在过期时平移到/抬到不该去的组）。
+// drainTarget 由调用方按事件语义给定（订阅结束 = subscriptionDrainGroup(ended)；
+// 解除固定分组钉 = 最近 ended 订阅的 drain 或 default），空串 = 断档时不移动组。
 // 返回收敛后的组与是否变更；未变更不写库。事务内调用，只用 tx；调用方变更后刷用户组缓存。
-func settleUserSubscriptionGroupTx(tx *gorm.DB, userId int, ended *UserSubscription) (string, bool, error) {
+func settleUserSubscriptionGroupTx(tx *gorm.DB, userId int, drainTarget string) (string, bool, error) {
 	if tx == nil || userId <= 0 {
 		return "", false, errors.New("invalid settle args")
 	}
@@ -983,6 +972,14 @@ func settleUserSubscriptionGroupTx(tx *gorm.DB, userId int, ended *UserSubscript
 			}
 		}
 	}
+	// 固定分组钉：永不消失的锚（不受订阅生命周期影响），与订阅锚点取 max。
+	if g, err := activeGroupPinGroupTx(tx, userId); err != nil {
+		return "", false, err
+	} else if g != "" {
+		if p := GroupPriority(g); p > bestPriority {
+			bestGroup, bestPriority = g, p
+		}
+	}
 	currentGroup, err := getUserGroupByIdTx(tx, userId)
 	if err != nil {
 		return "", false, err
@@ -990,7 +987,7 @@ func settleUserSubscriptionGroupTx(tx *gorm.DB, userId int, ended *UserSubscript
 	target := bestGroup
 	fromDrain := false
 	if target == "" {
-		target = subscriptionDrainGroup(ended)
+		target = drainTarget
 		fromDrain = true
 	}
 	if target == "" || target == currentGroup {
@@ -1009,8 +1006,8 @@ func settleUserSubscriptionGroupTx(tx *gorm.DB, userId int, ended *UserSubscript
 // 的单一入口，按运营是否配置组优先级分流：
 //   - 未配置（legacy 态）：downgradeUserGroupForSubscriptionTx 逐订阅 legacy 回退
 //     （按 down/prev 回退；有其他活跃升级订阅撑组则保组），数值优先级比较全部关闭。
-//   - 已配置（锚点态）：settleUserSubscriptionGroupTx 全局锚点重算——钉子永久、非钉子
-//     释放、彻底断档按 ended 降级目标兜底。
+//   - 已配置（锚点态）：settleUserSubscriptionGroupTx 全局锚点重算——active 订阅锚点 +
+//     固定分组钉取 max，彻底断档按 ended 降级目标兜底。
 //
 // 返回收敛后的组（变更时非空）与是否变更。调用方在变更后负责刷用户组缓存。
 func applyGroupAfterSubscriptionEndTx(tx *gorm.DB, sub *UserSubscription, now int64) (string, bool, error) {
@@ -1027,7 +1024,7 @@ func applyGroupAfterSubscriptionEndTx(tx *gorm.DB, sub *UserSubscription, now in
 		}
 		return target, target != "", nil
 	}
-	return settleUserSubscriptionGroupTx(tx, sub.UserId, sub)
+	return settleUserSubscriptionGroupTx(tx, sub.UserId, subscriptionDrainGroup(sub))
 }
 
 func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *SubscriptionPlan, source string) (*UserSubscription, error) {
@@ -1189,12 +1186,26 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 		if order.Status != common.TopUpStatusPending {
 			return ErrSubscriptionOrderStatusInvalid
 		}
-		plan, err := GetSubscriptionPlanById(order.PlanId)
-		if err != nil {
-			return err
-		}
-		if !plan.Enabled {
-			// still allow completion for already purchased orders
+		var itemTitle string
+		var plan *SubscriptionPlan
+		var pinProduct *GroupPinProduct
+		var err error
+		if order.Kind == OrderKindGroupPin {
+			// 固定分组订单：加载商品，完成时建钉而非订阅。
+			pinProduct, err = GetGroupPinProductById(order.PinProductId)
+			if err != nil {
+				return err
+			}
+			itemTitle = pinProduct.Title
+		} else {
+			plan, err = GetSubscriptionPlanById(order.PlanId)
+			if err != nil {
+				return err
+			}
+			if !plan.Enabled {
+				// still allow completion for already purchased orders
+			}
+			itemTitle = plan.Title
 		}
 		// 锁定用户行：并发完成同一用户的不同订单（包括多实例部署下）时，
 		// 使 CreateUserSubscriptionFromPlanTx 的 MaxPurchasePerUser 检查按用户串行。
@@ -1202,7 +1213,15 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 		if err := lockForUpdate(tx).Select("id").Where("id = ?", order.UserId).First(&userRow).Error; err != nil {
 			return err
 		}
-		if order.ExtendSubscriptionId > 0 {
+		if order.Kind == OrderKindGroupPin {
+			changed, err := PinUserGroupTx(tx, order.UserId, pinProduct.Group, GroupPinSourcePurchase, pinProduct.Title, order.UserId)
+			if err != nil {
+				return err
+			}
+			if changed {
+				upgradeGroup = pinProduct.Group
+			}
+		} else if order.ExtendSubscriptionId > 0 {
 			// Renewal: extend the target subscription instead of creating a new one.
 			var target UserSubscription
 			if err := lockForUpdate(tx).
@@ -1237,7 +1256,7 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 			return err
 		}
 		logUserId = order.UserId
-		logPlanTitle = plan.Title
+		logPlanTitle = itemTitle
 		logMoney = order.Money
 		logPaymentMethod = order.PaymentMethod
 		return nil

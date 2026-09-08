@@ -21,6 +21,7 @@ import (
 	"github.com/QuantumNous/new-api/service/authz"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/QuantumNous/new-api/constant"
 
@@ -869,9 +870,23 @@ func UpdateUser(c *gin.Context) {
 	}
 	updatePassword := updatedUser.Password != ""
 	authzTouched := false
+	groupChanged := false
 	if err := model.DB.Transaction(func(tx *gorm.DB) error {
 		if err := updatedUser.EditWithTx(tx, updatePassword); err != nil {
 			return err
+		}
+		// 管理员改组即建固定分组钉（介入即固定）：组发生变化且目标组合法时，
+		// 在同一事务内以 admin 来源建钉（单钉替换）。钉组与当前组一致 → 只记钉不动组。
+		// 订阅分组功能未关闭、目标组存在于分组倍率配置才建钉，否则保持原有编辑行为。
+		if common.SubscriptionGroupUpgradeEnabled &&
+			updatedUser.Group != "" && updatedUser.Group != originUser.Group {
+			if _, ok := ratio_setting.GetGroupRatioCopy()[updatedUser.Group]; ok {
+				if _, err := model.PinUserGroupTx(tx, updatedUser.Id, updatedUser.Group,
+					model.GroupPinSourceAdmin, "admin user update", c.GetInt("id")); err != nil {
+					return err
+				}
+				groupChanged = true
+			}
 		}
 		touched, err := updateAdminPermissionsForUserInTx(c, tx, updatedUser.Id, originUser.Role, updatedUser.AdminPermissions)
 		authzTouched = touched
@@ -879,6 +894,11 @@ func UpdateUser(c *gin.Context) {
 	}); err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	if groupChanged {
+		if err := model.RefreshUserGroupCache(updatedUser.Id); err != nil {
+			common.SysError(fmt.Sprintf("failed to refresh user group cache after admin group change for user %d: %v", updatedUser.Id, err))
+		}
 	}
 	if authzTouched {
 		if err := authz.ReloadPolicy(); err != nil {

@@ -204,3 +204,63 @@ export async function unbindCustomOAuth(
   const res = await api.delete(`/api/user/oauth/bindings/${providerId}`)
   return res.data
 }
+
+/**
+ * Group pin (固定分组)：当前用户 active 钉；无钉时 data 为 null
+ */
+export interface GroupPin {
+  id: number
+  user_id: number
+  group: string
+  status: string
+  source: string
+  note: string
+  created_at: number
+}
+
+export async function getMyGroupPin(): Promise<ApiResponse<GroupPin | null>> {
+  const res = await api.get('/api/group_pin/self')
+  return res.data
+}
+
+/**
+ * 上架的固定分组商品（购买页）
+ */
+export interface GroupPinProduct {
+  id: number
+  title: string
+  group: string
+  price_amount: number
+  enabled: boolean
+  sort_order: number
+}
+
+export async function getGroupPinProducts(): Promise<
+  ApiResponse<GroupPinProduct[]>
+> {
+  const res = await api.get('/api/group_pin/products')
+  return res.data
+}
+
+/**
+ * 余额购买固定分组
+ */
+export async function purchaseGroupPinBalance(
+  pinProductId: number
+): Promise<ApiResponse<{ message: string }>> {
+  const res = await api.post('/api/group_pin/balance/pay', {
+    pin_product_id: pinProductId,
+  })
+  return res.data
+}
+
+/**
+ * epay 购买固定分组（返回支付跳转参数）
+ */
+export async function purchaseGroupPinEpay(params: {
+  pin_product_id: number
+  payment_method: string
+}): Promise<ApiResponse & { data?: unknown; url?: string }> {
+  const res = await api.post('/api/group_pin/epay/pay', params)
+  return res.data
+}
