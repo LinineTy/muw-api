@@ -6555,6 +6555,8 @@
     "Group pin released": "Đã gỡ ghim nhóm",
     "Title": "Tiêu đề",
     "profile.group_pin.title": "Nhóm cố định",
-    "profile.group_pin.description": "Tài khoản của bạn được ghim vào nhóm bên dưới và sẽ không quay lại khi gói đăng ký hết hạn"
+    "profile.group_pin.description": "Tài khoản của bạn được ghim vào nhóm bên dưới và sẽ không quay lại khi gói đăng ký hết hạn",
+    "Subtitle": "Tiêu đề phụ",
+    "JSON array of user groups allowed to purchase. Empty = all groups": "Mảng JSON các nhóm người dùng được mua. Để trống = tất cả"
   }
 }

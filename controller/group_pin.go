@@ -78,12 +78,16 @@ func AdminListGroupPinProducts(c *gin.Context) {
 }
 
 type AdminUpsertGroupPinProductRequest struct {
-	Id          int     `json:"id"`
-	Title       string  `json:"title"`
-	Group       string  `json:"group"`
-	PriceAmount float64 `json:"price_amount"`
-	Enabled     *bool   `json:"enabled"`
-	SortOrder   int     `json:"sort_order"`
+	Id              int     `json:"id"`
+	Title           string  `json:"title"`
+	Subtitle        string  `json:"subtitle"`
+	Group           string  `json:"group"`
+	PriceAmount     float64 `json:"price_amount"`
+	Enabled         *bool   `json:"enabled"`
+	IsRecommended   *bool   `json:"is_recommended"`
+	AllowBalancePay *bool   `json:"allow_balance_pay"`
+	SortOrder       int     `json:"sort_order"`
+	AllowedGroups   string  `json:"allowed_groups"`
 }
 
 // AdminSaveGroupPinProduct 新建/更新固定分组商品。目标组必须存在于分组倍率配置。
@@ -94,6 +98,7 @@ func AdminSaveGroupPinProduct(c *gin.Context) {
 		return
 	}
 	req.Title = strings.TrimSpace(req.Title)
+	req.Subtitle = strings.TrimSpace(req.Subtitle)
 	req.Group = strings.TrimSpace(req.Group)
 	if req.Title == "" {
 		common.ApiErrorMsg(c, "商品名称不能为空")
@@ -107,6 +112,8 @@ func AdminSaveGroupPinProduct(c *gin.Context) {
 		common.ApiErrorMsg(c, "价格不能为负数")
 		return
 	}
+	// 允许的用户组白名单归一（与订阅套餐同口径：空 = 不限）。
+	req.AllowedGroups = model.NormalizeSubscriptionPlanAllowedGroups(req.AllowedGroups)
 	if req.Id > 0 {
 		var product model.GroupPinProduct
 		if err := model.DB.First(&product, "id = ?", req.Id).Error; err != nil {
@@ -114,12 +121,20 @@ func AdminSaveGroupPinProduct(c *gin.Context) {
 			return
 		}
 		product.Title = req.Title
+		product.Subtitle = req.Subtitle
 		product.Group = req.Group
 		product.PriceAmount = req.PriceAmount
 		if req.Enabled != nil {
 			product.Enabled = *req.Enabled
 		}
+		if req.IsRecommended != nil {
+			product.IsRecommended = *req.IsRecommended
+		}
+		if req.AllowBalancePay != nil {
+			product.AllowBalancePay = req.AllowBalancePay
+		}
 		product.SortOrder = req.SortOrder
+		product.AllowedGroups = req.AllowedGroups
 		if err := model.DB.Save(&product).Error; err != nil {
 			common.ApiError(c, err)
 			return
@@ -128,11 +143,15 @@ func AdminSaveGroupPinProduct(c *gin.Context) {
 		return
 	}
 	product := model.GroupPinProduct{
-		Title:       req.Title,
-		Group:       req.Group,
-		PriceAmount: req.PriceAmount,
-		Enabled:     req.Enabled == nil || *req.Enabled,
-		SortOrder:   req.SortOrder,
+		Title:           req.Title,
+		Subtitle:        req.Subtitle,
+		Group:           req.Group,
+		PriceAmount:     req.PriceAmount,
+		Enabled:         req.Enabled == nil || *req.Enabled,
+		IsRecommended:   req.IsRecommended != nil && *req.IsRecommended,
+		AllowBalancePay: req.AllowBalancePay,
+		SortOrder:       req.SortOrder,
+		AllowedGroups:   req.AllowedGroups,
 	}
 	if err := model.DB.Create(&product).Error; err != nil {
 		common.ApiError(c, err)

@@ -6555,6 +6555,8 @@
     "Group pin released": "Épingle de groupe libérée",
     "Title": "Titre",
     "profile.group_pin.title": "Groupe fixe",
-    "profile.group_pin.description": "Votre compte est fixé au groupe ci-dessous et ne reviendra pas en arrière après l'expiration de l'abonnement"
+    "profile.group_pin.description": "Votre compte est fixé au groupe ci-dessous et ne reviendra pas en arrière après l'expiration de l'abonnement",
+    "Subtitle": "Sous-titre",
+    "JSON array of user groups allowed to purchase. Empty = all groups": "Tableau JSON des groupes autorisés à acheter. Vide = tous les groupes"
   }
 }

@@ -5,6 +5,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -32,20 +33,46 @@ const (
 	GroupPinReleaseReasonReplaced = "replaced"
 )
 
-// GroupPinProduct 固定分组的商品定义：哪些组可钉、价格多少。仅购买路径使用，
-// 管理员改组建钉不经过商品。
+// GroupPinProduct 固定分组的商品定义：哪些组可钉、价格多少。字段面与订阅套餐的
+// "商品面"对齐（标题/副标题/价格/推荐/余额兑换/允许的用户组），只是没有时长、
+// 额度、互斥组——钉子不是订阅，不参与订阅互斥替换。
 type GroupPinProduct struct {
 	Id          int     `json:"id"`
 	Title       string  `json:"title" gorm:"type:varchar(128)"`
+	Subtitle    string  `json:"subtitle" gorm:"type:varchar(255)"`
 	Group       string  `json:"group" gorm:"column:group;type:varchar(64)"`
 	PriceAmount float64 `json:"price_amount"`
 	Enabled     bool    `json:"enabled" gorm:"default:true"`
-	SortOrder   int     `json:"sort_order" gorm:"default:0"`
-	CreatedAt   int64   `json:"created_at" gorm:"bigint"`
-	UpdatedAt   int64   `json:"updated_at" gorm:"bigint"`
+	// 与订阅套餐 is_recommended 同义：购买页推荐标。
+	IsRecommended bool `json:"is_recommended" gorm:"default:false"`
+	// 指针 bool 与订阅套餐 allow_balance_pay 同构：nil/缺失 = 允许（策略性开关）。
+	AllowBalancePay *bool `json:"allow_balance_pay"`
+	SortOrder       int   `json:"sort_order" gorm:"default:0"`
+	// 允许购买的用户组白名单（JSON 数组文本，如 ["tier0","default"]）。空 = 不限。
+	AllowedGroups string `json:"allowed_groups" gorm:"type:text"`
+	CreatedAt     int64  `json:"created_at" gorm:"bigint"`
+	UpdatedAt     int64  `json:"updated_at" gorm:"bigint"`
 }
 
 func (GroupPinProduct) TableName() string { return "group_pin_products" }
+
+// AllowedTo reports whether a user group may purchase this product. 语义与订阅
+// 套餐 userGroupAllowed 一致：空串/格式错/空数组 = 不限。
+func (p *GroupPinProduct) AllowedTo(group string) bool {
+	if p == nil || strings.TrimSpace(p.AllowedGroups) == "" || strings.TrimSpace(group) == "" {
+		return true
+	}
+	var groups []string
+	if err := common.UnmarshalJsonStr(p.AllowedGroups, &groups); err != nil {
+		return true
+	}
+	return len(groups) == 0 || slices.Contains(groups, group)
+}
+
+// BalancePayAllowed 返回是否允许余额兑换（指针缺省 = 允许）。
+func (p *GroupPinProduct) BalancePayAllowed() bool {
+	return p == nil || p.AllowBalancePay == nil || *p.AllowBalancePay
+}
 
 // GroupPin 用户的固定分组记录。active 钉作为永不消失的锚参与组收敛；
 // released 钉仅留痕（何时/谁/为何解除）。
@@ -260,6 +287,18 @@ func PurchaseGroupPin(userId, pinProductId int) (string, error) {
 	if _, ok := ratio_setting.GetGroupRatioCopy()[product.Group]; !ok {
 		return "", errors.New("固定分组目标不存在")
 	}
+	// 允许的用户组白名单（与订阅套餐 allowed_groups 同口径）。
+	userGroup, err := getUserGroupByIdTx(nil, userId)
+	if err != nil {
+		return "", err
+	}
+	if !product.AllowedTo(userGroup) {
+		return "", errors.New("当前分组不允许购买该固定分组")
+	}
+	// 余额兑换开关（与订阅套餐 allow_balance_pay 同口径）。
+	if !product.BalancePayAllowed() {
+		return "", errors.New("该固定分组不允许使用余额兑换")
+	}
 	requiredQuota, err := calcSubscriptionBalanceQuota(product.PriceAmount)
 	if err != nil {
 		return "", err
@@ -267,11 +306,11 @@ func PurchaseGroupPin(userId, pinProductId int) (string, error) {
 	now := GetDBTimestamp()
 	pinChanged := false
 	err = DB.Transaction(func(tx *gorm.DB) error {
-		var user User
-		if err := lockForUpdate(tx).Where("id = ?", userId).First(&user).Error; err != nil {
+		var userRow User
+		if err := lockForUpdate(tx).Where("id = ?", userId).First(&userRow).Error; err != nil {
 			return err
 		}
-		if requiredQuota > 0 && user.Quota < requiredQuota {
+		if requiredQuota > 0 && userRow.Quota < requiredQuota {
 			return errors.New("余额不足")
 		}
 		if requiredQuota > 0 {
