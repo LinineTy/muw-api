@@ -264,6 +264,7 @@ export type ModelSettings = {
   SubscriptionPriorityEnabled: boolean
   SubscriptionGroupUpgradeEnabled: boolean
   SubscriptionExclusiveGroupEnabled: boolean
+  SubscriptionGroupPriorities: string
   SubscriptionMaxSimultaneous: number
 }
 

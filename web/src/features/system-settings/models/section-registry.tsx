@@ -187,6 +187,8 @@ const MODELS_SECTIONS = [
             settings.SubscriptionGroupUpgradeEnabled ?? true,
           SubscriptionExclusiveGroupEnabled:
             settings.SubscriptionExclusiveGroupEnabled ?? true,
+          SubscriptionGroupPriorities:
+            settings.SubscriptionGroupPriorities ?? '{}',
           SubscriptionMaxSimultaneous:
             settings.SubscriptionMaxSimultaneous ?? 0,
         }}

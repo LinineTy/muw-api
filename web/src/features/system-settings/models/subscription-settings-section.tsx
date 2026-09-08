@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
+import { JsonCodeEditor } from '@/components/json-code-editor'
 
 import {
   SettingsForm,
@@ -27,11 +28,32 @@ import { SettingsSection } from '../components/settings-section'
 import { useResetForm } from '../hooks/use-reset-form'
 import { useUpdateOption } from '../hooks/use-update-option'
 
+// 组优先级 JSON：{"v2":30,"v1":20}——组名 → 整数优先级，未配置的组 = 0。
+const groupPrioritiesSchema = z
+  .string()
+  .refine((v) => {
+    if (!v.trim()) return true
+    try {
+      const parsed: unknown = JSON.parse(v)
+      if (
+        typeof parsed !== 'object' ||
+        parsed === null ||
+        Array.isArray(parsed)
+      ) {
+        return false
+      }
+      return Object.values(parsed).every((n) => Number.isInteger(n))
+    } catch {
+      return false
+    }
+  })
+
 const subscriptionSettingsSchema = z.object({
   SubscriptionAutoRenewEnabled: z.boolean(),
   SubscriptionPriorityEnabled: z.boolean(),
   SubscriptionGroupUpgradeEnabled: z.boolean(),
   SubscriptionExclusiveGroupEnabled: z.boolean(),
+  SubscriptionGroupPriorities: groupPrioritiesSchema,
   SubscriptionMaxSimultaneous: z.number().int().min(0),
 })
 
@@ -48,6 +70,7 @@ type SubscriptionSettingsSectionProps = {
     SubscriptionPriorityEnabled: boolean
     SubscriptionGroupUpgradeEnabled: boolean
     SubscriptionExclusiveGroupEnabled: boolean
+    SubscriptionGroupPriorities: string
     SubscriptionMaxSimultaneous: number
   }
 }
@@ -61,6 +84,7 @@ const buildFormDefaults = (
     defaults.SubscriptionGroupUpgradeEnabled,
   SubscriptionExclusiveGroupEnabled:
     defaults.SubscriptionExclusiveGroupEnabled,
+  SubscriptionGroupPriorities: defaults.SubscriptionGroupPriorities,
   SubscriptionMaxSimultaneous: defaults.SubscriptionMaxSimultaneous ?? 0,
 })
 
@@ -211,6 +235,30 @@ export function SubscriptionSettingsSection({
               )}
             />
           </div>
+
+          <FormField
+            control={form.control}
+            name='SubscriptionGroupPriorities'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Subscription group priorities')}</FormLabel>
+                <FormControl>
+                  <JsonCodeEditor
+                    value={field.value}
+                    onChange={field.onChange}
+                    name={field.name}
+                    onBlur={field.onBlur}
+                    textareaRef={field.ref}
+                  />
+                </FormControl>
+                <FormDescription>
+                  {t(
+                    'JSON mapping group name to integer priority (higher wins, unlisted groups = 0). Purchases only change the user group when the target priority is not lower; group fallback on expiry never lands on an equal-or-higher group and prefers the highest group still backed by an active subscription. Example: {"v2":30,"v1":20}.'
+                  )}
+                </FormDescription>
+              </FormItem>
+            )}
+          />
 
           <FormField
             control={form.control}

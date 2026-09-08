@@ -6535,5 +6535,7 @@
     "Maximize window": "最大化視窗",
     "Close other windows": "關閉其他視窗",
     "Close all windows": "關閉全部視窗"
-  }
+  },
+  "Subscription group priorities": "訂閱組優先級",
+  "JSON mapping group name to integer priority (higher wins, unlisted groups = 0). Purchases only change the user group when the target priority is not lower; group fallback on expiry never lands on an equal-or-higher group and prefers the highest group still backed by an active subscription. Example: {\"v2\":30,\"v1\":20}.": "JSON 映射組名到整數優先級（數字大者優先，未配置的組視為 0）。僅當目標組優先級不低於當前組時，購買才會切換使用者組；訂閱到期回退絕不落到不低於當前優先級的組，並優先回退到仍有活躍訂閱撐著的最高組。範例：{\"v2\":30,\"v1\":20}。"
 }
