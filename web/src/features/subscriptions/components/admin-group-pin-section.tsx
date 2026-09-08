@@ -171,7 +171,7 @@ export function AdminGroupPinSection() {
     mutationFn: (pinId: number) => adminReleaseGroupPin(pinId, 'admin release'),
     onSuccess: (res) => {
       if (res.success) {
-        toast.success(t('Group pin released'))
+        toast.success(t('Fixed group removed'))
         invalidateAll()
       } else {
         toast.error(res.message)
@@ -291,7 +291,7 @@ export function AdminGroupPinSection() {
                         disabled={releaseMutation.isPending}
                         onClick={() => releaseMutation.mutate(pin.id)}
                       >
-                        {t('Release')}
+                        {t('Unpin')}
                       </Button>
                     )}
                   </TableCell>
