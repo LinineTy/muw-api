@@ -226,11 +226,11 @@ export function OsWindowFrame({
           onPointerMove={onResizeMove}
           onPointerUp={onResizeUp}
           onPointerCancel={onResizeUp}
-          className='absolute right-0 bottom-0 z-20 size-4 cursor-nwse-resize touch-none'
+          className='text-muted-foreground/60 hover:text-foreground absolute right-0 bottom-0 z-20 flex size-5 cursor-nwse-resize touch-none items-center justify-center transition-colors'
           role='presentation'
         >
-          <svg viewBox='0 0 16 16' className='text-border size-4' fill='none' aria-hidden='true'>
-            <path d='M14 6 L6 14 M14 10 L10 14' stroke='currentColor' strokeWidth='1.5' strokeLinecap='round' opacity='0.7' />
+          <svg viewBox='0 0 16 16' className='size-3.5' fill='none' aria-hidden='true'>
+            <path d='M14 6 L6 14 M14 10 L10 14' stroke='currentColor' strokeWidth='1.5' strokeLinecap='round' />
           </svg>
         </div>
       ) : null}
