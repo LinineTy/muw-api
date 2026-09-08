@@ -743,7 +743,7 @@ func TestRefundTaskQuota_NoToken(t *testing.T) {
 	assert.Zero(t, getTaskQuota(t, task.ID))
 }
 
-func TestRefundTaskQuota_FundingFailureKeepsAccountingAndPendingMarker(t *testing.T) {
+func TestRefundTaskQuota_SubscriptionMissingRefundsToWallet(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()
 
@@ -751,19 +751,20 @@ func TestRefundTaskQuota_FundingFailureKeepsAccountingAndPendingMarker(t *testin
 	seedUser(t, userID, 5000)
 	seedChannel(t, channelID)
 	seedChargedAccounting(t, userID, channelID, 0, preConsumed, 1)
+	// 订阅 ID 9999 不存在（管理端删除 / 行丢失）：退款必须转钱包结算，
+	// 不再卡死在"订阅找不到"上等人工（死订阅 delta 转钱包兜底语义）。
 	task := makeTask(userID, channelID, preConsumed, 0, BillingSourceSubscription, 9999)
 	task.Status = model.TaskStatusFailure
 	require.NoError(t, model.DB.Create(task).Error)
 
-	assert.False(t, RefundTaskQuota(ctx, task, "subscription missing"))
-	assert.Equal(t, 5000, getUserQuota(t, userID))
-	assert.Equal(t, preConsumed, task.Quota)
-	assert.Equal(t, preConsumed, getTaskQuota(t, task.ID))
+	assert.True(t, RefundTaskQuota(ctx, task, "subscription missing"))
+	assert.Equal(t, 5000+preConsumed, getUserQuota(t, userID), "订阅缺失时退款转钱包")
+	assert.Equal(t, 0, getTaskQuota(t, task.ID))
 	usedQuota, requestCount := getUserUsageAccounting(t, userID)
-	assert.Equal(t, preConsumed, usedQuota)
+	assert.Zero(t, usedQuota)
 	assert.Equal(t, 1, requestCount)
-	assert.Equal(t, int64(preConsumed), getChannelUsedQuota(t, channelID))
-	assert.Equal(t, int64(0), countLogs(t))
+	assert.Zero(t, getChannelUsedQuota(t, channelID), "成功退款回滚渠道用量")
+	assert.Equal(t, int64(1), countLogs(t))
 }
 
 // ===========================================================================

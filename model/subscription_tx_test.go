@@ -20,6 +20,7 @@ package model
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -58,7 +59,7 @@ func TestPostConsumeUserSubscriptionDeltaJoinsCallerTransaction(t *testing.T) {
 
 	rollbackErr := errors.New("force rollback")
 	err := db.Transaction(func(tx *gorm.DB) error {
-		require.NoError(t, PostConsumeUserSubscriptionDelta(tx, sub.Id, -10))
+		require.NoError(t, PostConsumeUserSubscriptionDelta(tx, sub.UserId, sub.Id, -10))
 		return rollbackErr
 	})
 	require.Equal(t, rollbackErr, err)
@@ -85,9 +86,71 @@ func TestPostConsumeUserSubscriptionDeltaDefaultUsesGlobalDB(t *testing.T) {
 	DB = db
 	defer func() { DB = prevDB }()
 
-	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, sub.Id, -10))
+	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, sub.UserId, sub.Id, -10))
 
 	var after UserSubscription
 	require.NoError(t, db.First(&after, sub.Id).Error)
 	assert.Equal(t, int64(90), after.PeriodUsed)
+}
+
+// TestPostConsumeDeltaOnDeadSubscriptionRoutesToWallet 预扣发生在请求开始，结算可能晚于
+// 订阅切换/取消/过期甚至被管理端物理删除。死订阅的窗口与账本已冻结，delta 继续写入死行
+// 会让补扣（正 delta）静默蒸发（平台少收）、退款（负 delta）退进死订阅拿不回来——
+// 因此非 active 订阅与已删除订阅的 delta 一律转钱包结算；active 订阅仍走订阅回填（回归）。
+func TestPostConsumeDeltaOnDeadSubscriptionRoutesToWallet(t *testing.T) {
+	prevType := common.MainDatabaseType()
+	common.SetMainDatabaseType(common.DatabaseTypeSQLite)
+	defer func() { common.SetMainDatabaseType(prevType) }()
+
+	db := openSubscriptionDeltaTestDB(t)
+	require.NoError(t, db.AutoMigrate(&User{}, &UserSubscription{}, &SubscriptionPlan{}, &SubscriptionPreConsumeRecord{}))
+	prevDB := DB
+	DB = db
+	defer func() { DB = prevDB }()
+
+	seedQuotaPlan(t, 7901, &SubscriptionPlan{
+		Title: "dead-a", PriceAmount: 10,
+		DurationUnit: SubscriptionDurationMonth, DurationValue: 1,
+		ResetWindowsRaw: `[{"unit":"hour","value":5,"limit":100}]`,
+	})
+	now := GetDBTimestamp()
+	// 9001: cancelled；9002: expired；9003: active（回归对照）；钱包用户 901/902/903。
+	for i, status := range []string{"cancelled", "expired", "active"} {
+		userId := 901 + i
+		require.NoError(t, db.Create(&User{Id: userId, Username: fmt.Sprintf("dead-user-%d", userId), AffCode: fmt.Sprintf("dead%d", userId), Quota: 1_000_000}).Error)
+		require.NoError(t, db.Create(&UserSubscription{
+			Id: 9001 + i, UserId: userId, PlanId: 7901, Status: status,
+			PeriodUsed: 500, StartTime: now, EndTime: now + 30*86400,
+			WindowState: windowStateJSON(windowEntry(0, 100, now, now+5*3600)),
+		}).Error)
+	}
+
+	// a) cancelled 订阅 + 补扣 300 → 钱包扣 300，订阅行冻结不动。
+	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, 901, 9001, 300))
+	getUser := func(id int) User {
+		t.Helper()
+		var u User
+		require.NoError(t, db.Session(&gorm.Session{NewDB: true}).Where("id = ?", id).First(&u).Error)
+		return u
+	}
+	assert.EqualValues(t, 1_000_000-300, getUser(901).Quota, "补扣转钱包：用户实际消耗必须付到钱包")
+	dead := getSubByID(t, 9001)
+	assert.EqualValues(t, 500, dead.PeriodUsed, "死订阅账本冻结，不得写入")
+
+	// b) expired 订阅 + 退款 -200 → 钱包加 200，订阅行冻结不动。
+	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, 902, 9002, -200))
+	assert.EqualValues(t, 1_000_000+200, getUser(902).Quota, "退款转钱包：超额预扣必须退回钱包")
+	dead = getSubByID(t, 9002)
+	assert.EqualValues(t, 500, dead.PeriodUsed, "死订阅账本冻结，不得写入")
+
+	// c) 订阅行被物理删除（管理端删除场景）→ 转钱包，不报错。
+	require.NoError(t, db.Delete(&UserSubscription{}, 9001).Error)
+	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, 901, 9001, 100))
+	assert.EqualValues(t, 1_000_000-400, getUser(901).Quota, "行已删除仍转钱包，资金不蒸发")
+
+	// d) active 订阅 → 正常走订阅回填，钱包不动（回归）。
+	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, 903, 9003, 300))
+	live := getSubByID(t, 9003)
+	assert.EqualValues(t, 800, live.PeriodUsed, "active 订阅走订阅账本")
+	assert.EqualValues(t, 1_000_000, getUser(903).Quota, "active 订阅不触碰钱包")
 }

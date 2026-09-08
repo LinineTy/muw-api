@@ -191,12 +191,12 @@ func TestWindowDynamicNoLegacyTotalGuard(t *testing.T) {
 	})
 
 	// 结算正 delta：不得报错，窗口计数 +10。
-	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, 7808, 10))
+	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, 784, 7808, 10))
 	states := windowStatesOf(t, getSubByID(t, 7808))
 	assert.EqualValues(t, 60, states[0].CycleUsed)
 
 	// 退款负 delta 超过计数 → clamp 到 0，不报错。
-	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, 7808, -1000))
+	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, 784, 7808, -1000))
 	states = windowStatesOf(t, getSubByID(t, 7808))
 	assert.Zero(t, states[0].CycleUsed)
 }
@@ -449,13 +449,13 @@ func TestWindowDynamicMaintainsCalendarMonthCounter(t *testing.T) {
 	assert.EqualValues(t, 10, after.WeekUsed, "日历周边界应清零上周计数后再累加本周")
 
 	// 结算差额 +5 → 计数 15。
-	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, 7825, 5))
+	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, 792, 7825, 5))
 	after = getSubByID(t, 7825)
 	assert.EqualValues(t, 15, after.MonthUsed)
 	assert.EqualValues(t, 15, after.WeekUsed)
 
 	// 退款负差额超过计数 → clamp 到 0。
-	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, 7825, -1000))
+	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, 792, 7825, -1000))
 	after = getSubByID(t, 7825)
 	assert.Zero(t, after.MonthUsed)
 	assert.Zero(t, after.WeekUsed)
