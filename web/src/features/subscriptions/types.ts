@@ -83,8 +83,9 @@ export const userSubscriptionSchema = z.object({
   source: z.string().optional(),
   start_time: z.number(),
   end_time: z.number(),
-  amount_total: z.number(),
-  amount_used: z.number(),
+  // 单期账本：当前预付期（购买/最近一次续费）内的累计消耗（quota units，续费清零）。
+  // 展示额度来自套餐窗口（buildLimitRows），此字段仅账本/审计用。
+  period_used: z.number().optional().default(0),
   auto_renew: z.boolean().optional().default(false),
   auto_renew_failed: z.boolean().optional().default(false),
   priority: z.number().optional().default(0),

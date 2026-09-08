@@ -93,7 +93,7 @@ func TestAutoMigrateUpgradesLegacyUserSubscriptionsAndOrders(t *testing.T) {
 
 	require.NoError(t, db.AutoMigrate(&UserSubscription{}, &SubscriptionOrder{}))
 
-	for _, col := range []string{"exclusive_group", "auto_renew", "auto_renew_failed", "week_start_at", "week_used", "month_start_at", "month_used", "priority", "cancel_at_end", "tier_priority", "window_state"} {
+	for _, col := range []string{"exclusive_group", "auto_renew", "auto_renew_failed", "week_start_at", "week_used", "month_start_at", "month_used", "priority", "cancel_at_end", "tier_priority", "window_state", "period_used"} {
 		assertHasColumn(t, db, &UserSubscription{}, col)
 	}
 	assertHasColumn(t, db, &SubscriptionOrder{}, "extend_subscription_id")
@@ -101,7 +101,8 @@ func TestAutoMigrateUpgradesLegacyUserSubscriptionsAndOrders(t *testing.T) {
 	var sub UserSubscription
 	require.NoError(t, db.Where("plan_id = ?", 2).First(&sub).Error)
 	assert.Equal(t, "active", sub.Status)
-	assert.EqualValues(t, 10, sub.AmountUsed)
+	// 旧 amount_used 是跨期累计展示值，与单期账本语义不可比：period_used 清零起步，不搬旧值。
+	assert.Zero(t, sub.PeriodUsed)
 
 	var order SubscriptionOrder
 	require.NoError(t, db.Where("trade_no = ?", "TN-1").First(&order).Error)

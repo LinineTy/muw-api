@@ -17,7 +17,7 @@ import (
 //   - 多窗口独立取最小；单次预扣累加全部窗口。
 //   - 动态订阅跳过累计账本 guard（HOLE D）。
 //   - 退款对全部窗口 clamp 且幂等。
-//   - 动态续费不累加 AmountTotal。
+//   - 续费清零 period_used（开启新预付期）。
 
 func windowStateJSON(entries ...string) string {
 	return "[" + strings.Join(entries, ",") + "]"
@@ -91,9 +91,8 @@ func TestWindowRenewRearmsCapWindowWithoutLag(t *testing.T) {
 	// 原订阅 EndTime = start+10d（已过期但状态仍 active，模拟维护任务未跑）。
 	seedQuotaSub(t, 7804, &UserSubscription{
 		UserId: 782, PlanId: 7803, Status: "active",
-		AmountTotal: 0,
-		StartTime:   startUnix,
-		EndTime:     startUnix + 10*86400,
+		StartTime: startUnix,
+		EndTime:   startUnix + 10*86400,
 		// 封顶态：月窗口 next_reset 超出原 EndTime，计数已用 80。
 		WindowState: windowStateJSON(windowEntry(0, 80, startUnix, 0)),
 	})
@@ -173,9 +172,9 @@ func TestWindowMultipleIndependentMinGate(t *testing.T) {
 	assert.Contains(t, err.Error(), "insufficient")
 }
 
-// 动态订阅跳过累计账本 guard（HOLE D 回归）：total_amount>0 的动态订阅，展示用
-// AmountUsed 越过 total 后 PostConsume 不得报 "used exceeds total"。
-func TestWindowDynamicIgnoresAmountTotalGuard(t *testing.T) {
+// 动态订阅跳过累计账本 guard（HOLE D 回归）：单期账本 PeriodUsed 即使已超过预付价值，
+// PostConsume 也不得报 legacy 的 "used exceeds total"。
+func TestWindowDynamicNoLegacyTotalGuard(t *testing.T) {
 	truncateTables(t)
 
 	now := GetDBTimestamp()
@@ -186,18 +185,18 @@ func TestWindowDynamicIgnoresAmountTotalGuard(t *testing.T) {
 	})
 	seedQuotaSub(t, 7808, &UserSubscription{
 		UserId: 784, PlanId: 7807, Status: "active",
-		AmountTotal: 1000, AmountUsed: 2000, // 已越过 total（模拟历史消耗/展示累计）
+		PeriodUsed: 2000, // 已超过快照价格对应的 units（模拟超耗）
 		StartTime: now, EndTime: now + 30*86400,
 		WindowState: windowStateJSON(windowEntry(0, 50, now, now+5*3600)),
 	})
 
 	// 结算正 delta：不得报错，窗口计数 +10。
-	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, 7808, 10))
+	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, 784, 7808, 10))
 	states := windowStatesOf(t, getSubByID(t, 7808))
 	assert.EqualValues(t, 60, states[0].CycleUsed)
 
 	// 退款负 delta 超过计数 → clamp 到 0，不报错。
-	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, 7808, -1000))
+	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, 784, 7808, -1000))
 	states = windowStatesOf(t, getSubByID(t, 7808))
 	assert.Zero(t, states[0].CycleUsed)
 }
@@ -233,8 +232,8 @@ func TestWindowRefundClampsAllWindowsIdempotent(t *testing.T) {
 	assert.Zero(t, states[1].CycleUsed)
 }
 
-// 动态续费不累加 AmountTotal：续费两次 AmountTotal 保持 0，仅 EndTime 延长。
-func TestWindowRenewDoesNotAccumulateAmountTotal(t *testing.T) {
+// 续费开启新的预付期：period_used 清零重开，仅 EndTime 延长。
+func TestRenewResetsPeriodUsed(t *testing.T) {
 	truncateTables(t)
 
 	now := GetDBTimestamp()
@@ -246,8 +245,8 @@ func TestWindowRenewDoesNotAccumulateAmountTotal(t *testing.T) {
 	startUnix := now - 10*86400
 	seedQuotaSub(t, 7812, &UserSubscription{
 		UserId: 786, PlanId: 7811, Status: "active",
-		AmountTotal: 0,
-		StartTime:   startUnix, EndTime: startUnix + 10*86400,
+		PeriodUsed: 500,
+		StartTime:  startUnix, EndTime: startUnix + 10*86400,
 		WindowState: windowStateJSON(windowEntry(0, 0, startUnix, 0)),
 	})
 
@@ -264,7 +263,7 @@ func TestWindowRenewDoesNotAccumulateAmountTotal(t *testing.T) {
 	renew()
 
 	after := getSubByID(t, 7812)
-	assert.Zero(t, after.AmountTotal, "动态续费不得累加 AmountTotal")
+	assert.Zero(t, after.PeriodUsed, "续费开启新预付期，period_used 必须清零")
 	assert.Greater(t, after.EndTime, startUnix+10*86400, "续费应延长有效期")
 }
 
@@ -335,7 +334,7 @@ func TestApplyPlanWindowsToActiveSubscriptionsResetsCounters(t *testing.T) {
 	// 活跃订阅：带 legacy 计数残留（模拟转换前状态）。
 	seedQuotaSub(t, 7819, &UserSubscription{
 		UserId: 790, PlanId: 7818, Status: "active",
-		AmountTotal: 1000, AmountUsed: 300,
+		PeriodUsed: 300,
 		WeekUsed: 40, MonthUsed: 90,
 		StartTime: now - 86400, EndTime: activeEnd,
 	})
@@ -450,13 +449,13 @@ func TestWindowDynamicMaintainsCalendarMonthCounter(t *testing.T) {
 	assert.EqualValues(t, 10, after.WeekUsed, "日历周边界应清零上周计数后再累加本周")
 
 	// 结算差额 +5 → 计数 15。
-	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, 7825, 5))
+	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, 792, 7825, 5))
 	after = getSubByID(t, 7825)
 	assert.EqualValues(t, 15, after.MonthUsed)
 	assert.EqualValues(t, 15, after.WeekUsed)
 
 	// 退款负差额超过计数 → clamp 到 0。
-	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, 7825, -1000))
+	require.NoError(t, PostConsumeUserSubscriptionDelta(nil, 792, 7825, -1000))
 	after = getSubByID(t, 7825)
 	assert.Zero(t, after.MonthUsed)
 	assert.Zero(t, after.WeekUsed)

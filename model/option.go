@@ -177,6 +177,7 @@ func InitOptionMap() {
 	common.OptionMap["SubscriptionPriorityEnabled"] = strconv.FormatBool(common.SubscriptionPriorityEnabled)
 	common.OptionMap["SubscriptionGroupUpgradeEnabled"] = strconv.FormatBool(common.SubscriptionGroupUpgradeEnabled)
 	common.OptionMap["SubscriptionExclusiveGroupEnabled"] = strconv.FormatBool(common.SubscriptionExclusiveGroupEnabled)
+	common.OptionMap["SubscriptionGroupPriorities"] = SubscriptionGroupPriorities2JSONString()
 
 	// IP 维度限流（Critical / Global API / Global Web），支持设置页热生效
 	common.OptionMap["CriticalRateLimitEnable"] = strconv.FormatBool(common.CriticalRateLimitEnable)
@@ -607,6 +608,8 @@ func updateOptionMap(key string, value string) (err error) {
 		err = ratio_setting.UpdateModelRatioByJSONString(value)
 	case "GroupRatio":
 		err = ratio_setting.UpdateGroupRatioByJSONString(value)
+	case "SubscriptionGroupPriorities":
+		err = SetSubscriptionGroupPrioritiesFromJSON(value)
 	case "GroupGroupRatio":
 		err = ratio_setting.UpdateGroupGroupRatioByJSONString(value)
 	case "UserUsableGroups":

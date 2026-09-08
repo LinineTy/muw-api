@@ -97,13 +97,12 @@ func seedToken(t *testing.T, id int, userId int, key string, remainQuota int) {
 	require.NoError(t, model.DB.Create(token).Error)
 }
 
-func seedSubscription(t *testing.T, id int, userId int, amountTotal int64, amountUsed int64) {
+func seedSubscription(t *testing.T, id int, userId int, periodUsed int64) {
 	t.Helper()
 	sub := &model.UserSubscription{
 		Id:          id,
 		UserId:      userId,
-		AmountTotal: amountTotal,
-		AmountUsed:  amountUsed,
+		PeriodUsed:  periodUsed,
 		Status:      "active",
 		StartTime:   time.Now().Unix(),
 		EndTime:     time.Now().Add(30 * 24 * time.Hour).Unix(),
@@ -296,8 +295,8 @@ func getTokenUsedQuota(t *testing.T, id int) int {
 func getSubscriptionUsed(t *testing.T, id int) int64 {
 	t.Helper()
 	var sub model.UserSubscription
-	require.NoError(t, model.DB.Select("amount_used").Where("id = ?", id).First(&sub).Error)
-	return sub.AmountUsed
+	require.NoError(t, model.DB.Select("period_used").Where("id = ?", id).First(&sub).Error)
+	return sub.PeriodUsed
 }
 
 func getTaskQuota(t *testing.T, id int64) int {
@@ -665,13 +664,13 @@ func TestRefundTaskQuota_Subscription(t *testing.T) {
 
 	const userID, tokenID, channelID, subID = 2, 2, 2, 1
 	const preConsumed = 2000
-	const subTotal, subUsed int64 = 100000, 50000
+	const subUsed int64 = 50000
 	const tokenRemain = 8000
 
 	seedUser(t, userID, 0)
 	seedToken(t, tokenID, userID, "sk-sub-key", tokenRemain)
 	seedChannel(t, channelID)
-	seedSubscription(t, subID, userID, subTotal, subUsed)
+	seedSubscription(t, subID, userID, subUsed)
 	seedChargedAccounting(t, userID, channelID, tokenID, preConsumed, 1)
 
 	task := makeTask(userID, channelID, preConsumed, tokenID, BillingSourceSubscription, subID)
@@ -744,7 +743,7 @@ func TestRefundTaskQuota_NoToken(t *testing.T) {
 	assert.Zero(t, getTaskQuota(t, task.ID))
 }
 
-func TestRefundTaskQuota_FundingFailureKeepsAccountingAndPendingMarker(t *testing.T) {
+func TestRefundTaskQuota_SubscriptionMissingRefundsToWallet(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()
 
@@ -752,19 +751,20 @@ func TestRefundTaskQuota_FundingFailureKeepsAccountingAndPendingMarker(t *testin
 	seedUser(t, userID, 5000)
 	seedChannel(t, channelID)
 	seedChargedAccounting(t, userID, channelID, 0, preConsumed, 1)
+	// 订阅 ID 9999 不存在（管理端删除 / 行丢失）：退款必须转钱包结算，
+	// 不再卡死在"订阅找不到"上等人工（死订阅 delta 转钱包兜底语义）。
 	task := makeTask(userID, channelID, preConsumed, 0, BillingSourceSubscription, 9999)
 	task.Status = model.TaskStatusFailure
 	require.NoError(t, model.DB.Create(task).Error)
 
-	assert.False(t, RefundTaskQuota(ctx, task, "subscription missing"))
-	assert.Equal(t, 5000, getUserQuota(t, userID))
-	assert.Equal(t, preConsumed, task.Quota)
-	assert.Equal(t, preConsumed, getTaskQuota(t, task.ID))
+	assert.True(t, RefundTaskQuota(ctx, task, "subscription missing"))
+	assert.Equal(t, 5000+preConsumed, getUserQuota(t, userID), "订阅缺失时退款转钱包")
+	assert.Equal(t, 0, getTaskQuota(t, task.ID))
 	usedQuota, requestCount := getUserUsageAccounting(t, userID)
-	assert.Equal(t, preConsumed, usedQuota)
+	assert.Zero(t, usedQuota)
 	assert.Equal(t, 1, requestCount)
-	assert.Equal(t, int64(preConsumed), getChannelUsedQuota(t, channelID))
-	assert.Equal(t, int64(0), countLogs(t))
+	assert.Zero(t, getChannelUsedQuota(t, channelID), "成功退款回滚渠道用量")
+	assert.Equal(t, int64(1), countLogs(t))
 }
 
 // ===========================================================================
@@ -894,13 +894,13 @@ func TestRecalculate_Subscription_NegativeDelta(t *testing.T) {
 	const userID, tokenID, channelID, subID = 14, 14, 14, 2
 	const preConsumed = 5000
 	const actualQuota = 2000 // over-charged by 3000
-	const subTotal, subUsed int64 = 100000, 50000
+	const subUsed int64 = 50000
 	const tokenRemain = 8000
 
 	seedUser(t, userID, 0)
 	seedToken(t, tokenID, userID, "sk-sub-recalc", tokenRemain)
 	seedChannel(t, channelID)
-	seedSubscription(t, subID, userID, subTotal, subUsed)
+	seedSubscription(t, subID, userID, subUsed)
 	seedChargedAccounting(t, userID, channelID, tokenID, preConsumed, 1)
 
 	task := makeTask(userID, channelID, preConsumed, tokenID, BillingSourceSubscription, subID)
