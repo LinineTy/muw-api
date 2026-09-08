@@ -2880,7 +2880,7 @@ func RefundSubscriptionPreConsume(requestId string) error {
 			record.Status = "refunded"
 			return tx.Save(&record).Error
 		}
-		if err := PostConsumeUserSubscriptionDelta(tx, record.UserSubscriptionId, -record.PreConsumed); err != nil {
+		if err := PostConsumeUserSubscriptionDelta(tx, record.UserId, record.UserSubscriptionId, -record.PreConsumed); err != nil {
 			return err
 		}
 		record.Status = "refunded"
@@ -2927,12 +2927,20 @@ func GetSubscriptionPlanInfoByUserSubscriptionId(userSubscriptionId int) (*Subsc
 	return info, nil
 }
 
-// Update subscription used amount by delta (positive consume more, negative refund).
-// db 指定执行事务的连接：传 nil 使用全局 DB；调用方若已处于事务内，应传入外层 tx，
-// 让 delta 更新作为 savepoint 嵌套在同一个连接上，保证与事务一起提交/回滚。切勿在
-// 外层事务中再对全局 DB 另开事务（不同连接）：SQLite+WAL 下会因读快照过期触发
+// PostConsumeUserSubscriptionDelta updates subscription usage by delta (positive consume
+// more, negative refund). db 指定执行事务的连接：传 nil 使用全局 DB；调用方若已处于事务内，
+// 应传入外层 tx，让 delta 更新作为 savepoint 嵌套在同一个连接上，保证与事务一起提交/回滚。
+// 切勿在外层事务中再对全局 DB 另开事务（不同连接）：SQLite+WAL 下会因读快照过期触发
 // SQLITE_BUSY_SNAPSHOT（database is locked），MySQL 下则破坏外层事务原子性。
-func PostConsumeUserSubscriptionDelta(db *gorm.DB, userSubscriptionId int, delta int64) error {
+//
+// userId 用于死订阅兜底：预扣发生在请求开始，结算可能晚于订阅切换/取消/过期甚至被管理端
+// 物理删除。此时订阅窗口与账本已冻结，delta 若继续写入死行，正 delta（补扣）会静默蒸发
+// （平台少收），负 delta（退款）退进死订阅拿不回来。统一转钱包结算，保证用户实际消耗与
+// 余额变动一致。db==nil（顶层事务提交后）同步钱包缓存；嵌套事务时由外层负责缓存。
+func PostConsumeUserSubscriptionDelta(db *gorm.DB, userId int, userSubscriptionId int, delta int64) error {
+	if userId <= 0 {
+		return errors.New("invalid userId")
+	}
 	if userSubscriptionId <= 0 {
 		return errors.New("invalid userSubscriptionId")
 	}
@@ -2942,12 +2950,22 @@ func PostConsumeUserSubscriptionDelta(db *gorm.DB, userSubscriptionId int, delta
 	if db == nil {
 		db = DB
 	}
-	return db.Transaction(func(tx *gorm.DB) error {
+	walletDelta := int64(0)
+	err := db.Transaction(func(tx *gorm.DB) error {
 		var sub UserSubscription
-		if err := lockForUpdate(tx).
+		err := lockForUpdate(tx).
 			Where("id = ?", userSubscriptionId).
-			First(&sub).Error; err != nil {
+			First(&sub).Error
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				walletDelta = delta
+				return applyDeltaToWalletTx(tx, userId, delta)
+			}
 			return err
+		}
+		if sub.Status != "active" {
+			walletDelta = delta
+			return applyDeltaToWalletTx(tx, userId, delta)
 		}
 		plan, _ := getSubscriptionPlanByIdTx(tx, sub.PlanId)
 		var windows []ResetWindow
@@ -2974,6 +2992,38 @@ func PostConsumeUserSubscriptionDelta(db *gorm.DB, userSubscriptionId int, delta
 		sub.MonthUsed = clampNonNegative(sub.MonthUsed + delta)
 		return tx.Save(&sub).Error
 	})
+	if err != nil {
+		return err
+	}
+	if db == DB && walletDelta != 0 {
+		// 顶层事务已提交，同步钱包缓存（嵌套事务时由外层调用方负责）。
+		syncWalletQuotaCache(userId, walletDelta)
+	}
+	return nil
+}
+
+// applyDeltaToWalletTx 在事务内按 delta 调整钱包余额：正 delta 扣款（补扣在途消耗），
+// 负 delta 入账（退还超额预扣）。与 WalletFunding.Settle 的语义一致。
+func applyDeltaToWalletTx(tx *gorm.DB, userId int, delta int64) error {
+	if delta > 0 {
+		return tx.Model(&User{}).Where("id = ?", userId).
+			Update("quota", gorm.Expr("quota - ?", delta)).Error
+	}
+	return tx.Model(&User{}).Where("id = ?", userId).
+		Update("quota", gorm.Expr("quota + ?", -delta)).Error
+}
+
+// syncWalletQuotaCache 按 delta 方向同步钱包缓存（正 delta=扣款，负 delta=入账）。
+func syncWalletQuotaCache(userId int, delta int64) {
+	var err error
+	if delta > 0 {
+		err = cacheDecrUserQuota(userId, delta)
+	} else {
+		err = cacheIncrUserQuota(userId, -delta)
+	}
+	if err != nil {
+		common.SysLog("failed to sync user quota cache after wallet settlement: " + err.Error())
+	}
 }
 
 func clampNonNegative(v int64) int64 {
