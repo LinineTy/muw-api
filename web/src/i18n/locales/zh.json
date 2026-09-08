@@ -6543,6 +6543,21 @@
     "© 2025 Your Company. All rights reserved.": "© 2025 您的公司。保留所有权利。",
     "、": "、",
     "，": "，",
-    "，and ": "，并"
+    "，and ": "，并",
+    "Background blur": "背景模糊",
+    "How strongly the background image is blurred (0px = sharp original; higher = softer behind the glass)": "背景图的模糊强度(0px = 锐利原图;越大,玻璃后越柔和)",
+    "{{models}} models · {{vendors}} vendors · {{groups}} groups": "{{models}} 个模型 · {{vendors}} 家供应商 · {{groups}} 个分组",
+    "No matching models in any group": "所有分组中都没有匹配的模型",
+    "24h success rate": "24h 成功率",
+    "Quick links": "快速导航",
+    "os-shell.desktop-hint": "所有窗口已关闭 · 从底部 Dock 或左下角导航球打开页面",
+    "Close window": "关闭窗口",
+    "Minimize window": "最小化窗口",
+    "Maximize window": "最大化窗口",
+    "Close other windows": "关闭其他窗口",
+    "Close all windows": "关闭全部窗口",
+    "Subscription group priorities": "订阅组优先级",
+    "Remove group": "移除组",
+    "Higher priority wins (unlisted groups = 0). A purchase only changes the user group when the target priority is not lower; group fallback on expiry never lands on an equal-or-higher group and prefers the highest group still backed by an active subscription.": "优先级高者优先（未配置的组视为 0）。仅当目标组优先级不低于当前组时，购买才会切换用户组；订阅到期回退绝不落到不低于当前优先级的组，并优先回退到仍有活跃订阅撑着的最高组。"
   }
 }

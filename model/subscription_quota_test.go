@@ -82,8 +82,8 @@ func TestPreConsumeUnlimitedWhenNoCaps(t *testing.T) {
 
 	var after UserSubscription
 	require.NoError(t, DB.Where("id = ?", 7703).First(&after).Error)
-	// 无限套餐仍照常累加展示计数（AmountUsed / 周 / 月）。
-	assert.EqualValues(t, 1_000_000, after.AmountUsed)
+	// 无限套餐仍照常累加单期账本与周/月展示计数（PeriodUsed / 周 / 月）。
+	assert.EqualValues(t, 1_000_000, after.PeriodUsed)
 	assert.EqualValues(t, 1_000_000, after.MonthUsed)
 }
 
@@ -154,7 +154,7 @@ func TestCancelAtEndBlocksRenewal(t *testing.T) {
 	})
 	seedQuotaSub(t, 7102, &UserSubscription{
 		UserId: 720, PlanId: 7101, Status: "active",
-		AmountTotal: 0, CancelAtEnd: true,
+		CancelAtEnd: true,
 		StartTime: now - 86400, EndTime: now + 30*86400,
 	})
 
@@ -188,7 +188,6 @@ func TestCancelAtEndBlocksRenewal(t *testing.T) {
 	// 对照组：非 cancel_at_end 的订阅可通过续费目标检查，不被误伤。
 	seedQuotaSub(t, 7103, &UserSubscription{
 		UserId: 720, PlanId: 7101, Status: "active",
-		AmountTotal: 0,
 		StartTime:   now - 86400, EndTime: now + 30*86400,
 	})
 	require.NoError(t, ValidateSubscriptionPurchaseGate(720, plan, 7103))
@@ -257,7 +256,6 @@ func TestRemainingValueUsesSnapshotPeriod(t *testing.T) {
 	startUnix := now - 70*86400
 	sub := &UserSubscription{
 		UserId:    722, PlanId: 7203, Status: "active",
-		AmountTotal: 0,
 		StartTime:   startUnix,
 		EndTime:     now + 20*86400,
 	}
@@ -296,7 +294,6 @@ func TestDisabledPlanAllowsRenewalBlocksNewPurchase(t *testing.T) {
 	startUnix := now - 10*86400
 	sub := &UserSubscription{
 		UserId:    723, PlanId: 7204, Status: "active",
-		AmountTotal: 0,
 		StartTime:   startUnix,
 		EndTime:     startUnix + planDurationSeconds(plan, startUnix),
 	}
@@ -324,4 +321,210 @@ func TestDisabledPlanAllowsRenewalBlocksNewPurchase(t *testing.T) {
 	_, err = PurchaseWithStrategy(723, 7204, 0)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "套餐未启用")
+}
+
+// TestPurchaseSwitchDowngradeRefundClamp 同互斥组降级退款的账本 clamp：
+// 退款 = min(按时间折算的剩余价值, max(0, 快照价格 − period_used 折算已消耗价值))。
+// 覆盖三档：超耗（退 0，堵"烧爆额度→降级退全款"套利）、部分超耗（clamp 咬合）、
+// 低耗（时间价值封顶）。
+func TestPurchaseSwitchDowngradeRefundClamp(t *testing.T) {
+	truncateTables(t)
+
+	oldQuotaPerUnit := common.QuotaPerUnit
+	common.QuotaPerUnit = 500000
+	t.Cleanup(func() { common.QuotaPerUnit = oldQuotaPerUnit })
+
+	now := GetDBTimestamp()
+	seedQuotaPlan(t, 7830, &SubscriptionPlan{
+		Title: "std-mini", PriceAmount: 10, Enabled: true,
+		DurationUnit: SubscriptionDurationDay, DurationValue: 30,
+		ResetWindowsRaw: capWindowJSON(1000),
+		ExclusiveGroup:  "std",
+	})
+	seedQuotaPlan(t, 7831, &SubscriptionPlan{
+		Title: "std-free", PriceAmount: 0, Enabled: true,
+		DurationUnit: SubscriptionDurationDay, DurationValue: 30,
+		ResetWindowsRaw: capWindowJSON(1000),
+		ExclusiveGroup:  "std",
+	})
+	miniPlan, err := GetSubscriptionPlanById(7830)
+	require.NoError(t, err)
+
+	startUnix := now - 15*86400
+	endUnix := startUnix + 30*86400 // 剩 15/30 天，时间剩余价值 = $5
+
+	seedCase := func(subId, userId int, periodUsed int64, wallet int) {
+		sub := &UserSubscription{
+			UserId: userId, PlanId: 7830, Status: "active",
+			PeriodUsed: periodUsed,
+			StartTime:  startUnix, EndTime: endUnix,
+		}
+		sub.SnapshotRenewTerms(miniPlan, startUnix)
+		seedQuotaSub(t, subId, sub)
+		require.NoError(t, DB.Create(&User{Id: userId, Username: "clamp-user-" + strconv.Itoa(userId), AffCode: "c" + strconv.Itoa(userId), Quota: wallet}).Error)
+	}
+
+	// 三档：超耗 $20（cap=0 → 退 0）；消耗 $7（cap=$3 < $5 → 退 $3）；零消耗（退 $5）。
+	seedCase(7832, 791, 10_000_000, 1_000_000)
+	seedCase(7834, 792, 3_500_000, 1_000_000)
+	seedCase(7836, 793, 0, 1_000_000)
+
+	walletOf := func(userId int) int {
+		var u User
+		require.NoError(t, DB.Where("id = ?", userId).First(&u).Error)
+		return u.Quota
+	}
+	assertOldCancelledAndNewFree := func(t *testing.T, oldSubId int, userId int) {
+		t.Helper()
+		var old UserSubscription
+		require.NoError(t, DB.Where("id = ?", oldSubId).First(&old).Error)
+		assert.Equal(t, "cancelled", old.Status, "旧订阅应已作废")
+		var fresh UserSubscription
+		require.NoError(t, DB.Where("user_id = ? AND plan_id = ? AND status = ?", userId, 7831, "active").First(&fresh).Error)
+		assert.Zero(t, fresh.PeriodUsed, "新订阅账本从零起步")
+	}
+
+	// 超耗：烧爆后降级一分不退，堵住"消耗即时、退款线性"的套利。
+	_, err = PurchaseWithStrategy(791, 7831, 0)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1_000_000, walletOf(791), "已消耗价值超过预付，退款必须为 0")
+	assertOldCancelledAndNewFree(t, 7832, 791)
+
+	// 部分超耗：时间价值 $5 被 clamp 压到 $3，只退未消耗的预付。
+	_, err = PurchaseWithStrategy(792, 7831, 0)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1_000_000+1_500_000, walletOf(792), "退款 = min($5 时间价值, $10-$7 未消耗预付) = $3")
+	assertOldCancelledAndNewFree(t, 7834, 792)
+
+	// 低耗：未触 clamp，按时间剩余价值退 $5。
+	_, err = PurchaseWithStrategy(793, 7831, 0)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1_000_000+2_500_000, walletOf(793), "退款 = min($5 时间价值, $10 未消耗预付) = $5")
+	assertOldCancelledAndNewFree(t, 7836, 793)
+}
+
+// TestRenewThenDowngradeRefundCappedAtPrice 烧爆→续费→立即降级的组合场景：
+// 提前续费是叠期（第二期从原 EndTime 起算），降级时 remain 44/45d 必然 > 周期 30d，
+// 时间项超过快照价格，退款被 cap 压到快照价格 = 第二期实付 = **全额退还**——
+// 用户第二期一天没用，一分折价不扣。同时钉死不变量：退款 ≤ cap ≤ 快照价格 ≤
+// 续费实付，"续费洗水表"零增益（洗回的钱恰等于刚付的钱）。
+func TestRenewThenDowngradeRefundCappedAtPrice(t *testing.T) {
+	truncateTables(t)
+
+	oldQuotaPerUnit := common.QuotaPerUnit
+	common.QuotaPerUnit = 500000
+	t.Cleanup(func() { common.QuotaPerUnit = oldQuotaPerUnit })
+
+	now := GetDBTimestamp()
+	seedQuotaPlan(t, 7840, &SubscriptionPlan{
+		Title: "cap-mini", PriceAmount: 10, Enabled: true,
+		DurationUnit: SubscriptionDurationDay, DurationValue: 30,
+		ResetWindowsRaw: capWindowJSON(1000),
+		ExclusiveGroup:  "std",
+	})
+	seedQuotaPlan(t, 7841, &SubscriptionPlan{
+		Title: "cap-free", PriceAmount: 0, Enabled: true,
+		DurationUnit: SubscriptionDurationDay, DurationValue: 30,
+		ResetWindowsRaw: capWindowJSON(1000),
+		ExclusiveGroup:  "std",
+	})
+	miniPlan, err := GetSubscriptionPlanById(7840)
+	require.NoError(t, err)
+
+	// 第 15 天、已烧爆（period_used = 10M units = $20，超付一倍）。
+	startUnix := now - 15 * 86400
+	sub := &UserSubscription{
+		UserId: 794, PlanId: 7840, Status: "active",
+		PeriodUsed: 10_000_000,
+		StartTime:  startUnix, EndTime: startUnix + 30*86400,
+	}
+	sub.SnapshotRenewTerms(miniPlan, startUnix)
+	seedQuotaSub(t, 7842, sub)
+	require.NoError(t, DB.Create(&User{Id: 794, Username: "clamp-renew-user", AffCode: "c794", Quota: 1_000_000}).Error)
+
+	// 立即续费：EndTime 延长到 now+45d（提前续费叠期），period_used 清零。
+	require.NoError(t, DB.Transaction(func(tx *gorm.DB) error {
+		var locked UserSubscription
+		require.NoError(t, tx.Where("id = ?", 7842).First(&locked).Error)
+		return RenewSubscriptionTx(tx, &locked, miniPlan, now)
+	}))
+	var renewed UserSubscription
+	require.NoError(t, DB.Where("id = ?", 7842).First(&renewed).Error)
+	assert.Zero(t, renewed.PeriodUsed, "续费清零账本")
+	assert.Greater(t, renewed.EndTime, now+30*86400, "提前续费应叠期延长")
+
+	// 次日降级：第二期未开始使用，时间项 $15 被 cap $10 压平 → 全额退还续费款。
+	_, err = PurchaseWithStrategy(794, 7841, 0)
+	require.NoError(t, err)
+	var u User
+	require.NoError(t, DB.Where("id = ?", 794).First(&u).Error)
+	assert.Equal(t, 1_000_000+5_000_000, u.Quota, "第二期零使用，退续费全款 $10（cap=快照价格=实付）")
+}
+
+// TestUpgradeBranchChargesDiffWithClamp 升级方向的 clamp：同组升级补差价 = 新快照价格 −
+// 剩余价值，而剩余价值被 clamp 在"快照价格 − period_used 折算已消耗"内——烧爆者剩余价值
+// 为 0，升级按新套餐全价补差，防止"烧爆低档再升级白拿差额抵扣"的套利。未烧爆者按剩余
+// 价值抵扣。新订阅 period_used 从 0 重开（单期账本），旧订阅作废。
+func TestUpgradeBranchChargesDiffWithClamp(t *testing.T) {
+	truncateTables(t)
+
+	oldQuotaPerUnit := common.QuotaPerUnit
+	common.QuotaPerUnit = 500000
+	t.Cleanup(func() { common.QuotaPerUnit = oldQuotaPerUnit })
+
+	now := GetDBTimestamp()
+	seedQuotaPlan(t, 7850, &SubscriptionPlan{
+		Title: "up-mini", PriceAmount: 10, Enabled: true,
+		DurationUnit: SubscriptionDurationDay, DurationValue: 30,
+		ResetWindowsRaw: capWindowJSON(1000),
+		ExclusiveGroup:  "std", Priority: 1,
+	})
+	seedQuotaPlan(t, 7851, &SubscriptionPlan{
+		Title: "up-standard", PriceAmount: 20, Enabled: true,
+		DurationUnit: SubscriptionDurationDay, DurationValue: 30,
+		ResetWindowsRaw: capWindowJSON(2000),
+		ExclusiveGroup:  "std", Priority: 2,
+	})
+	miniPlan, err := GetSubscriptionPlanById(7850)
+	require.NoError(t, err)
+
+	seedCase := func(subId, userId int, periodUsed int64, wallet int) {
+		t.Helper()
+		startUnix := now - 15 * 86400
+		sub := &UserSubscription{
+			UserId: userId, PlanId: 7850, Status: "active",
+			PeriodUsed: periodUsed,
+			StartTime:  startUnix, EndTime: startUnix + 30*86400,
+		}
+		sub.SnapshotRenewTerms(miniPlan, startUnix)
+		seedQuotaSub(t, subId, sub)
+		require.NoError(t, DB.Create(&User{Id: userId, Username: "up-user-" + strconv.Itoa(userId), AffCode: "u" + strconv.Itoa(userId), Quota: wallet}).Error)
+	}
+
+	// 场景 A：烧爆（$20 已耗 > $10 快照）→ 剩余价值 0 → 补差价 = $20 全款。
+	seedCase(7862, 795, 10_000_000, 20_000_000)
+	msg, err := PurchaseWithStrategy(795, 7851, 0)
+	require.NoError(t, err)
+	assert.Contains(t, msg, "已升级", "tier 更高应走升级分支")
+	var uA User
+	require.NoError(t, DB.Where("id = ?", 795).First(&uA).Error)
+	assert.EqualValues(t, 20_000_000-10_000_000, uA.Quota, "烧爆升级补差价 = 新套餐全价 $20（clamp 后无抵扣）")
+	var oldA UserSubscription
+	require.NoError(t, DB.Where("id = ?", 7862).First(&oldA).Error)
+	assert.Equal(t, "cancelled", oldA.Status, "旧订阅作废")
+
+	// 场景 B：半烧（$3 已耗）→ 时间项 $5（15/30 天）< cap $7 → 补差价 = $20 − $5 = $15。
+	// clamp 未咬合时按时间比例照常抵扣，只有烧爆才被压到 0。
+	seedCase(7870, 796, 1_500_000, 20_000_000)
+	_, err = PurchaseWithStrategy(796, 7851, 0)
+	require.NoError(t, err)
+	var uB User
+	require.NoError(t, DB.Where("id = ?", 796).First(&uB).Error)
+	assert.EqualValues(t, 20_000_000-7_500_000, uB.Quota, "未烧爆升级按时间剩余价值 $5 抵扣，补 $15")
+
+	// 新订阅账本从 0 重开：找 795 的新 active 订阅验证。
+	var newSub UserSubscription
+	require.NoError(t, DB.Where("user_id = ? AND status = ?", 795, "active").First(&newSub).Error)
+	assert.Equal(t, 7851, newSub.PlanId, "新订阅应指向高阶套餐")
+	assert.Zero(t, newSub.PeriodUsed, "单期账本随新订阅从 0 重开")
 }

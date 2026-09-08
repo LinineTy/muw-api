@@ -1,3 +1,4 @@
+// @muw-owned
 /*
 Copyright (C) 2023-2026 QuantumNous
 

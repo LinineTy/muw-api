@@ -46,6 +46,9 @@ const GENERATED_FILE_MARKERS = [
   'DO NOT EDIT',
   'You should NOT make any changes in this file',
 ]
+// muw 自研文件标记:带此标记的文件不参与 QuantumNous 版权头管理
+// (见仓库 AGENTS.md 版权头纪律;标记行必须是文件第一行)
+const MUW_OWNED_MARKER = '// @muw-owned'
 
 const COPYRIGHT_HEADER = `/*
 Copyright (C) 2023-2026 QuantumNous
@@ -80,6 +83,10 @@ function isGeneratedFile(filePath) {
 
 function hasGeneratedMarker(text) {
   return GENERATED_FILE_MARKERS.some((marker) => text.includes(marker))
+}
+
+function isMuwOwned(text) {
+  return text.startsWith(MUW_OWNED_MARKER)
 }
 
 function hasThirdPartyCopyright(text) {
@@ -185,6 +192,7 @@ async function main() {
     added: 0,
     checked: 0,
     skippedGenerated: 0,
+    skippedMuwOwned: 0,
     skippedThirdParty: 0,
     updated: 0,
   }
@@ -197,6 +205,11 @@ async function main() {
     const bom = originalText.startsWith('\uFEFF') ? '\uFEFF' : ''
     const text = bom ? originalText.slice(1) : originalText
     const [, body] = splitShebang(text)
+
+    if (isMuwOwned(text)) {
+      stats.skippedMuwOwned += 1
+      continue
+    }
 
     if (hasGeneratedMarker(body)) {
       stats.skippedGenerated += 1
@@ -227,6 +240,7 @@ async function main() {
       `added ${stats.added}`,
       `updated ${stats.updated}`,
       `skipped generated ${stats.skippedGenerated}`,
+      `skipped muw-owned ${stats.skippedMuwOwned}`,
       `skipped third-party ${stats.skippedThirdParty}`,
     ].join(', ')
   )

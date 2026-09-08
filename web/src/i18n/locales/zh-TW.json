@@ -184,7 +184,7 @@
     "Add \"{{value}}\"": "新增 \"{{value}}\"",
     "Add API": "新增 API",
     "Add API Shortcut": "新增 API 快捷方式",
-    "Add Account": "新增帳號",
+    "Add Account": "新增賬號",
     "Add Announcement": "新增公告",
     "Add Auto group": "新增 Auto 分組",
     "Add Coding Plan Account": "新增編碼套餐賬號",
@@ -6543,6 +6543,21 @@
     "© 2025 Your Company. All rights reserved.": "© 2025 您的公司。保留所有權利。",
     "、": "、",
     "，": "，",
-    "，and ": "，並"
+    "，and ": "，並",
+    "Background blur": "背景模糊",
+    "How strongly the background image is blurred (0px = sharp original; higher = softer behind the glass)": "背景圖的模糊強度(0px = 銳利原圖;越大,玻璃後越柔和)",
+    "{{models}} models · {{vendors}} vendors · {{groups}} groups": "{{models}} models · {{vendors}} vendors · {{groups}} groups",
+    "No matching models in any group": "No matching models in any group",
+    "24h success rate": "24h 成功率",
+    "Quick links": "快速導航",
+    "os-shell.desktop-hint": "所有視窗已關閉 · 從底部 Dock 或左下角導航球開啟頁面",
+    "Close window": "關閉視窗",
+    "Minimize window": "最小化視窗",
+    "Maximize window": "最大化視窗",
+    "Close other windows": "關閉其他視窗",
+    "Close all windows": "關閉全部視窗",
+    "Subscription group priorities": "訂閱組優先級",
+    "Remove group": "移除組",
+    "Higher priority wins (unlisted groups = 0). A purchase only changes the user group when the target priority is not lower; group fallback on expiry never lands on an equal-or-higher group and prefers the highest group still backed by an active subscription.": "優先級高者優先（未配置的組視為 0）。僅當目標組優先級不低於當前組時，購買才會切換使用者組；訂閱到期回退絕不落到不低於當前優先級的組，並優先回退到仍有活躍訂閱撐著的最高組。"
   }
 }

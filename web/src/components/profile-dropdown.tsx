@@ -40,7 +40,14 @@ import { useAuthStore } from '@/stores/auth-store'
 
 const avatarFallbackClassName = 'font-semibold text-white'
 
-export function ProfileDropdown() {
+export function ProfileDropdown({
+  trigger,
+  onNavigate,
+}: {
+  trigger?: React.ReactElement
+  /** 桌面壳开窗钩子:返回 true 表示已处理,跳过内置路由跳转 */
+  onNavigate?: (path: string) => boolean
+}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [open, setOpen] = useDialogState()
@@ -59,7 +66,11 @@ export function ProfileDropdown() {
     <>
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger
-          render={<Button variant='ghost' className='relative size-6 p-0' />}
+          render={
+            trigger ?? (
+              <Button variant='ghost' className='relative size-6 p-0' />
+            )
+          }
         >
           <Avatar className='size-6'>
             {user?.avatar ? (
@@ -73,7 +84,7 @@ export function ProfileDropdown() {
             </AvatarFallback>
           </Avatar>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align='end' sideOffset={8} className='w-56'>
+        <DropdownMenuContent align='end' sideOffset={8} className='z-[80] w-56'>
           <div className='flex items-center gap-2 px-1.5 py-1.5'>
             <Avatar className='size-8'>
               {user?.avatar ? (
@@ -108,13 +119,23 @@ export function ProfileDropdown() {
 
           <DropdownMenuSeparator />
 
-          <DropdownMenuItem onClick={() => navigate({ to: '/profile' })}>
+          <DropdownMenuItem
+            onClick={() => {
+              if (onNavigate?.('/profile')) return
+              navigate({ to: '/profile' })
+            }}
+          >
             <User className='size-4' />
             {t('Profile')}
           </DropdownMenuItem>
 
           {isWalletVisible && (
-            <DropdownMenuItem onClick={() => navigate({ to: '/wallet' })}>
+            <DropdownMenuItem
+              onClick={() => {
+                if (onNavigate?.('/wallet')) return
+                navigate({ to: '/wallet' })
+              }}
+            >
               <Wallet className='size-4' />
               {t('Wallet')}
             </DropdownMenuItem>
@@ -122,12 +143,13 @@ export function ProfileDropdown() {
 
           {isSuperAdmin && (
             <DropdownMenuItem
-              onClick={() =>
+              onClick={() => {
+                if (onNavigate?.('/system-settings/site/system-info')) return
                 navigate({
                   to: '/system-settings/site/$section',
                   params: { section: 'system-info' },
                 })
-              }
+              }}
             >
               <Settings className='size-4' />
               {t('System Settings')}

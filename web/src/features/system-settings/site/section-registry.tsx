@@ -42,6 +42,7 @@ const SITE_SECTIONS = [
           BackgroundImage: settings.BackgroundImage,
           GlassMaskOpacity: settings.GlassMaskOpacity,
           GlassBrightness: settings.GlassBrightness,
+          GlassBlur: settings.GlassBlur,
           Footer: settings.Footer,
           ServerAddress: settings.ServerAddress,
         }}

@@ -39,6 +39,22 @@ export const resources = {
   zhTW,
 } as const
 
+// OS 窗口模式(self!==top,由 OS 壳 iframe 承载):监听主层语言镜像
+// 消息即时切换,不再需要刷新窗口(主层入口在 lib/os-window-theme.ts)
+if (typeof window !== 'undefined' && window.self !== window.top) {
+  window.addEventListener('message', (event) => {
+    if (event.source !== window.parent) return
+    const data = event.data as { type?: string; lang?: string } | null
+    if (
+      data?.type === 'muw:sync-language' &&
+      data.lang &&
+      data.lang !== i18n.language
+    ) {
+      void i18n.changeLanguage(data.lang)
+    }
+  })
+}
+
 i18n
   .use(LanguageDetector)
   .use(initReactI18next)

@@ -751,3 +751,94 @@ input[type='number'] {
     display: none;
   }
 }
+
+/* ===== OS 桌面壳 · iframe 内容模式 =====
+ * 窗口内的子应用(self!==top)由布局挂 html.os-in-window:
+ * 文档底色与壁纸层全部透明,让窗口标题栏与内容主体统一透出
+ * 主层窗口容器的玻璃底,消除分体感。
+ * !important 必须:暗色琉璃 body 实底规则
+ * (html.dark body[data-theme-preset='liquid-glass'] 特异性更高)
+ * 会把这里的透明压掉,导致暗色窗口底黑实、壁纸透不出来。 */
+html.os-in-window,
+html.os-in-window body {
+  background: transparent !important;
+}
+
+html.os-in-window body::before {
+  display: none;
+}
+
+/* 窗口内页面骨架透明化:SidebarInset(bg-background)、侧栏材质与 Main
+ * 会盖住窗口玻璃底;亮暗都透明,头身统一透窗口容器的玻璃/暗玻璃底 */
+html.os-in-window [data-slot='sidebar-inset'] {
+  background: transparent;
+  /* 琉璃画布配方的 blur(8px) 轻霜在窗口里会二次模糊主层玻璃底,
+   * 与"窗口统一透出壁纸"的目标冲突,一并清掉(仅设置窗有 sidebar-inset) */
+  backdrop-filter: none !important;
+  /* inset variant 自带 m-2+圆角+阴影(浮卡),窗口内会形成画布叠画布;
+   * 平铺到窗口玻璃上 */
+  margin: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+html.os-in-window [data-slot='sidebar'] {
+  background: transparent;
+}
+
+html.os-in-window [data-slot='sidebar-gap'] {
+  background: transparent;
+}
+
+/* OS 窗口开/关动画(纯 CSS,不依赖 motion——AnimatePresence 对包裹组件的
+   initial/exit 传播在生产构建下不生效,最大化/恢复仍走 CSS transition) */
+@keyframes os-window-restore {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(46px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.os-window-restore {
+  animation: os-window-restore 0.34s cubic-bezier(0.22, 1.2, 0.36, 1);
+}
+@keyframes os-window-minimize {
+  to {
+    opacity: 0;
+    transform: scale(0.88) translateY(90px);
+  }
+}
+.os-window-minimize {
+  animation: os-window-minimize 0.2s ease-in forwards;
+}
+@keyframes os-window-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.97) translateY(8px);
+  }
+}
+.os-window-exit {
+  animation: os-window-out 0.22s ease-in forwards;
+  pointer-events: none;
+}
+
+/* 通知弹层 tab 双面板叠放:容器高度取两者最大值,tab 切换零跳动。
+   display 靠组件内联 block!important 保占位;这里只管叠放与
+   inactive 面板不可见(visibility 保占位且不拦交互) */
+.os-tabs-stack {
+  display: grid;
+}
+.os-tabs-stack > div {
+  grid-area: 1 / 1;
+}
+.os-tabs-stack > div[hidden],
+.os-tabs-stack > div[inert] {
+  visibility: hidden;
+}

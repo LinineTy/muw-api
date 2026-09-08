@@ -31,6 +31,7 @@ const defaultSiteSettings: SiteSettings = {
   BackgroundImage: '',
   GlassMaskOpacity: '0.35',
   GlassBrightness: '1',
+  GlassBlur: '18',
   Footer: '',
   About: '',
   HomePageContent: '',

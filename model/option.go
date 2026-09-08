@@ -87,6 +87,8 @@ func InitOptionMap() {
 	common.OptionMap["GlassMaskOpacity"] = "0.35"
 	// 玻璃预设背景图整体亮度(系数,1 = 原样),与遮罩分开调节
 	common.OptionMap["GlassBrightness"] = "1"
+	// 玻璃预设背景图模糊强度(px,0 = 原图),与遮罩/亮度分开调节
+	common.OptionMap["GlassBlur"] = "18"
 	common.OptionMap["ServerAddress"] = ""
 	common.OptionMap["WorkerUrl"] = system_setting.WorkerUrl
 	common.OptionMap["WorkerValidKey"] = system_setting.WorkerValidKey
@@ -175,6 +177,7 @@ func InitOptionMap() {
 	common.OptionMap["SubscriptionPriorityEnabled"] = strconv.FormatBool(common.SubscriptionPriorityEnabled)
 	common.OptionMap["SubscriptionGroupUpgradeEnabled"] = strconv.FormatBool(common.SubscriptionGroupUpgradeEnabled)
 	common.OptionMap["SubscriptionExclusiveGroupEnabled"] = strconv.FormatBool(common.SubscriptionExclusiveGroupEnabled)
+	common.OptionMap["SubscriptionGroupPriorities"] = SubscriptionGroupPriorities2JSONString()
 
 	// IP 维度限流（Critical / Global API / Global Web），支持设置页热生效
 	common.OptionMap["CriticalRateLimitEnable"] = strconv.FormatBool(common.CriticalRateLimitEnable)
@@ -270,6 +273,11 @@ func validateOptionValue(key string, value string) error {
 		f, err := strconv.ParseFloat(value, 64)
 		if err != nil || f <= 0 || math.IsNaN(f) || math.IsInf(f, 0) || f > setting.MaxUserSpacePurchaseRatio {
 			return fmt.Errorf("must be a positive number in (0, %g], got %q", setting.MaxUserSpacePurchaseRatio, value)
+		}
+	case "GlassBlur":
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 0 || n > 30 {
+			return fmt.Errorf("must be an integer in [0, 30], got %q", value)
 		}
 	}
 	return nil
@@ -600,6 +608,8 @@ func updateOptionMap(key string, value string) (err error) {
 		err = ratio_setting.UpdateModelRatioByJSONString(value)
 	case "GroupRatio":
 		err = ratio_setting.UpdateGroupRatioByJSONString(value)
+	case "SubscriptionGroupPriorities":
+		err = SetSubscriptionGroupPrioritiesFromJSON(value)
 	case "GroupGroupRatio":
 		err = ratio_setting.UpdateGroupGroupRatioByJSONString(value)
 	case "UserUsableGroups":

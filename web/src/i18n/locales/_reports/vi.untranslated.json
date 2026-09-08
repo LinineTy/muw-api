@@ -306,5 +306,6 @@
   "Your account is on the blacklist and is not allowed to sign in": "Your account is on the blacklist and is not allowed to sign in",
   "Your balance does not meet the pool requirement": "Your balance does not meet the pool requirement",
   "and all of its claim records. This action cannot be undone.": "and all of its claim records. This action cannot be undone.",
-  "e.g. 131072, 0 or empty = unlimited": "e.g. 131072, 0 or empty = unlimited"
+  "e.g. 131072, 0 or empty = unlimited": "e.g. 131072, 0 or empty = unlimited",
+  "How strongly the background image is blurred (0px = sharp original; higher = softer behind the glass)": "How strongly the background image is blurred (0px = sharp original; higher = softer behind the glass)"
 }

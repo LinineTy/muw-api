@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { Radio as RadioPrimitive } from '@base-ui/react/radio'
 import { RadioGroup as Radio } from '@base-ui/react/radio-group'
+import { useLocation } from '@tanstack/react-router'
 import { CircleCheck, Palette, RotateCcw } from 'lucide-react'
 import type { SVGProps } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -38,6 +39,7 @@ import {
   sideDrawerFormClassName,
   sideDrawerHeaderClassName,
 } from '@/components/drawer-layout'
+import { isSettingsUrl } from '@/components/layout/components/os-shell/os-open'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
@@ -66,7 +68,15 @@ import { useSidebar } from './ui/sidebar'
 
 const Item = RadioPrimitive.Root
 
-export function ConfigDrawer() {
+export function ConfigDrawer({ trigger }: { trigger?: React.ReactElement }) {
+  // 侧栏/布局两节只在"当前布局真的有活侧栏"时渲染:
+  // OS 桌面壳 v2 后 PC 管理端只有设置页退出多窗口走完整布局带侧栏,
+  // 其余页面全在窗口里(无侧栏)——桌面壳 Dock 打开的抽屉里这两节是
+  // 死配置,藏掉;设置页顶栏打开的抽屉仍可调(设置页侧栏还在消费)。
+  // 普通用户进不了设置页(仅管理员),等于永远看不到这两节。
+  const hasLiveSidebar = isSettingsUrl(
+    useLocation({ select: (s) => s.pathname })
+  )
   const { t } = useTranslation()
   const { setOpen } = useSidebar()
   const { resetDir } = useDirection()
@@ -86,18 +96,20 @@ export function ConfigDrawer() {
     <Sheet>
       <SheetTrigger
         render={
-          <Button
-            size='icon'
-            variant='ghost'
-            aria-label={t('Open theme settings')}
-            aria-describedby='config-drawer-description'
-            className='max-md:hidden'
-          />
+          trigger ?? (
+            <Button
+              size='icon'
+              variant='ghost'
+              aria-label={t('Open theme settings')}
+              aria-describedby='config-drawer-description'
+              className='max-md:hidden'
+            />
+          )
         }
       >
         <Palette className='size-[1.2rem]' aria-hidden='true' />
       </SheetTrigger>
-      <SheetContent className={sideDrawerContentClassName('sm:max-w-md')}>
+      <SheetContent className={cn(sideDrawerContentClassName('sm:max-w-md'), 'z-[80]')}>
         <SheetHeader className={sideDrawerHeaderClassName()}>
           <SheetTitle>{t('Theme Settings')}</SheetTitle>
           <SheetDescription id='config-drawer-description'>
@@ -110,8 +122,12 @@ export function ConfigDrawer() {
           <FontConfig />
           <RadiusConfig />
           <ScaleConfig />
-          <SidebarConfig />
-          <LayoutConfig />
+          {hasLiveSidebar && (
+            <>
+              <SidebarConfig />
+              <LayoutConfig />
+            </>
+          )}
           <ContentLayoutConfig />
           <DirConfig />
         </div>

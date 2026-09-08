@@ -982,7 +982,14 @@ body[data-theme-preset='liquid-glass'] {
  * 与遮罩强度(向白/黑靠拢)分开,由管理端"背景亮度"滑块控制。非琉璃主题
  * --app-bg-image 为 none,滤镜无可视影响。 */
 body[data-theme-preset='liquid-glass']::before {
-  filter: brightness(var(--app-bg-brightness, 1));
+  /* blur+saturate 原在 [data-slot='public-layout'] 的 backdrop-filter 上——
+   * backdrop-filter 祖先会为后代 fixed 元素创建 containing block,导致公开页
+   * 顶栏(fixed)随页面滚走。挪到背景层自身的 filter 链,视觉等价(模糊的都
+   * 是这张背景图)且不影响任何后代定位。
+   * blur 强度由 --app-bg-blur 控制(管理端"背景模糊"滑块,0 = 锐利原图),
+   * 由 useAppBackground 写到 body 内联变量;未配置时回落 18px 保持默认观感。 */
+  filter: brightness(var(--app-bg-brightness, 1))
+    blur(var(--app-bg-blur, 18px)) saturate(160%);
 }
 
 /* ── Liquid Glass — 玻璃模糊与高光 ─────────────────────────────────────────
@@ -1009,19 +1016,32 @@ body[data-theme-preset='liquid-glass']::before {
   background-color: oklch(0.13 0 0 / 0.35);
 }
 /* 公开页画布与内部内容区统一:背景驯服后不需要 55% 白遮罩,降到和 sidebar-inset
- * 相同的 10% 白,玻璃更透、背景图更可见;18px blur 保留(整页画布没有侧栏/卡片
- * 托底,需要更强的柔化压住背景亮度不均,保证长文可读)。 */
+ * 相同的 10% 白,玻璃更透、背景图更可见;整页轻霜的 blur(18px) 由 body::before
+ * 的 filter 链提供(见上方注释),容器自身绝不能带 backdrop-filter——否则内部
+ * fixed 顶栏会随页面滚走。 */
 [data-theme-preset='liquid-glass'] [data-slot='public-layout'] {
   background-color: oklch(1 0 0 / 0.1);
-  backdrop-filter: blur(18px) saturate(160%);
 }
 .dark [data-theme-preset='liquid-glass'] [data-slot='public-layout'] {
   background-color: oklch(0.13 0 0 / 0.35);
 }
 /* 轻玻璃面板配方:透明背景 + 极轻模糊,主要靠 --border 边框和圆角区分。
- * 背景图在面板下清晰可见——参考概览页系统负载卡片的透明质感。 */
+ * 背景图在面板下清晰可见——参考概览页系统负载卡片的透明质感。
+ * header(管理端顶栏)与 sidebar-inner(侧栏)不在列表内:两者要求纯透明,
+ * 不做二次模糊(背景层 body::before 已有整页 blur,面板再叠 backdrop-filter
+ * 属于重复处理);header 本身 bg-transparent,直接透出背景。
+ * sidebar-inner 连 bg-sidebar 底色也一并去掉(maintainer拍板:侧栏是框架,框架
+ * 全透——底色去掉后菜单直接坐在驯服过的壁纸上,与顶栏透明同一语言;
+ * 68fd67c9a 去掉的是它的 backdrop-filter,这里补全底色。移动端不受影响:
+ * 移动端弹卡外壳自带 bg-sidebar+backdrop-blur-md,内部不渲染
+ * sidebar-inner。非琉璃预设不动——实色侧栏底是各预设 token 的语义。) */
+[data-theme-preset='liquid-glass'] [data-slot='sidebar-inner'] {
+  background-color: transparent;
+}
+.dark [data-theme-preset='liquid-glass'] [data-slot='sidebar-inner'] {
+  background-color: transparent;
+}
 [data-theme-preset='liquid-glass'] :is(
-  [data-slot='header'],
   [data-slot='card'],
   [data-slot='dialog-content'],
   [data-slot='alert-dialog-content'],
@@ -1037,7 +1057,6 @@ body[data-theme-preset='liquid-glass']::before {
 }
 .dark
   [data-theme-preset='liquid-glass'] :is(
-    [data-slot='header'],
     [data-slot='card'],
     [data-slot='dialog-content'],
     [data-slot='alert-dialog-content'],
@@ -1049,12 +1068,6 @@ body[data-theme-preset='liquid-glass']::before {
   ) {
   box-shadow: none;
   background-image: none;
-}
-/* sidebar-inner 单独给 blur:它原本在 :is() 面板配方里,但那个列表会连 box-shadow
- * 一起清掉,把 floating 变体的浮起阴影 shadow-sm 也抹了;移出后 floating 保留
- * 自己的浮起阴影,inset 侧栏只需 blur(圆角由下方规则补)。 */
-[data-theme-preset='liquid-glass'] [data-slot='sidebar-inner'] {
-  backdrop-filter: blur(8px) saturate(150%);
 }
 
 /* 弹窗(抽屉/对话框/alert)的背景逻辑:
