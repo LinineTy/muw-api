@@ -6534,8 +6534,9 @@
     "Minimize window": "Réduire la fenêtre",
     "Maximize window": "Agrandir la fenêtre",
     "Close other windows": "Fermer les autres fenêtres",
-    "Close all windows": "Fermer toutes les fenêtres"
-  },
-  "Subscription group priorities": "Priorités des groupes d'abonnement",
-  "JSON mapping group name to integer priority (higher wins, unlisted groups = 0). Purchases only change the user group when the target priority is not lower; group fallback on expiry never lands on an equal-or-higher group and prefers the highest group still backed by an active subscription. Example: {\"v2\":30,\"v1\":20}.": "Mappage JSON du nom de groupe vers une priorité entière (le plus élevé gagne, groupes non listés = 0). L'achat ne change le groupe utilisateur que si la priorité cible n'est pas inférieure ; le repli à l'expiration n'atteint jamais un groupe de priorité égale ou supérieure et préfère le groupe le plus élevé encore soutenu par un abonnement actif. Exemple : {\"v2\":30,\"v1\":20}."
+    "Close all windows": "Fermer toutes les fenêtres",
+    "Subscription group priorities": "Priorités des groupes d'abonnement",
+    "Remove group": "Retirer le groupe",
+    "Higher priority wins (unlisted groups = 0). A purchase only changes the user group when the target priority is not lower; group fallback on expiry never lands on an equal-or-higher group and prefers the highest group still backed by an active subscription.": "La priorité la plus élevée gagne (groupes non listés = 0). L'achat ne change le groupe utilisateur que si la priorité cible n'est pas inférieure ; le repli à l'expiration n'atteint jamais un groupe de priorité égale ou supérieure et préfère le groupe le plus élevé encore soutenu par un abonnement actif."
+  }
 }

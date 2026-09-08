@@ -6534,8 +6534,9 @@
     "Minimize window": "Minimize window",
     "Maximize window": "Maximize window",
     "Close other windows": "Close other windows",
-    "Close all windows": "Close all windows"
-  },
-  "Subscription group priorities": "Subscription group priorities",
-  "JSON mapping group name to integer priority (higher wins, unlisted groups = 0). Purchases only change the user group when the target priority is not lower; group fallback on expiry never lands on an equal-or-higher group and prefers the highest group still backed by an active subscription. Example: {\"v2\":30,\"v1\":20}.": "JSON mapping group name to integer priority (higher wins, unlisted groups = 0). Purchases only change the user group when the target priority is not lower; group fallback on expiry never lands on an equal-or-higher group and prefers the highest group still backed by an active subscription. Example: {\"v2\":30,\"v1\":20}."
+    "Close all windows": "Close all windows",
+    "Subscription group priorities": "Subscription group priorities",
+    "Remove group": "Remove group",
+    "Higher priority wins (unlisted groups = 0). A purchase only changes the user group when the target priority is not lower; group fallback on expiry never lands on an equal-or-higher group and prefers the highest group still backed by an active subscription.": "Higher priority wins (unlisted groups = 0). A purchase only changes the user group when the target priority is not lower; group fallback on expiry never lands on an equal-or-higher group and prefers the highest group still backed by an active subscription."
+  }
 }
