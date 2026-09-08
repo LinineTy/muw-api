@@ -351,6 +351,7 @@ export function ModelMutateDrawer({
       SubscriptionGroupUpgradeEnabled: true,
       SubscriptionExclusiveGroupEnabled: true,
       SubscriptionMaxSimultaneous: 0,
+      SubscriptionGroupPriorities: '{}',
     }
     return getOptionValue(systemOptionsData.data, defaultModelSettings)
   }, [systemOptionsData])

@@ -87,6 +87,7 @@ const defaultModelSettings: ModelSettings = {
   SubscriptionPriorityEnabled: true,
   SubscriptionGroupUpgradeEnabled: true,
   SubscriptionExclusiveGroupEnabled: true,
+  SubscriptionGroupPriorities: '{}',
   SubscriptionMaxSimultaneous: 0,
 }
 

@@ -6535,5 +6535,7 @@
     "Maximize window": "最大化窗口",
     "Close other windows": "关闭其他窗口",
     "Close all windows": "关闭全部窗口"
-  }
+  },
+  "Subscription group priorities": "订阅组优先级",
+  "JSON mapping group name to integer priority (higher wins, unlisted groups = 0). Purchases only change the user group when the target priority is not lower; group fallback on expiry never lands on an equal-or-higher group and prefers the highest group still backed by an active subscription. Example: {\"v2\":30,\"v1\":20}.": "JSON 映射组名到整数优先级（数字大者优先，未配置的组视为 0）。仅当目标组优先级不低于当前组时，购买才会切换用户组；订阅到期回退绝不落到不低于当前优先级的组，并优先回退到仍有活跃订阅撑着的最高组。示例：{\"v2\":30,\"v1\":20}。"
 }

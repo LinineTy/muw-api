@@ -6535,5 +6535,7 @@
     "Maximize window": "Phóng to cửa sổ",
     "Close other windows": "Đóng các cửa sổ khác",
     "Close all windows": "Đóng tất cả cửa sổ"
-  }
+  },
+  "Subscription group priorities": "Ưu tiên nhóm đăng ký",
+  "JSON mapping group name to integer priority (higher wins, unlisted groups = 0). Purchases only change the user group when the target priority is not lower; group fallback on expiry never lands on an equal-or-higher group and prefers the highest group still backed by an active subscription. Example: {\"v2\":30,\"v1\":20}.": "Ánh xạ JSON từ tên nhóm sang độ ưu tiên số nguyên (số càng cao càng ưu tiên, nhóm không liệt kê = 0). Việc mua chỉ đổi nhóm người dùng khi độ ưu tiên đích không thấp hơn; khi hết hạn, nhóm không bao giờ rơi vào nhóm có độ ưu tiên bằng hoặc cao hơn và ưu tiên nhóm cao nhất vẫn còn đăng ký hoạt động duy trì. Ví dụ: {\"v2\":30,\"v1\":20}."
 }

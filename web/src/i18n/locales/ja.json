@@ -6535,5 +6535,7 @@
     "Maximize window": "ウィンドウを最大化",
     "Close other windows": "他のウィンドウを閉じる",
     "Close all windows": "すべてのウィンドウを閉じる"
-  }
+  },
+  "Subscription group priorities": "サブスクリプショングループの優先度",
+  "JSON mapping group name to integer priority (higher wins, unlisted groups = 0). Purchases only change the user group when the target priority is not lower; group fallback on expiry never lands on an equal-or-higher group and prefers the highest group still backed by an active subscription. Example: {\"v2\":30,\"v1\":20}.": "グループ名から整数優先度への JSON マッピング（数値が大きいほど優先、未設定は 0）。購入時にユーザーグループが変更されるのは、対象グループの優先度が現在と同値以上の場合のみです。期限切れ時のフォールバックは現在の優先度以上のグループには落ちず、アクティブなサブスクリプションが支えている最も高いグループを優先します。例：{\"v2\":30,\"v1\":20}。"
 }

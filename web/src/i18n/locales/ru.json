@@ -6535,5 +6535,7 @@
     "Maximize window": "Развернуть окно",
     "Close other windows": "Закрыть другие окна",
     "Close all windows": "Закрыть все окна"
-  }
+  },
+  "Subscription group priorities": "Приоритеты групп подписки",
+  "JSON mapping group name to integer priority (higher wins, unlisted groups = 0). Purchases only change the user group when the target priority is not lower; group fallback on expiry never lands on an equal-or-higher group and prefers the highest group still backed by an active subscription. Example: {\"v2\":30,\"v1\":20}.": "JSON-отображение имени группы в целочисленный приоритет (выше — важнее, неуказанные группы = 0). Покупка меняет группу пользователя, только если приоритет цели не ниже текущего; откат по истечении никогда не опускается в группу с равным или большим приоритетом и предпочитает наивысшую группу, всё ещё поддерживаемую активной подпиской. Пример: {\"v2\":30,\"v1\":20}."
 }
