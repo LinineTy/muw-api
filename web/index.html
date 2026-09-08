@@ -21,5 +21,46 @@
 
   <body>
     <div id="root" translate="no" class="notranslate"></div>
+    <!-- OS 桌面壳窗口内文档(self!==top)的最早透明化:
+         React mount 前该文档不知道自己在窗口里,会按主题闪纯色底
+         (暗色琉璃=黑实底),与主层玻璃观感割裂。同步脚本先挂
+         os-in-window(class 同名规则在 index.css)+内联透明,再放一个
+         纯 CSS spinner(透明底透出主层窗口玻璃,中性灰两主题可读)。
+         ⚠️ spinner 必须注入 root 的"兄弟节点",绝不能写进 root:
+         实测(muw.4)往 root innerHTML 注入内容后,窗口 iframe 里
+         React createRoot 会静默不 mount(无任何报错,主层无此现象),
+         窗口内容永空白、spinner 永转圈。自删交给 MutationObserver:
+         root 一旦出现 React 子节点即移除宿主,零 app 侧改动。
+         脚本必须在 root div 之后(getElementById 才拿得到)。
+         muw 调整,上游同步留意。 -->
+    <script>
+      if (window.self !== window.top) {
+        document.documentElement.classList.add('os-in-window')
+        document.documentElement.style.background = 'transparent'
+        document.body.style.background = 'transparent'
+        // spinner 跟主题色:读主层(已渲染完)的 --primary 计算值,任何预设自动跟随
+        var spinColor = '#888a'
+        try {
+          var _p = window.parent
+          var _c = _p.getComputedStyle(_p.document.body).getPropertyValue('--primary')
+          if (_c) spinColor = _c.trim()
+        } catch (e) { /* 跨域兜底中性灰 */ }
+        // 宿主是 root 的兄弟节点(不碰 root,root 留给 React 独占)
+        var _boot = document.createElement('div')
+        _boot.id = 'boot-loading'
+        _boot.innerHTML =
+          '<style>#boot-loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2147483647}#boot-loading svg{animation:boot-spin 0.9s linear infinite}@keyframes boot-spin{to{transform:rotate(360deg)}}</style>' +
+          '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="' + spinColor + '" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9" stroke-opacity="0.15"/><path d="M21 12a9 9 0 0 0-9-9" stroke-opacity="0.75"/></svg>'
+        document.body.appendChild(_boot)
+        // React mount(root 出现子节点)即自删;mount 失败则 spinner 常驻(等效白屏提示)
+        new MutationObserver(function (_m, obs) {
+          var _r = document.getElementById('root')
+          if (_r && _r.childElementCount > 0) {
+            obs.disconnect()
+            _boot.remove()
+          }
+        }).observe(document.getElementById('root'), { childList: true })
+      }
+    </script>
   </body>
 </html>

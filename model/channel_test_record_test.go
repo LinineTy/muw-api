@@ -246,6 +246,16 @@ func TestClassifyRelayError(t *testing.T) {
 		{"502 upstream", newErr("bad gateway", "", 502), ErrorKindUpstream},
 		{"401 upstream auth (relay 阶段=渠道key问题)", newErr("invalid api key", "", 401), ErrorKindUpstream},
 
+		// 上游非 2xx 包装(ErrorCodeBadResponseStatusCode):状态码即上游判定
+		{"upstream raw 422", newErr("bad response status code 422, body: {\"error\":{...}}", types.ErrorCodeBadResponseStatusCode, 422), ErrorKindClient},
+		{"upstream raw 400", newErr("bad response status code 400", types.ErrorCodeBadResponseStatusCode, 400), ErrorKindClient},
+		{"upstream raw 429", newErr("bad response status code 429", types.ErrorCodeBadResponseStatusCode, 429), ErrorKindUpstream},
+		{"upstream raw 401", newErr("bad response status code 401", types.ErrorCodeBadResponseStatusCode, 401), ErrorKindUpstream},
+		{"upstream raw 503", newErr("bad response status code 503", types.ErrorCodeBadResponseStatusCode, 503), ErrorKindUpstream},
+		// 透传 errorCode + showBodyWhenFail 包装前缀:前缀不算上游特征,落状态码兜底
+		{"透传code+包装前缀+422", newErr("bad response status code 422, message: unknown parameter: tools", "some_upstream_code", 422), ErrorKindClient},
+		{"透传code+包装前缀+500", newErr("bad response status code 500, message: internal", "some_upstream_code", 500), ErrorKindUpstream},
+
 		// 未知默认 upstream:拿不准先红,不掩盖真实故障
 		{"unknown", newErr("something odd happened", "", 0), ErrorKindUpstream},
 	}

@@ -1,28 +1,13 @@
-/*
-Copyright (C) 2023-2026 QuantumNous
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-For commercial licensing, please contact support@quantumnous.com
-*/
+// @muw-owned
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useMemo, useRef } from 'react'
+import { Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import * as z from 'zod'
 
+import { Button } from '@/components/ui/button'
 import {
   Form,
   FormControl,
@@ -32,7 +17,16 @@ import {
   FormLabel,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+
+import { getGroupOptions } from '../api'
 
 import {
   SettingsForm,
@@ -49,6 +43,7 @@ const subscriptionSettingsSchema = z.object({
   SubscriptionPriorityEnabled: z.boolean(),
   SubscriptionGroupUpgradeEnabled: z.boolean(),
   SubscriptionExclusiveGroupEnabled: z.boolean(),
+  SubscriptionGroupPriorities: z.string(),
   SubscriptionMaxSimultaneous: z.number().int().min(0),
 })
 
@@ -65,6 +60,7 @@ type SubscriptionSettingsSectionProps = {
     SubscriptionPriorityEnabled: boolean
     SubscriptionGroupUpgradeEnabled: boolean
     SubscriptionExclusiveGroupEnabled: boolean
+    SubscriptionGroupPriorities: string
     SubscriptionMaxSimultaneous: number
   }
 }
@@ -78,8 +74,154 @@ const buildFormDefaults = (
     defaults.SubscriptionGroupUpgradeEnabled,
   SubscriptionExclusiveGroupEnabled:
     defaults.SubscriptionExclusiveGroupEnabled,
+  SubscriptionGroupPriorities: defaults.SubscriptionGroupPriorities,
   SubscriptionMaxSimultaneous: defaults.SubscriptionMaxSimultaneous ?? 0,
 })
+
+/** 解析组优先级 JSON → 行数组（非法输入容忍为空）。 */
+function parsePriorityRows(
+  value: string
+): { group: string; priority: number }[] {
+  try {
+    const parsed: unknown = JSON.parse(value || '{}')
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
+      return []
+    return Object.entries(parsed).map(([group, priority]) => ({
+      group,
+      priority: Number(priority) || 0,
+    }))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * 组优先级结构化编辑器:每行 = 组选择 + 优先级 + 删除,底部添加行。
+ * 组列表从 /api/group 拉取(与套餐表单 UpgradeGroup 同源);已有配置里
+ * 不在列表中的组(历史/已删组)合并进选项兜底;其他行已选的组被排除,
+ * 防同组重复配置。对外交付 JSON 字符串,管理员不手写。
+ * 草稿行存本地 state——若直接依赖 value 派生,空行会被序列化过滤掉
+ * 导致"添加组"永远渲染不出新行。
+ */
+function GroupPrioritiesEditor({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (v: string) => void
+}) {
+  const { t } = useTranslation()
+  const [groupOptions, setGroupOptions] = useState<string[]>([])
+
+  useEffect(() => {
+    getGroupOptions()
+      .then(setGroupOptions)
+      .catch(() => {})
+  }, [])
+
+  const serialize = (rows: { group: string; priority: number }[]) => {
+    const obj: Record<string, number> = {}
+    for (const r of rows) {
+      const name = r.group.trim()
+      if (name) obj[name] = r.priority
+    }
+    return JSON.stringify(obj)
+  }
+
+  const [draft, setDraft] = useState<
+    { group: string; priority: number }[] | null
+  >(null)
+  const draftSerialized = useMemo(
+    () => (draft === null ? null : serialize(draft)),
+    [draft]
+  )
+  // 外部改写 value(表单重置/加载)且不等于草稿序列化结果 → 丢弃草稿重新解析
+  useEffect(() => {
+    if (draft !== null && draftSerialized !== value) setDraft(null)
+  }, [value, draft, draftSerialized])
+
+  const rows = draft ?? parsePriorityRows(value)
+
+  const commit = (next: { group: string; priority: number }[]) => {
+    setDraft(next)
+    onChange(serialize(next))
+  }
+
+  return (
+    <div className='space-y-2'>
+      {rows.map((row, i) => {
+        // 该行可选组 = 全部组 ∪ 本行当前值(兜底历史组) − 其他行已选组
+        const takenByOthers = new Set(
+          rows.filter((_, j) => j !== i).map((r) => r.group.trim())
+        )
+        const options = [
+          ...new Set(
+            [...groupOptions, row.group.trim()].filter(
+              (g) => g && !takenByOthers.has(g)
+            )
+          ),
+        ]
+        return (
+          <div key={i} className='flex items-center gap-2'>
+            <Select
+              items={options.map((g) => ({ value: g, label: g }))}
+              onValueChange={(v) => {
+                const next = [...rows]
+                next[i] = { ...row, group: v ?? '' }
+                commit(next)
+              }}
+              value={row.group}
+            >
+              <FormControl>
+                <SelectTrigger className='w-48'>
+                  <SelectValue placeholder={t('Group name')} />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent side='bottom' align='start' alignItemWithTrigger={false}>
+                {options.map((g) => (
+                  <SelectItem key={g} value={g}>
+                    {g}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              className='w-32'
+              type='number'
+              step={1}
+              value={row.priority}
+              onChange={(e) => {
+                const next = [...rows]
+                next[i] = {
+                  ...row,
+                  priority: Number.parseInt(e.target.value, 10) || 0,
+                }
+                commit(next)
+              }}
+            />
+            <Button
+              type='button'
+              variant='ghost'
+              size='icon'
+              aria-label={t('Remove group')}
+              onClick={() => commit(rows.filter((_, j) => j !== i))}
+            >
+              <Trash2 className='size-4' aria-hidden='true' />
+            </Button>
+          </div>
+        )
+      })}
+      <Button
+        type='button'
+        variant='outline'
+        size='sm'
+        onClick={() => commit([...rows, { group: '', priority: 0 }])}
+      >
+        {t('Add group')}
+      </Button>
+    </div>
+  )
+}
 
 export function SubscriptionSettingsSection({
   defaultValues,
@@ -228,6 +370,27 @@ export function SubscriptionSettingsSection({
               )}
             />
           </div>
+
+          <FormField
+            control={form.control}
+            name='SubscriptionGroupPriorities'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Subscription group priorities')}</FormLabel>
+                <FormControl>
+                  <GroupPrioritiesEditor
+                    value={field.value}
+                    onChange={field.onChange}
+                  />
+                </FormControl>
+                <FormDescription>
+                  {t(
+                    'Higher priority wins (unlisted groups = 0). A purchase only changes the user group when the target priority is not lower; group fallback on expiry never lands on an equal-or-higher group and prefers the highest group still backed by an active subscription.'
+                  )}
+                </FormDescription>
+              </FormItem>
+            )}
+          />
 
           <FormField
             control={form.control}

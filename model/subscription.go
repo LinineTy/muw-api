@@ -408,9 +408,10 @@ type UserSubscription struct {
 	UserId int `json:"user_id" gorm:"index;index:idx_user_sub_active,priority:1"`
 	PlanId int `json:"plan_id" gorm:"index"`
 
-	// 动态模型下仅作展示（额度全部来自窗口）：AmountTotal 恒为 0，AmountUsed 为累计消费。
-	AmountTotal int64 `json:"amount_total" gorm:"type:bigint;not null;default:0"`
-	AmountUsed  int64 `json:"amount_used" gorm:"type:bigint;not null;default:0"`
+	// 单期账本：PeriodUsed 是当前预付期（购买/最近一次续费）内的累计消耗（quota units），
+	// 续费清零重开。退款 clamp 用它折算已消耗价值，防"烧爆额度→降级退款"套利。
+	// 展示额度来自窗口（buildLimitRows），本字段是账本不是额度。
+	PeriodUsed int64 `json:"period_used" gorm:"column:period_used;type:bigint;not null;default:0"`
 
 	StartTime int64  `json:"start_time" gorm:"bigint"`
 	EndTime   int64  `json:"end_time" gorm:"bigint;index;index:idx_user_sub_active,priority:3"`
@@ -844,14 +845,26 @@ func downgradeUserGroupForSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now
 	if err != nil {
 		return "", err
 	}
-	// If another active upgraded subscription exists, keep the current group.
-	var activeSub UserSubscription
-	activeQuery := tx.Where("user_id = ? AND status = ? AND end_time > ? AND id <> ? AND upgrade_group <> ''",
+	// 其他活跃订阅赋予的最高优先级组（降级终点不得低于它——有订阅撑着就降到那个组）。
+	// 撑组判定（legacy 行为：有其他活跃升级订阅就保组）无条件生效；两处优先级数值
+	// 比较仅在运营配置了组优先级时生效——未配置全为 0，"同级拦"会把"过期回退"
+	// 误伤成"永不回退"，用户被永久卡在升级组（2026-09-09 main 存量回归）。
+	prioritiesEnabled := SubscriptionGroupPrioritiesEnabled()
+	var otherSubs []UserSubscription
+	if err := tx.Where("user_id = ? AND status = ? AND end_time > ? AND id <> ? AND upgrade_group <> ''",
 		sub.UserId, "active", now, sub.Id).
 		Order("end_time desc, id desc").
-		Limit(1).
-		Find(&activeSub)
-	if activeQuery.Error == nil && activeQuery.RowsAffected > 0 {
+		Find(&otherSubs).Error; err != nil {
+		return "", err
+	}
+	bestGroup, bestPriority := "", -1
+	for _, other := range otherSubs {
+		if p := GroupPriority(strings.TrimSpace(other.UpgradeGroup)); p > bestPriority {
+			bestGroup, bestPriority = strings.TrimSpace(other.UpgradeGroup), p
+		}
+	}
+	// 当前组正被其他活跃订阅撑着 → 不降（v2+v1 共存、v1 过期保持 v2）。
+	if bestGroup == currentGroup {
 		return "", nil
 	}
 	// Determine the downgrade target: an explicit downgrade group takes precedence,
@@ -865,6 +878,14 @@ func downgradeUserGroupForSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now
 		target = strings.TrimSpace(sub.PrevUserGroup)
 	}
 	if target == "" || target == currentGroup {
+		return "", nil
+	}
+	// 其他订阅撑着比显式目标更高的组 → 降到那个组（v2 过期、v1 还活着 → 回 v1 而非底组）。
+	if prioritiesEnabled && bestPriority > GroupPriority(target) {
+		target = bestGroup
+	}
+	// 目标优先级 ≥ 当前 → 不降（同级也拦：过期还组不换同档组；防错配把人往高处"降"）。
+	if prioritiesEnabled && GroupPriority(target) >= GroupPriority(currentGroup) {
 		return "", nil
 	}
 	if err := tx.Model(&User{}).Where("id = ?", sub.UserId).
@@ -914,7 +935,10 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 			if err != nil {
 				return nil, err
 			}
-			if currentGroup != upgradeGroup {
+			// 组优先级（统一 ≥ 语义）：目标组优先级 ≥ 当前组才改组。
+			// 低级订阅不拉低当前组（v2 用户买 v1 订阅保持 v2，订阅额度照常生效）；
+			// 同级放行（跟随用户主动选择）；高买低照常升级。
+			if currentGroup != upgradeGroup && GroupPriority(upgradeGroup) >= GroupPriority(currentGroup) {
 				prevGroup = currentGroup
 				if err := tx.Model(&User{}).Where("id = ?", userId).
 					Update("group", upgradeGroup).Error; err != nil {
@@ -931,7 +955,6 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 	sub := &UserSubscription{
 		UserId:        userId,
 		PlanId:        plan.Id,
-		AmountUsed:    0,
 		StartTime:     nowUnixAtCreate,
 		EndTime:       endUnix,
 		Status:        "active",
@@ -942,7 +965,6 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 		MonthUsed:     0,
 		UpgradeGroup:  upgradeGroup,
 		PrevUserGroup: prevGroup,
-		// 动态模型下 AmountTotal 恒为 0（总额度来自窗口），仅保留作展示字段。
 		DowngradeGroup:      strings.TrimSpace(plan.DowngradeGroup),
 		AllowWalletOverflow: allowWalletOverflow,
 		ExclusiveGroup:      strings.TrimSpace(plan.ExclusiveGroup),
@@ -1255,8 +1277,16 @@ func invalidateSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now int64) (st
 
 // calcSubscriptionRemainingValue returns the prorated monetary value of a
 // subscription based on the fraction of time remaining. Quota already consumed is
-// intentionally ignored.
+// intentionally ignored here — the period-ledger clamp 在升降配入口（PurchaseWithStrategy）
+// 另行生效，避免"烧爆当期额度后降级仍按时间全额退款"的套利。
 func calcSubscriptionRemainingValue(sub *UserSubscription, plan *SubscriptionPlan) (float64, error) {
+	return calcSubscriptionRemainingValueAt(sub, plan, GetDBTimestamp())
+}
+
+// calcSubscriptionRemainingValueAt 是 calcSubscriptionRemainingValue 的可注入时钟版本。
+// 事务内必须传应用时钟 now：GetDBTimestamp() 是一次全局 DB 往返，在事务内需要第二个
+// 连接——单连接池（SQLite 测试库）直接死锁，生产上也引入跨连接时钟漂移。
+func calcSubscriptionRemainingValueAt(sub *UserSubscription, plan *SubscriptionPlan, now int64) (float64, error) {
 	if sub == nil || plan == nil {
 		return 0, errors.New("invalid subscription or plan")
 	}
@@ -1267,7 +1297,7 @@ func calcSubscriptionRemainingValue(sub *UserSubscription, plan *SubscriptionPla
 	if terms.DurationSeconds <= 0 {
 		return 0, nil
 	}
-	remain := sub.EndTime - GetDBTimestamp()
+	remain := sub.EndTime - now
 	if remain < 0 {
 		remain = 0
 	}
@@ -1494,9 +1524,20 @@ func PurchaseWithStrategy(userId int, planId int, subscriptionId int) (string, e
 			if err != nil {
 				return err
 			}
-			value, err := calcSubscriptionRemainingValue(&sameGroup, oldPlan)
+			value, err := calcSubscriptionRemainingValueAt(&sameGroup, oldPlan, now)
 			if err != nil {
 				return err
+			}
+			// 单期账本 clamp：按时间折算的剩余价值不得超过"当前预付期未消耗的预付"
+			// （快照价格 − period_used 折算已消耗价值）。否则用户可烧爆当期额度后降级，
+			// 按时间比例拿回接近全款的退款（消耗即时、退款线性 = 套利）。clamp 对升级
+			// 方向同样生效：已超耗的订阅切换时剩余价值为 0，补差价按新套餐全价计。
+			terms := sameGroup.RenewTermsOrPlan(oldPlan)
+			if cap := terms.PriceAmount - float64(sameGroup.PeriodUsed)/common.QuotaPerUnit; value > cap {
+				value = cap
+			}
+			if value < 0 {
+				value = 0
 			}
 			diff := plan.PriceAmount - value
 			var user User
@@ -1652,6 +1693,9 @@ func RenewSubscriptionTx(tx *gorm.DB, sub *UserSubscription, plan *SubscriptionP
 		return errors.New("已达该套餐最长可续时长，无法继续续费")
 	}
 	sub.EndTime = endUnix
+	// 单期账本：续费开启新的预付期，period_used 清零重开。退款 clamp 按"当前预付期
+	// 快照价格 − period_used 折算已消耗"封顶，清零保证续费后的退款不会误用上一期的
+	// 消耗；提前续费的误差方向是少退（用户当期未用完的预付不作退款），不会放大退款。
 	// 注意：不改各窗口 next_reset_at——续费只延长订阅，重置窗口照常按各自 cadence 推进
 	// （动态窗口的"封顶态重算"由 advanceSubscriptionWindows 在续费后的下一次预扣时惰性
 	// 处理）；若在此重新武装，会吞掉已排期的下一次重置（用户损失一个周期的重置额度）。
@@ -1659,6 +1703,7 @@ func RenewSubscriptionTx(tx *gorm.DB, sub *UserSubscription, plan *SubscriptionP
 	// previous auto-renew failure so the task may retry.
 	sub.CancelAtEnd = false
 	sub.AutoRenewFailed = false
+	sub.PeriodUsed = 0
 	return tx.Save(sub).Error
 }
 
@@ -2512,10 +2557,10 @@ func AdminResetPlanSubscriptions(planId int, advanceResetTime bool) (*Subscripti
 type SubscriptionPreConsumeResult struct {
 	UserSubscriptionId int
 	PreConsumed        int64
-	// AmountTotal / AmountUsedBefore / AmountUsedAfter 仅作展示（动态模型下 AmountTotal 恒 0）。
-	AmountTotal      int64
-	AmountUsedBefore int64
-	AmountUsedAfter  int64
+	// PeriodUsedBefore / PeriodUsedAfter 是单期账本（当前预付期累计消耗）的预扣前后值，
+	// 仅作展示/审计。
+	PeriodUsedBefore int64
+	PeriodUsedAfter  int64
 	// Remaining 是预扣后的窗口剩余额度（subscriptionRemaining 的 min-over-windows；
 	// 无限额度 = math.MaxInt64）。告警/消费日志据此展示真实剩余，替代已移除的总额模型。
 	Remaining int64
@@ -2544,18 +2589,10 @@ func expireUserSubscriptionsTx(tx *gorm.DB, userId int, now int64) (int, string,
 		// 组升降级功能关闭：到期只标记状态，不改用户组。
 		return expired, "", nil
 	}
-	// If there's an active upgraded subscription, keep current group.
-	var activeSub UserSubscription
-	activeQuery := tx.Where("user_id = ? AND status = ? AND end_time > ? AND upgrade_group <> ''",
-		userId, "active", now).
-		Order("end_time desc, id desc").
-		Limit(1).
-		Find(&activeSub)
-	if activeQuery.Error == nil && activeQuery.RowsAffected > 0 {
-		return expired, "", nil
-	}
 	// Find the most recently expired subscription that defines a group transition
-	// (an explicit downgrade target or an upgrade snapshot to revert).
+	// (an explicit downgrade target or an upgrade snapshot to revert). 组变更判定
+	// 全部委托 downgradeUserGroupForSubscriptionTx——撑组检查与组优先级规则单点维护，
+	// 批量任务与惰性路径、取消/管理端作废共享同一套语义。
 	var lastExpired UserSubscription
 	expiredQuery := tx.Where("user_id = ? AND status = ? AND (downgrade_group <> '' OR upgrade_group <> '')",
 		userId, "expired").
@@ -2565,30 +2602,8 @@ func expireUserSubscriptionsTx(tx *gorm.DB, userId int, now int64) (int, string,
 	if expiredQuery.Error != nil || expiredQuery.RowsAffected == 0 {
 		return expired, "", nil
 	}
-	currentGroup, err := getUserGroupByIdTx(tx, userId)
+	target, err := downgradeUserGroupForSubscriptionTx(tx, &lastExpired, now)
 	if err != nil {
-		return expired, "", err
-	}
-	// An explicit downgrade group takes precedence; otherwise revert to the
-	// group held before purchase (legacy behavior, only when the subscription
-	// actually elevated the user).
-	target := strings.TrimSpace(lastExpired.DowngradeGroup)
-	if target == "" {
-		upgradeGroup := strings.TrimSpace(lastExpired.UpgradeGroup)
-		prevGroup := strings.TrimSpace(lastExpired.PrevUserGroup)
-		if upgradeGroup == "" || prevGroup == "" {
-			return expired, "", nil
-		}
-		if currentGroup != upgradeGroup {
-			return expired, "", nil
-		}
-		target = prevGroup
-	}
-	if target == "" || target == currentGroup {
-		return expired, "", nil
-	}
-	if err := tx.Model(&User{}).Where("id = ?", userId).
-		Update("group", target).Error; err != nil {
 		return expired, "", err
 	}
 	return expired, target, nil
@@ -2760,9 +2775,8 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 			}
 			returnValue.UserSubscriptionId = sub.Id
 			returnValue.PreConsumed = existing.PreConsumed
-			returnValue.AmountTotal = sub.AmountTotal
-			returnValue.AmountUsedBefore = sub.AmountUsed
-			returnValue.AmountUsedAfter = sub.AmountUsed
+			returnValue.PeriodUsedBefore = sub.PeriodUsed
+			returnValue.PeriodUsedAfter = sub.PeriodUsed
 			plan, _ := getSubscriptionPlanByIdTx(tx, sub.PlanId)
 			returnValue.Remaining = subscriptionRemaining(&sub, plan)
 			return nil
@@ -2793,7 +2807,7 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 			if subscriptionRemaining(&sub, plan) < amount {
 				continue
 			}
-			usedBefore := sub.AmountUsed
+			usedBefore := sub.PeriodUsed
 			record := &SubscriptionPreConsumeRecord{
 				RequestId:          requestId,
 				UserId:             userId,
@@ -2809,17 +2823,16 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 					}
 					returnValue.UserSubscriptionId = sub.Id
 					returnValue.PreConsumed = dup.PreConsumed
-					returnValue.AmountTotal = sub.AmountTotal
-					returnValue.AmountUsedBefore = sub.AmountUsed
-					returnValue.AmountUsedAfter = sub.AmountUsed
+					returnValue.PeriodUsedBefore = sub.PeriodUsed
+					returnValue.PeriodUsedAfter = sub.PeriodUsed
 					plan, _ := getSubscriptionPlanByIdTx(tx, sub.PlanId)
 					returnValue.Remaining = subscriptionRemaining(&sub, plan)
 					return nil
 				}
 				return err
 			}
-			sub.AmountUsed += amount
-			// 累加到全部窗口计数（AmountUsed 仅保留作累计展示）；自然周/月计数同步累加，
+			sub.PeriodUsed += amount
+			// 累加到全部窗口计数（PeriodUsed 是单期账本，续费清零）；自然周/月计数同步累加，
 			// 供钱包卡「订阅抵扣」按日历月统计（不作上限）。
 			addWindowUsage(&sub, windows, amount)
 			sub.WeekUsed += amount
@@ -2829,9 +2842,8 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 			}
 			returnValue.UserSubscriptionId = sub.Id
 			returnValue.PreConsumed = amount
-			returnValue.AmountTotal = sub.AmountTotal
-			returnValue.AmountUsedBefore = usedBefore
-			returnValue.AmountUsedAfter = sub.AmountUsed
+			returnValue.PeriodUsedBefore = usedBefore
+			returnValue.PeriodUsedAfter = sub.PeriodUsed
 			returnValue.Remaining = subscriptionRemaining(&sub, plan)
 			return nil
 		}
@@ -2861,7 +2873,7 @@ func RefundSubscriptionPreConsume(requestId string) error {
 			record.Status = "refunded"
 			return tx.Save(&record).Error
 		}
-		if err := PostConsumeUserSubscriptionDelta(tx, record.UserSubscriptionId, -record.PreConsumed); err != nil {
+		if err := PostConsumeUserSubscriptionDelta(tx, record.UserId, record.UserSubscriptionId, -record.PreConsumed); err != nil {
 			return err
 		}
 		record.Status = "refunded"
@@ -2908,12 +2920,20 @@ func GetSubscriptionPlanInfoByUserSubscriptionId(userSubscriptionId int) (*Subsc
 	return info, nil
 }
 
-// Update subscription used amount by delta (positive consume more, negative refund).
-// db 指定执行事务的连接：传 nil 使用全局 DB；调用方若已处于事务内，应传入外层 tx，
-// 让 delta 更新作为 savepoint 嵌套在同一个连接上，保证与事务一起提交/回滚。切勿在
-// 外层事务中再对全局 DB 另开事务（不同连接）：SQLite+WAL 下会因读快照过期触发
+// PostConsumeUserSubscriptionDelta updates subscription usage by delta (positive consume
+// more, negative refund). db 指定执行事务的连接：传 nil 使用全局 DB；调用方若已处于事务内，
+// 应传入外层 tx，让 delta 更新作为 savepoint 嵌套在同一个连接上，保证与事务一起提交/回滚。
+// 切勿在外层事务中再对全局 DB 另开事务（不同连接）：SQLite+WAL 下会因读快照过期触发
 // SQLITE_BUSY_SNAPSHOT（database is locked），MySQL 下则破坏外层事务原子性。
-func PostConsumeUserSubscriptionDelta(db *gorm.DB, userSubscriptionId int, delta int64) error {
+//
+// userId 用于死订阅兜底：预扣发生在请求开始，结算可能晚于订阅切换/取消/过期甚至被管理端
+// 物理删除。此时订阅窗口与账本已冻结，delta 若继续写入死行，正 delta（补扣）会静默蒸发
+// （平台少收），负 delta（退款）退进死订阅拿不回来。统一转钱包结算，保证用户实际消耗与
+// 余额变动一致。db==nil（顶层事务提交后）同步钱包缓存；嵌套事务时由外层负责缓存。
+func PostConsumeUserSubscriptionDelta(db *gorm.DB, userId int, userSubscriptionId int, delta int64) error {
+	if userId <= 0 {
+		return errors.New("invalid userId")
+	}
 	if userSubscriptionId <= 0 {
 		return errors.New("invalid userSubscriptionId")
 	}
@@ -2923,21 +2943,31 @@ func PostConsumeUserSubscriptionDelta(db *gorm.DB, userSubscriptionId int, delta
 	if db == nil {
 		db = DB
 	}
-	return db.Transaction(func(tx *gorm.DB) error {
+	walletDelta := int64(0)
+	err := db.Transaction(func(tx *gorm.DB) error {
 		var sub UserSubscription
-		if err := lockForUpdate(tx).
+		err := lockForUpdate(tx).
 			Where("id = ?", userSubscriptionId).
-			First(&sub).Error; err != nil {
+			First(&sub).Error
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				walletDelta = delta
+				return applyDeltaToWalletTx(tx, userId, delta)
+			}
 			return err
+		}
+		if sub.Status != "active" {
+			walletDelta = delta
+			return applyDeltaToWalletTx(tx, userId, delta)
 		}
 		plan, _ := getSubscriptionPlanByIdTx(tx, sub.PlanId)
 		var windows []ResetWindow
 		if plan != nil {
 			windows = plan.ResetWindows()
 		}
-		// 动态模型：对窗口计数反向回填（正数补扣、负数退还）。AmountUsed 仅作累计展示，
-		// 不再有 legacy 的总额门限 guard。
-		sub.AmountUsed = clampNonNegative(sub.AmountUsed + delta)
+		// 动态模型：对窗口计数反向回填（正数补扣、负数退还）。PeriodUsed 是单期账本，
+		// 同步 delta 修正并 clamp 非负。
+		sub.PeriodUsed = clampNonNegative(sub.PeriodUsed + delta)
 		states := sub.WindowStates()
 		changed := false
 		for i := range windows {
@@ -2955,6 +2985,38 @@ func PostConsumeUserSubscriptionDelta(db *gorm.DB, userSubscriptionId int, delta
 		sub.MonthUsed = clampNonNegative(sub.MonthUsed + delta)
 		return tx.Save(&sub).Error
 	})
+	if err != nil {
+		return err
+	}
+	if db == DB && walletDelta != 0 {
+		// 顶层事务已提交，同步钱包缓存（嵌套事务时由外层调用方负责）。
+		syncWalletQuotaCache(userId, walletDelta)
+	}
+	return nil
+}
+
+// applyDeltaToWalletTx 在事务内按 delta 调整钱包余额：正 delta 扣款（补扣在途消耗），
+// 负 delta 入账（退还超额预扣）。与 WalletFunding.Settle 的语义一致。
+func applyDeltaToWalletTx(tx *gorm.DB, userId int, delta int64) error {
+	if delta > 0 {
+		return tx.Model(&User{}).Where("id = ?", userId).
+			Update("quota", gorm.Expr("quota - ?", delta)).Error
+	}
+	return tx.Model(&User{}).Where("id = ?", userId).
+		Update("quota", gorm.Expr("quota + ?", -delta)).Error
+}
+
+// syncWalletQuotaCache 按 delta 方向同步钱包缓存（正 delta=扣款，负 delta=入账）。
+func syncWalletQuotaCache(userId int, delta int64) {
+	var err error
+	if delta > 0 {
+		err = cacheDecrUserQuota(userId, delta)
+	} else {
+		err = cacheIncrUserQuota(userId, -delta)
+	}
+	if err != nil {
+		common.SysLog("failed to sync user quota cache after wallet settlement: " + err.Error())
+	}
 }
 
 func clampNonNegative(v int64) int64 {

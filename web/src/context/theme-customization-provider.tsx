@@ -26,6 +26,7 @@ import {
 } from 'react'
 
 import { getCookie, removeCookie, setCookie } from '@/lib/cookies'
+import { syncOsWindowThemes } from '@/lib/os-window-theme'
 import {
   CONTENT_LAYOUT_VALUES,
   type ContentLayout,
@@ -139,8 +140,10 @@ export function ThemeCustomizationProvider(props: {
   // CSS 才生效;default 预设也写 data-theme-preset='default'——theme-presets.css
   // 里所有 [data-theme-preset] 规则都是 :not([data-theme-preset='default']) 排除式,
   // 所以 default 写属性后仍等于基础样式,行为不变。
+  // 每轴写入后同步镜像到 OS 壳窗口 iframe(独立文档不会自动跟随)。
   useEffect(() => {
     applyAttribute('data-theme-preset', preset)
+    syncOsWindowThemes()
   }, [preset])
 
   // Font is the one axis where we resolve before writing the attribute:
@@ -151,6 +154,7 @@ export function ThemeCustomizationProvider(props: {
   // future presets opt into typography via `PRESET_DEFAULT_FONT` alone.
   useEffect(() => {
     applyAttribute('data-theme-font', resolveThemeFont(font, preset))
+    syncOsWindowThemes()
   }, [font, preset])
 
   useEffect(() => {
@@ -158,6 +162,7 @@ export function ThemeCustomizationProvider(props: {
       'data-theme-radius',
       radius === DEFAULT_THEME_CUSTOMIZATION.radius ? null : radius
     )
+    syncOsWindowThemes()
   }, [radius])
 
   useEffect(() => {
@@ -165,10 +170,12 @@ export function ThemeCustomizationProvider(props: {
       'data-theme-scale',
       scale === DEFAULT_THEME_CUSTOMIZATION.scale ? null : scale
     )
+    syncOsWindowThemes()
   }, [scale])
 
   useEffect(() => {
     applyAttribute('data-theme-content-layout', contentLayout)
+    syncOsWindowThemes()
   }, [contentLayout])
 
   const setPreset = useCallback((value: ThemePreset) => {

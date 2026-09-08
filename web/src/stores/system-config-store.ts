@@ -48,6 +48,8 @@ export interface SystemConfig {
   glassMaskOpacity: number
   /** 玻璃预设背景图整体亮度(系数,1 = 原样),与遮罩分开调节 */
   glassBrightness: number
+  /** 玻璃预设背景图模糊强度(px,0 = 原图),与遮罩/亮度分开调节 */
+  glassBlur: number
   demoSiteEnabled?: boolean
   displayTokenStatEnabled?: boolean
   currency: CurrencyConfig
@@ -57,6 +59,8 @@ export interface SystemConfig {
 export const DEFAULT_GLASS_MASK_OPACITY = 0.35
 /** 背景图亮度默认值(系数,1 = 原样),未配置时使用 */
 export const DEFAULT_GLASS_BRIGHTNESS = 1
+/** 背景图模糊强度默认值(px),未配置时使用;0 = 锐利原图 */
+export const DEFAULT_GLASS_BLUR = 18
 
 export const DEFAULT_CURRENCY_CONFIG: CurrencyConfig = {
   displayInCurrency: true,
@@ -88,6 +92,7 @@ export const useSystemConfigStore = create<SystemConfigState>()(
         logo: DEFAULT_LOGO,
         glassMaskOpacity: DEFAULT_GLASS_MASK_OPACITY,
         glassBrightness: DEFAULT_GLASS_BRIGHTNESS,
+        glassBlur: DEFAULT_GLASS_BLUR,
         currency: { ...DEFAULT_CURRENCY_CONFIG },
       },
       loading: true,

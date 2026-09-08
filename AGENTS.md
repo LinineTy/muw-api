@@ -93,6 +93,21 @@ Do NOT directly import or call `encoding/json` in business code. `json.RawMessag
 - Migrations must work on all three databases. For SQLite, use `ALTER TABLE ... ADD COLUMN` instead of `ALTER COLUMN` (see `model/main.go` for patterns).
 - Avoid GORM boolean default tags such as `gorm:"default:true"` when the default is a business rule already enforced by code. MySQL and PostgreSQL can normalize boolean defaults differently, causing GORM `AutoMigrate` to repeatedly issue `ALTER TABLE` on restart. Prefer setting these defaults in request/model normalization, hooks, constructors, or service logic; do not replace `default:true` with `default:1` unless the behavior is verified across SQLite, MySQL, and PostgreSQL.
 
+**Transactions and app-time discipline:** Code inside a `DB.Transaction(...)` closure MUST NOT touch the global handles (`DB`, `LOG_DB`) — every such round trip needs a second pool connection and deadlocks the single-connection SQLite test database. It also breaks clock consistency in production (each connection can observe a different time).
+
+- Inside a transaction, query only through the `tx` handle. This includes indirect calls: a "pure" helper can hide a global-DB round trip inside (real cases: `loadModelSettings` inside `BatchInsertChannels`, `GetDBTimestamp()` inside `calcSubscriptionRemainingValue` — both deadlocked tests and had to be refactored). When reviewing transactional code, drill one level into every helper it calls.
+- Never call `GetDBTimestamp()` (a live SQL query) inside a transaction. Use `common.GetTimestamp()` (app clock) at transaction start and thread it through as a parameter — see `calcSubscriptionRemainingValueAt(sub, plan, now)` for the injectable-clock pattern.
+- New transactional paths MUST get a test that runs them on the single-connection SQLite fixture; that is what exposes this deadlock class.
+
+**Schema migration discipline (date-name stamps, since b566e7e02):** Migration identity is the name `<YYMMDD>-<slug>` in `model/schema_migration.go`; `schema_migrations` is keyed by name. The integer `CurrentSchemaVersion` era is GONE — do not reintroduce version numbers (they caused the 2026-09-08 "same number, different content" collision between parallel branches, which made startup skip AutoMigrate and crash on a missing column).
+
+- New migrations: append a new entry with date ≥ the latest existing entry's YYMMDD; same-day additions are fine (slug distinguishes them, the two-step filter back-fills them). `validateMigrations` panics at startup on bad format, duplicate names, or non-monotonic dates — that panic is the safety net, do not bypass it.
+- **A published migration's Name is immutable and non-reusable.** Renaming hides the head from already-stamped databases; reusing a name re-runs a destructive Up.
+- Merging a branch that carries its own migrations: bring its entries over AS date-stamped names (date = that migration's introducing commit date, e.g. channel-refactor's accounts decoupling becomes `2608xx-accounts-channel-decoupling`). Never carry integer-version entries across.
+- Transitional hazard: once a database has been upgraded by this scheme (`schema_migrations` name-keyed), running an OLD integer-version build against it crashes (the `version` column no longer exists). Don't flip test environments between new-main and un-rebased branch builds.
+- The skip-AutoMigrate fast path still runs the idempotent `ensure*` guards (including `ensureUserSubscriptionPeriodUsedColumn`); a "stamped but column missing" database self-heals on next start. When adding a new column, add a matching `ensure*` to BOTH migrateDB branches (skip path and full path) — that is the seatbelt for stamp/schema drift.
+- Diagnosing a database: `SELECT name FROM schema_migrations` — the names tell you which migrations it has seen; unknown slugs mean the database ran another branch's build.
+
 **Relay and provider behavior:**
 
 - When implementing a new channel, confirm whether the provider supports `StreamOptions`; if supported, add the channel to `streamSupportedChannels`.
@@ -128,6 +143,19 @@ Do NOT directly import or call `encoding/json` in business code. `json.RawMessag
 - When cleaning tests, preserve meaningful regression coverage. If a deleted test covered a real contract indirectly, replace it with a smaller test that asserts that contract directly.
 
 ### Frontend Rules
+
+**Field-tested UI pitfalls (OS shell + settings, 2026-09-08):** Every rule below came from a real user-reported defect that survived code review and screenshot passes. Re-check these when building anything similar.
+
+- **Corner elements get physically clipped by rounded + overflow-hidden containers.** A resize handle pinned `right-0 bottom-0` inside a window with `rounded-2xl` (renders 36px) was half-clipped and invisible — tuning its color twice fixed nothing. Corner-anchored interactive elements (handles, badges, FABs) must live OUTSIDE the clipping layer: split the component into an outer positioning layer (no overflow/rounding, hosts floating elements) and an inner visual layer (rounding/overflow/blur/materials). Verify with `document.elementFromPoint()` at the element center — if it doesn't return the element (or its descendant), it is clipped or covered, no matter what the screenshots suggest.
+- **Base UI `SelectContent` defaults to `alignItemWithTrigger = true`** — a native-select-style popup that OVERLAYS the trigger (selected option aligned onto it). Users read this as "the popup position is not fixed". For a regular dropdown that opens below the trigger, pass explicitly `side='bottom' align='start' alignItemWithTrigger={false}`; then the popup lands 4px under the trigger (`data-side="bottom"`).
+- **Pin trigger widths with `w-*`, never `max-w-*`.** `max-w-48` lets the selected value stretch/shrink the trigger on every change; popups anchored to it wobble too.
+- **Row-based form editors must keep unsaved draft rows in local state.** If rows are derived from the form value (parse → render), an empty newly-added row gets filtered out during serialization (`if (name)`), the value never changes, the derived list never updates — the "Add" button appears dead. Keep draft rows in `useState`; serialize only valid rows upward; drop the draft when the incoming value differs from the draft's serialization (form reset).
+- **Inputs whose value domain already exists in the system must be selectors, not text inputs.** Group/model/channel names come from APIs (`GET /api/group` etc., same source as sibling forms). Free-text invites typos that silently attach config to a nonexistent group. Merge historical/stored values into the options so old configs still render, and exclude options already picked by sibling rows.
+- **Locale files are nested: all keys live under the `translation` object** (`src/i18n/locales/*.json` → `{ "translation": { ... } }`). A key added at the file top level is silently unknown — i18next falls back to the raw English key and the UI shows English on Chinese locales. After adding keys run `bun run i18n:sync`, and verify with a playwright context using `locale: 'zh-CN'` (default headless locale is en-US and will mask the bug).
+- **Same-tick repeated clicks reuse stale closures.** In playwright, two `.click()` calls inside one `evaluate()` run before React re-renders, so both fire the old handler (e.g. "Add row" twice yields one row). Real users can't do this; don't mistake it for a component bug — space clicks and assert after render.
+- **Glass theme popups are translucent** (`bg-popover` over `backdrop-blur`): content under a popup shows through. Text overlap in screenshots under an open popup is expected theme behavior, not a z-index bug.
+
+**Relay and provider behavior:**
 
 - Use `bun` as the preferred package manager and script runner for the frontend (`web/`):
   - `bun install` for dependency installation

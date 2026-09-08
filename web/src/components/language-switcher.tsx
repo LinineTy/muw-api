@@ -33,15 +33,18 @@ import {
 } from '@/i18n/languages'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { syncOsWindowLanguages } from '@/lib/os-window-theme'
 import { useAuthStore } from '@/stores/auth-store'
 
-export function LanguageSwitcher() {
+export function LanguageSwitcher({ trigger }: { trigger?: React.ReactElement }) {
   const { i18n, t } = useTranslation()
   const user = useAuthStore((s) => s.auth.user)
   const currentLanguage = normalizeInterfaceLanguage(i18n.language)
   const handleChangeLanguage = useCallback(
     async (code: string) => {
       await i18n.changeLanguage(code)
+      // OS 壳:窗口 iframe 是独立文档独立 i18n 实例,镜像广播才即时生效
+      syncOsWindowLanguages(code)
       if (user) {
         try {
           await api.put('/api/user/self', { language: code })
@@ -56,12 +59,14 @@ export function LanguageSwitcher() {
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger
-        render={<Button variant='ghost' size='icon' className='h-9 w-9' />}
+        render={
+          trigger ?? <Button variant='ghost' size='icon' className='h-9 w-9' />
+        }
       >
         <Languages className='size-[1.2rem]' />
         <span className='sr-only'>{t('Change language')}</span>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align='end'>
+      <DropdownMenuContent align='end' sideOffset={8} className='z-[80]'>
         {INTERFACE_LANGUAGE_OPTIONS.map((lang) => (
           <DropdownMenuItem
             key={lang.code}

@@ -6543,6 +6543,21 @@
     "© 2025 Your Company. All rights reserved.": "© 2025 Your Company. All rights reserved.",
     "、": ", ",
     "，": ", ",
-    "，and ": ", and "
+    "，and ": ", and ",
+    "Background blur": "Background blur",
+    "How strongly the background image is blurred (0px = sharp original; higher = softer behind the glass)": "How strongly the background image is blurred (0px = sharp original; higher = softer behind the glass)",
+    "{{models}} models · {{vendors}} vendors · {{groups}} groups": "{{models}} models · {{vendors}} vendors · {{groups}} groups",
+    "No matching models in any group": "No matching models in any group",
+    "24h success rate": "24h success rate",
+    "Quick links": "Quick links",
+    "os-shell.desktop-hint": "All windows closed · Open pages from the Dock or the nav ball at the bottom-left",
+    "Close window": "Close window",
+    "Minimize window": "Minimize window",
+    "Maximize window": "Maximize window",
+    "Close other windows": "Close other windows",
+    "Close all windows": "Close all windows",
+    "Subscription group priorities": "Subscription group priorities",
+    "Remove group": "Remove group",
+    "Higher priority wins (unlisted groups = 0). A purchase only changes the user group when the target priority is not lower; group fallback on expiry never lands on an equal-or-higher group and prefers the highest group still backed by an active subscription.": "Higher priority wins (unlisted groups = 0). A purchase only changes the user group when the target priority is not lower; group fallback on expiry never lands on an equal-or-higher group and prefers the highest group still backed by an active subscription."
   }
 }
