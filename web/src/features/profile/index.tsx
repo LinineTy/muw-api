@@ -27,7 +27,6 @@ import { LanguagePreferencesCard } from './components/language-preferences-card'
 import { LoginSessionsCard } from './components/login-sessions-card'
 import { PasskeyCard } from './components/passkey-card'
 import { CreditScoreCard } from './components/credit-score-card'
-import { GroupPinCard } from './components/group-pin-card'
 import { ProfileHeader } from './components/profile-header'
 import { ProfileSecurityCard } from './components/profile-security-card'
 import { ProfileSettingsCard } from './components/profile-settings-card'
@@ -55,10 +54,6 @@ export function Profile() {
 
           <CardStaggerItem>
             <CreditScoreCard />
-          </CardStaggerItem>
-
-          <CardStaggerItem>
-            <GroupPinCard />
           </CardStaggerItem>
 
           <CardStaggerItem>

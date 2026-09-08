@@ -63,7 +63,7 @@ function SubscriptionsContent() {
                   {t('History Subscriptions')}
                 </TabsTrigger>
                 <TabsTrigger value='group-pins'>
-                  {t('Fixed Groups', '固定分组')}
+                  {t('Fixed Groups')}
                 </TabsTrigger>
               </TabsList>
               <div className='min-h-0 flex-1 pt-2'>

@@ -16,8 +16,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Activity, BarChart3, Camera, WalletCards } from 'lucide-react'
+import { Activity, BarChart3, Camera, Pin, WalletCards } from 'lucide-react'
 import { useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -59,6 +60,16 @@ export function ProfileHeader({
   const setUser = useAuthStore((s) => s.auth.setUser)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
+  // 固定分组钉：有 active 钉时组名旁显示"已固定"标识
+  const pinnedQuery = useQuery({
+    queryKey: ['group-pin', 'self'],
+    queryFn: () => import('../api').then((m) => m.getMyGroupPin()),
+    retry: false,
+  })
+  const pinnedGroup =
+    pinnedQuery.data?.data?.status === 'active'
+      ? pinnedQuery.data.data.group
+      : null
 
   const handleAvatarChange = async (
     event: React.ChangeEvent<HTMLInputElement>
@@ -223,6 +234,18 @@ export function ProfileHeader({
                 <>
                   <span>•</span>
                   <span className='truncate'>{profile.group}</span>
+                </>
+              )}
+              {pinnedGroup && (
+                <>
+                  <span>•</span>
+                  <span
+                    className='inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary'
+                    title={t('Pinned')}
+                  >
+                    <Pin className='size-3' />
+                    {t('Pinned')}
+                  </span>
                 </>
               )}
             </div>
