@@ -14,6 +14,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useMySubscriptions } from '@/features/my-subscriptions/components/my-subscriptions-provider'
 import {
@@ -23,6 +31,7 @@ import {
   type GroupPinProduct,
 } from '@/features/profile/api'
 import { getEpayMethods } from '../lib/helpers'
+import type { PaymentMethod } from '@/features/wallet/types'
 import { formatQuota } from '@/lib/format'
 import { getCurrencyDisplay } from '@/lib/currency'
 import { DEFAULT_CURRENCY_CONFIG } from '@/stores/system-config-store'
@@ -38,7 +47,7 @@ function GroupPinPayDialog({
 }: {
   product: GroupPinProduct
   balance: number
-  epayMethods: { type: string; label?: string }[]
+  epayMethods: PaymentMethod[]
   onClose: () => void
 }) {
   const { t } = useTranslation()
@@ -119,11 +128,15 @@ function GroupPinPayDialog({
     onError: () => toast.error(t('Payment request failed')),
   })
 
-  const optionClass = (selected: boolean) =>
-    cn(
-      'flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2 text-sm',
-      selected ? 'border-primary bg-primary/5' : 'border-border'
-    )
+  const paymentItems = [
+    ...epayMethods.map((m) => ({
+      value: `epay:${m.type}`,
+      label: m.name || m.type,
+    })),
+    ...(allowBalance ? [{ value: 'balance', label: t('Balance') }] : []),
+  ]
+  const selectedPaymentLabel =
+    paymentItems.find((it) => it.value === method)?.label ?? method
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
@@ -133,36 +146,50 @@ function GroupPinPayDialog({
             {t('Subscribe Now')} — {product.title}
           </DialogTitle>
         </DialogHeader>
-        <div className='grid gap-2 py-2'>
-          {hasEpay &&
-            epayMethods.map((m) => {
-              const key = `epay:${m.type}`
-              return (
-                <button
-                  key={key}
-                  type='button'
-                  className={optionClass(method === key)}
-                  onClick={() => setMethod(key)}
-                >
-                  <span>{m.label || m.type}</span>
-                  <span className='text-muted-foreground text-xs'>
-                    {currencySymbol}
-                    {price}
-                  </span>
-                </button>
-              )
-            })}
-          {allowBalance && (
-            <button
-              type='button'
-              className={optionClass(isBalance)}
-              onClick={() => setMethod('balance')}
+        <div className='space-y-3 py-2'>
+          <p className='text-muted-foreground text-xs'>
+            {t('Select payment method')}
+          </p>
+          <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
+            <Select
+              items={paymentItems}
+              value={method}
+              onValueChange={(v) => v !== null && setMethod(v)}
             >
-              <span>{t('Balance')}</span>
-              <span className='text-muted-foreground text-xs'>
-                {formatQuota(balance)}
-              </span>
-            </button>
+              <SelectTrigger className='flex-1'>
+                <SelectValue>{selectedPaymentLabel}</SelectValue>
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false}>
+                <SelectGroup>
+                  {paymentItems.map((it) => (
+                    <SelectItem key={it.value} value={it.value}>
+                      {it.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <Button
+              disabled={paying || (isBalance && insufficientBalance)}
+              onClick={() => (isBalance ? payBalance.mutate() : payEpay.mutate())}
+            >
+              {isBalance ? t('Subscribe Now') : t('Pay')}
+            </Button>
+          </div>
+          {isBalance && (
+            <div className='text-muted-foreground grid gap-1 text-xs'>
+              <div className='flex justify-between'>
+                <span>{t('Required')}</span>
+                <span>
+                  {currencySymbol}
+                  {price}
+                </span>
+              </div>
+              <div className='flex justify-between'>
+                <span>{t('Available')}</span>
+                <span>{formatQuota(balance)}</span>
+              </div>
+            </div>
           )}
           {isBalance && insufficientBalance && (
             <p className='text-destructive text-xs'>
@@ -173,12 +200,6 @@ function GroupPinPayDialog({
         <DialogFooter>
           <Button variant='outline' onClick={onClose}>
             {t('Cancel')}
-          </Button>
-          <Button
-            disabled={paying || (isBalance && insufficientBalance)}
-            onClick={() => (isBalance ? payBalance.mutate() : payEpay.mutate())}
-          >
-            {t('Subscribe Now')}
           </Button>
         </DialogFooter>
       </DialogContent>
