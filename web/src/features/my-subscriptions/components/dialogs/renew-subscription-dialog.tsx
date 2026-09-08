@@ -311,7 +311,10 @@ export function RenewSubscriptionDialog(props: Props) {
                   onValueChange={(v) => v !== null && setSelectedEpayMethod(v)}
                 >
                   <SelectTrigger className='flex-1'>
-                    <SelectValue>{selectedEpayMethod}</SelectValue>
+                    <SelectValue>
+                      {epayMethods.find((m) => m.type === selectedEpayMethod)?.name ||
+                        selectedEpayMethod}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent alignItemWithTrigger={false}>
                     <SelectGroup>
