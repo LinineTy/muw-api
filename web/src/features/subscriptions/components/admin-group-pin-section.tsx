@@ -14,15 +14,6 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import {
   Table,
   TableBody,
   TableCell,
@@ -30,153 +21,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { SubscriptionsMutateDrawer } from './subscriptions-mutate-drawer'
 import {
   adminDeleteGroupPinProduct,
   adminListGroupPinProducts,
   adminListGroupPins,
   adminReleaseGroupPin,
-  adminSaveGroupPinProduct,
   type AdminGroupPinProduct,
 } from '../api'
 
-function ProductEditorDialog({
-  open,
-  onClose,
-  editing,
-}: {
-  open: boolean
-  onClose: () => void
-  editing: AdminGroupPinProduct | null
-}) {
-  const { t } = useTranslation()
-  const queryClient = useQueryClient()
-  const [title, setTitle] = useState(editing?.title ?? '')
-  const [subtitle, setSubtitle] = useState(editing?.subtitle ?? '')
-  const [group, setGroup] = useState(editing?.group ?? '')
-  const [price, setPrice] = useState(String(editing?.price_amount ?? '0'))
-  const [sortOrder, setSortOrder] = useState(String(editing?.sort_order ?? '0'))
-  const [recommended, setRecommended] = useState(editing?.is_recommended ?? false)
-  const [allowBalance, setAllowBalance] = useState(editing?.allow_balance_pay ?? true)
-  const [allowedGroups, setAllowedGroups] = useState('')
-
-  const saveMutation = useMutation({
-    mutationFn: adminSaveGroupPinProduct,
-    onSuccess: (res) => {
-      if (res.success) {
-        toast.success(t('Saved'))
-        queryClient.invalidateQueries({ queryKey: ['admin-group-pin-products'] })
-        onClose()
-      } else {
-        toast.error(res.message)
-      }
-    },
-  })
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {editing ? t('Edit Product') : t('New Product')}
-          </DialogTitle>
-        </DialogHeader>
-        <div className='grid gap-3 py-2'>
-          <div className='grid gap-1.5'>
-            <Label>{t('Title')}</Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-          </div>
-          <div className='grid gap-1.5'>
-            <Label>{t('Subtitle')}</Label>
-            <Input
-              value={subtitle}
-              onChange={(e) => setSubtitle(e.target.value)}
-            />
-          </div>
-          <div className='grid gap-1.5'>
-            <Label>{t('Group')}</Label>
-            <Input
-              value={group}
-              onChange={(e) => setGroup(e.target.value)}
-              placeholder='tier1-permanent'
-            />
-          </div>
-          <div className='grid grid-cols-2 gap-3'>
-            <div className='grid gap-1.5'>
-              <Label>{t('Price')} ($)</Label>
-              <Input
-                type='number'
-                min='0'
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-              />
-            </div>
-            <div className='grid gap-1.5'>
-              <Label>{t('Sort Order')}</Label>
-              <Input
-                type='number'
-                value={sortOrder}
-                onChange={(e) => setSortOrder(e.target.value)}
-              />
-            </div>
-          </div>
-          <div className='grid gap-1.5'>
-            <Label>{t('Allowed Groups')}</Label>
-            <Input
-              value={allowedGroups}
-              onChange={(e) => setAllowedGroups(e.target.value)}
-              placeholder={'["tier0","default"]'}
-            />
-            <p className='text-muted-foreground text-xs'>
-              {t('JSON array of user groups allowed to purchase. Empty = all groups')}
-            </p>
-          </div>
-          <label className='flex items-center gap-2 text-sm'>
-            <input
-              type='checkbox'
-              checked={recommended}
-              onChange={(e) => setRecommended(e.target.checked)}
-            />
-            {t('Recommended')}
-          </label>
-          <label className='flex items-center gap-2 text-sm'>
-            <input
-              type='checkbox'
-              checked={allowBalance}
-              onChange={(e) => setAllowBalance(e.target.checked)}
-            />
-            {t('Allow balance redemption')}
-          </label>
-        </div>
-        <DialogFooter>
-          <Button variant='outline' onClick={onClose}>
-            {t('Cancel')}
-          </Button>
-          <Button
-            disabled={saveMutation.isPending || !title || !group}
-            onClick={() =>
-              saveMutation.mutate({
-                id: editing?.id,
-                title,
-                subtitle,
-                group,
-                price_amount: Number(price) || 0,
-                enabled: true,
-                is_recommended: recommended,
-                allow_balance_pay: allowBalance,
-                sort_order: Number(sortOrder) || 0,
-                allowed_groups: allowedGroups,
-              })
-            }
-          >
-            {t('Save')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-// 管理端固定分组区块：商品管理 + 钉子列表/解除。挂在订阅管理页"固定分组"tab。
 export function AdminGroupPinSection() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -344,13 +197,12 @@ export function AdminGroupPinSection() {
         </CardContent>
       </Card>
 
-      {editorOpen && (
-        <ProductEditorDialog
-          open
-          editing={editing}
-          onClose={() => setEditorOpen(false)}
-        />
-      )}
+      {/* 商品编辑复用订阅配置抽屉（特殊订阅，顶部 Tabs 切换类型） */}
+      <SubscriptionsMutateDrawer
+        open={editorOpen}
+        onOpenChange={(v) => !v && setEditorOpen(false)}
+        groupPinProduct={editing ?? undefined}
+      />
     </div>
   )
 }

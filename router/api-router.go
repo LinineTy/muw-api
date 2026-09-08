@@ -429,6 +429,9 @@ func SetApiRouter(router *gin.Engine) {
 		groupRoute := apiRouter.Group("/group")
 		groupRoute.Use(middleware.AdminAuth())
 		{
+			// 前端请求 /api/group（无尾斜杠），gin 不会自动重定向到 /api/group/，
+			// 两个都注册避免 404。
+			groupRoute.GET("", controller.GetGroups)
 			groupRoute.GET("/", controller.GetGroups)
 		}
 
