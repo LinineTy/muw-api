@@ -99,6 +99,16 @@ Do NOT directly import or call `encoding/json` in business code. `json.RawMessag
 - Never call `GetDBTimestamp()` (a live SQL query) inside a transaction. Use `common.GetTimestamp()` (app clock) at transaction start and thread it through as a parameter — see `calcSubscriptionRemainingValueAt(sub, plan, now)` for the injectable-clock pattern.
 - New transactional paths MUST get a test that runs them on the single-connection SQLite fixture; that is what exposes this deadlock class.
 
+**Schema migration version discipline:** Custom migrations in `model/schema_migration.go` share one version-number space across ALL active branches. Two branches shipping the same `Version` number with different `Name` is a production-breaking trap (real case 2026-09-08):
+
+- `feat/channel-refactor` shipped `v18 = accounts-channel-decoupling`; `feat/subscription-period-ledger` shipped `v18 = subscription-period-ledger`. A SQLite test database that had run channel-refactor carried the v18 stamp; after merging subscription-period-ledger into main, startup took the "already at latest" fast path (`applied >= CurrentSchemaVersion` skips AutoMigrate), so `user_subscriptions.period_used` was never created — runtime then failed with `table user_subscriptions has no column named period_used`. Option-driven features kept working, which made the half-broken state confusing to diagnose.
+- Rules when touching `model/schema_migration.go` on any branch:
+  1. Before picking the next `Version` number, check the other unmerged feature branches for entries at the same version — not just main.
+  2. When merging branches that both bumped the schema version, the merge resolver MUST renumber the later entry (e.g. subscription ledger becomes v19 after channel-refactor's v18) and bump `CurrentSchemaVersion` accordingly. Databases stamped by either branch then take the full-migration path on next start and self-heal.
+  3. Never fix a stamped-but-column-missing database by editing data alone without renumbering: as long as two branches share a version number, every database that ran the other branch reproduces the failure.
+  4. Diagnosing "column missing" on a database: compare `SELECT MAX(version) FROM schema_migrations` and the stamp `name` against the code's migration list first — the stamp name tells you which branch last touched the database. Option-table features keep working on such databases, so "some features work" does not mean the schema is intact.
+- Long-term: consider a dedicated version range for muw custom migrations (e.g. 1000+) so upstream syncs and feature branches stop colliding in the same space.
+
 **Relay and provider behavior:**
 
 - When implementing a new channel, confirm whether the provider supports `StreamOptions`; if supported, add the channel to `streamSupportedChannels`.
@@ -134,6 +144,19 @@ Do NOT directly import or call `encoding/json` in business code. `json.RawMessag
 - When cleaning tests, preserve meaningful regression coverage. If a deleted test covered a real contract indirectly, replace it with a smaller test that asserts that contract directly.
 
 ### Frontend Rules
+
+**Field-tested UI pitfalls (OS shell + settings, 2026-09-08):** Every rule below came from a real user-reported defect that survived code review and screenshot passes. Re-check these when building anything similar.
+
+- **Corner elements get physically clipped by rounded + overflow-hidden containers.** A resize handle pinned `right-0 bottom-0` inside a window with `rounded-2xl` (renders 36px) was half-clipped and invisible — tuning its color twice fixed nothing. Corner-anchored interactive elements (handles, badges, FABs) must live OUTSIDE the clipping layer: split the component into an outer positioning layer (no overflow/rounding, hosts floating elements) and an inner visual layer (rounding/overflow/blur/materials). Verify with `document.elementFromPoint()` at the element center — if it doesn't return the element (or its descendant), it is clipped or covered, no matter what the screenshots suggest.
+- **Base UI `SelectContent` defaults to `alignItemWithTrigger = true`** — a native-select-style popup that OVERLAYS the trigger (selected option aligned onto it). Users read this as "the popup position is not fixed". For a regular dropdown that opens below the trigger, pass explicitly `side='bottom' align='start' alignItemWithTrigger={false}`; then the popup lands 4px under the trigger (`data-side="bottom"`).
+- **Pin trigger widths with `w-*`, never `max-w-*`.** `max-w-48` lets the selected value stretch/shrink the trigger on every change; popups anchored to it wobble too.
+- **Row-based form editors must keep unsaved draft rows in local state.** If rows are derived from the form value (parse → render), an empty newly-added row gets filtered out during serialization (`if (name)`), the value never changes, the derived list never updates — the "Add" button appears dead. Keep draft rows in `useState`; serialize only valid rows upward; drop the draft when the incoming value differs from the draft's serialization (form reset).
+- **Inputs whose value domain already exists in the system must be selectors, not text inputs.** Group/model/channel names come from APIs (`GET /api/group` etc., same source as sibling forms). Free-text invites typos that silently attach config to a nonexistent group. Merge historical/stored values into the options so old configs still render, and exclude options already picked by sibling rows.
+- **Locale files are nested: all keys live under the `translation` object** (`src/i18n/locales/*.json` → `{ "translation": { ... } }`). A key added at the file top level is silently unknown — i18next falls back to the raw English key and the UI shows English on Chinese locales. After adding keys run `bun run i18n:sync`, and verify with a playwright context using `locale: 'zh-CN'` (default headless locale is en-US and will mask the bug).
+- **Same-tick repeated clicks reuse stale closures.** In playwright, two `.click()` calls inside one `evaluate()` run before React re-renders, so both fire the old handler (e.g. "Add row" twice yields one row). Real users can't do this; don't mistake it for a component bug — space clicks and assert after render.
+- **Glass theme popups are translucent** (`bg-popover` over `backdrop-blur`): content under a popup shows through. Text overlap in screenshots under an open popup is expected theme behavior, not a z-index bug.
+
+**Relay and provider behavior:**
 
 - Use `bun` as the preferred package manager and script runner for the frontend (`web/`):
   - `bun install` for dependency installation
