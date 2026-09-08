@@ -895,6 +895,141 @@ func downgradeUserGroupForSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now
 	return target, nil
 }
 
+// subscriptionIsPinned 报告订阅是否为"钉子（永久）档"：升档与降档目标相同
+// （如 upgrade v2 + downgrade v2 = 等效不降级）。钉子订阅自然到期后锚点仍保留，
+// 用户被钉在该档；只有同互斥组替换（自愿放弃）、管理端作废或立即取消才解钉。
+// 仅在已配置组优先级（锚点态）下有意义。
+func subscriptionIsPinned(s *UserSubscription) bool {
+	if s == nil {
+		return false
+	}
+	up := strings.TrimSpace(s.UpgradeGroup)
+	down := strings.TrimSpace(s.DowngradeGroup)
+	return up != "" && down == up
+}
+
+// subscriptionAnchorGroup 返回订阅当前贡献的用户组锚点（空串 = 不贡献）：
+//   - active：其 upgrade_group（订阅生效期间拿到的档）；
+//   - expired 且为钉子：仍返回 upgrade_group（永久锚，自然到期不消失）；
+//   - cancelled / deleted：不贡献（同组替换解钉、主动放弃、管理端作废）。
+func subscriptionAnchorGroup(s *UserSubscription) string {
+	if s == nil {
+		return ""
+	}
+	up := strings.TrimSpace(s.UpgradeGroup)
+	if up == "" {
+		return ""
+	}
+	if s.Status == "active" {
+		return up
+	}
+	if s.Status == "expired" && subscriptionIsPinned(s) {
+		return up
+	}
+	return ""
+}
+
+// subscriptionDrainGroup 返回订阅结束导致"彻底无锚"时的断档兜底组（仅锚点态使用）。
+// 钉子订阅被取消/作废时其 downgrade==upgrade 没有"放弃"意义，直接回基底
+// （prev_user_group / default）；普通订阅按 downgrade_group → prev_user_group 回退；
+// 无降级目标/基底的阶梯订阅落 default 兜底（防幽灵高档）。完全非阶梯订阅
+// （三字段全空）返回空串 = 不移动组，避免清掉非订阅来源的手动分组。
+func subscriptionDrainGroup(s *UserSubscription) string {
+	if s == nil {
+		return ""
+	}
+	up := strings.TrimSpace(s.UpgradeGroup)
+	down := strings.TrimSpace(s.DowngradeGroup)
+	prev := strings.TrimSpace(s.PrevUserGroup)
+	if up == "" && down == "" && prev == "" {
+		return ""
+	}
+	if subscriptionIsPinned(s) {
+		if prev != "" {
+			return prev
+		}
+		return "default"
+	}
+	if down != "" {
+		return down
+	}
+	if prev != "" {
+		return prev
+	}
+	return "default"
+}
+
+// settleUserSubscriptionGroupTx 是锚点态（已配置组优先级）下订阅生命周期事件后的组收敛：
+// 组 = 现存最高锚点（active 订阅 + 自然到期的钉子订阅，见 subscriptionAnchorGroup）；
+// 现存无锚点（彻底断档）时按 ended 的降级目标兜底（见 subscriptionDrainGroup），且只允许
+// "真降"（目标优先级 < 当前，同级也拦——防错配把人在过期时平移到/抬到不该去的组）。
+// 返回收敛后的组与是否变更；未变更不写库。事务内调用，只用 tx；调用方变更后刷用户组缓存。
+func settleUserSubscriptionGroupTx(tx *gorm.DB, userId int, ended *UserSubscription) (string, bool, error) {
+	if tx == nil || userId <= 0 {
+		return "", false, errors.New("invalid settle args")
+	}
+	if !common.SubscriptionGroupUpgradeEnabled || !SubscriptionGroupPrioritiesEnabled() {
+		return "", false, nil
+	}
+	var subs []UserSubscription
+	if err := tx.Where("user_id = ?", userId).Find(&subs).Error; err != nil {
+		return "", false, err
+	}
+	bestGroup, bestPriority := "", -1
+	for i := range subs {
+		if g := subscriptionAnchorGroup(&subs[i]); g != "" {
+			if p := GroupPriority(g); p > bestPriority {
+				bestGroup, bestPriority = g, p
+			}
+		}
+	}
+	currentGroup, err := getUserGroupByIdTx(tx, userId)
+	if err != nil {
+		return "", false, err
+	}
+	target := bestGroup
+	fromDrain := false
+	if target == "" {
+		target = subscriptionDrainGroup(ended)
+		fromDrain = true
+	}
+	if target == "" || target == currentGroup {
+		return currentGroup, false, nil
+	}
+	if fromDrain && GroupPriority(target) >= GroupPriority(currentGroup) {
+		return currentGroup, false, nil
+	}
+	if err := tx.Model(&User{}).Where("id = ?", userId).Update("group", target).Error; err != nil {
+		return "", false, err
+	}
+	return target, true, nil
+}
+
+// applyGroupAfterSubscriptionEndTx 是订阅生命周期结束（到期/取消/作废/删除）后收敛用户组
+// 的单一入口，按运营是否配置组优先级分流：
+//   - 未配置（legacy 态）：downgradeUserGroupForSubscriptionTx 逐订阅 legacy 回退
+//     （按 down/prev 回退；有其他活跃升级订阅撑组则保组），数值优先级比较全部关闭。
+//   - 已配置（锚点态）：settleUserSubscriptionGroupTx 全局锚点重算——钉子永久、非钉子
+//     释放、彻底断档按 ended 降级目标兜底。
+//
+// 返回收敛后的组（变更时非空）与是否变更。调用方在变更后负责刷用户组缓存。
+func applyGroupAfterSubscriptionEndTx(tx *gorm.DB, sub *UserSubscription, now int64) (string, bool, error) {
+	if tx == nil || sub == nil {
+		return "", false, errors.New("invalid group-apply args")
+	}
+	if !common.SubscriptionGroupUpgradeEnabled {
+		return "", false, nil
+	}
+	if !SubscriptionGroupPrioritiesEnabled() {
+		target, err := downgradeUserGroupForSubscriptionTx(tx, sub, now)
+		if err != nil {
+			return "", false, err
+		}
+		return target, target != "", nil
+	}
+	return settleUserSubscriptionGroupTx(tx, sub.UserId, sub)
+}
+
 func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *SubscriptionPlan, source string) (*UserSubscription, error) {
 	if tx == nil {
 		return nil, errors.New("tx is nil")
@@ -953,18 +1088,18 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 	}
 	nowUnixAtCreate := now.Unix()
 	sub := &UserSubscription{
-		UserId:        userId,
-		PlanId:        plan.Id,
-		StartTime:     nowUnixAtCreate,
-		EndTime:       endUnix,
-		Status:        "active",
-		Source:        source,
-		WeekStartAt:   weekStartUnix(now),
-		WeekUsed:      0,
-		MonthStartAt:  monthStartUnix(now),
-		MonthUsed:     0,
-		UpgradeGroup:  upgradeGroup,
-		PrevUserGroup: prevGroup,
+		UserId:              userId,
+		PlanId:              plan.Id,
+		StartTime:           nowUnixAtCreate,
+		EndTime:             endUnix,
+		Status:              "active",
+		Source:              source,
+		WeekStartAt:         weekStartUnix(now),
+		WeekUsed:            0,
+		MonthStartAt:        monthStartUnix(now),
+		MonthUsed:           0,
+		UpgradeGroup:        upgradeGroup,
+		PrevUserGroup:       prevGroup,
 		DowngradeGroup:      strings.TrimSpace(plan.DowngradeGroup),
 		AllowWalletOverflow: allowWalletOverflow,
 		ExclusiveGroup:      strings.TrimSpace(plan.ExclusiveGroup),
@@ -1259,8 +1394,9 @@ func createBalanceOrderTx(tx *gorm.DB, userId, planId, extendSubId int, money fl
 	return tx.Create(order).Error
 }
 
-// invalidateSubscriptionTx cancels a subscription immediately and downgrades the
-// user group if needed. The subscription must already be locked by the caller.
+// invalidateSubscriptionTx cancels a subscription immediately and converges the
+// user group if needed (see applyGroupAfterSubscriptionEndTx). The subscription
+// must already be locked by the caller.
 func invalidateSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now int64) (string, error) {
 	if tx == nil || sub == nil {
 		return "", errors.New("invalid invalidate args")
@@ -1272,7 +1408,14 @@ func invalidateSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now int64) (st
 	}).Error; err != nil {
 		return "", err
 	}
-	return downgradeUserGroupForSubscriptionTx(tx, sub, now)
+	target, changed, err := applyGroupAfterSubscriptionEndTx(tx, sub, now)
+	if err != nil {
+		return "", err
+	}
+	if !changed {
+		return "", nil
+	}
+	return target, nil
 }
 
 // calcSubscriptionRemainingValue returns the prorated monetary value of a
@@ -1568,8 +1711,9 @@ func PurchaseWithStrategy(userId int, planId int, subscriptionId int) (string, e
 				}
 				creditedQuota = int64(credit)
 			}
-			// Create the new subscription first, then retire the old one so the
-			// downgrade logic keeps the elevated group from the new subscription.
+			// Create the new subscription first, then retire the old one. 组变更由
+			// 作废旧订阅时的收敛统一收口：升级方向 create 已升（PrevUserGroup 非空），
+			// 同组降级方向旧订阅作废后锚点只剩新订阅 → 收敛把组切到新订阅档位。
 			subscription, err := CreateUserSubscriptionFromPlanTx(tx, userId, plan, PaymentMethodBalance)
 			if err != nil {
 				return err
@@ -1577,8 +1721,10 @@ func PurchaseWithStrategy(userId int, planId int, subscriptionId int) (string, e
 			if subscription.PrevUserGroup != "" {
 				upgradeGroupChanged = true
 			}
-			if _, err := invalidateSubscriptionTx(tx, &sameGroup, now); err != nil {
+			if target, err := invalidateSubscriptionTx(tx, &sameGroup, now); err != nil {
 				return err
+			} else if target != "" {
+				upgradeGroupChanged = true
 			}
 			logTitle = plan.Title
 			logMoney = diff
@@ -2267,11 +2413,11 @@ func AdminInvalidateUserSubscription(userSubscriptionId int) (string, error) {
 		}).Error; err != nil {
 			return err
 		}
-		target, err := downgradeUserGroupForSubscriptionTx(tx, &sub, now)
+		target, changed, err := applyGroupAfterSubscriptionEndTx(tx, &sub, now)
 		if err != nil {
 			return err
 		}
-		if target != "" {
+		if changed {
 			cacheGroup = target
 			downgradeGroup = target
 		}
@@ -2310,20 +2456,21 @@ func AdminDeleteUserSubscription(userSubscriptionId int) (string, error) {
 			return err
 		}
 		userId = sub.UserId
-		target, err := downgradeUserGroupForSubscriptionTx(tx, &sub, now)
-		if err != nil {
-			return err
-		}
-		if target != "" {
-			cacheGroup = target
-			downgradeGroup = target
-		}
 		if err := tx.Model(&sub).Updates(map[string]interface{}{
 			"status":     "deleted",
 			"end_time":   now,
 			"updated_at": now,
 		}).Error; err != nil {
 			return err
+		}
+		// 先标记 deleted 再收敛组：锚点态下 cancelled/deleted 不贡献锚点，顺序敏感。
+		target, changed, err := applyGroupAfterSubscriptionEndTx(tx, &sub, now)
+		if err != nil {
+			return err
+		}
+		if changed {
+			cacheGroup = target
+			downgradeGroup = target
 		}
 		return nil
 	})
@@ -2364,16 +2511,18 @@ func AdminPurgeUserSubscription(userSubscriptionId int) (string, error) {
 			return errors.New("无法彻底删除活跃订阅，请先作废")
 		}
 		userId = sub.UserId
-		target, err := downgradeUserGroupForSubscriptionTx(tx, &sub, now)
+		if err := tx.Where("id = ?", userSubscriptionId).Delete(&UserSubscription{}).Error; err != nil {
+			return err
+		}
+		// 先删行再收敛组：行已不在，锚点判定不把它算进去（锚点态下彻底删除一个
+		// 钉子/非钉子订阅都会释放其贡献）。
+		target, changed, err := applyGroupAfterSubscriptionEndTx(tx, &sub, now)
 		if err != nil {
 			return err
 		}
-		if target != "" {
+		if changed {
 			cacheGroup = target
 			downgradeGroup = target
-		}
-		if err := tx.Where("id = ?", userSubscriptionId).Delete(&UserSubscription{}).Error; err != nil {
-			return err
 		}
 		return nil
 	})
@@ -2591,8 +2740,10 @@ func expireUserSubscriptionsTx(tx *gorm.DB, userId int, now int64) (int, string,
 	}
 	// Find the most recently expired subscription that defines a group transition
 	// (an explicit downgrade target or an upgrade snapshot to revert). 组变更判定
-	// 全部委托 downgradeUserGroupForSubscriptionTx——撑组检查与组优先级规则单点维护，
-	// 批量任务与惰性路径、取消/管理端作废共享同一套语义。
+	// 统一委托 applyGroupAfterSubscriptionEndTx（legacy/锚点两态分流）：
+	// legacy 态逐订阅回退（down/prev，有其它活跃升级订阅撑组则保组）；锚点态全局重算
+	// （钉子永久、非钉子释放，断档按 ended 降级目标兜底）——lastExpired 仅作锚点态
+	// 彻底断档时的兜底候选，锚点本身以全量现存订阅重算。
 	var lastExpired UserSubscription
 	expiredQuery := tx.Where("user_id = ? AND status = ? AND (downgrade_group <> '' OR upgrade_group <> '')",
 		userId, "expired").
@@ -2602,9 +2753,12 @@ func expireUserSubscriptionsTx(tx *gorm.DB, userId int, now int64) (int, string,
 	if expiredQuery.Error != nil || expiredQuery.RowsAffected == 0 {
 		return expired, "", nil
 	}
-	target, err := downgradeUserGroupForSubscriptionTx(tx, &lastExpired, now)
+	target, changed, err := applyGroupAfterSubscriptionEndTx(tx, &lastExpired, now)
 	if err != nil {
 		return expired, "", err
+	}
+	if !changed {
+		return expired, "", nil
 	}
 	return expired, target, nil
 }
