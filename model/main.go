@@ -393,6 +393,12 @@ func migrateDB() error {
 		if err := ensureUserSubscriptionRenewTermsColumn(DB); err != nil {
 			return err
 		}
+		if err := ensureGroupPinTables(DB); err != nil {
+			return err
+		}
+		if err := ensureSubscriptionOrderPinColumns(DB); err != nil {
+			return err
+		}
 		if err := ensureDropLegacySubscriptionPlanColumns(DB); err != nil {
 			return err
 		}
@@ -453,6 +459,12 @@ func migrateDB() error {
 	if err := ensureUserSubscriptionRenewTermsColumn(DB); err != nil {
 		return err
 	}
+	if err := ensureGroupPinTables(DB); err != nil {
+		return err
+	}
+	if err := ensureSubscriptionOrderPinColumns(DB); err != nil {
+		return err
+	}
 	if err := ensureDropLegacySubscriptionPlanColumns(DB); err != nil {
 		return err
 	}
@@ -506,6 +518,8 @@ func autoMigrateAll() error {
 		&SubscriptionOrder{},
 		&UserSubscription{},
 		&SubscriptionPreConsumeRecord{},
+		&GroupPinProduct{},
+		&GroupPin{},
 		&CustomOAuthProvider{},
 		&UserOAuthBinding{},
 		&PerfMetric{},
@@ -1428,5 +1442,37 @@ func PingDB() error {
 
 	lastPingTime = time.Now()
 	common.SysLog("Database pinged successfully")
+	return nil
+}
+
+// ensureGroupPinTables 幂等建固定分组两表（group_pin_products / group_pins）。
+// 表由 AutoMigrate（升日期路径）创建；存量已最新库走"跳过迁移"路径不重跑
+// AutoMigrate，需在这里显式建表（260909-group-pin）。
+func ensureGroupPinTables(db *gorm.DB) error {
+	if !db.Migrator().HasTable(&GroupPinProduct{}) {
+		if err := db.AutoMigrate(&GroupPinProduct{}); err != nil {
+			return err
+		}
+	}
+	if !db.Migrator().HasTable(&GroupPin{}) {
+		return db.AutoMigrate(&GroupPin{})
+	}
+	return nil
+}
+
+// ensureSubscriptionOrderPinColumns 幂等补 subscription_orders.kind / pin_product_id
+// 列（固定分组订单分流）。理由同 ensureGroupPinTables：skip 路径的已最新库需显式补列。
+func ensureSubscriptionOrderPinColumns(db *gorm.DB) error {
+	if !db.Migrator().HasColumn(&SubscriptionOrder{}, "kind") {
+		if err := db.Migrator().AddColumn(&SubscriptionOrder{}, "kind"); err != nil {
+			return err
+		}
+	}
+	if err := db.Model(&SubscriptionOrder{}).Where("kind IS NULL").Update("kind", OrderKindSubscription).Error; err != nil {
+		return err
+	}
+	if !db.Migrator().HasColumn(&SubscriptionOrder{}, "pin_product_id") {
+		return db.Migrator().AddColumn(&SubscriptionOrder{}, "pin_product_id")
+	}
 	return nil
 }

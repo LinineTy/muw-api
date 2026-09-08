@@ -23,6 +23,7 @@ import { SectionPageLayout } from '@/components/layout'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 import { AdminHistorySubscriptionsTable } from './components/admin-history-subscriptions-table'
+import { AdminGroupPinSection } from './components/admin-group-pin-section'
 import { AdminSubscriptionsTable } from './components/admin-subscriptions-table'
 import { SubscriptionsDialogs } from './components/subscriptions-dialogs'
 import { SubscriptionsPrimaryButtons } from './components/subscriptions-primary-buttons'
@@ -31,7 +32,9 @@ import { SubscriptionsTable } from './components/subscriptions-table'
 
 function SubscriptionsContent() {
   const { t } = useTranslation()
-  const [tab, setTab] = useState<'plans' | 'all' | 'history'>('plans')
+  const [tab, setTab] = useState<'plans' | 'all' | 'history' | 'group-pins'>(
+    'plans'
+  )
 
   return (
     <>
@@ -47,7 +50,7 @@ function SubscriptionsContent() {
             <Tabs
               value={tab}
               onValueChange={(value) =>
-                setTab(value as 'plans' | 'all' | 'history')
+                setTab(value as 'plans' | 'all' | 'history' | 'group-pins')
               }
               className='flex min-h-0 flex-1 flex-col'
             >
@@ -59,12 +62,16 @@ function SubscriptionsContent() {
                 <TabsTrigger value='history'>
                   {t('History Subscriptions')}
                 </TabsTrigger>
+                <TabsTrigger value='group-pins'>
+                  {t('Fixed Groups', '固定分组')}
+                </TabsTrigger>
               </TabsList>
               <div className='min-h-0 flex-1 pt-2'>
                 {{
                   plans: <SubscriptionsTable />,
                   all: <AdminSubscriptionsTable />,
                   history: <AdminHistorySubscriptionsTable />,
+                  'group-pins': <AdminGroupPinSection />,
                 }[tab]}
               </div>
             </Tabs>

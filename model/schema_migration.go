@@ -176,6 +176,11 @@ var migrations = []Migration{
 	// 订阅账本单期化：period_used 列由 AutoMigrate/ensure* 添加，删列由
 	// ensureDropLegacySubscriptionLedgerColumns 幂等执行，只打名称戳。
 	{Name: "260907-subscription-period-ledger", Up: func(db *gorm.DB) error { return nil }},
+	// 固定分组（GroupPin）：group_pin_products / group_pins 两表由 AutoMigrate（升日期路径）
+	// 或 ensureGroupPinTables（已最新库的跳过路径）创建；subscription_orders 的
+	// kind / pin_product_id 列由 AutoMigrate 或 ensureSubscriptionOrderPinColumns 补齐。
+	// 均为纯建表/加列，无数据转换，只打名称戳。
+	{Name: "260909-group-pin", Up: func(db *gorm.DB) error { return nil }},
 }
 
 // ensureSchemaMigrationsTable 用纯 SQL 建 schema_migrations（主键 name，自带日期前缀），

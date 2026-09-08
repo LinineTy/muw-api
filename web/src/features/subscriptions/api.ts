@@ -282,3 +282,71 @@ export async function getGroups(): Promise<ApiResponse<string[]>> {
   const res = await api.get('/api/group')
   return res.data
 }
+
+// ============================================================================
+// Group pin (固定分组) admin APIs
+// ============================================================================
+
+export interface AdminGroupPinProduct {
+  id: number
+  title: string
+  group: string
+  price_amount: number
+  enabled: boolean
+  sort_order: number
+}
+
+export interface AdminGroupPin {
+  id: number
+  user_id: number
+  group: string
+  status: string
+  source: string
+  note: string
+  created_at: number
+  created_by: number
+  released_at: number
+  released_by: number
+  release_reason: string
+}
+
+export async function adminListGroupPinProducts(): Promise<
+  ApiResponse<AdminGroupPinProduct[]>
+> {
+  const res = await api.get('/api/group_pin/admin/products')
+  return res.data
+}
+
+export async function adminSaveGroupPinProduct(
+  data: Partial<AdminGroupPinProduct>
+): Promise<ApiResponse<AdminGroupPinProduct>> {
+  const res = await api.post('/api/group_pin/admin/product/save', data)
+  return res.data
+}
+
+export async function adminDeleteGroupPinProduct(
+  id: number
+): Promise<ApiResponse> {
+  const res = await api.delete(`/api/group_pin/admin/product/${id}`)
+  return res.data
+}
+
+export async function adminListGroupPins(params: {
+  user_id?: number
+  page?: number
+  page_size?: number
+}): Promise<ApiResponse<{ items: AdminGroupPin[]; total: number }>> {
+  const res = await api.get('/api/group_pin/admin/pins', { params })
+  return res.data
+}
+
+export async function adminReleaseGroupPin(
+  pinId: number,
+  reason: string
+): Promise<ApiResponse<{ group: string; changed: boolean }>> {
+  const res = await api.post('/api/group_pin/admin/pin/release', {
+    pin_id: pinId,
+    reason,
+  })
+  return res.data
+}
