@@ -4420,6 +4420,7 @@
     "Periodically re-sync each LinuxDO user trust level (and auto-managed group) using their stored refresh token, without requiring them to re-authorize.": "Periodically re-sync each LinuxDO user trust level (and auto-managed group) using their stored refresh token, without requiring them to re-authorize.",
     "Periodically send ping frames to keep streaming connections active.": "ストリーミング接続をアクティブに保つために、定期的にpingフレームを送信します。",
     "Permanent": "永久",
+    "No pinned group or active subscription": "固定グループまたは有効なサブスクリプションがありません",
     "Permanent images": "Permanent images",
     "Permanent size": "Permanent size",
     "Permanently delete": "Permanently delete",

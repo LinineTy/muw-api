@@ -4420,6 +4420,7 @@
     "Periodically re-sync each LinuxDO user trust level (and auto-managed group) using their stored refresh token, without requiring them to re-authorize.": "定期使用使用者儲存的重新整理權杖同步每位 LinuxDO 使用者的信任等級（以及自動管理的群組），無需使用者重新授權。",
     "Periodically send ping frames to keep streaming connections active.": "定期發送 ping 幀以保持串流連接處於活動狀態。",
     "Permanent": "永久有效",
+    "No pinned group or active subscription": "暫無固定分組或生效中的訂閱",
     "Permanent images": "永久圖片",
     "Permanent size": "永久圖片總量",
     "Permanently delete": "徹底刪除",
