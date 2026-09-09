@@ -24,6 +24,7 @@ import {
 import { useAuthStore } from '@/stores/auth-store'
 
 import { CreditScoreCard } from './components/credit-score-card'
+import { GroupPinCard } from './components/group-pin-card'
 import { LanguagePreferencesCard } from './components/language-preferences-card'
 import { ProfileHeader } from './components/profile-header'
 import { ProfileSettingsCard } from './components/profile-settings-card'
@@ -49,19 +50,9 @@ export function Profile() {
           </CardStaggerItem>
 
           <CardStaggerItem>
-            <CreditScoreCard />
-          </CardStaggerItem>
-
-          <CardStaggerItem>
-            {/* 右栏(边栏模块)对 root 不显示(sidebar_settings=false),此时不要保留
-                两列栅格——否则左栏被压到 1fr,右边空一大块 */}
-            <div
-              className={
-                canConfigureSidebar
-                  ? 'grid gap-4 sm:gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.46fr)] xl:items-start'
-                  : 'space-y-4 sm:space-y-6'
-              }
-            >
+            {/* 双列主侧：左=设置/偏好/边栏模块，右=分组与固定/风控分。
+                分组信息单一来源在右栏分组卡，header 不再重复展示组/钉。 */}
+            <div className='grid gap-4 sm:gap-5 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-start'>
               <div className='space-y-4 sm:space-y-6'>
                 <ProfileSettingsCard
                   profile={profile}
@@ -72,13 +63,13 @@ export function Profile() {
                   profile={profile}
                   onProfileUpdate={refreshProfile}
                 />
+                {canConfigureSidebar && <SidebarModulesCard />}
               </div>
 
-              {canConfigureSidebar && (
-                <div className='space-y-4 sm:space-y-6 xl:sticky xl:top-6'>
-                  <SidebarModulesCard />
-                </div>
-              )}
+              <div className='space-y-4 sm:space-y-6 xl:sticky xl:top-6'>
+                <GroupPinCard profile={profile} loading={loading} />
+                <CreditScoreCard />
+              </div>
             </div>
           </CardStaggerItem>
         </CardStaggerContainer>
