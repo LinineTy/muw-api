@@ -444,6 +444,9 @@ func migrateDB() error {
 		if err := ensureDropLegacySubscriptionLedgerColumns(DB); err != nil {
 			return err
 		}
+		if err := ensureDropLegacyBackupTables(DB); err != nil {
+			return err
+		}
 		common.SysLog(fmt.Sprintf("schema up to date at migration %q (%d), skipping AutoMigrate", head.Name, migrationDate(head.Name)))
 		return nil
 	}
@@ -508,6 +511,9 @@ func migrateDB() error {
 		return err
 	}
 	if err := ensureDropLegacySubscriptionLedgerColumns(DB); err != nil {
+		return err
+	}
+	if err := ensureDropLegacyBackupTables(DB); err != nil {
 		return err
 	}
 	if err := runMigrations(DB, pending); err != nil {
@@ -892,10 +898,14 @@ func dropLegacyQuotaClaimColumns(db *gorm.DB) error {
 var legacySubscriptionPlanColumns = []string{
 	"total_amount", "quota_reset_period", "quota_reset_custom_seconds",
 	"reset_amount_limit", "weekly_amount_limit", "monthly_amount_limit",
+	// 随第三方支付渠道（Stripe/Creem/Waffo Pancake）一起移除的商品 ID 列。
+	"stripe_price_id", "creem_product_id", "waffo_pancake_product_id",
 }
 
 var legacyUserSubscriptionColumns = []string{
 	"cycle_start_at", "cycle_used", "next_cycle_reset_at",
+	// 早期重置窗口模型遗留的时间列（现由 period_used/动态窗口取代）。
+	"last_reset_time", "next_reset_time",
 }
 
 // legacySubscriptionLedgerColumns 是单期账本改造（period_used）移除的累计展示列：
@@ -979,6 +989,28 @@ func ensureDropLegacyUserSubscriptionColumns(db *gorm.DB) error {
 // 单列索引，SQLite 直接逐列 DROP 即可。
 func ensureDropLegacySubscriptionLedgerColumns(db *gorm.DB) error {
 	return dropLegacySubscriptionColumns(db, "user_subscriptions", legacySubscriptionLedgerColumns, nil)
+}
+
+// legacyBackupTables 是历史迁移留下的一次性备份表（_bak_<table>_<date>）。源表
+// （abilities / subscription_orders / subscription_plans）仍在并由 AutoMigrate
+// 管理，备份已无用途；显式删除，保证升级库与全新建库的表结构一致。
+var legacyBackupTables = []string{
+	"_bak_abilities_sponsored_20260628",
+	"_bak_subscription_orders_20260628",
+	"_bak_subscription_plans_20260628",
+}
+
+func ensureDropLegacyBackupTables(db *gorm.DB) error {
+	for _, table := range legacyBackupTables {
+		if !db.Migrator().HasTable(table) {
+			continue
+		}
+		if err := db.Migrator().DropTable(table); err != nil {
+			return err
+		}
+		common.SysLog("dropped legacy backup table " + table)
+	}
+	return nil
 }
 
 func migrateLOGDB() error {
