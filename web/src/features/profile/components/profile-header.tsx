@@ -37,6 +37,7 @@ import { getRoleLabel } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { uploadAvatar } from '../api'
+import { getMyGroupPin } from '@/features/subscriptions/api'
 import { getDisplayName } from '../lib'
 import type { UserProfile } from '../types'
 
@@ -63,7 +64,7 @@ export function ProfileHeader({
   // 固定分组钉：有 active 钉时组名旁显示"已固定"标识
   const pinnedQuery = useQuery({
     queryKey: ['group-pin', 'self'],
-    queryFn: () => import('../api').then((m) => m.getMyGroupPin()),
+    queryFn: getMyGroupPin,
     retry: false,
   })
   const pinnedGroup =

@@ -23,7 +23,7 @@ import { SubscriptionsMutateDrawer } from './subscriptions-mutate-drawer'
 import { useSubscriptions } from './subscriptions-provider'
 
 export function SubscriptionsDialogs() {
-  const { open, setOpen, currentRow } = useSubscriptions()
+  const { open, setOpen, currentRow, createKind } = useSubscriptions()
   const isUpdate = open === 'update'
 
   return (
@@ -32,6 +32,7 @@ export function SubscriptionsDialogs() {
         open={open === 'create' || isUpdate}
         onOpenChange={(isOpen) => !isOpen && setOpen(null)}
         currentRow={isUpdate ? currentRow || undefined : undefined}
+        createKind={createKind}
       />
       <ToggleStatusDialog />
       <ResetSubscriptionsDialog />

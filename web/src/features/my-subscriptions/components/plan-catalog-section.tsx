@@ -1,15 +1,18 @@
 // @muw-owned
-import { ArrowLeftRight, CheckCircle2, Sparkles } from 'lucide-react'
+import { ArrowLeftRight, CheckCircle2, Pin, Sparkles } from 'lucide-react'
 import { Fragment, useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useQueryClient } from '@tanstack/react-query'
 
 import { Button } from '@/components/ui/button'
+import { GroupBadge } from '@/components/group-badge'
 import { Separator } from '@/components/ui/separator'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { ProductPurchaseDialog } from '@/features/subscriptions/components/dialogs/product-purchase-dialog'
 import { SubscriptionPurchaseDialog } from '@/features/subscriptions/components/dialogs/subscription-purchase-dialog'
 import { GroupCollapsibleSection } from '@/features/subscriptions/components/group-collapsible-section'
 import {
@@ -17,7 +20,13 @@ import {
   formatWindowPeriodLabel,
   isCapWindow,
   parsePlanResetWindows,
+  planRecordFromGroupPinProduct,
 } from '@/features/subscriptions/lib'
+import {
+  purchaseGroupPinBalance,
+  purchaseGroupPinEpay,
+  type GroupPinProduct,
+} from '@/features/subscriptions/api'
 import type {
   PlanRecord,
   SubscriptionPlan,
@@ -55,7 +64,7 @@ function BenefitRow({ children }: { children: string }) {
   )
 }
 
-// 每个套餐在目录里展示时的可购买状态，供平铺卡片与分组视图条目共用。
+// 每个套餐/固定分组商品在目录里展示时的可购买状态，供平铺卡片与分组视图条目共用。
 interface PlanActionState {
   count: number
   limit: number
@@ -168,22 +177,25 @@ function PlanActionButton({
   )
 }
 
-// 平铺视图下的单套餐卡片。
+// 平铺视图下的单卡片：订阅套餐与固定分组商品共用同一外壳，差异只在周期后缀与
+// 权益条目（固定分组无时长/额度，权益是"永久固定到某组"）。
 function CatalogPlanCard({
-  plan,
+  record,
   state,
   onSubscribe,
   onSwitch,
 }: {
-  plan: SubscriptionPlan
+  record: PlanRecord
   state: PlanActionState
-  onSubscribe: (plan: SubscriptionPlan) => void
+  onSubscribe: (record: PlanRecord) => void
   onSwitch: (plan: SubscriptionPlan) => void
 }) {
   const { t } = useTranslation()
   const { meta: currencyMeta } = getCurrencyDisplay()
   const currencySymbol =
     currencyMeta.kind === 'tokens' ? '$' : currencyMeta.symbol
+  const plan = record.plan
+  const isGroupPin = record.kind === 'group_pin'
   const price = Number(plan.price_amount || 0).toFixed(2)
   const isPopular = plan.is_recommended === true
 
@@ -193,26 +205,36 @@ function CatalogPlanCard({
     resetWindows.length > 0 && resetWindows.every((w) => Number(w.limit) <= 0)
 
   // 权益清单：动态窗口 = 每个窗口一条（封顶窗口单独标注）；全部窗口额度 0 = 无限额度。
+  // 固定分组商品：永久钉组，无额度。
   const benefits: string[] = []
-  if (unlimited) {
-    benefits.push(t('Unlimited'))
-  } else {
-    resetWindows.forEach((w) => {
-      const period = formatWindowPeriodLabel(w, t)
-      const amount = formatQuota(w.limit || 0)
+  if (isGroupPin) {
+    benefits.push(t('Permanent'))
+    if (plan.upgrade_group) {
       benefits.push(
-        // 封顶窗口（周期 >= 有效期）只显示总额度，不暴露周期（如 "12 个月"）。
-        isCapWindow(w, plan)
-          ? t('{{amount}} total', { amount })
-          : t('{{amount}} every {{period}}', { amount, period })
+        t('Group pinned to {{group}}', { group: plan.upgrade_group })
       )
-    })
-  }
-  if (maxDays > 0) {
-    benefits.push(t('Up to {{days}} days', { days: maxDays }))
-  }
-  if (plan.upgrade_group) {
-    benefits.push(t('Upgrade to {{group}}', { group: plan.upgrade_group }))
+    }
+  } else {
+    if (unlimited) {
+      benefits.push(t('Unlimited'))
+    } else {
+      resetWindows.forEach((w) => {
+        const period = formatWindowPeriodLabel(w, t)
+        const amount = formatQuota(w.limit || 0)
+        benefits.push(
+          // 封顶窗口（周期 >= 有效期）只显示总额度，不暴露周期（如 "12 个月"）。
+          isCapWindow(w, plan)
+            ? t('{{amount}} total', { amount })
+            : t('{{amount}} every {{period}}', { amount, period })
+        )
+      })
+    }
+    if (maxDays > 0) {
+      benefits.push(t('Up to {{days}} days', { days: maxDays }))
+    }
+    if (plan.upgrade_group) {
+      benefits.push(t('Upgrade to {{group}}', { group: plan.upgrade_group }))
+    }
   }
 
   return (
@@ -223,12 +245,17 @@ function CatalogPlanCard({
         isPopular && 'border-primary/40'
       )}
     >
-      {/* 头部：标题 + 推荐 tag + 副标题 */}
+      {/* 头部：标题 + 类型/推荐 tag + 副标题 */}
       <div className='flex flex-col gap-2'>
         <div className='flex flex-wrap items-center gap-2'>
           <h3 className='truncate text-lg font-medium'>
             {plan.title || t('Subscription Plans')}
           </h3>
+          {isGroupPin && (
+            <span className='bg-primary/10 text-primary inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium'>
+              {t('Fixed Groups')}
+            </span>
+          )}
           {isPopular && (
             <span className='bg-primary/10 text-primary inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium'>
               <Sparkles className='size-3' />
@@ -248,7 +275,7 @@ function CatalogPlanCard({
           {plan.subtitle || t('No description')}
         </p>
 
-        {/* 价格行：货币符号 + 大价格 + 周期 */}
+        {/* 价格行：货币符号 + 大价格 + 周期（固定分组无周期） */}
         <div className='flex flex-wrap items-end gap-1 pt-1'>
           <span className='text-primary text-sm leading-5'>
             {currencySymbol}
@@ -256,9 +283,11 @@ function CatalogPlanCard({
           <span className='text-primary text-3xl leading-8 font-bold'>
             {price}
           </span>
-          <span className='text-foreground/70 text-sm leading-6'>
-            / {formatDuration(plan, t)}
-          </span>
+          {!isGroupPin && (
+            <span className='text-foreground/70 text-sm leading-6'>
+              / {formatDuration(plan, t)}
+            </span>
+          )}
         </div>
 
         {/* 虚线分隔 */}
@@ -282,7 +311,7 @@ function CatalogPlanCard({
         <PlanActionButton
           plan={plan}
           state={state}
-          onSubscribe={onSubscribe}
+          onSubscribe={() => onSubscribe(record)}
           onSwitch={onSwitch}
         />
       </div>
@@ -292,17 +321,34 @@ function CatalogPlanCard({
 
 export function PlanCatalogSection({ grouped }: { grouped: boolean }) {
   const { t } = useTranslation()
-  const { plans, planMap, selfData, topupInfo, userQuota, userGroup, refresh } =
-    useMySubscriptions()
+  const {
+    plans,
+    planMap,
+    selfData,
+    topupInfo,
+    userQuota,
+    userGroup,
+    pinProducts,
+    myPin,
+    refresh,
+  } = useMySubscriptions()
 
   const [purchaseOpen, setPurchaseOpen] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<PlanRecord | null>(null)
+  const [selectedPin, setSelectedPin] = useState<GroupPinProduct | null>(null)
   const [switchTarget, setSwitchTarget] = useState<PlanRecord | null>(null)
+  const queryClient = useQueryClient()
 
   const enableOnlineTopUp = !!topupInfo?.enable_online_topup
   const epayMethods = useMemo(
     () => getEpayMethods(topupInfo?.pay_methods),
     [topupInfo?.pay_methods]
+  )
+
+  // 固定分组商品并进同一份卡片网格：复用管理端同款行模型（PlanRecord + kind）。
+  const pinRecords = useMemo(
+    () => pinProducts.map(planRecordFromGroupPinProduct),
+    [pinProducts]
   )
 
   const allSubscriptions = useMemo(
@@ -437,8 +483,36 @@ export function PlanCatalogSection({ grouped }: { grouped: boolean }) {
     ]
   )
 
-  const handleSubscribe = useCallback((plan: SubscriptionPlan) => {
-    setSelectedPlan({ plan })
+  // 固定分组商品绝不能复用按 plan_id 建索引的判定（商品 id 与套餐 id 会撞号，会误判
+  // 成"已达限购/已订阅"）；同时钉子不占订阅"同时持有"名额。同组重购会 release 旧钉
+  // 并再次扣费，所以 isCurrent 必须按当前钉的组判定。
+  const resolveGroupPinState = useCallback(
+    (record: PlanRecord): PlanActionState => {
+      const allowedGroups = parseAllowedGroups(record.groupPin?.allowed_groups)
+      return {
+        count: 0,
+        limit: 0,
+        reached: false,
+        allowedGroups,
+        groupRestricted:
+          allowedGroups.length > 0 && !allowedGroups.includes(userGroup),
+        isCurrent: !!myPin && myPin.group === record.plan.upgrade_group,
+        sameGroupActive: null,
+        tierDirection: 0,
+        maxSimultaneous: 0,
+        activeCount: 0,
+        simultaneousReached: false,
+      }
+    },
+    [userGroup, myPin]
+  )
+
+  const handleSubscribe = useCallback((record: PlanRecord) => {
+    if (record.kind === 'group_pin' && record.groupPin) {
+      setSelectedPin(record.groupPin)
+      return
+    }
+    setSelectedPlan(record)
     setPurchaseOpen(true)
   }, [])
   const handleSwitch = useCallback((plan: SubscriptionPlan) => {
@@ -449,7 +523,7 @@ export function PlanCatalogSection({ grouped }: { grouped: boolean }) {
     ? findSameGroupSub(switchTarget.plan)
     : null
 
-  if (plans.length === 0) {
+  if (plans.length === 0 && pinRecords.length === 0) {
     return (
       <p className='text-muted-foreground py-4 text-center text-sm'>
         {t('No plans available')}
@@ -473,7 +547,7 @@ export function PlanCatalogSection({ grouped }: { grouped: boolean }) {
                   {groupPlans.map((plan) => (
                     <CatalogPlanCard
                       key={plan.id}
-                      plan={plan}
+                      record={{ plan }}
                       state={resolvePlanState(plan)}
                       onSubscribe={handleSubscribe}
                       onSwitch={handleSwitch}
@@ -482,7 +556,7 @@ export function PlanCatalogSection({ grouped }: { grouped: boolean }) {
                 </GroupCollapsibleSection>
               </Fragment>
             ))}
-            {groupedData.standalone.length > 0 && (
+            {(groupedData.standalone.length > 0 || pinRecords.length > 0) && (
               <>
                 <Separator />
                 <div>
@@ -493,8 +567,17 @@ export function PlanCatalogSection({ grouped }: { grouped: boolean }) {
                     {groupedData.standalone.map((plan) => (
                       <CatalogPlanCard
                         key={plan.id}
-                        plan={plan}
+                        record={{ plan }}
                         state={resolvePlanState(plan)}
+                        onSubscribe={handleSubscribe}
+                        onSwitch={handleSwitch}
+                      />
+                    ))}
+                    {pinRecords.map((record) => (
+                      <CatalogPlanCard
+                        key={`pin-${record.plan.id}`}
+                        record={record}
+                        state={resolveGroupPinState(record)}
                         onSubscribe={handleSubscribe}
                         onSwitch={handleSwitch}
                       />
@@ -512,13 +595,22 @@ export function PlanCatalogSection({ grouped }: { grouped: boolean }) {
               return (
                 <CatalogPlanCard
                   key={plan.id}
-                  plan={plan}
+                  record={{ plan }}
                   state={resolvePlanState(plan)}
                   onSubscribe={handleSubscribe}
                   onSwitch={handleSwitch}
                 />
               )
             })}
+            {pinRecords.map((record) => (
+              <CatalogPlanCard
+                key={`pin-${record.plan.id}`}
+                record={record}
+                state={resolveGroupPinState(record)}
+                onSubscribe={handleSubscribe}
+                onSwitch={handleSwitch}
+              />
+            ))}
           </div>
         )}
       </div>
@@ -547,6 +639,62 @@ export function PlanCatalogSection({ grouped }: { grouped: boolean }) {
             : undefined
         }
       />
+
+      {/* 固定分组购买：与订阅共用同一购买弹窗，只换摘要行与支付回调 */}
+      {selectedPin && (
+        <ProductPurchaseDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setSelectedPin(null)
+          }}
+          title={
+            <>
+              <Pin className='h-5 w-5' />
+              {t('Purchase Fixed Group')}
+            </>
+          }
+          summaryRows={[
+            {
+              key: 'title',
+              label: t('Product Name'),
+              value: selectedPin.title,
+            },
+            {
+              key: 'group',
+              label: t('Pinned Group'),
+              value: <GroupBadge group={selectedPin.group} />,
+            },
+            {
+              key: 'validity',
+              label: t('Validity Period'),
+              value: t('Permanent'),
+            },
+          ]}
+          priceAmount={Number(selectedPin.price_amount || 0)}
+          allowBalancePay={selectedPin.allow_balance_pay !== false}
+          userQuota={userQuota}
+          enableOnlineTopUp={enableOnlineTopUp}
+          epayMethods={epayMethods}
+          onPayEpay={async (paymentMethod) => {
+            const res = await purchaseGroupPinEpay({
+              pin_product_id: selectedPin.id,
+              payment_method: paymentMethod,
+            })
+            return {
+              message: res.message,
+              url: res.url,
+              data: res.data as Record<string, unknown> | undefined,
+            }
+          }}
+          onPayBalance={() => purchaseGroupPinBalance(selectedPin.id)}
+          successMessage={t('Fixed group activated')}
+          onPurchaseSuccess={async () => {
+            await refresh()
+            // 头像旁的 Pinned 徽标走独立的 react-query 缓存。
+            void queryClient.invalidateQueries({ queryKey: ['group-pin'] })
+          }}
+        />
+      )}
 
       <SwitchPlanDialog
         open={!!switchTarget}

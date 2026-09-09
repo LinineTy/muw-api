@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next'
 
 import { Skeleton } from '@/components/ui/skeleton'
 import { EndedSubscriptionsTable } from '@/features/my-subscriptions/components/ended-subscriptions-table'
-import { GroupPinCatalogSection } from '@/features/my-subscriptions/components/group-pin-section'
 import {
   MySubscriptionsProvider,
   useMySubscriptions,
@@ -103,16 +102,13 @@ function SubscriptionTabContent({ grouped }: { grouped: boolean }) {
       {/* 到期提醒 */}
       <ExpiringBanner />
 
-      {/* 套餐目录（购买）：余额支付/在线支付，支持升级/降级 */}
+      {/* 套餐目录（购买）：余额支付/在线支付，支持升级/降级；固定分组商品同网格 */}
       <section className='flex flex-col gap-3'>
         <h2 className='text-sm font-semibold tracking-tight'>
           {t('Plans')}
         </h2>
         <PlanCatalogSection grouped={grouped} />
       </section>
-
-      {/* 固定分组（购买）：将账户固定到指定分组，订阅到期不回落 */}
-      <GroupPinCatalogSection />
 
       {/* 历史订阅：已过期/已取消的订阅 */}
       <section className='flex flex-col gap-3'>
