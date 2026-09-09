@@ -84,19 +84,6 @@ export function ModelsPrimaryButtons({
         onCheckedChange={onBatchModeChange}
       />
 
-      <Button onClick={handleSync} variant='outline' size='sm'>
-        {t('Sync metadata')}
-      </Button>
-      {canPrice && (
-        <Button
-          onClick={() => setOpen('price-sync')}
-          variant='outline'
-          size='sm'
-        >
-          {t('Sync pricing')}
-        </Button>
-      )}
-
       {/* Create Model */}
       <Button onClick={handleCreateModel} size='sm'>
         <Plus className='h-4 w-4' />
@@ -130,12 +117,23 @@ export function ModelsPrimaryButtons({
             </DropdownMenuShortcut>
           </DropdownMenuItem>
 
+          {/* 同步资料/同步价格收进这里:它们是低频动作,不再占用工具条。
+              "Sync metadata" 与旧的 "Sync Upstream" 是同一个 handleSync,只留一条 */}
           <DropdownMenuItem onClick={handleSync}>
-            {t('Sync Upstream')}
+            {t('Sync metadata')}
             <DropdownMenuShortcut>
               <RefreshCw className='h-4 w-4' />
             </DropdownMenuShortcut>
           </DropdownMenuItem>
+
+          {canPrice && (
+            <DropdownMenuItem onClick={() => setOpen('price-sync')}>
+              {t('Sync pricing')}
+              <DropdownMenuShortcut>
+                <RefreshCw className='h-4 w-4' />
+              </DropdownMenuShortcut>
+            </DropdownMenuItem>
+          )}
 
           <DropdownMenuSeparator />
 

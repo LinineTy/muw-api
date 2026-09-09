@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQueryClient } from '@tanstack/react-query'
 import type { Row } from '@tanstack/react-table'
-import { Eye, EyeOff, Trash2 } from 'lucide-react'
+import { Eye, EyeOff, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -28,7 +28,11 @@ import {
   DropdownMenuItem,
   DropdownMenuShortcut,
 } from '@/components/ui/dropdown-menu'
-import { useCanEditModelPricing } from '@/features/model-pricing/api'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 import { handleToggleModelStatus, isModelEnabled } from '../lib'
 import type { Model } from '../types'
@@ -41,7 +45,6 @@ interface DataTableRowActionsProps {
 
 export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const { t } = useTranslation()
-  const canPrice = useCanEditModelPricing()
   const model = row.original
   const { setOpen, setCurrentRow } = useModels()
   const queryClient = useQueryClient()
@@ -63,30 +66,26 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
     : t('Show in model square')
 
   return (
-    <div className='-ml-1.5 flex min-w-0 items-center gap-1 [&>button]:min-w-0 [&>button]:shrink'>
-      <Button
-        variant='ghost'
-        size='sm'
-        onClick={handleEdit}
-        title={model.id > 0 ? t('Edit') : t('Add metadata')}
-      >
-        <span className='truncate'>
-          {model.id > 0 ? t('Edit') : t('Add metadata')}
-        </span>
-      </Button>
-
-      {canPrice && (
-        <Button
-          variant='ghost'
-          size='sm'
-          onClick={() => {
-            setCurrentRow(model)
-            setOpen('price-model')
-          }}
+    <div className='-ml-1.5 flex min-w-0 items-center gap-1'>
+      {/* 只留一个「编辑」:它打开的抽屉与旧的「定价」按钮完全相同(含定价表单),
+          而价格列本身点一下也开同一个抽屉,两个按钮是重复的 */}
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant='ghost'
+              size='icon-sm'
+              onClick={handleEdit}
+              aria-label={model.id > 0 ? t('Edit') : t('Add metadata')}
+            />
+          }
         >
-          <span className='truncate'>{t('Pricing')}</span>
-        </Button>
-      )}
+          {model.id > 0 ? <Pencil /> : <Plus />}
+        </TooltipTrigger>
+        <TooltipContent>
+          {model.id > 0 ? t('Edit') : t('Add metadata')}
+        </TooltipContent>
+      </Tooltip>
 
       {model.id > 0 && (
         <DataTableRowActionMenu ariaLabel={t('Open menu')}>
