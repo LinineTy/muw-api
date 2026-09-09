@@ -31,8 +31,10 @@ type BillingRecord struct {
 	Id              int     `json:"id"`
 	UserId          int     `json:"user_id"`
 	Type            string  `json:"type"` // topup / subscription
+	Kind            string  `json:"kind"` // subscription / group_pin（固定分组商品订单）
 	Amount          int64   `json:"amount"`
 	PlanId          int     `json:"plan_id"`
+	PinProductId    int     `json:"pin_product_id"`
 	PlanTitle       string  `json:"plan_title"`
 	Money           float64 `json:"money"`
 	TradeNo         string  `json:"trade_no"`
@@ -76,8 +78,28 @@ func resolvePlanTitles(planIds map[int]struct{}) map[int]string {
 	return titles
 }
 
+// resolvePinProductTitles 批量查询固定分组商品标题（商品被删回退为空，由前端兜底 #id）。
+func resolvePinProductTitles(productIds map[int]struct{}) map[int]string {
+	if len(productIds) == 0 {
+		return nil
+	}
+	ids := make([]int, 0, len(productIds))
+	for id := range productIds {
+		ids = append(ids, id)
+	}
+	var products []GroupPinProduct
+	if err := DB.Where("id IN ?", ids).Find(&products).Error; err != nil {
+		return nil
+	}
+	titles := make(map[int]string, len(products))
+	for _, p := range products {
+		titles[p.Id] = p.Title
+	}
+	return titles
+}
+
 // mergeBillingRecords 充值记录与订阅订单合并为统一视图，按 create_time 倒序。
-func mergeBillingRecords(topups []*TopUp, subs []*SubscriptionOrder, planTitles map[int]string) []*BillingRecord {
+func mergeBillingRecords(topups []*TopUp, subs []*SubscriptionOrder, planTitles, pinTitles map[int]string) []*BillingRecord {
 	merged := make([]*BillingRecord, 0, len(topups)+len(subs))
 	for _, t := range topups {
 		merged = append(merged, &BillingRecord{
@@ -95,12 +117,24 @@ func mergeBillingRecords(topups []*TopUp, subs []*SubscriptionOrder, planTitles 
 		})
 	}
 	for _, s := range subs {
+		// 固定分组订单同样落在 subscription_orders 表：kind 区分商品来源，标题取
+		// 商品标题而非套餐标题——否则前端只能按 plan_id=0 兜底显示 #0。
+		kind := s.Kind
+		if kind == "" {
+			kind = OrderKindSubscription
+		}
+		title := planTitles[s.PlanId]
+		if kind == OrderKindGroupPin {
+			title = pinTitles[s.PinProductId]
+		}
 		merged = append(merged, &BillingRecord{
 			Id:              -s.Id,
 			UserId:          s.UserId,
 			Type:            "subscription",
+			Kind:            kind,
 			PlanId:          s.PlanId,
-			PlanTitle:       planTitles[s.PlanId],
+			PinProductId:    s.PinProductId,
+			PlanTitle:       title,
 			Money:           s.Money,
 			TradeNo:         s.TradeNo,
 			PaymentMethod:   s.PaymentMethod,
@@ -118,8 +152,19 @@ func mergeBillingRecords(topups []*TopUp, subs []*SubscriptionOrder, planTitles 
 func collectSubscriptionPlanIds(subs []*SubscriptionOrder) map[int]struct{} {
 	ids := make(map[int]struct{}, len(subs))
 	for _, s := range subs {
-		if s.PlanId > 0 {
+		if s.Kind != OrderKindGroupPin && s.PlanId > 0 {
 			ids[s.PlanId] = struct{}{}
+		}
+	}
+	return ids
+}
+
+// collectPinProductIds 汇总固定分组订单涉及的商品 id，供标题批量解析。
+func collectPinProductIds(subs []*SubscriptionOrder) map[int]struct{} {
+	ids := make(map[int]struct{})
+	for _, s := range subs {
+		if s.Kind == OrderKindGroupPin && s.PinProductId > 0 {
+			ids[s.PinProductId] = struct{}{}
 		}
 	}
 	return ids
@@ -127,8 +172,8 @@ func collectSubscriptionPlanIds(subs []*SubscriptionOrder) map[int]struct{} {
 
 // billingMergePage 在内存合并排序后的记录上按 pageInfo 取页。分页参数带下界防护：
 // 负的 p / page_size 会得到负的 start 或 end < start，直接切片会 panic。
-func billingMergePage(topups []*TopUp, subs []*SubscriptionOrder, planTitles map[int]string, pageInfo *common.PageInfo) ([]*BillingRecord, error) {
-	merged := mergeBillingRecords(topups, subs, planTitles)
+func billingMergePage(topups []*TopUp, subs []*SubscriptionOrder, planTitles, pinTitles map[int]string, pageInfo *common.PageInfo) ([]*BillingRecord, error) {
+	merged := mergeBillingRecords(topups, subs, planTitles, pinTitles)
 	start := pageInfo.GetStartIdx()
 	if start < 0 {
 		start = 0
@@ -208,7 +253,9 @@ func GetUserBillingRecords(userId int, pageInfo *common.PageInfo, keyword, statu
 	}
 
 	total = topupTotal + subTotal
-	records, err = billingMergePage(topups, subs, resolvePlanTitles(collectSubscriptionPlanIds(subs)), pageInfo)
+	records, err = billingMergePage(topups, subs,
+		resolvePlanTitles(collectSubscriptionPlanIds(subs)),
+		resolvePinProductTitles(collectPinProductIds(subs)), pageInfo)
 	return records, total, err
 }
 
@@ -261,6 +308,8 @@ func GetAllBillingRecords(pageInfo *common.PageInfo, keyword, status, method, ty
 	}
 
 	total = topupTotal + subTotal
-	records, err = billingMergePage(topups, subs, resolvePlanTitles(collectSubscriptionPlanIds(subs)), pageInfo)
+	records, err = billingMergePage(topups, subs,
+		resolvePlanTitles(collectSubscriptionPlanIds(subs)),
+		resolvePinProductTitles(collectPinProductIds(subs)), pageInfo)
 	return records, total, err
 }
