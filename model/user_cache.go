@@ -11,7 +11,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const userCacheSchemaVersion = 4
+// userCacheSchemaVersion 变更即让存量哈希作废、下次读取从库水合。
+// v5:补写 Activated 字段(此前哈希缺该字段,Redis 命中时恒为 0,
+// 激活制下会被 middleware/auth.go 判为未激活而 403)。
+const userCacheSchemaVersion = 5
 
 type UserBase struct {
 	Id          int    `json:"id"`
