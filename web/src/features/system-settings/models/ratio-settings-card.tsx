@@ -380,7 +380,11 @@ export function RatioSettingsCard({
           toast.info(t('No model price changes to save'))
           return
         }
-        await savePricing.mutateAsync(changes)
+        // 只在真有价格改动时调保存接口:后端对空 changes 直接报错
+        // ("select model pricing changes before saving"),会连带把下面的开关保存挡掉
+        if (changes.length) {
+          await savePricing.mutateAsync(changes)
+        }
         if (visibilityChanged) {
           await updateOption.mutateAsync({
             key: 'ExposeRatioEnabled',
