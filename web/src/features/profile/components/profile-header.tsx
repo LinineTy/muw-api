@@ -61,7 +61,8 @@ export function ProfileHeader({
   const setUser = useAuthStore((s) => s.auth.setUser)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
-  // 固定分组钉：有 active 钉时组名旁显示"已固定"标识
+  // 固定分组钉：有 active 钉时组名旁显示"📌 钉组名"徽标——徽标必须携带钉组名，
+  // 否则"组 v3（订阅发的）+ 钉 v2"会显示成 "v3 · Pinned"，被读成钉的是 v3（歧义）。
   const pinnedQuery = useQuery({
     queryKey: ['group-pin', 'self'],
     queryFn: getMyGroupPin,
@@ -245,7 +246,7 @@ export function ProfileHeader({
                     title={t('Pinned')}
                   >
                     <Pin className='size-3' />
-                    {t('Pinned')}
+                    {pinnedGroup}
                   </span>
                 </>
               )}
