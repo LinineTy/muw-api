@@ -44,6 +44,8 @@ export function ModelPriceCell(props: {
   model: PricingModel
   options?: ModelPriceCellOptions
   showExpression?: boolean
+  /** 表格单元格用:指标与单位并成一行,避免占两行、货币符号单独起行 */
+  compact?: boolean
 }) {
   const { t } = useTranslation()
   const currency = useSystemConfigStore((state) => state.config.currency)
@@ -69,6 +71,13 @@ export function ModelPriceCell(props: {
 
   if (dynamic) {
     if (dynamic.isSpecialExpression) {
+      if (props.compact) {
+        return (
+          <span className='text-muted-foreground block truncate text-xs'>
+            {t('Special billing expression')}
+          </span>
+        )
+      }
       return (
         <span className='block max-w-full min-w-0'>
           <span className='text-muted-foreground block truncate text-sm'>
@@ -166,6 +175,37 @@ export function ModelPriceCell(props: {
       ]
       caption = `${currencyLabel} / ${t('request')}`
     }
+  }
+  if (props.compact) {
+    // 紧凑模式:压掉单位里的空格(🍰 / 1M Token → 🍰/1M Token),让「输入 x 输出 y 单位」
+    // 尽量落在一行内,表格行高才整齐
+    const compactCaption = caption.replace(/\s*\/\s*/g, '/')
+    return (
+      <span
+        className='flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5'
+        title={[
+          ...metrics.map((metric) => `${metric.label} ${metric.value}`),
+          caption,
+        ].join(' · ')}
+      >
+        {metrics.map((metric) => (
+          <span
+            key={metric.label}
+            className='flex items-baseline gap-x-1 whitespace-nowrap'
+          >
+            <span className='text-muted-foreground text-xs'>
+              {metric.label}
+            </span>
+            <span className='font-mono text-sm tabular-nums'>
+              {metric.value}
+            </span>
+          </span>
+        ))}
+        <span className='text-muted-foreground text-xs whitespace-nowrap'>
+          {compactCaption}
+        </span>
+      </span>
+    )
   }
   return (
     <span className='block w-full max-w-full min-w-0 space-y-1.5'>

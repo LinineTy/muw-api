@@ -218,6 +218,7 @@ export function useModelsColumns(
               )}
               options={{ tokenUnit: 'M' }}
               showExpression={false}
+              compact
             />
           </Button>
         )
