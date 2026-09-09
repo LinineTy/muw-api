@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -248,16 +247,43 @@ func GetEnabledGroupPinProducts() ([]GroupPinProduct, error) {
 	return products, err
 }
 
+// ValidateGroupPinProductForUser 校验固定分组商品当前对某用户可购买：上架、订阅分组
+// 功能开启、目标组存在于分组倍率配置、用户组在白名单内。余额与 epay 两条通道共用，
+// 防止其中一条漏掉门禁（epay 直连曾绕过白名单）。
+func ValidateGroupPinProductForUser(userId int, product *GroupPinProduct) error {
+	if product == nil {
+		return errors.New("固定分组商品不存在")
+	}
+	if !product.Enabled {
+		return errors.New("该固定分组商品未上架")
+	}
+	if !common.SubscriptionGroupUpgradeEnabled {
+		return errors.New("订阅分组功能未启用")
+	}
+	// 组存在性校验（与套餐 upgrade_group 同口径）。
+	if _, ok := ratio_setting.GetGroupRatioCopy()[product.Group]; !ok {
+		return errors.New("固定分组目标不存在")
+	}
+	// 允许的用户组白名单（与订阅套餐 allowed_groups 同口径）。
+	userGroup, err := getUserGroupByIdTx(nil, userId)
+	if err != nil {
+		return err
+	}
+	if !product.AllowedTo(userGroup) {
+		return errors.New("当前分组不允许购买该固定分组")
+	}
+	return nil
+}
+
 // createGroupPinOrderTx records a successful wallet-based group-pin order
 //（余额购钉的订单流水，kind=group_pin；订阅订单走 createBalanceOrderTx）。
 func createGroupPinOrderTx(tx *gorm.DB, userId, pinProductId int, money float64, now int64) error {
-	tradeNo := fmt.Sprintf("PINGRP%dNO%s%d", userId, common.GetRandomString(6), time.Now().UnixNano())
 	order := &SubscriptionOrder{
 		UserId:          userId,
 		Kind:            OrderKindGroupPin,
 		PinProductId:    pinProductId,
 		Money:           money,
-		TradeNo:         tradeNo,
+		TradeNo:         NewSubscriptionTradeNo("PINGRP", userId),
 		PaymentMethod:   PaymentMethodBalance,
 		PaymentProvider: PaymentProviderBalance,
 		Status:          common.TopUpStatusSuccess,
@@ -277,23 +303,8 @@ func PurchaseGroupPin(userId, pinProductId int) (string, error) {
 	if err != nil {
 		return "", errors.New("固定分组商品不存在")
 	}
-	if !product.Enabled {
-		return "", errors.New("该固定分组商品未上架")
-	}
-	if !common.SubscriptionGroupUpgradeEnabled {
-		return "", errors.New("订阅分组功能未启用")
-	}
-	// 组存在性校验（与套餐 upgrade_group 同口径）。
-	if _, ok := ratio_setting.GetGroupRatioCopy()[product.Group]; !ok {
-		return "", errors.New("固定分组目标不存在")
-	}
-	// 允许的用户组白名单（与订阅套餐 allowed_groups 同口径）。
-	userGroup, err := getUserGroupByIdTx(nil, userId)
-	if err != nil {
+	if err := ValidateGroupPinProductForUser(userId, product); err != nil {
 		return "", err
-	}
-	if !product.AllowedTo(userGroup) {
-		return "", errors.New("当前分组不允许购买该固定分组")
 	}
 	// 余额兑换开关（与订阅套餐 allow_balance_pay 同口径）。
 	if !product.BalancePayAllowed() {

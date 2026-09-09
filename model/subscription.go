@@ -351,6 +351,13 @@ const (
 	OrderKindGroupPin     = "group_pin"
 )
 
+// NewSubscriptionTradeNo 生成订阅体系订单号：<prefix><userId>NO<随机串><纳秒时间戳>。
+// prefix 自带实体标识（订阅 "SUBUSR"、固定分组 "PINGRP"），保证可归类且同实体下唯一。
+// 余额下单与 epay 下单共用，避免两条通道各自拼串漂移。
+func NewSubscriptionTradeNo(prefix string, userId int) string {
+	return fmt.Sprintf("%s%dNO%s%d", prefix, userId, common.GetRandomString(6), time.Now().UnixNano())
+}
+
 func (o *SubscriptionOrder) Insert() error {
 	if o.CreateTime == 0 {
 		o.CreateTime = common.GetTimestamp()

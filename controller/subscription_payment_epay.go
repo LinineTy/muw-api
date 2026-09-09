@@ -22,6 +22,55 @@ type SubscriptionEpayPayRequest struct {
 	SubscriptionId int    `json:"subscription_id"` // >0 renews the target subscription
 }
 
+// epayPurchase 一次 epay 下单所需的客户端与回调地址。订阅与固定分组共用：
+// 调用方必须在插入订单之前先 prepareEpayPurchase —— 配置缺失时不落脏订单
+//（否则会留下 pending 单，既挡住套餐删除又能在订单页被误补单）。
+type epayPurchase struct {
+	client    *epay.Client
+	returnUrl *url.URL
+	notifyUrl *url.URL
+}
+
+// prepareEpayPurchase 校验支付配置并解析回调地址；失败时已写响应，调用方直接 return。
+func prepareEpayPurchase(c *gin.Context) (*epayPurchase, bool) {
+	client := GetEpayClient()
+	if client == nil {
+		common.ApiErrorMsg(c, "当前管理员未配置支付信息")
+		return nil, false
+	}
+	callBackAddress := service.GetCallbackAddress()
+	returnUrl, err := url.Parse(callBackAddress + "/api/subscription/epay/return")
+	if err != nil {
+		common.ApiErrorMsg(c, "回调地址配置错误")
+		return nil, false
+	}
+	notifyUrl, err := url.Parse(callBackAddress + "/api/subscription/epay/notify")
+	if err != nil {
+		common.ApiErrorMsg(c, "回调地址配置错误")
+		return nil, false
+	}
+	return &epayPurchase{client: client, returnUrl: returnUrl, notifyUrl: notifyUrl}, true
+}
+
+// request 拉起支付；失败时作废刚插入的订单。成功返回 (跳转地址, 表单参数)。
+func (p *epayPurchase) request(c *gin.Context, tradeNo, subject string, money float64, paymentMethod string) (string, map[string]string, bool) {
+	uri, params, err := p.client.Purchase(&epay.PurchaseArgs{
+		Type:           paymentMethod,
+		ServiceTradeNo: tradeNo,
+		Name:           subject,
+		Money:          strconv.FormatFloat(money, 'f', 2, 64),
+		Device:         epay.PC,
+		NotifyUrl:      p.notifyUrl,
+		ReturnUrl:      p.returnUrl,
+	})
+	if err != nil {
+		_ = model.ExpireSubscriptionOrder(tradeNo, model.PaymentProviderEpay)
+		common.ApiErrorMsg(c, "拉起支付失败")
+		return "", nil, false
+	}
+	return uri, params, true
+}
+
 func SubscriptionRequestEpay(c *gin.Context) {
 	var req SubscriptionEpayPayRequest
 	if err := c.ShouldBindJSON(&req); err != nil || req.PlanId <= 0 {
@@ -91,26 +140,12 @@ func SubscriptionRequestEpay(c *gin.Context) {
 		renewPrice = terms.PriceAmount
 	}
 
-	callBackAddress := service.GetCallbackAddress()
-	returnUrl, err := url.Parse(callBackAddress + "/api/subscription/epay/return")
-	if err != nil {
-		common.ApiErrorMsg(c, "回调地址配置错误")
-		return
-	}
-	notifyUrl, err := url.Parse(callBackAddress + "/api/subscription/epay/notify")
-	if err != nil {
-		common.ApiErrorMsg(c, "回调地址配置错误")
+	purchase, ok := prepareEpayPurchase(c)
+	if !ok {
 		return
 	}
 
-	tradeNo := fmt.Sprintf("%s%d", common.GetRandomString(6), time.Now().Unix())
-	tradeNo = fmt.Sprintf("SUBUSR%dNO%s", userId, tradeNo)
-
-	client := GetEpayClient()
-	if client == nil {
-		common.ApiErrorMsg(c, "当前管理员未配置支付信息")
-		return
-	}
+	tradeNo := model.NewSubscriptionTradeNo("SUBUSR", userId)
 
 	order := &model.SubscriptionOrder{
 		UserId:               userId,
@@ -127,18 +162,8 @@ func SubscriptionRequestEpay(c *gin.Context) {
 		common.ApiErrorMsg(c, "创建订单失败")
 		return
 	}
-	uri, params, err := client.Purchase(&epay.PurchaseArgs{
-		Type:           req.PaymentMethod,
-		ServiceTradeNo: tradeNo,
-		Name:           fmt.Sprintf("SUB:%s", plan.Title),
-		Money:          strconv.FormatFloat(renewPrice, 'f', 2, 64),
-		Device:         epay.PC,
-		NotifyUrl:      notifyUrl,
-		ReturnUrl:      returnUrl,
-	})
-	if err != nil {
-		_ = model.ExpireSubscriptionOrder(tradeNo, model.PaymentProviderEpay)
-		common.ApiErrorMsg(c, "拉起支付失败")
+	uri, params, ok := purchase.request(c, tradeNo, fmt.Sprintf("SUB:%s", plan.Title), renewPrice, req.PaymentMethod)
+	if !ok {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "success", "data": params, "url": uri})
