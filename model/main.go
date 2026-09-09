@@ -940,9 +940,26 @@ func existingColumnsOf(db *gorm.DB, table string, columns []string) ([]string, e
 	return present, nil
 }
 
-// dropLegacySubscriptionColumns 幂等删除指定表上的 legacy 列。SQLite 逐列 DROP（且先删
-// 仍引用该列的索引——DROP COLUMN 不允许列被索引引用），MySQL/PostgreSQL 一条 ALTER 多列。
-func dropLegacySubscriptionColumns(db *gorm.DB, table string, columns []string, sqliteIndexes []string) error {
+// sqliteIndexesOnColumns 返回 SQLite 表上引用了给定列的索引名。SQLite 的 DROP COLUMN
+// 不允许列仍被索引引用，必须先删索引；索引清单用 pragma 动态查而不是手工维护——漏一个
+// 就是启动期 FATAL（2026-09-10 踩过：legacy 列 next_reset_time 上的旧索引没删，
+// 开发库 SQLite 直接起不来，MySQL 因为会随列自动删索引所以演练时没暴露）。
+func sqliteIndexesOnColumns(db *gorm.DB, table string, columns []string) ([]string, error) {
+	if len(columns) == 0 {
+		return nil, nil
+	}
+	var indexes []string
+	err := db.Raw(
+		"SELECT DISTINCT il.name FROM pragma_index_list(?) AS il, pragma_index_info(il.name) AS ii WHERE ii.name IN (?)",
+		table, columns,
+	).Scan(&indexes).Error
+	return indexes, err
+}
+
+// dropLegacySubscriptionColumns 幂等删除指定表上的 legacy 列。SQLite 逐列 DROP，且先删
+// 掉引用这些列的索引（SQLite 不允许 DROP COLUMN 时列仍被索引引用）；MySQL/PostgreSQL
+// 一条 ALTER 多列，索引随列自动消失。
+func dropLegacySubscriptionColumns(db *gorm.DB, table string, columns []string) error {
 	present, err := existingColumnsOf(db, table, columns)
 	if err != nil {
 		return err
@@ -951,7 +968,11 @@ func dropLegacySubscriptionColumns(db *gorm.DB, table string, columns []string, 
 		return nil
 	}
 	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
-		for _, idx := range sqliteIndexes {
+		indexes, err := sqliteIndexesOnColumns(db, table, present)
+		if err != nil {
+			return err
+		}
+		for _, idx := range indexes {
 			if err := db.Exec("DROP INDEX IF EXISTS " + idx).Error; err != nil {
 				return err
 			}
@@ -971,24 +992,23 @@ func dropLegacySubscriptionColumns(db *gorm.DB, table string, columns []string, 
 }
 
 // ensureDropLegacySubscriptionPlanColumns 删除 subscription_plans 上随 legacy 模型移除的
-// 6 列（total_amount / quota_reset_* / reset_amount_limit / weekly / monthly）。
+// 列（total_amount / quota_reset_* / reset_amount_limit / weekly / monthly /
+// stripe_price_id / creem_product_id / waffo_pancake_product_id）。
 func ensureDropLegacySubscriptionPlanColumns(db *gorm.DB) error {
-	return dropLegacySubscriptionColumns(db, "subscription_plans", legacySubscriptionPlanColumns, nil)
+	return dropLegacySubscriptionColumns(db, "subscription_plans", legacySubscriptionPlanColumns)
 }
 
 // ensureDropLegacyUserSubscriptionColumns 删除 user_subscriptions 上随 legacy 模型移除的
-// 3 列（cycle_start_at / cycle_used / next_cycle_reset_at）。next_cycle_reset_at 建有 GORM
-// 单列索引 idx_user_subscriptions_next_cycle_reset_at，SQLite 需先删索引再删列。
+// 列（cycle_start_at / cycle_used / next_cycle_reset_at / last_reset_time / next_reset_time）。
+// 这些列上可能留有旧版 GORM 建的索引，dropLegacySubscriptionColumns 会在 SQLite 上先删索引。
 func ensureDropLegacyUserSubscriptionColumns(db *gorm.DB) error {
-	return dropLegacySubscriptionColumns(db, "user_subscriptions", legacyUserSubscriptionColumns,
-		[]string{"idx_user_subscriptions_next_cycle_reset_at"})
+	return dropLegacySubscriptionColumns(db, "user_subscriptions", legacyUserSubscriptionColumns)
 }
 
 // ensureDropLegacySubscriptionLedgerColumns 删除 user_subscriptions 上单期账本改造
-// 移除的累计展示列（amount_total / amount_used，被 period_used 取代）。amount_used 无
-// 单列索引，SQLite 直接逐列 DROP 即可。
+// 移除的累计展示列（amount_total / amount_used，被 period_used 取代）。
 func ensureDropLegacySubscriptionLedgerColumns(db *gorm.DB) error {
-	return dropLegacySubscriptionColumns(db, "user_subscriptions", legacySubscriptionLedgerColumns, nil)
+	return dropLegacySubscriptionColumns(db, "user_subscriptions", legacySubscriptionLedgerColumns)
 }
 
 // legacyBackupTables 是历史迁移留下的一次性备份表（_bak_<table>_<date>）。源表
