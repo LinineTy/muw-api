@@ -54,7 +54,9 @@ export function useRedemptionsColumns({
               <Checkbox
                 checked={table.getIsAllPageRowsSelected()}
                 indeterminate={table.getIsSomePageRowsSelected()}
-                onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+                onCheckedChange={(value) =>
+                  table.toggleAllPageRowsSelected(!!value)
+                }
                 aria-label={t('Select all')}
                 className='translate-y-[2px]'
               />
@@ -181,7 +183,7 @@ export function useRedemptionsColumns({
     {
       id: 'code',
       accessorKey: 'key',
-      header: t('Code'),
+      header: t('Redemption Code'),
       cell: function CodeCell({ row }) {
         const redemption = row.original
         const key = redemption.key

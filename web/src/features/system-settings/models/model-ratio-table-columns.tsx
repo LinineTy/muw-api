@@ -31,6 +31,8 @@ import {
   type ModelRow,
 } from './model-pricing-snapshots'
 
+export const TASK_PRICING_MODE_FILTER = 'tiered_expr_task'
+
 const filterBySelectedValues = (
   rowValue: unknown,
   filterValue: unknown
@@ -45,6 +47,7 @@ type BuildModelRatioColumnsOptions = {
   deleteDisabled?: boolean
   /** Whether the row-selection checkbox column is rendered (batch mode). */
   selectable?: boolean
+  taskModelNames?: Set<string>
   t: (key: string) => string
 }
 
@@ -53,6 +56,7 @@ export function buildModelRatioColumns({
   onEdit,
   deleteDisabled,
   selectable = true,
+  taskModelNames,
   t,
 }: BuildModelRatioColumnsOptions): ColumnDef<ModelRow>[] {
   return [
@@ -64,7 +68,9 @@ export function buildModelRatioColumns({
               <Checkbox
                 checked={table.getIsAllPageRowsSelected()}
                 indeterminate={table.getIsSomePageRowsSelected()}
-                onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+                onCheckedChange={(value) =>
+                  table.toggleAllPageRowsSelected(!!value)
+                }
                 aria-label={t('Select all')}
                 className='translate-y-[2px]'
               />
@@ -88,27 +94,55 @@ export function buildModelRatioColumns({
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title={t('Model name')} />
       ),
-      cell: ({ row }) => (
-        <div className='flex min-w-0 items-center gap-2 font-medium'>
-          <span className='min-w-0 truncate'>{row.getValue('name')}</span>
-          {row.original.billingMode === 'tiered_expr' && (
-            <StatusBadge
-              label={t('Tiered')}
-              variant='info'
-              copyable={false}
-              className='shrink-0'
-            />
-          )}
-          {row.original.hasConflict && (
-            <StatusBadge
-              label={t('Conflict')}
-              variant='danger'
-              copyable={false}
-              className='shrink-0'
-            />
-          )}
-        </div>
-      ),
+      cell: ({ row }) => {
+        const isTaskModel = Boolean(taskModelNames?.has(row.original.name))
+        const hasConfiguredTaskPricing =
+          row.original.billingMode === 'tiered_expr' &&
+          Boolean(row.original.billingExpr)
+        const showTaskPricingBadge = isTaskModel && hasConfiguredTaskPricing
+        const showTieredBadge =
+          row.original.billingMode === 'tiered_expr' && !isTaskModel
+        const showUnconfiguredTaskBadge =
+          isTaskModel && !hasConfiguredTaskPricing
+
+        return (
+          <div className='flex min-w-0 items-center gap-2 font-medium'>
+            <span className='min-w-0 truncate'>{row.getValue('name')}</span>
+            {showTieredBadge ? (
+              <StatusBadge
+                label={t('Tiered')}
+                variant='info'
+                copyable={false}
+                className='shrink-0'
+              />
+            ) : null}
+            {showTaskPricingBadge ? (
+              <StatusBadge
+                label={t('Task pricing')}
+                variant='info'
+                copyable={false}
+                className='shrink-0'
+              />
+            ) : null}
+            {row.original.hasConflict && (
+              <StatusBadge
+                label={t('Conflict')}
+                variant='danger'
+                copyable={false}
+                className='shrink-0'
+              />
+            )}
+            {showUnconfiguredTaskBadge ? (
+              <StatusBadge
+                label={t('Task pricing not configured')}
+                variant='warning'
+                copyable={false}
+                className='shrink-0'
+              />
+            ) : null}
+          </div>
+        )
+      },
       enableHiding: false,
     },
     {
@@ -125,8 +159,20 @@ export function buildModelRatioColumns({
           className='-ml-1.5 px-0'
         />
       ),
-      filterFn: (row, id, value) =>
-        filterBySelectedValues(row.getValue(id), value),
+      filterFn: (row, id, value) => {
+        if (filterBySelectedValues(row.getValue(id), value)) return true
+        if (
+          !Array.isArray(value) ||
+          !value.includes(TASK_PRICING_MODE_FILTER)
+        ) {
+          return false
+        }
+        return (
+          Boolean(taskModelNames?.has(row.original.name)) &&
+          row.original.billingMode === 'tiered_expr' &&
+          Boolean(row.original.billingExpr)
+        )
+      },
       meta: { label: t('Mode') },
     },
     {

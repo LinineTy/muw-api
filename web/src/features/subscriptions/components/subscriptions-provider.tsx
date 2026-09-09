@@ -20,13 +20,16 @@ import React, { useState } from 'react'
 
 import useDialogState from '@/hooks/use-dialog'
 
-import type { PlanRecord, SubscriptionsDialogType } from '../types'
+import type { PlanKind, PlanRecord, SubscriptionsDialogType } from '../types'
 
 type SubscriptionsContextType = {
   open: SubscriptionsDialogType | null
   setOpen: (str: SubscriptionsDialogType | null) => void
   currentRow: PlanRecord | null
   setCurrentRow: React.Dispatch<React.SetStateAction<PlanRecord | null>>
+  /** 新建对象的类型（套餐 / 固定分组商品）；编辑时以 currentRow.kind 为准。 */
+  createKind: PlanKind
+  setCreateKind: (kind: PlanKind) => void
   refreshTrigger: number
   triggerRefresh: () => void
   grouped: boolean
@@ -43,6 +46,7 @@ export function SubscriptionsProvider({
 }) {
   const [open, setOpen] = useDialogState<SubscriptionsDialogType>(null)
   const [currentRow, setCurrentRow] = useState<PlanRecord | null>(null)
+  const [createKind, setCreateKind] = useState<PlanKind>('plan')
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [grouped, setGrouped] = useState(() => {
     return localStorage.getItem('subscriptions:grouped') === 'true'
@@ -57,6 +61,8 @@ export function SubscriptionsProvider({
         setOpen,
         currentRow,
         setCurrentRow,
+        createKind,
+        setCreateKind,
         refreshTrigger,
         triggerRefresh,
         grouped,

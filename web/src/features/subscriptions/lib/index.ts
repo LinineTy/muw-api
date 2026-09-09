@@ -35,6 +35,7 @@ export {
   PLAN_FORM_DEFAULTS,
   planToFormValues,
   formValuesToPlanPayload,
+  parseAllowedGroups,
   parseResetWindowsRaw,
   resetWindowsRawEqual,
   planValiditySeconds,
@@ -42,6 +43,11 @@ export {
   type PlanFormValues,
   type ResetWindowFormRow,
 } from './plan-form'
+export {
+  groupPinToFormValues,
+  planRecordFromGroupPinProduct,
+  planValuesToGroupPinPayload,
+} from './group-pin'
 export {
   buildLimitRows,
   type WindowUsageRow,

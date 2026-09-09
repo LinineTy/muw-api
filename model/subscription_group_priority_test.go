@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -45,9 +46,9 @@ func seedGPSubFull(t *testing.T, id int, userId, planId int, upgradeGroup, prevG
 	now := GetDBTimestamp()
 	sub := &UserSubscription{
 		UserId: userId, PlanId: planId, Status: "active",
-		UpgradeGroup:   upgradeGroup,
-		PrevUserGroup:  prevGroup,
-		StartTime:      now - 15*86400, EndTime: now + endOffset,
+		UpgradeGroup:  upgradeGroup,
+		PrevUserGroup: prevGroup,
+		StartTime:     now - 15*86400, EndTime: now + endOffset,
 	}
 	seedQuotaSub(t, id, sub)
 }
@@ -147,10 +148,196 @@ func TestGroupPriorityExpiry(t *testing.T) {
 	})
 	seedGPUser(t, 832, "v2")
 	seedGPSub(t, 8233, 832, 8113, "v2", -3600)
+	// CreateUserSubscriptionFromPlanTx 会把套餐 downgrade_group 快照进订阅行；seedGPSubFull
+	// 不写该列，这里补上（f 测的是"同级降级目标被拦"，降级目标必须在行上生效）。
+	require.NoError(t, DB.Model(&UserSubscription{}).Where("id = ?", 8233).Update("downgrade_group", "v2b").Error)
 	downgraded, err = LazyExpireUserSubscriptions(832)
 	require.NoError(t, err)
 	assert.False(t, downgraded)
 	assert.Equal(t, "v2", gpUserGroup(t, 832), "同级降级目标被拦截，组保持")
+}
+
+// ---- 锚点态（已配置组优先级）下"钉子/高水位"语义 ----
+
+// seedAnchorPlan 造一个带升/降目标与互斥组的订阅套餐（行内字段即计划字段，购买时会
+// 快照进订阅行）。
+func seedAnchorPlan(t *testing.T, id int, up, down, exclusive string) {
+	t.Helper()
+	seedQuotaPlan(t, id, &SubscriptionPlan{
+		Title: fmt.Sprintf("anchor-%s-%s-%d", up, down, id), PriceAmount: 10, Enabled: true,
+		DurationUnit: SubscriptionDurationDay, DurationValue: 30,
+		ResetWindowsRaw: capWindowJSON(1000),
+		UpgradeGroup:    up, DowngradeGroup: down, ExclusiveGroup: exclusive,
+	})
+}
+
+func anchorTestEnv(t *testing.T, prioritiesJSON string) {
+	t.Helper()
+	truncateTables(t)
+	require.NoError(t, SetSubscriptionGroupPrioritiesFromJSON(prioritiesJSON))
+	t.Cleanup(func() { _ = SetSubscriptionGroupPrioritiesFromJSON(`{}`) })
+	oldQuotaPerUnit := common.QuotaPerUnit
+	common.QuotaPerUnit = 500000
+	t.Cleanup(func() { common.QuotaPerUnit = oldQuotaPerUnit })
+}
+
+func buyAnchorPlan(t *testing.T, userId, planId int) {
+	t.Helper()
+	_, err := PurchaseWithStrategy(userId, planId, 0)
+	require.NoError(t, err)
+}
+
+// forceExpireSubs 把用户指定套餐的订阅 end_time 拨到过去并惰性到期，返回是否改过组。
+func forceExpireSubs(t *testing.T, userId, planId int) bool {
+	t.Helper()
+	now := GetDBTimestamp()
+	require.NoError(t, DB.Model(&UserSubscription{}).
+		Where("user_id = ? AND plan_id = ? AND status = ?", userId, planId, "active").
+		Update("end_time", now-1).Error)
+	downgraded, err := LazyExpireUserSubscriptions(userId)
+	require.NoError(t, err)
+	return downgraded
+}
+
+// 固定分组钉（GroupPin）撑住到期回退：普通订阅自然到期后组不掉，回落钉组。
+func TestGroupPinSurvivesSubscriptionExpiry(t *testing.T) {
+	anchorTestEnv(t, `{"default":1,"v1":20,"v2":30}`)
+	seedAnchorPlan(t, 9101, "v1", "", "gx-a") // 普通订阅：升 v1、无降级目标
+	seedGPUser(t, 9001, "default")
+
+	_, err := PinUserGroupTx(DB, 9001, "v2", GroupPinSourceAdmin, "", 1)
+	require.NoError(t, err)
+	require.Equal(t, "v2", gpUserGroup(t, 9001), "发钉切组（30 ≥ 1）")
+
+	buyAnchorPlan(t, 9001, 9101)
+	require.Equal(t, "v2", gpUserGroup(t, 9001), "买低档 v1 不拉低（20 < 30）")
+
+	assert.False(t, forceExpireSubs(t, 9001, 9101), "v1 到期收敛后组未变")
+	assert.Equal(t, "v2", gpUserGroup(t, 9001), "固定分组钉撑住，到期不回落")
+}
+
+// 钉 v2 用户买到更高 v3：正常升级；v3 到期回落固定分组 v2（而非其降级目标）。
+func TestGroupPinHighExpiresFallsToPin(t *testing.T) {
+	anchorTestEnv(t, `{"default":1,"v1":20,"v2":30,"v3":40}`)
+	seedAnchorPlan(t, 9103, "v3", "v1", "gx-b") // 升 v3 降 v1
+	seedGPUser(t, 9002, "default")
+
+	_, err := PinUserGroupTx(DB, 9002, "v2", GroupPinSourceAdmin, "", 1)
+	require.NoError(t, err)
+	require.Equal(t, "v2", gpUserGroup(t, 9002))
+
+	buyAnchorPlan(t, 9002, 9103) // 高买 → 组升 v3
+	require.Equal(t, "v3", gpUserGroup(t, 9002))
+
+	assert.True(t, forceExpireSubs(t, 9002, 9103), "v3 到期应掉组")
+	assert.Equal(t, "v2", gpUserGroup(t, 9002), "v3 到期回落固定分组 v2，而非降级目标 v1")
+}
+
+// 非钉子 v3（升 v3 降 v1）到期，现存最高锚为用户的 v2 固定分组钉 → 回落 v2 而非其降级目标 v1。
+func TestAnchorNonPinnedHighExpiresFallsToRemaining(t *testing.T) {
+	anchorTestEnv(t, `{"default":1,"v1":20,"v2":30,"v3":40}`)
+	seedAnchorPlan(t, 9105, "v3", "v1", "gx-b") // 非钉子：升 v3 降 v1
+	seedGPUser(t, 9003, "default")
+
+	_, err := PinUserGroupTx(DB, 9003, "v2", GroupPinSourceAdmin, "", 1)
+	require.NoError(t, err)
+	require.Equal(t, "v2", gpUserGroup(t, 9003))
+
+	buyAnchorPlan(t, 9003, 9105)
+	require.Equal(t, "v3", gpUserGroup(t, 9003))
+
+	assert.True(t, forceExpireSubs(t, 9003, 9105), "v3 到期应掉组（回落到钉组 v2）")
+	assert.Equal(t, "v2", gpUserGroup(t, 9003), "非钉子 v3 到期回落固定分组 v2，而非降级目标 v1")
+}
+
+// 解除固定分组钉后组收敛：a) 无订阅 → 兜底 default；b) 有 ended 订阅 → 按其降级目标兜底。
+func TestGroupPinReleaseFallsBack(t *testing.T) {
+	t.Run("no subs drains to default", func(t *testing.T) {
+		anchorTestEnv(t, `{"default":1,"v2":30}`)
+		seedGPUser(t, 9004, "default")
+
+		_, err := PinUserGroupTx(DB, 9004, "v2", GroupPinSourceAdmin, "", 1)
+		require.NoError(t, err)
+		require.Equal(t, "v2", gpUserGroup(t, 9004))
+
+		var pin GroupPin
+		require.NoError(t, DB.Where("user_id = ?", 9004).First(&pin).Error)
+		_, changed, err := ReleaseGroupPinTx(DB, pin.Id, 1, "admin release")
+		require.NoError(t, err)
+		assert.True(t, changed, "解钉断档兜底 default")
+		assert.Equal(t, "default", gpUserGroup(t, 9004))
+	})
+
+	t.Run("drains to last expired downgrade target", func(t *testing.T) {
+		anchorTestEnv(t, `{"default":1,"v1":20,"v2":30}`)
+		seedAnchorPlan(t, 9106, "v1", "default", "gx-c") // 升 v1 降 default
+		seedGPUser(t, 9005, "default")
+
+		buyAnchorPlan(t, 9005, 9106)
+		require.Equal(t, "v1", gpUserGroup(t, 9005))
+		assert.True(t, forceExpireSubs(t, 9005, 9106), "唯一订阅到期掉组")
+		assert.Equal(t, "default", gpUserGroup(t, 9005))
+
+		_, err := PinUserGroupTx(DB, 9005, "v2", GroupPinSourceAdmin, "", 1)
+		require.NoError(t, err)
+		require.Equal(t, "v2", gpUserGroup(t, 9005))
+
+		var pin GroupPin
+		require.NoError(t, DB.Where("user_id = ?", 9005).First(&pin).Error)
+		_, changed, err := ReleaseGroupPinTx(DB, pin.Id, 1, "release")
+		require.NoError(t, err)
+		assert.True(t, changed)
+		assert.Equal(t, "default", gpUserGroup(t, 9005), "解钉回落最近 ended 订阅的降级目标 default")
+	})
+}
+
+// 给更高组的用户发低组钉：只记钉不切组；钉记录保持 active。
+func TestPinUserGroupNoDowngrade(t *testing.T) {
+	anchorTestEnv(t, `{"default":1,"v2":30,"v3":40}`)
+	seedGPUser(t, 9006, "v3")
+
+	changed, err := PinUserGroupTx(DB, 9006, "v2", GroupPinSourceAdmin, "", 1)
+	require.NoError(t, err)
+	assert.False(t, changed, "钉组优先级低于当前组，不切组")
+	assert.Equal(t, "v3", gpUserGroup(t, 9006))
+
+	var pin GroupPin
+	require.NoError(t, DB.Where("user_id = ?", 9006).First(&pin).Error)
+	assert.Equal(t, "v2", pin.Group)
+	assert.Equal(t, GroupPinStatusActive, pin.Status)
+}
+
+// 单钉模型：再次发钉替换旧钉（旧钉 released、reason=replaced），active 钉唯一。
+func TestGroupPinReplaceOldPin(t *testing.T) {
+	anchorTestEnv(t, `{"default":1,"v1":20,"v2":30}`)
+	seedGPUser(t, 9007, "default")
+
+	_, err := PinUserGroupTx(DB, 9007, "v1", GroupPinSourceAdmin, "", 1)
+	require.NoError(t, err)
+	changed, err := PinUserGroupTx(DB, 9007, "v2", GroupPinSourceAdmin, "", 1)
+	require.NoError(t, err)
+	assert.True(t, changed, "v2 30 ≥ v1 20 应切组")
+
+	var pins []GroupPin
+	require.NoError(t, DB.Where("user_id = ?", 9007).Order("id").Find(&pins).Error)
+	require.Len(t, pins, 2)
+	assert.Equal(t, GroupPinStatusReleased, pins[0].Status, "旧钉被替换释放")
+	assert.Equal(t, GroupPinReleaseReasonReplaced, pins[0].ReleaseReason)
+	assert.Equal(t, GroupPinStatusActive, pins[1].Status)
+	assert.Equal(t, "v2", gpUserGroup(t, 9007))
+}
+
+// 彻底断档（唯一非钉子订阅到期）→ 按它自己的 downgrade 目标兜底。
+func TestAnchorFullLapseDrainsToDowngradeGroup(t *testing.T) {
+	anchorTestEnv(t, `{"default":1,"v1":20,"v2":30}`)
+	seedAnchorPlan(t, 9108, "v2", "v1", "") // 非钉子：升 v2 降 v1，无互斥组
+	seedGPUser(t, 9005, "default")
+
+	buyAnchorPlan(t, 9005, 9108)
+	require.Equal(t, "v2", gpUserGroup(t, 9005))
+
+	assert.True(t, forceExpireSubs(t, 9005, 9108), "唯一订阅到期应掉组")
+	assert.Equal(t, "v1", gpUserGroup(t, 9005), "彻底断档按 downgrade 目标 v1 兜底")
 }
 
 // 编译期引用检查（避免 unused import）。

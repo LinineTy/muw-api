@@ -159,7 +159,7 @@ export function ModelHealth() {
             onValueChange={(value) => setDays(Number(value))}
             items={DAY_OPTIONS}
           >
-            <SelectTrigger className='h-9 w-28'>
+            <SelectTrigger className='h-9'>
               <SelectValue />
             </SelectTrigger>
             <SelectContent alignItemWithTrigger={false}>

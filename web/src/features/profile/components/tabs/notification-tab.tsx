@@ -22,7 +22,6 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { PasswordInput } from '@/components/password-input'
-import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -31,34 +30,21 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ROLE } from '@/lib/roles'
 
 import { updateUserSettings } from '../../api'
+import { NOTIFICATION_METHODS } from '../../constants'
+import { normalizeUserSettings } from '../../lib/user-settings'
+import type { UserProfile, NotifyType } from '../../types'
 import {
-  DEFAULT_QUOTA_WARNING_THRESHOLD,
-  NOTIFICATION_METHODS,
-} from '../../constants'
-import { parseUserSettings } from '../../lib'
-import type { UserProfile, UserSettings, NotifyType } from '../../types'
+  PolicyBadge,
+  PREFERENCE_KEY_ACCEPT_UNPRICED,
+  PREFERENCE_KEY_UPSTREAM_NOTIFY,
+  usePreferencePolicy,
+} from '../preference-policy'
 
 const NOTIFICATION_ICONS: Record<NotifyType, typeof Mail> = {
   email: Mail,
   webhook: Webhook,
   bark: Bell,
   gotify: Server,
-}
-
-const NOTIFICATION_VALUES = new Set<NotifyType>(
-  NOTIFICATION_METHODS.map((method) => method.value)
-)
-
-// Preference policy keys (must match backend common.PreferenceKey*).
-const PREF_ACCEPT_UNPRICED = 'accept_unset_model_ratio_model'
-const PREF_RECORD_IP = 'record_ip_log'
-const PREF_UPSTREAM_NOTIFY = 'upstream_model_update_notify_enabled'
-
-function normalizeNotifyType(value: unknown): NotifyType {
-  return typeof value === 'string' &&
-    NOTIFICATION_VALUES.has(value as NotifyType)
-    ? (value as NotifyType)
-    : 'email'
 }
 
 // ============================================================================
@@ -70,61 +56,21 @@ interface NotificationTabProps {
   onUpdate: () => void
 }
 
-function PolicyBadge({
-  forced,
-  locked,
-}: {
-  forced: boolean
-  locked: boolean
-}) {
-  const { t } = useTranslation()
-  if (forced) {
-    return (
-      <StatusBadge
-        label={t('Admin Enforced')}
-        variant='warning'
-        copyable={false}
-        className='shrink-0'
-      />
-    )
-  }
-  if (locked) {
-    return (
-      <StatusBadge
-        label={t('Locked by Admin')}
-        variant='neutral'
-        copyable={false}
-        className='shrink-0'
-      />
-    )
-  }
-  return null
-}
-
 export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
   const { t } = useTranslation()
   const isAdmin = (profile?.role ?? 0) >= ROLE.ADMIN
-  const forceOnSet = new Set(profile?.preference_policy?.force_on ?? [])
-  const lockedSet = new Set(profile?.preference_policy?.locked ?? [])
+  const { forceOnSet, lockedSet } = usePreferencePolicy(
+    profile?.preference_policy
+  )
   const [loading, setLoading] = useState(false)
-  const [settings, setSettings] = useState<UserSettings>({
-    notify_type: 'email',
-    quota_warning_threshold: DEFAULT_QUOTA_WARNING_THRESHOLD,
-    notification_email: '',
-    webhook_url: '',
-    webhook_secret: '',
-    bark_url: '',
-    gotify_url: '',
-    gotify_token: '',
-    gotify_priority: 5,
-    accept_unset_model_ratio_model: false,
-    record_ip_log: false,
-    upstream_model_update_notify_enabled: false,
-  })
+  const [settings, setSettings] = useState(() => normalizeUserSettings())
 
   // Update form field helper
   const updateField = useCallback(
-    <K extends keyof UserSettings>(field: K, value: UserSettings[K]) => {
+    <K extends keyof typeof settings>(
+      field: K,
+      value: (typeof settings)[K]
+    ) => {
       setSettings((prev) => ({ ...prev, [field]: value }))
     },
     []
@@ -132,31 +78,15 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
 
   useEffect(() => {
     if (profile?.setting) {
-      const parsed = parseUserSettings(profile.setting)
-      setSettings({
-        notify_type: normalizeNotifyType(parsed.notify_type),
-        quota_warning_threshold:
-          parsed.quota_warning_threshold ?? DEFAULT_QUOTA_WARNING_THRESHOLD,
-        notification_email: parsed.notification_email ?? '',
-        webhook_url: parsed.webhook_url ?? '',
-        webhook_secret: parsed.webhook_secret ?? '',
-        bark_url: parsed.bark_url ?? '',
-        gotify_url: parsed.gotify_url ?? '',
-        gotify_token: parsed.gotify_token ?? '',
-        gotify_priority: parsed.gotify_priority ?? 5,
-        accept_unset_model_ratio_model:
-          parsed.accept_unset_model_ratio_model || false,
-        record_ip_log: parsed.record_ip_log || false,
-        upstream_model_update_notify_enabled:
-          parsed.upstream_model_update_notify_enabled || false,
-      })
+      setSettings(normalizeUserSettings(profile.setting))
     }
   }, [profile])
 
   const handleSave = async () => {
     try {
       setLoading(true)
-      const response = await updateUserSettings(settings)
+      const { record_ip_log: _recordIpLog, ...notificationSettings } = settings
+      const response = await updateUserSettings(notificationSettings)
 
       if (response.success) {
         toast.success(t('Settings updated successfully'))
@@ -164,14 +94,14 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
       } else {
         toast.error(response.message || t('Failed to update settings'))
       }
-    } catch (_error) {
+    } catch {
       toast.error(t('Failed to update settings'))
     } finally {
       setLoading(false)
     }
   }
 
-  const notifyType = normalizeNotifyType(settings.notify_type)
+  const notifyType = settings.notify_type
 
   return (
     <div className='space-y-4 sm:space-y-6'>
@@ -182,8 +112,7 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
           value={[notifyType]}
           onValueChange={(value) => {
             const nextValue = value.find((item) => item !== notifyType)
-            if (nextValue)
-              updateField('notify_type', normalizeNotifyType(nextValue))
+            if (nextValue) updateField('notify_type', nextValue as NotifyType)
           }}
           aria-label={t('Notification Method')}
           variant='outline'
@@ -380,8 +309,8 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
                   {t('Receive Upstream Model Update Notifications')}
                 </Label>
                 <PolicyBadge
-                  forced={forceOnSet.has(PREF_UPSTREAM_NOTIFY)}
-                  locked={lockedSet.has(PREF_UPSTREAM_NOTIFY)}
+                  forced={forceOnSet.has(PREFERENCE_KEY_UPSTREAM_NOTIFY)}
+                  locked={lockedSet.has(PREFERENCE_KEY_UPSTREAM_NOTIFY)}
                 />
               </div>
               <p className='text-muted-foreground line-clamp-3 text-xs sm:line-clamp-none sm:text-sm'>
@@ -394,12 +323,12 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
               id='upstreamModelUpdateNotify'
               className='shrink-0'
               checked={
-                forceOnSet.has(PREF_UPSTREAM_NOTIFY) ||
+                forceOnSet.has(PREFERENCE_KEY_UPSTREAM_NOTIFY) ||
                 settings.upstream_model_update_notify_enabled
               }
               disabled={
-                forceOnSet.has(PREF_UPSTREAM_NOTIFY) ||
-                lockedSet.has(PREF_UPSTREAM_NOTIFY)
+                forceOnSet.has(PREFERENCE_KEY_UPSTREAM_NOTIFY) ||
+                lockedSet.has(PREFERENCE_KEY_UPSTREAM_NOTIFY)
               }
               onCheckedChange={(checked) =>
                 updateField('upstream_model_update_notify_enabled', checked)
@@ -416,8 +345,8 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
                 {t('Accept Unpriced Models')}
               </Label>
               <PolicyBadge
-                forced={forceOnSet.has(PREF_ACCEPT_UNPRICED)}
-                locked={lockedSet.has(PREF_ACCEPT_UNPRICED)}
+                forced={forceOnSet.has(PREFERENCE_KEY_ACCEPT_UNPRICED)}
+                locked={lockedSet.has(PREFERENCE_KEY_ACCEPT_UNPRICED)}
               />
             </div>
             <p className='text-muted-foreground text-xs sm:text-sm'>
@@ -428,43 +357,16 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
             id='acceptUnsetPrice'
             className='shrink-0'
             checked={
-              forceOnSet.has(PREF_ACCEPT_UNPRICED) ||
+              forceOnSet.has(PREFERENCE_KEY_ACCEPT_UNPRICED) ||
               settings.accept_unset_model_ratio_model
             }
             disabled={
-              forceOnSet.has(PREF_ACCEPT_UNPRICED) ||
-              lockedSet.has(PREF_ACCEPT_UNPRICED)
+              forceOnSet.has(PREFERENCE_KEY_ACCEPT_UNPRICED) ||
+              lockedSet.has(PREFERENCE_KEY_ACCEPT_UNPRICED)
             }
             onCheckedChange={(checked) =>
               updateField('accept_unset_model_ratio_model', checked)
             }
-          />
-        </div>
-
-        {/* Record IP Log */}
-        <div className='flex items-start justify-between gap-3 rounded-lg border p-3 sm:items-center sm:p-4'>
-          <div className='space-y-0.5'>
-            <div className='flex flex-wrap items-center gap-2'>
-              <Label htmlFor='recordIp'>{t('Record IP Address')}</Label>
-              <PolicyBadge
-                forced={forceOnSet.has(PREF_RECORD_IP)}
-                locked={lockedSet.has(PREF_RECORD_IP)}
-              />
-            </div>
-            <p className='text-muted-foreground text-xs sm:text-sm'>
-              {t('Log IP address for usage and error logs')}
-            </p>
-          </div>
-          <Switch
-            id='recordIp'
-            className='shrink-0'
-            checked={
-              forceOnSet.has(PREF_RECORD_IP) || settings.record_ip_log
-            }
-            disabled={
-              forceOnSet.has(PREF_RECORD_IP) || lockedSet.has(PREF_RECORD_IP)
-            }
-            onCheckedChange={(checked) => updateField('record_ip_log', checked)}
           />
         </div>
       </div>

@@ -19,8 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 import { DescriptionDialog } from './dialogs/description-dialog'
 import { MissingModelsDialog } from './dialogs/missing-models-dialog'
 import { PrefillGroupManagement } from './dialogs/prefill-group-management'
+import { PriceSyncDialog } from './dialogs/price-sync-dialog'
 import { SyncWizardDialog } from './dialogs/sync-wizard-dialog'
-import { UpstreamConflictDialog } from './dialogs/upstream-conflict-dialog'
 import { ModelMutateDrawer } from './drawers/model-mutate-drawer'
 import { useModels } from './models-provider'
 import { VendorManagement } from './vendor-management'
@@ -31,14 +31,24 @@ export function ModelsDialogs() {
 
   return (
     <>
-      {/* Model Create/Update Drawer */}
+      <PriceSyncDialog
+        open={open === 'price-sync'}
+        onOpenChange={(value) => !value && setOpen(null)}
+      />
+
+      {/* Model Create/Update Drawer（含 pricing 表单字段） */}
+      {/* MERGE-DECISION: 保留 fork 抽屉；price-model 同样打开它（fork 抽屉无上游 initialSection 分区）。 */}
       <ModelMutateDrawer
-        open={open === 'create-model' || open === 'update-model'}
+        open={
+          open === 'create-model' ||
+          open === 'update-model' ||
+          open === 'price-model'
+        }
         onOpenChange={(v) => !v && setOpen(null)}
         currentRow={currentRow}
       />
 
-      {/* Vendor Management */}
+      {/* Vendor Management（fork 自研：列表 + 编辑表单一体） */}
       <VendorManagement
         open={open === 'vendor-management'}
         onOpenChange={(v) => !v && setOpen(null)}
@@ -53,12 +63,6 @@ export function ModelsDialogs() {
       {/* Sync Wizard Dialog */}
       <SyncWizardDialog
         open={open === 'sync-wizard'}
-        onOpenChange={(v) => !v && setOpen(null)}
-      />
-
-      {/* Upstream Conflict Dialog */}
-      <UpstreamConflictDialog
-        open={open === 'upstream-conflict'}
         onOpenChange={(v) => !v && setOpen(null)}
       />
 

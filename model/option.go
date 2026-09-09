@@ -2,12 +2,15 @@ package model
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/pkg/jsplugin"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -58,6 +61,11 @@ func InitOptionMap() {
 	common.OptionMap["DisplayTokenStatEnabled"] = strconv.FormatBool(common.DisplayTokenStatEnabled)
 	common.OptionMap["DrawingEnabled"] = strconv.FormatBool(common.DrawingEnabled)
 	common.OptionMap["TaskEnabled"] = strconv.FormatBool(common.TaskEnabled)
+	common.OptionMap["TaskPluginEnabled"] = strconv.FormatBool(constant.TaskPluginEnabled)
+	jsplugin.DefaultRegistry.SetEnabled(constant.TaskPluginEnabled)
+	common.OptionMap[setting.TaskPluginMarketplaceSourcesKey] = setting.TaskPluginMarketplaceSources2JsonString()
+	common.OptionMap[setting.TaskPluginDisabledFactoryKeysKey] = "[]"
+	jsplugin.DefaultRegistry.SetDisabledFactoryKeys(nil)
 	common.OptionMap["DataExportEnabled"] = strconv.FormatBool(common.DataExportEnabled)
 	common.OptionMap["ChannelDisableThreshold"] = strconv.FormatFloat(common.ChannelDisableThreshold, 'f', -1, 64)
 	common.OptionMap["EmailDomainRestrictionEnabled"] = strconv.FormatBool(common.EmailDomainRestrictionEnabled)
@@ -90,6 +98,7 @@ func InitOptionMap() {
 	// 玻璃预设背景图模糊强度(px,0 = 原图),与遮罩/亮度分开调节
 	common.OptionMap["GlassBlur"] = "18"
 	common.OptionMap["ServerAddress"] = ""
+	common.OptionMap["TaskPublicAddress"] = system_setting.TaskPublicAddress
 	common.OptionMap["WorkerUrl"] = system_setting.WorkerUrl
 	common.OptionMap["WorkerValidKey"] = system_setting.WorkerValidKey
 	common.OptionMap["WorkerAllowHttpImageRequestEnabled"] = strconv.FormatBool(system_setting.WorkerAllowHttpImageRequestEnabled)
@@ -192,9 +201,7 @@ func InitOptionMap() {
 
 	// 自动添加所有注册的模型配置
 	modelConfigs := config.GlobalConfig.ExportAllConfigs()
-	for k, v := range modelConfigs {
-		common.OptionMap[k] = v
-	}
+	maps.Copy(common.OptionMap, modelConfigs)
 
 	common.OptionMapRWMutex.Unlock()
 	loadOptionsFromDatabase()
@@ -284,6 +291,9 @@ func validateOptionValue(key string, value string) error {
 }
 
 func UpdateOption(key string, value string) error {
+	if IsModelPricingOption(key) {
+		return UpdateModelPricingOptions(map[string]string{key: value})
+	}
 	if err := validateOptionValue(key, value); err != nil {
 		return err
 	}
@@ -370,7 +380,11 @@ func updateOptionMap(key string, value string) (err error) {
 			common.ImageDownloadPermission = intValue
 		}
 	}
-	if strings.HasSuffix(key, "Enabled") || key == "DefaultCollapseSidebar" || key == "DefaultUseAutoGroup" || key == "SMTPForceAuthLogin" || key == "SMTPInsecureSkipVerify" {
+	// 两个后缀都要判:三个限流开关叫 CriticalRateLimitEnable / GlobalApiRateLimitEnable /
+	// GlobalWebRateLimitEnable(结尾 "Enable"),其余布尔开关是 *Enabled(结尾 "Enabled",
+	// 它不以 "Enable" 结尾——少一个 d 就是两批键)。只判 "Enabled" 会漏掉限流开关,
+	// 于是设置页改了只写库、运行时永不生效。
+	if strings.HasSuffix(key, "Enabled") || strings.HasSuffix(key, "Enable") || key == "DefaultCollapseSidebar" || key == "DefaultUseAutoGroup" || key == "SMTPForceAuthLogin" || key == "SMTPInsecureSkipVerify" {
 		boolValue := value == "true"
 		switch key {
 		case "PasswordRegisterEnabled":
@@ -421,6 +435,9 @@ func updateOptionMap(key string, value string) (err error) {
 			common.DrawingEnabled = boolValue
 		case "TaskEnabled":
 			common.TaskEnabled = boolValue
+		case "TaskPluginEnabled":
+			constant.TaskPluginEnabled = boolValue
+			jsplugin.DefaultRegistry.SetEnabled(boolValue)
 		case "DataExportEnabled":
 			common.DataExportEnabled = boolValue
 		case "DefaultCollapseSidebar":
@@ -479,6 +496,9 @@ func updateOptionMap(key string, value string) (err error) {
 			common.GlobalWebRateLimitEnable = boolValue
 		}
 	}
+	if key == setting.TaskPluginDisabledFactoryKeysKey {
+		jsplugin.DefaultRegistry.SetDisabledFactoryKeys(setting.ParseTaskPluginDisabledFactoryKeys(value))
+	}
 	switch key {
 	case "EmailDomainWhitelist":
 		common.EmailDomainWhitelist = strings.Split(value, ",")
@@ -497,6 +517,8 @@ func updateOptionMap(key string, value string) (err error) {
 		common.SMTPToken = value
 	case "ServerAddress":
 		system_setting.ServerAddress = value
+	case "TaskPublicAddress":
+		system_setting.TaskPublicAddress = value
 	case "WorkerUrl":
 		system_setting.WorkerUrl = value
 	case "WorkerValidKey":

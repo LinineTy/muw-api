@@ -1052,5 +1052,20 @@
   "suggestions": "suggestions",
   "Background blur": "Background blur",
   "How strongly the background image is blurred (0px = sharp original; higher = softer behind the glass)": "How strongly the background image is blurred (0px = sharp original; higher = softer behind the glass)",
-  "No matching models in any group": "No matching models in any group"
+  "No matching models in any group": "No matching models in any group",
+  "Please select a group": "Please select a group",
+  "Restrict which user groups can purchase. Leave empty to allow all groups.": "Restrict which user groups can purchase. Leave empty to allow all groups.",
+  "History": "History",
+  "Update fixed group product": "Update fixed group product",
+  "Delete fixed group product \"{{title}}\"? This cannot be undone. Existing pins of users are not affected.": "Delete fixed group product \"{{title}}\"? This cannot be undone. Existing pins of users are not affected.",
+  "Every pin of this user, including released ones. The active pin is what currently anchors the group.": "Every pin of this user, including released ones. The active pin is what currently anchors the group.",
+  "Release the fixed group \"{{group}}\" for this user? The group falls back to the highest remaining subscription anchor, or the last downgrade target.": "Release the fixed group \"{{group}}\" for this user? The group falls back to the highest remaining subscription anchor, or the last downgrade target.",
+  "Purchase": "Purchase",
+  "Create fixed group product": "Create fixed group product",
+  "New Fixed Group Product": "New Fixed Group Product",
+  "Fixed group products: one-time purchase pins the user to the group permanently": "Fixed group products: one-time purchase pins the user to the group permanently",
+  "Fixed group history": "Fixed group history",
+  "Use \"Create\" to add a subscription plan or a fixed group product": "Use \"Create\" to add a subscription plan or a fixed group product",
+  "No fixed group pinned": "No fixed group pinned",
+  "Purchase access": "Purchase access"
 }

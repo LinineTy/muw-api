@@ -16,21 +16,34 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Layers, Plus } from 'lucide-react'
+import { Layers, Pin, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { MobileToggleMenu, ToggleMenuItem, TogglePill } from '@/components/ui/responsive-toggle'
 
 import { useSubscriptions } from './subscriptions-provider'
 
 export function SubscriptionsPrimaryButtons() {
   const { t } = useTranslation()
-  const { setOpen, grouped, setGrouped } = useSubscriptions()
+  const { setOpen, setCreateKind, grouped, setGrouped } = useSubscriptions()
 
   const handleGroupedToggle = (checked: boolean) => {
     localStorage.setItem('subscriptions:grouped', String(checked))
     setGrouped(checked)
+  }
+
+  // 新建入口按类型分开：类型在选择入口时确定，抽屉里不再切换（避免"点新建商品
+  // 却落在套餐表单"）。
+  const handleCreate = (kind: 'plan' | 'group_pin') => {
+    setCreateKind(kind)
+    setOpen('create')
   }
 
   return (
@@ -42,10 +55,25 @@ export function SubscriptionsPrimaryButtons() {
         checked={grouped}
         onCheckedChange={handleGroupedToggle}
       />
-      <Button size='sm' onClick={() => setOpen('create')}>
-        <Plus className='h-4 w-4' />
-        {t('Create Plan')}
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={<Button size='sm' />}
+          aria-label={t('Create')}
+        >
+          <Plus className='h-4 w-4' />
+          {t('Create')}
+        </DropdownMenuTrigger>
+        {/* 弹层宽度由 DropdownMenuContent 默认按内容撑开，此处无需再覆盖。 */}
+        <DropdownMenuContent align='end'>
+          <DropdownMenuItem onClick={() => handleCreate('plan')}>
+            {t('Create Plan')}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleCreate('group_pin')}>
+            <Pin className='size-4' />
+            {t('New Fixed Group Product')}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <MobileToggleMenu>
         <ToggleMenuItem
           label={t('Group display')}

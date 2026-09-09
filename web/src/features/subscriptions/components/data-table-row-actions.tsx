@@ -38,6 +38,8 @@ export function DataTableRowActions({ plan }: DataTableRowActionsProps) {
   const { setOpen, setCurrentRow } = useSubscriptions()
   const isEnabled = plan.plan.enabled
   const toggleLabel = isEnabled ? t('Disable') : t('Enable')
+  // 固定分组商品没有订阅，也就没有可重置的额度。
+  const isGroupPin = plan.kind === 'group_pin'
 
   const handleEdit = () => {
     setCurrentRow(plan)
@@ -77,21 +79,23 @@ export function DataTableRowActions({ plan }: DataTableRowActionsProps) {
         <TooltipContent>{t('Edit')}</TooltipContent>
       </Tooltip>
 
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              variant='ghost'
-              size='icon-sm'
-              onClick={handleResetSubscriptions}
-              aria-label={t('Reset subscription quota')}
-            />
-          }
-        >
-          <RotateCcw />
-        </TooltipTrigger>
-        <TooltipContent>{t('Reset subscription quota')}</TooltipContent>
-      </Tooltip>
+      {!isGroupPin && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant='ghost'
+                size='icon-sm'
+                onClick={handleResetSubscriptions}
+                aria-label={t('Reset subscription quota')}
+              />
+            }
+          >
+            <RotateCcw />
+          </TooltipTrigger>
+          <TooltipContent>{t('Reset subscription quota')}</TooltipContent>
+        </Tooltip>
+      )}
 
       <Tooltip>
         <TooltipTrigger

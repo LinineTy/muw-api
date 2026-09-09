@@ -156,7 +156,7 @@ export function LinuxDOGroupMappingEditor({
                 level !== null && updateLevel(row.id, level)
               }
             >
-              <SelectTrigger className='w-24 shrink-0'>
+              <SelectTrigger className='shrink-0'>
                 <SelectValue placeholder={t('Level')} />
               </SelectTrigger>
               <SelectContent alignItemWithTrigger={false}>

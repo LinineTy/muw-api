@@ -102,7 +102,7 @@ function SubscriptionTabContent({ grouped }: { grouped: boolean }) {
       {/* 到期提醒 */}
       <ExpiringBanner />
 
-      {/* 套餐目录（购买）：余额支付/在线支付，支持升级/降级 */}
+      {/* 套餐目录（购买）：余额支付/在线支付，支持升级/降级；固定分组商品同网格 */}
       <section className='flex flex-col gap-3'>
         <h2 className='text-sm font-semibold tracking-tight'>
           {t('Plans')}

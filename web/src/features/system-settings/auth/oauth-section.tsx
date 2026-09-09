@@ -83,8 +83,7 @@ const oauthSchema = z.object({
     user_info_endpoint: z.string(),
   }),
   TelegramOAuthEnabled: z.boolean(),
-  TelegramBotToken: z.string(),
-  TelegramBotName: z.string(),
+  telegram: z.object({ client_id: z.string(), client_secret: z.string() }),
   LinuxDOOAuthEnabled: z.boolean(),
   LinuxDOClientId: z.string(),
   LinuxDOClientSecret: z.string(),
@@ -117,8 +116,8 @@ type FlatOAuthDefaults = {
   'oidc.token_endpoint': string
   'oidc.user_info_endpoint': string
   TelegramOAuthEnabled: boolean
-  TelegramBotToken: string
-  TelegramBotName: string
+  'telegram.client_id': string
+  'telegram.client_secret': string
   LinuxDOOAuthEnabled: boolean
   LinuxDOClientId: string
   LinuxDOClientSecret: string
@@ -205,8 +204,10 @@ const buildFormDefaults = (defaults: FlatOAuthDefaults): OAuthFormValues => ({
     user_info_endpoint: defaults['oidc.user_info_endpoint'] ?? '',
   },
   TelegramOAuthEnabled: defaults.TelegramOAuthEnabled,
-  TelegramBotToken: defaults.TelegramBotToken ?? '',
-  TelegramBotName: defaults.TelegramBotName ?? '',
+  telegram: {
+    client_id: defaults['telegram.client_id'] ?? '',
+    client_secret: defaults['telegram.client_secret'] ?? '',
+  },
   LinuxDOOAuthEnabled: defaults.LinuxDOOAuthEnabled,
   LinuxDOClientId: defaults.LinuxDOClientId ?? '',
   LinuxDOClientSecret: defaults.LinuxDOClientSecret ?? '',
@@ -214,8 +215,7 @@ const buildFormDefaults = (defaults: FlatOAuthDefaults): OAuthFormValues => ({
   LinuxDOGroupMapping: defaults.LinuxDOGroupMapping ?? '',
   LinuxDOBlacklist: defaults.LinuxDOBlacklist ?? '',
   LinuxDoRefreshEnabled: defaults.LinuxDoRefreshEnabled,
-  LinuxDoRefreshIntervalHours:
-    defaults.LinuxDoRefreshIntervalHours ?? '24',
+  LinuxDoRefreshIntervalHours: defaults.LinuxDoRefreshIntervalHours ?? '24',
   WeChatAuthEnabled: defaults.WeChatAuthEnabled,
   WeChatServerAddress: defaults.WeChatServerAddress ?? '',
   WeChatServerToken: defaults.WeChatServerToken ?? '',
@@ -237,9 +237,9 @@ const normalizeFormValues = (values: OAuthFormValues): FlatOAuthDefaults => ({
   'oidc.authorization_endpoint': values.oidc.authorization_endpoint,
   'oidc.token_endpoint': values.oidc.token_endpoint,
   'oidc.user_info_endpoint': values.oidc.user_info_endpoint,
+  'telegram.client_id': values.telegram.client_id,
+  'telegram.client_secret': values.telegram.client_secret,
   TelegramOAuthEnabled: values.TelegramOAuthEnabled,
-  TelegramBotToken: values.TelegramBotToken,
-  TelegramBotName: values.TelegramBotName,
   LinuxDOOAuthEnabled: values.LinuxDOOAuthEnabled,
   LinuxDOClientId: values.LinuxDOClientId,
   LinuxDOClientSecret: values.LinuxDOClientSecret,
@@ -277,6 +277,11 @@ export function OAuthSection(props: OAuthSectionProps) {
   const oidcCallbackUrl = buildOAuthCallbackUrl(
     props.serverAddress,
     'oidc',
+    t('Site URL')
+  )
+  const telegramCallbackUrl = buildOAuthCallbackUrl(
+    props.serverAddress,
+    'telegram',
     t('Site URL')
   )
   const linuxDOCallbackUrl = buildOAuthCallbackUrl(
@@ -826,6 +831,19 @@ export function OAuthSection(props: OAuthSectionProps) {
                 value='telegram'
                 className={oauthTabContentClassName}
               >
+                <OAuthSetupGuide
+                  title={t('Setup guide')}
+                  description={t(
+                    'In BotFather, open Login Widget, register this callback URL, and copy the Client ID and Client Secret. Existing Telegram bindings will continue to work after configuration.'
+                  )}
+                  rows={[
+                    {
+                      label: t('Authorization callback URL'),
+                      value: telegramCallbackUrl,
+                      copyLabel: t('Copy callback URL'),
+                    },
+                  ]}
+                />
                 <FormField
                   control={form.control}
                   name='TelegramOAuthEnabled'
@@ -849,14 +867,16 @@ export function OAuthSection(props: OAuthSectionProps) {
 
                 <FormField
                   control={form.control}
-                  name='TelegramBotToken'
+                  name='telegram.client_secret'
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('Bot Token')}</FormLabel>
+                      <FormLabel>{t('Client Secret')}</FormLabel>
                       <FormControl>
                         <Input
                           type='password'
-                          placeholder={t('Your Telegram Bot Token')}
+                          placeholder={t(
+                            'Telegram OAuth Client Secret from BotFather'
+                          )}
                           autoComplete='new-password'
                           value={field.value ?? ''}
                           onChange={(event) =>
@@ -874,13 +894,15 @@ export function OAuthSection(props: OAuthSectionProps) {
 
                 <FormField
                   control={form.control}
-                  name='TelegramBotName'
+                  name='telegram.client_id'
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('Bot Name')}</FormLabel>
+                      <FormLabel>{t('Client ID')}</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder={t('Your Bot Name')}
+                          placeholder={t(
+                            'Telegram OAuth Client ID from BotFather'
+                          )}
                           autoComplete='off'
                           value={field.value ?? ''}
                           onChange={(event) =>
@@ -1069,7 +1091,9 @@ export function OAuthSection(props: OAuthSectionProps) {
                   render={({ field }) => (
                     <SettingsSwitchItem>
                       <SettingsSwitchContent>
-                        <FormLabel>{t('Refresh LinuxDO trust levels')}</FormLabel>
+                        <FormLabel>
+                          {t('Refresh LinuxDO trust levels')}
+                        </FormLabel>
                         <FormDescription>
                           {t(
                             'Periodically re-sync each LinuxDO user trust level (and auto-managed group) using their stored refresh token, without requiring them to re-authorize.'

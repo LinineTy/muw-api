@@ -43,6 +43,33 @@ export function OsWindowFrame({
   const drag = useRef<DragState>(null)
   // 拖动/缩放中禁几何过渡(否则指针追不上),最大化/恢复切换时才有平滑动画
   const [interacting, setInteracting] = useState(false)
+  // 窗口圆角来自主题 token(--radius-2xl = var(--radius) × 1.8,随预设 0.3~1.25rem
+  // 变化),右下缩放弧必须与它同心,否则切主题时弧线与窗口圆角错位。读实测计算值
+  // 而非解析 CSS 变量:自定义圆角轴会二次覆盖 token,计算值才是最终生效的那个。
+  const visualRef = useRef<HTMLDivElement | null>(null)
+  const [cornerRadius, setCornerRadius] = useState(36)
+  useEffect(() => {
+    const el = visualRef.current
+    if (!el) return
+    const read = () => {
+      const radius = Number.parseFloat(
+        getComputedStyle(el).borderBottomRightRadius
+      )
+      // 最大化(rounded-none)/最小化时读不到有效圆角,保留上一次的值
+      if (Number.isFinite(radius) && radius > 0) setCornerRadius(radius)
+    }
+    read()
+    const observer = new MutationObserver(read)
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    })
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['data-theme-preset', 'data-theme-radius'],
+    })
+    return () => observer.disconnect()
+  }, [win.maximized])
   const { t } = useTranslation()
   const {
     closeWindow,
@@ -131,6 +158,25 @@ export function OsWindowFrame({
   // React 会卸载重建 iframe,导致每次最小化/恢复整页重载(请求风暴 429)
   if (win.minimized) style.display = 'none'
 
+  // 缩放弧几何:与窗口圆角同心,外缘只在窗体边缘外 CORNER_GAP px(贴边)。
+  // ARC_PAD 是弧线中心到把手容器边缘的留白(容纳圆头线帽)。
+  const ARC_PAD = 6
+  const CORNER_GAP = 2
+  const arcRadius = cornerRadius + CORNER_GAP
+  const arcSize = arcRadius + ARC_PAD * 2
+  // 起止角与旧实现一致(15°~75°),只按半径缩放:弧不贴到窗口边的延长线上,
+  // 看起来像"包住角"的一道弧而不是四分之一圆框
+  const arcPoint = (deg: number) => {
+    const rad = (deg * Math.PI) / 180
+    return [
+      ARC_PAD + arcRadius * Math.cos(rad),
+      ARC_PAD + arcRadius * Math.sin(rad),
+    ] as const
+  }
+  const [arcX0, arcY0] = arcPoint(75)
+  const [arcX1, arcY1] = arcPoint(15)
+  const arcPath = `M ${arcX0} ${arcY0} A ${arcRadius} ${arcRadius} 0 0 0 ${arcX1} ${arcY1}`
+
   return (
     // 外层=定位/动画层:无视觉无裁剪,缩放弧线把手悬浮在这一层的窗口圆角外
     <div
@@ -153,6 +199,7 @@ export function OsWindowFrame({
           overflow-hidden 负责把 iframe 内容裁进圆角——缩放把手必须留在
           这层之外,否则贴角部分会被圆角曲线物理裁掉(实测 36px 圆角) */}
       <div
+        ref={visualRef}
         className={cn(
           // 亮暗统一琉璃配方:暗色 --card 自带低透明度,壁纸可透出
           'border-border/60 relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border bg-card/70 backdrop-blur-[8px] saturate-150',
@@ -229,21 +276,33 @@ export function OsWindowFrame({
       />
       </div>
 
-      {/* 右下角缩放把手:书名号弧线——与窗口圆角(36px)同心平行的外弧,
-          悬浮于窗口圆角外 6px,像包住窗口角的一道弧。热区=透明宽描边
-          (16px),可见线 2.5px 仅展示;pointer-events 只在弧线上,不挡
-          弧线圈内的桌面交互。挂在定位层,不被内层 overflow-hidden 裁剪 */}
+      {/* 右下角缩放把手:书名号弧线——与窗口圆角(--radius-2xl,随主题变)同心
+          平行的外弧,外缘贴住窗体边缘(2px),像包住窗口角的一道弧。热区=透明
+          16px 宽弧,可见线 3px 仅展示;pointer-events 只在弧线上,不挡弧线圈内
+          的桌面交互。挂在定位层,不被内层 overflow-hidden 裁剪 */}
       {!win.maximized ? (
         <div
-          className='group pointer-events-none absolute -right-3.5 -bottom-3.5 z-30 size-14 text-muted-foreground/70 transition-colors group-hover:text-foreground'
+          className='group pointer-events-none absolute z-30 text-muted-foreground/70 transition-colors group-hover:text-foreground'
+          style={{
+            right: -(ARC_PAD + CORNER_GAP),
+            bottom: -(ARC_PAD + CORNER_GAP),
+            width: arcSize,
+            height: arcSize,
+          }}
           role='presentation'
         >
-          <svg viewBox='0 0 56 56' fill='none' aria-hidden='true'>
+          <svg
+            viewBox={`0 0 ${arcSize} ${arcSize}`}
+            width={arcSize}
+            height={arcSize}
+            fill='none'
+            aria-hidden='true'
+          >
             {/* 热区:透明宽弧,负责拖拽交互 */}
             <path
-              d='M 17 46.6 A 42 42 0 0 0 46.6 17'
+              d={arcPath}
               stroke='transparent'
-              strokeWidth='18'
+              strokeWidth={16}
               strokeLinecap='round'
               className='pointer-events-auto cursor-nwse-resize touch-none'
               onPointerDown={onResizeDown}
@@ -253,9 +312,9 @@ export function OsWindowFrame({
             />
             {/* 可见弧线 */}
             <path
-              d='M 17 46.6 A 42 42 0 0 0 46.6 17'
+              d={arcPath}
               stroke='currentColor'
-              strokeWidth='2.5'
+              strokeWidth={3}
               strokeLinecap='round'
               className='pointer-events-none'
             />

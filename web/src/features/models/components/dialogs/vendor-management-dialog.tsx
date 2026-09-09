@@ -39,7 +39,6 @@ import { formatTimestampToDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 import { getVendors } from '../../api'
-import { getModelStatusConfig } from '../../constants'
 import { vendorsQueryKeys, handleDeleteVendor } from '../../lib'
 import type { Vendor } from '../../types'
 
@@ -84,7 +83,15 @@ export function VendorManagementDialog({
     [vendors]
   )
 
-  const statusConfig = getModelStatusConfig(t)
+  // Vendor status is enabled/disabled — not the model square visibility labels
+  // that getModelStatusConfig returns (Shown / Not shown).
+  const statusConfig: Record<
+    number,
+    { label: string; variant: 'success' | 'neutral' }
+  > = {
+    1: { label: t('Enabled'), variant: 'success' },
+    0: { label: t('Disabled'), variant: 'neutral' },
+  }
 
   useEffect(() => {
     if (!open) {

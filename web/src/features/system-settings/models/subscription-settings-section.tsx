@@ -173,7 +173,7 @@ function GroupPrioritiesEditor({
               value={row.group}
             >
               <FormControl>
-                <SelectTrigger className='w-48'>
+                <SelectTrigger>
                   <SelectValue placeholder={t('Group name')} />
                 </SelectTrigger>
               </FormControl>

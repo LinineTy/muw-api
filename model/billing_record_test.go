@@ -20,6 +20,7 @@ package model
 
 import (
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/stretchr/testify/assert"
@@ -109,4 +110,48 @@ func TestGetAllBillingRecords(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), total)
 	require.Len(t, records, 2)
+}
+
+// TestBillingRecordsResolveGroupPinTitles 固定分组订单与订阅订单同表：kind=group_pin
+// 的行必须带上商品标题（订单中心此前按 plan_id=0 兜底显示 #0），且不误用套餐字段。
+func TestBillingRecordsResolveGroupPinTitles(t *testing.T) {
+	truncateTables(t)
+	product := &GroupPinProduct{Title: "Pin A", Group: "tier1", PriceAmount: 1.5, Enabled: true}
+	require.NoError(t, DB.Create(product).Error)
+	require.NoError(t, (&SubscriptionOrder{
+		UserId:          100,
+		Kind:            OrderKindGroupPin,
+		PinProductId:    product.Id,
+		Money:           1.5,
+		TradeNo:         "PINGRP100NO1",
+		PaymentMethod:   PaymentMethodBalance,
+		PaymentProvider: PaymentProviderBalance,
+		Status:          common.TopUpStatusSuccess,
+		CreateTime:      time.Now().Unix(),
+	}).Insert())
+	// 存量订阅订单 kind 为空串（迁移前落库），按订阅语义处理。
+	insertSubscriptionOrderForQueryTest(t, "SUBUSR100NO1", 100, 1, common.TopUpStatusSuccess, "alipay")
+
+	pageInfo := &common.PageInfo{Page: 1, PageSize: 10}
+	records, _, err := GetUserBillingRecords(100, pageInfo, "", "", "", "subscription")
+	require.NoError(t, err)
+	require.Len(t, records, 2)
+
+	var pin, sub *BillingRecord
+	for _, r := range records {
+		switch r.Kind {
+		case OrderKindGroupPin:
+			pin = r
+		case OrderKindSubscription:
+			sub = r
+		}
+	}
+	require.NotNil(t, pin)
+	assert.Equal(t, "Pin A", pin.PlanTitle)
+	assert.Equal(t, product.Id, pin.PinProductId)
+	assert.Zero(t, pin.PlanId)
+
+	require.NotNil(t, sub)
+	assert.Equal(t, 1, sub.PlanId)
+	assert.Zero(t, sub.PinProductId)
 }

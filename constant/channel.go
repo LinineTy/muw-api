@@ -59,6 +59,9 @@ const (
 	ChannelTypeNewAPI         = 60
 	ChannelTypeSenseNova      = 61
 	ChannelTypeOpenCodeZen    = 62
+	// Upstream assigned 61 to TaskPlugin; this fork already uses 61/62 for
+	// SenseNova/OpenCodeZen, so TaskPlugin is renumbered to the next free slot.
+	ChannelTypeTaskPlugin     = 63
 	ChannelTypeDummy          // this one is only for count, do not add any channel after this
 
 )
@@ -127,6 +130,14 @@ var ChannelBaseURLs = []string{
 	"",                                          //60
 	"https://token.sensenova.cn",                //61
 	"https://opencode.ai/zen",                   //62
+	"",                                          //63 (Task Plugin)
+}
+
+func GetChannelBaseURL(channelType int) string {
+	if channelType < 0 || channelType >= len(ChannelBaseURLs) {
+		return ""
+	}
+	return ChannelBaseURLs[channelType]
 }
 
 var ChannelTypeNames = map[int]string{
@@ -188,6 +199,7 @@ var ChannelTypeNames = map[int]string{
 	ChannelTypeNewAPI:         "New API",
 	ChannelTypeSenseNova:      "SenseNova",
 	ChannelTypeOpenCodeZen:    "OpenCode Zen",
+	ChannelTypeTaskPlugin:     "Task Plugin",
 }
 
 func GetChannelTypeName(channelType int) string {

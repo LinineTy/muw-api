@@ -217,11 +217,15 @@ export interface TopupRecord {
   user_id: number
   /** Order type: 充值记录 / 订阅订单 */
   type: 'topup' | 'subscription'
+  /** Order kind for subscription rows: 订阅订单 / 固定分组商品订单 */
+  kind?: 'subscription' | 'group_pin'
   /** Topup amount (quota); subscription orders omit this */
   amount?: number
   /** Plan id for subscription orders */
   plan_id?: number
-  /** Plan title snapshot for subscription orders */
+  /** Pin product id for group_pin orders */
+  pin_product_id?: number
+  /** Plan title snapshot for subscription orders（固定分组订单为商品标题） */
   plan_title?: string
   /** Payment amount (actual money paid) */
   money: number

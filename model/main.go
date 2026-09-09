@@ -27,6 +27,19 @@ var commonFalseVal string
 var logKeyCol string
 var logGroupCol string
 
+// jsonScanBytes 归一化 json 列的驱动返回值:不同驱动/协议模式下同一列可能
+// 以 []byte 或 string 返回,静默丢弃 string 会导致字段被清零而不报错。
+func jsonScanBytes(value any) []byte {
+	switch v := value.(type) {
+	case []byte:
+		return v
+	case string:
+		return []byte(v)
+	default:
+		return nil
+	}
+}
+
 func initCol() {
 	// init common column names
 	if common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
@@ -138,10 +151,12 @@ func chooseDB(envName string, isLog bool) (*gorm.DB, common.DatabaseType, error)
 		if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
 			// Use PostgreSQL
 			common.SysLog("using PostgreSQL as database")
-			db, err := gorm.Open(postgres.New(postgres.Config{
+			// 同时关闭 pgx 隐式与 GORM 显式预处理语句:命名 prepared statement 与
+			// 事务池代理(PgBouncer/Neon/Supabase)不兼容,会触发 FATAL 08P01/42P05。
+			db, err := gorm.Open(postgresMigrationDialector{postgres.Dialector{Config: &postgres.Config{
 				DSN:                  dsn,
-				PreferSimpleProtocol: true, // disables implicit prepared statement usage
-			}), newGormConfig(true))
+				PreferSimpleProtocol: true,
+			}}}, newGormConfig(false))
 			return db, common.DatabaseTypePostgreSQL, err
 		}
 		if strings.HasPrefix(dsn, "local") {
@@ -159,7 +174,7 @@ func chooseDB(envName string, isLog bool) (*gorm.DB, common.DatabaseType, error)
 				dsn += "?parseTime=true"
 			}
 		}
-		db, err := gorm.Open(mysql.Open(dsn), newGormConfig(true))
+		db, err := gorm.Open(mysqlMigrationDialector{mysql.Dialector{Config: &mysql.Config{DSN: dsn}}}, newGormConfig(true))
 		return db, common.DatabaseTypeMySQL, err
 	}
 	// Use SQLite
@@ -217,6 +232,9 @@ func InitLogDB() (err error) {
 		LOG_DB = DB
 		common.SetLogDatabaseType(common.MainDatabaseType())
 		initCol()
+		if common.IsMasterNode {
+			return MigrateAuditLogs()
+		}
 		return
 	}
 	db, dbType, err := chooseDB("LOG_SQL_DSN", true)
@@ -300,6 +318,18 @@ func is64BitIntegerType(dbType common.DatabaseType, dataType string) bool {
 }
 
 func migrateDB() error {
+	// 上游新增：旧库遗留的 PostgreSQL 唯一约束 / options 主键修复。三者都幂等，
+	// 且必须在 AutoMigrate 之前执行（AutoMigrate 会按当前 model 检查列与索引现状），
+	// 故放在最前面，跳过路径与完整路径都会跑。
+	if err := migrateTokenKeyUniqueness(DB); err != nil {
+		return err
+	}
+	if err := migratePrefillGroupUniqueness(DB); err != nil {
+		return err
+	}
+	if err := migrateOptionPrimaryKey(DB); err != nil {
+		common.SysError("failed to migrate options primary key: " + err.Error())
+	}
 	// 迁移身份 = 名称（YYMMDD-slug），启动按两步校验决定跑哪些：
 	// ① 先按时间：只执行日期 >= 当前已执行最大日期的迁移；
 	// ② 再按名称：已执行（name 已在 schema_migrations）的跳过、未执行的执行。
@@ -334,6 +364,12 @@ func migrateDB() error {
 		return err
 	}
 	if err := ensureModelsContextWindowColumn(DB); err != nil {
+		return err
+	}
+	// 上游同步新增的 schema(task_plugins / login_encryption_keys 表、
+	// users.access_token_created_at 列):已到最新迁移戳的库走"跳过 AutoMigrate"
+	// 路径,必须在这里幂等补齐,否则升级库启动即报 no such table。
+	if err := ensureUpstreamSyncSchema(DB); err != nil {
 		return err
 	}
 	// accounts 表 + channels.account_id 列 + 存量 backfill:幂等,每次启动执行。
@@ -403,6 +439,12 @@ func migrateDB() error {
 		if err := ensureUserSubscriptionRenewTermsColumn(DB); err != nil {
 			return err
 		}
+		if err := ensureGroupPinTables(DB); err != nil {
+			return err
+		}
+		if err := ensureSubscriptionOrderPinColumns(DB); err != nil {
+			return err
+		}
 		if err := ensureDropLegacySubscriptionPlanColumns(DB); err != nil {
 			return err
 		}
@@ -410,6 +452,9 @@ func migrateDB() error {
 			return err
 		}
 		if err := ensureDropLegacySubscriptionLedgerColumns(DB); err != nil {
+			return err
+		}
+		if err := ensureDropLegacyBackupTables(DB); err != nil {
 			return err
 		}
 		common.SysLog(fmt.Sprintf("schema up to date at migration %q (%d), skipping AutoMigrate", head.Name, migrationDate(head.Name)))
@@ -463,6 +508,12 @@ func migrateDB() error {
 	if err := ensureUserSubscriptionRenewTermsColumn(DB); err != nil {
 		return err
 	}
+	if err := ensureGroupPinTables(DB); err != nil {
+		return err
+	}
+	if err := ensureSubscriptionOrderPinColumns(DB); err != nil {
+		return err
+	}
 	if err := ensureDropLegacySubscriptionPlanColumns(DB); err != nil {
 		return err
 	}
@@ -470,6 +521,9 @@ func migrateDB() error {
 		return err
 	}
 	if err := ensureDropLegacySubscriptionLedgerColumns(DB); err != nil {
+		return err
+	}
+	if err := ensureDropLegacyBackupTables(DB); err != nil {
 		return err
 	}
 	if err := runMigrations(DB, pending); err != nil {
@@ -493,6 +547,7 @@ func autoMigrateAll() error {
 		&ExternalIdentityClaim{},
 		&PasskeyCredential{},
 		&Option{},
+		&LoginEncryptionKey{},
 		&Redemption{},
 		&RedemptionUse{},
 		&Ability{},
@@ -501,6 +556,7 @@ func autoMigrateAll() error {
 		&TopUp{},
 		&QuotaData{},
 		&Task{},
+		&TaskPlugin{},
 		&Model{},
 		&Vendor{},
 		&PrefillGroup{},
@@ -517,6 +573,8 @@ func autoMigrateAll() error {
 		&SubscriptionOrder{},
 		&UserSubscription{},
 		&SubscriptionPreConsumeRecord{},
+		&GroupPinProduct{},
+		&GroupPin{},
 		&CustomOAuthProvider{},
 		&UserOAuthBinding{},
 		&PerfMetric{},
@@ -851,10 +909,14 @@ func dropLegacyQuotaClaimColumns(db *gorm.DB) error {
 var legacySubscriptionPlanColumns = []string{
 	"total_amount", "quota_reset_period", "quota_reset_custom_seconds",
 	"reset_amount_limit", "weekly_amount_limit", "monthly_amount_limit",
+	// 随第三方支付渠道（Stripe/Creem/Waffo Pancake）一起移除的商品 ID 列。
+	"stripe_price_id", "creem_product_id", "waffo_pancake_product_id",
 }
 
 var legacyUserSubscriptionColumns = []string{
 	"cycle_start_at", "cycle_used", "next_cycle_reset_at",
+	// 早期重置窗口模型遗留的时间列（现由 period_used/动态窗口取代）。
+	"last_reset_time", "next_reset_time",
 }
 
 // legacySubscriptionLedgerColumns 是单期账本改造（period_used）移除的累计展示列：
@@ -889,9 +951,26 @@ func existingColumnsOf(db *gorm.DB, table string, columns []string) ([]string, e
 	return present, nil
 }
 
-// dropLegacySubscriptionColumns 幂等删除指定表上的 legacy 列。SQLite 逐列 DROP（且先删
-// 仍引用该列的索引——DROP COLUMN 不允许列被索引引用），MySQL/PostgreSQL 一条 ALTER 多列。
-func dropLegacySubscriptionColumns(db *gorm.DB, table string, columns []string, sqliteIndexes []string) error {
+// sqliteIndexesOnColumns 返回 SQLite 表上引用了给定列的索引名。SQLite 的 DROP COLUMN
+// 不允许列仍被索引引用，必须先删索引；索引清单用 pragma 动态查而不是手工维护——漏一个
+// 就是启动期 FATAL（2026-09-10 踩过：legacy 列 next_reset_time 上的旧索引没删，
+// 开发库 SQLite 直接起不来，MySQL 因为会随列自动删索引所以演练时没暴露）。
+func sqliteIndexesOnColumns(db *gorm.DB, table string, columns []string) ([]string, error) {
+	if len(columns) == 0 {
+		return nil, nil
+	}
+	var indexes []string
+	err := db.Raw(
+		"SELECT DISTINCT il.name FROM pragma_index_list(?) AS il, pragma_index_info(il.name) AS ii WHERE ii.name IN (?)",
+		table, columns,
+	).Scan(&indexes).Error
+	return indexes, err
+}
+
+// dropLegacySubscriptionColumns 幂等删除指定表上的 legacy 列。SQLite 逐列 DROP，且先删
+// 掉引用这些列的索引（SQLite 不允许 DROP COLUMN 时列仍被索引引用）；MySQL/PostgreSQL
+// 一条 ALTER 多列，索引随列自动消失。
+func dropLegacySubscriptionColumns(db *gorm.DB, table string, columns []string) error {
 	present, err := existingColumnsOf(db, table, columns)
 	if err != nil {
 		return err
@@ -900,7 +979,11 @@ func dropLegacySubscriptionColumns(db *gorm.DB, table string, columns []string, 
 		return nil
 	}
 	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
-		for _, idx := range sqliteIndexes {
+		indexes, err := sqliteIndexesOnColumns(db, table, present)
+		if err != nil {
+			return err
+		}
+		for _, idx := range indexes {
 			if err := db.Exec("DROP INDEX IF EXISTS " + idx).Error; err != nil {
 				return err
 			}
@@ -920,27 +1003,51 @@ func dropLegacySubscriptionColumns(db *gorm.DB, table string, columns []string, 
 }
 
 // ensureDropLegacySubscriptionPlanColumns 删除 subscription_plans 上随 legacy 模型移除的
-// 6 列（total_amount / quota_reset_* / reset_amount_limit / weekly / monthly）。
+// 列（total_amount / quota_reset_* / reset_amount_limit / weekly / monthly /
+// stripe_price_id / creem_product_id / waffo_pancake_product_id）。
 func ensureDropLegacySubscriptionPlanColumns(db *gorm.DB) error {
-	return dropLegacySubscriptionColumns(db, "subscription_plans", legacySubscriptionPlanColumns, nil)
+	return dropLegacySubscriptionColumns(db, "subscription_plans", legacySubscriptionPlanColumns)
 }
 
 // ensureDropLegacyUserSubscriptionColumns 删除 user_subscriptions 上随 legacy 模型移除的
-// 3 列（cycle_start_at / cycle_used / next_cycle_reset_at）。next_cycle_reset_at 建有 GORM
-// 单列索引 idx_user_subscriptions_next_cycle_reset_at，SQLite 需先删索引再删列。
+// 列（cycle_start_at / cycle_used / next_cycle_reset_at / last_reset_time / next_reset_time）。
+// 这些列上可能留有旧版 GORM 建的索引，dropLegacySubscriptionColumns 会在 SQLite 上先删索引。
 func ensureDropLegacyUserSubscriptionColumns(db *gorm.DB) error {
-	return dropLegacySubscriptionColumns(db, "user_subscriptions", legacyUserSubscriptionColumns,
-		[]string{"idx_user_subscriptions_next_cycle_reset_at"})
+	return dropLegacySubscriptionColumns(db, "user_subscriptions", legacyUserSubscriptionColumns)
 }
 
 // ensureDropLegacySubscriptionLedgerColumns 删除 user_subscriptions 上单期账本改造
-// 移除的累计展示列（amount_total / amount_used，被 period_used 取代）。amount_used 无
-// 单列索引，SQLite 直接逐列 DROP 即可。
+// 移除的累计展示列（amount_total / amount_used，被 period_used 取代）。
 func ensureDropLegacySubscriptionLedgerColumns(db *gorm.DB) error {
-	return dropLegacySubscriptionColumns(db, "user_subscriptions", legacySubscriptionLedgerColumns, nil)
+	return dropLegacySubscriptionColumns(db, "user_subscriptions", legacySubscriptionLedgerColumns)
+}
+
+// legacyBackupTables 是历史迁移留下的一次性备份表（_bak_<table>_<date>）。源表
+// （abilities / subscription_orders / subscription_plans）仍在并由 AutoMigrate
+// 管理，备份已无用途；显式删除，保证升级库与全新建库的表结构一致。
+var legacyBackupTables = []string{
+	"_bak_abilities_sponsored_20260628",
+	"_bak_subscription_orders_20260628",
+	"_bak_subscription_plans_20260628",
+}
+
+func ensureDropLegacyBackupTables(db *gorm.DB) error {
+	for _, table := range legacyBackupTables {
+		if !db.Migrator().HasTable(table) {
+			continue
+		}
+		if err := db.Migrator().DropTable(table); err != nil {
+			return err
+		}
+		common.SysLog("dropped legacy backup table " + table)
+	}
+	return nil
 }
 
 func migrateLOGDB() error {
+	if err := MigrateAuditLogs(); err != nil {
+		return err
+	}
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		return migrateClickHouseLogDB()
 	}
@@ -1080,6 +1187,22 @@ func ensureChannelCodingPlanAutoControlColumns(db *gorm.DB) error {
 			if err := db.Migrator().AddColumn(&Channel{}, column); err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+// ensureUpstreamSyncSchema 幂等补齐上游同步引入的 schema：task_plugins /
+// login_encryption_keys 两张新表，以及 users.access_token_created_at 新列。
+// 它们都在 autoMigrateAll 的模型列表里，但已到最新迁移戳的库会跳过 AutoMigrate，
+// 因此这里显式补，保证升级库与全新建库的 schema 一致。
+func ensureUpstreamSyncSchema(db *gorm.DB) error {
+	if err := db.AutoMigrate(&LoginEncryptionKey{}, &TaskPlugin{}); err != nil {
+		return err
+	}
+	if db.Migrator().HasTable(&User{}) && !db.Migrator().HasColumn(&User{}, "access_token_created_at") {
+		if err := db.Migrator().AddColumn(&User{}, "access_token_created_at"); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -1502,5 +1625,33 @@ func PingDB() error {
 
 	lastPingTime = time.Now()
 	common.SysLog("Database pinged successfully")
+	return nil
+}
+
+// ensureGroupPinTables 幂等建固定分组两表（group_pin_products / group_pins）并补列。
+// 表由 AutoMigrate（升日期路径）创建；存量已最新库走"跳过迁移"路径不重跑
+// AutoMigrate，需在这里显式补齐。AutoMigrate 幂等：表存在只补缺失列
+// （260909-group-pin 之后商品模型新增 subtitle/is_recommended 等列即靠这里兜底）。
+func ensureGroupPinTables(db *gorm.DB) error {
+	if err := db.AutoMigrate(&GroupPinProduct{}); err != nil {
+		return err
+	}
+	return db.AutoMigrate(&GroupPin{})
+}
+
+// ensureSubscriptionOrderPinColumns 幂等补 subscription_orders.kind / pin_product_id
+// 列（固定分组订单分流）。理由同 ensureGroupPinTables：skip 路径的已最新库需显式补列。
+func ensureSubscriptionOrderPinColumns(db *gorm.DB) error {
+	if !db.Migrator().HasColumn(&SubscriptionOrder{}, "kind") {
+		if err := db.Migrator().AddColumn(&SubscriptionOrder{}, "kind"); err != nil {
+			return err
+		}
+	}
+	if err := db.Model(&SubscriptionOrder{}).Where("kind IS NULL").Update("kind", OrderKindSubscription).Error; err != nil {
+		return err
+	}
+	if !db.Migrator().HasColumn(&SubscriptionOrder{}, "pin_product_id") {
+		return db.Migrator().AddColumn(&SubscriptionOrder{}, "pin_product_id")
+	}
 	return nil
 }

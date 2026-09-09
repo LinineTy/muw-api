@@ -163,22 +163,34 @@ export function BillingTab() {
       {
         accessorKey: 'type',
         header: t('Type'),
-        cell: ({ row }) =>
-          row.original.type === 'subscription' ? (
+        cell: ({ row }) => {
+          if (row.original.type !== 'subscription') {
+            return (
+              <StatusBadge
+                label={t('Recharge')}
+                variant='neutral'
+                showDot
+                copyable={false}
+              />
+            )
+          }
+          // 固定分组商品订单与订阅订单同表（kind 区分），徽标要分开，否则钉单看着像套餐单。
+          return row.original.kind === 'group_pin' ? (
             <StatusBadge
-              label={t('Subscription')}
+              label={t('Fixed Groups')}
               variant='info'
               showDot
               copyable={false}
             />
           ) : (
             <StatusBadge
-              label={t('Recharge')}
-              variant='neutral'
+              label={t('Subscription')}
+              variant='info'
               showDot
               copyable={false}
             />
-          ),
+          )
+        },
         size: 110,
       },
       {
@@ -186,12 +198,18 @@ export function BillingTab() {
         header: t('Plan'),
         cell: ({ row }) => {
           const record = row.original
-          return record.type === 'subscription' ? (
+          if (record.type !== 'subscription') {
+            return <span className='text-muted-foreground text-sm'>-</span>
+          }
+          // 商品被删时后端标题为空：固定分组订单回退商品 id，订阅订单回退套餐 id。
+          const fallbackId =
+            record.kind === 'group_pin'
+              ? record.pin_product_id
+              : record.plan_id
+          return (
             <span className='text-sm font-medium'>
-              {record.plan_title || `#${record.plan_id}`}
+              {record.plan_title || `#${fallbackId}`}
             </span>
-          ) : (
-            <span className='text-muted-foreground text-sm'>-</span>
           )
         },
         size: 140,
