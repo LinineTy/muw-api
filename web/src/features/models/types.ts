@@ -81,33 +81,6 @@ export interface Vendor {
 /**
  * Prefill group entity
  */
-/**
- * Sync diff data
- */
-export interface SyncDiffData {
-  missing?: Array<{
-    model_name: string
-    vendor?: string
-    [key: string]: unknown
-  }>
-  conflicts?: Array<{
-    model_name: string
-    local?: Partial<Model>
-    upstream?: Partial<Model>
-    fields?: Array<{
-      field: string
-      local?: unknown
-      upstream?: unknown
-    }>
-    [key: string]: unknown
-  }>
-}
-
-export interface SyncOverwritePayload {
-  model_name: string
-  fields: string[]
-}
-
 export interface PrefillGroup {
   id: number
   name: string

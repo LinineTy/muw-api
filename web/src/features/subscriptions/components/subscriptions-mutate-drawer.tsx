@@ -25,7 +25,6 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
-
 import {
   SideDrawerSection,
   sideDrawerContentClassName,
@@ -47,7 +46,14 @@ import {
 } from '@/components/ui/form'
 import { IconBadge } from '@/components/ui/icon-badge'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Sheet,
   SheetClose,
@@ -118,7 +124,9 @@ export function SubscriptionsMutateDrawer({
   const currencyLabel = getCurrencyLabel()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [groupOptions, setGroupOptions] = useState<string[]>([])
-  const [exclusiveGroupOptions, setExclusiveGroupOptions] = useState<string[]>([])
+  const [exclusiveGroupOptions, setExclusiveGroupOptions] = useState<string[]>(
+    []
+  )
   const [newExclusiveGroup, setNewExclusiveGroup] = useState(false)
   const [newExclusiveGroupValue, setNewExclusiveGroupValue] = useState('')
 
@@ -178,7 +186,9 @@ export function SubscriptionsMutateDrawer({
   // "改动即重置"：编辑模式且窗口列表有变化时，保存前弹确认。
   const originalWindowsRaw = currentRow?.plan?.reset_windows || ''
   const [confirmResetSave, setConfirmResetSave] = useState(false)
-  const [pendingSubmit, setPendingSubmit] = useState<PlanFormValues | null>(null)
+  const [pendingSubmit, setPendingSubmit] = useState<PlanFormValues | null>(
+    null
+  )
 
   const windowUnitOpts = [
     { value: 'hour', label: t('Hours') },
@@ -205,9 +215,13 @@ export function SubscriptionsMutateDrawer({
 
   const removeWindow = (index: number) => {
     const rows = form.getValues('reset_windows') || []
-    form.setValue('reset_windows', rows.filter((_, i) => i !== index), {
-      shouldValidate: true,
-    })
+    form.setValue(
+      'reset_windows',
+      rows.filter((_, i) => i !== index),
+      {
+        shouldValidate: true,
+      }
+    )
   }
 
   const submitGroupPin = async (values: PlanFormValues) => {
@@ -289,7 +303,8 @@ export function SubscriptionsMutateDrawer({
   // 没有可挂靠的 FormMessage，handleSubmit 静默拦截提交会"点了没反应"——这里把该字段
   // 的校验错误以 toast 显式反馈。
   const onInvalid = (errors: FieldErrors<PlanFormValues>) => {
-    const message = errors.reset_windows?.message ?? errors.upgrade_group?.message
+    const message =
+      errors.reset_windows?.message ?? errors.upgrade_group?.message
     if (message) {
       toast.error(String(message))
     }
@@ -297,7 +312,9 @@ export function SubscriptionsMutateDrawer({
 
   const durationUnitOpts = getDurationUnitOptions(t)
 
-  let sheetTitle = isEdit ? t('Update plan info') : t('Create new subscription plan')
+  let sheetTitle = isEdit
+    ? t('Update plan info')
+    : t('Create new subscription plan')
   let sheetDescription = isEdit
     ? t('Modify existing subscription plan configuration')
     : t('Fill in the following info to create a new subscription plan')
@@ -424,7 +441,7 @@ export function SubscriptionsMutateDrawer({
                             ? [{ value: field.value, label: field.value }]
                             : []),
                         ]}
-onValueChange={(v) =>
+                        onValueChange={(v) =>
                           field.onChange(v === '__none__' ? '' : v)
                         }
                         value={field.value || ''}
@@ -820,7 +837,9 @@ onValueChange={(v) =>
                         <div key={row.id} className='space-y-1'>
                           <div className='grid grid-cols-[minmax(0,80px)_minmax(0,64px)_minmax(0,1fr)_auto] items-center gap-2'>
                             <Tooltip>
-                              <TooltipTrigger render={<div className='min-w-0' />}>
+                              <TooltipTrigger
+                                render={<div className='min-w-0' />}
+                              >
                                 <Select
                                   items={windowUnitOpts}
                                   value={row.unit}
@@ -837,7 +856,10 @@ onValueChange={(v) =>
                                   <SelectContent alignItemWithTrigger={false}>
                                     <SelectGroup>
                                       {windowUnitOpts.map((o) => (
-                                        <SelectItem key={o.value} value={o.value}>
+                                        <SelectItem
+                                          key={o.value}
+                                          value={o.value}
+                                        >
                                           {o.label}
                                         </SelectItem>
                                       ))}
@@ -852,7 +874,9 @@ onValueChange={(v) =>
                               </TooltipContent>
                             </Tooltip>
                             <Tooltip>
-                              <TooltipTrigger render={<div className='min-w-0' />}>
+                              <TooltipTrigger
+                                render={<div className='min-w-0' />}
+                              >
                                 <Input
                                   type='number'
                                   min={1}
@@ -874,7 +898,9 @@ onValueChange={(v) =>
                               </TooltipContent>
                             </Tooltip>
                             <Tooltip>
-                              <TooltipTrigger render={<div className='min-w-0' />}>
+                              <TooltipTrigger
+                                render={<div className='min-w-0' />}
+                              >
                                 <Input
                                   type='number'
                                   min={0}
@@ -918,7 +944,7 @@ onValueChange={(v) =>
                             </Tooltip>
                           </div>
                           {isCap && (
-                            <span className='text-amber-700 dark:text-amber-300 text-xs'>
+                            <span className='text-xs text-amber-700 dark:text-amber-300'>
                               {t(
                                 'Covers the whole validity · acts as the subscription total cap'
                               )}
@@ -956,7 +982,7 @@ onValueChange={(v) =>
                 </TooltipProvider>
                 {resetWindows.length > 0 &&
                   resetWindows.every((w) => Number(w.limit || 0) <= 0) && (
-                    <p className='text-emerald-700 dark:text-emerald-300 text-xs'>
+                    <p className='text-xs text-emerald-700 dark:text-emerald-300'>
                       {t(
                         'All windows have zero quota: this plan is unlimited until it expires.'
                       )}
@@ -995,12 +1021,12 @@ onValueChange={(v) =>
                               onChange={(e) =>
                                 setNewExclusiveGroupValue(e.target.value)
                               }
-                              placeholder={t('Enter a new exclusive group name')}
+                              placeholder={t(
+                                'Enter a new exclusive group name'
+                              )}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
-                                  field.onChange(
-                                    newExclusiveGroupValue.trim()
-                                  )
+                                  field.onChange(newExclusiveGroupValue.trim())
                                   setNewExclusiveGroup(false)
                                   setNewExclusiveGroupValue('')
                                 }

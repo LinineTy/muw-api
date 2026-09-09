@@ -842,11 +842,13 @@ function normalizeBaseUrl(value: string | undefined): string {
  * models 列表外的失效行，不会累积。
  */
 export function serializeModelSettings(
-  settings: Array<{
-    model: string
-    enabled: boolean
-    context_window?: number | null
-  }> | undefined
+  settings:
+    | Array<{
+        model: string
+        enabled: boolean
+        context_window?: number | null
+      }>
+    | undefined
 ): ChannelModelSettingForm[] {
   if (!settings?.length) return []
   return settings.map((s) => ({

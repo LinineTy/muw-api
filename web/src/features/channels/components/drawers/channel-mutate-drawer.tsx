@@ -82,6 +82,7 @@ import {
 } from '@/components/ui/form'
 import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -103,8 +104,6 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
-import { NumericSpinnerInput } from '../numeric-spinner-input'
 import {
   Tooltip,
   TooltipContent,
@@ -199,6 +198,7 @@ import {
 import { ParamOverrideEditorDialog } from '../dialogs/param-override-editor-dialog'
 import { StatusCodeRiskDialog } from '../dialogs/status-code-risk-dialog'
 import { ModelMappingEditor } from '../model-mapping-editor'
+import { NumericSpinnerInput } from '../numeric-spinner-input'
 import {
   ChannelAdvancedSection,
   ChannelApiAccessSection,
@@ -1405,7 +1405,9 @@ export function ChannelMutateDrawer({
         context_window: s.context_window ?? null,
       }))
       const existing = current.find((s) => s.model === model)
-      const applyPatch = (s: ChannelModelSettingForm): ChannelModelSettingForm => {
+      const applyPatch = (
+        s: ChannelModelSettingForm
+      ): ChannelModelSettingForm => {
         if ('context_window' in patch && (patch.context_window ?? 0) <= 0) {
           return { ...s, context_window: null }
         }
@@ -3003,77 +3005,80 @@ export function ChannelMutateDrawer({
                                           {...field}
                                         />
                                       </FormControl>
-                                    {currentType !==
-                                      CHANNEL_TYPE_TASK_PLUGIN && (
-                                      <FormDescription>
-                                        {t(
-                                          'Custom API base URL. For official channels, New API has built-in addresses. Only fill this for third-party proxy sites or special endpoints. Do not add /v1 or trailing slash.'
-                                        )}
-                                      </FormDescription>
-                                    )}
-                                    {currentType === CHANNEL_TYPE_TASK_PLUGIN &&
-                                      !boundTaskPlugin?.baseUrl && (
+                                      {currentType !==
+                                        CHANNEL_TYPE_TASK_PLUGIN && (
                                         <FormDescription>
                                           {t(
-                                            'The upstream address this plugin sends requests to. The plugin declares no default, so it must be filled in.'
+                                            'Custom API base URL. For official channels, New API has built-in addresses. Only fill this for third-party proxy sites or special endpoints. Do not add /v1 or trailing slash.'
                                           )}
                                         </FormDescription>
                                       )}
-                                    {currentType === CHANNEL_TYPE_TASK_PLUGIN &&
-                                      boundTaskPlugin?.baseUrl && (
-                                        <FormDescription className='flex flex-wrap items-center gap-x-1'>
-                                          <span>{t('Plugin default')}:</span>
-                                          <span className='font-mono break-all'>
-                                            {boundTaskPlugin.baseUrl}
-                                          </span>
-                                          {(field.value ?? '')
-                                            .trim()
-                                            .replace(/\/+$/, '') !==
-                                            boundTaskPlugin.baseUrl && (
-                                            <Button
-                                              type='button'
-                                              variant='link'
-                                              size='xs'
-                                              className='h-auto p-0'
-                                              onClick={() =>
-                                                form.setValue(
-                                                  'base_url',
-                                                  boundTaskPlugin.baseUrl ?? '',
-                                                  {
-                                                    shouldDirty: true,
-                                                    shouldValidate: true,
-                                                  }
-                                                )
-                                              }
-                                            >
-                                              {t('Use default')}
-                                            </Button>
-                                          )}
-                                        </FormDescription>
+                                      {currentType ===
+                                        CHANNEL_TYPE_TASK_PLUGIN &&
+                                        !boundTaskPlugin?.baseUrl && (
+                                          <FormDescription>
+                                            {t(
+                                              'The upstream address this plugin sends requests to. The plugin declares no default, so it must be filled in.'
+                                            )}
+                                          </FormDescription>
+                                        )}
+                                      {currentType ===
+                                        CHANNEL_TYPE_TASK_PLUGIN &&
+                                        boundTaskPlugin?.baseUrl && (
+                                          <FormDescription className='flex flex-wrap items-center gap-x-1'>
+                                            <span>{t('Plugin default')}:</span>
+                                            <span className='font-mono break-all'>
+                                              {boundTaskPlugin.baseUrl}
+                                            </span>
+                                            {(field.value ?? '')
+                                              .trim()
+                                              .replace(/\/+$/, '') !==
+                                              boundTaskPlugin.baseUrl && (
+                                              <Button
+                                                type='button'
+                                                variant='link'
+                                                size='xs'
+                                                className='h-auto p-0'
+                                                onClick={() =>
+                                                  form.setValue(
+                                                    'base_url',
+                                                    boundTaskPlugin.baseUrl ??
+                                                      '',
+                                                    {
+                                                      shouldDirty: true,
+                                                      shouldValidate: true,
+                                                    }
+                                                  )
+                                                }
+                                              >
+                                                {t('Use default')}
+                                              </Button>
+                                            )}
+                                          </FormDescription>
+                                        )}
+                                      <FormMessage />
+                                      {(taskPluginBaseUrlTrust?.plainHttp ||
+                                        taskPluginBaseUrlTrust?.privateHost) && (
+                                        <Alert>
+                                          <AlertCircle />
+                                          <AlertDescription>
+                                            {taskPluginBaseUrlTrust?.plainHttp &&
+                                              t(
+                                                'This base URL uses plain HTTP, so the channel key is sent unencrypted.'
+                                              )}
+                                            {taskPluginBaseUrlTrust?.plainHttp &&
+                                              taskPluginBaseUrlTrust?.privateHost &&
+                                              ' '}
+                                            {taskPluginBaseUrlTrust?.privateHost &&
+                                              t(
+                                                'This base URL points at a private or local network host. Make sure it is an upstream you control.'
+                                              )}
+                                          </AlertDescription>
+                                        </Alert>
                                       )}
-                                    <FormMessage />
-                                    {(taskPluginBaseUrlTrust?.plainHttp ||
-                                      taskPluginBaseUrlTrust?.privateHost) && (
-                                      <Alert>
-                                        <AlertCircle />
-                                        <AlertDescription>
-                                          {taskPluginBaseUrlTrust?.plainHttp &&
-                                            t(
-                                              'This base URL uses plain HTTP, so the channel key is sent unencrypted.'
-                                            )}
-                                          {taskPluginBaseUrlTrust?.plainHttp &&
-                                            taskPluginBaseUrlTrust?.privateHost &&
-                                            ' '}
-                                          {taskPluginBaseUrlTrust?.privateHost &&
-                                            t(
-                                              'This base URL points at a private or local network host. Make sure it is an upstream you control.'
-                                            )}
-                                        </AlertDescription>
-                                      </Alert>
-                                    )}
-                                  </FormItem>
-                                )}
-                              />
+                                    </FormItem>
+                                  )}
+                                />
                               ))}
 
                             {currentType === CHANNEL_TYPE_ADVANCED_CUSTOM && (
@@ -3616,7 +3621,8 @@ export function ChannelMutateDrawer({
                                                 '{{count}} of {{total}} configured',
                                                 {
                                                   count: modelSettings.length,
-                                                  total: currentModelsArray.length,
+                                                  total:
+                                                    currentModelsArray.length,
                                                 }
                                               )}
                                             </Badge>
@@ -3626,10 +3632,13 @@ export function ChannelMutateDrawer({
                                           <Select
                                             key={unconfiguredModels.join('|')}
                                             onValueChange={(model) =>
-                                              updateModelSetting(model as string, {
-                                                enabled: true,
-                                                context_window: null,
-                                              })
+                                              updateModelSetting(
+                                                model as string,
+                                                {
+                                                  enabled: true,
+                                                  context_window: null,
+                                                }
+                                              )
                                             }
                                           >
                                             <SelectTrigger
@@ -3679,9 +3688,7 @@ export function ChannelMutateDrawer({
                                               </span>
                                               <div className='flex shrink-0 items-center gap-3'>
                                                 <NumericSpinnerInput
-                                                  value={
-                                                    setting.context_window
-                                                  }
+                                                  value={setting.context_window}
                                                   onChange={(v) =>
                                                     updateModelSetting(
                                                       setting.model,

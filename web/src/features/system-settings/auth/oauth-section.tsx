@@ -215,8 +215,7 @@ const buildFormDefaults = (defaults: FlatOAuthDefaults): OAuthFormValues => ({
   LinuxDOGroupMapping: defaults.LinuxDOGroupMapping ?? '',
   LinuxDOBlacklist: defaults.LinuxDOBlacklist ?? '',
   LinuxDoRefreshEnabled: defaults.LinuxDoRefreshEnabled,
-  LinuxDoRefreshIntervalHours:
-    defaults.LinuxDoRefreshIntervalHours ?? '24',
+  LinuxDoRefreshIntervalHours: defaults.LinuxDoRefreshIntervalHours ?? '24',
   WeChatAuthEnabled: defaults.WeChatAuthEnabled,
   WeChatServerAddress: defaults.WeChatServerAddress ?? '',
   WeChatServerToken: defaults.WeChatServerToken ?? '',
@@ -1092,7 +1091,9 @@ export function OAuthSection(props: OAuthSectionProps) {
                   render={({ field }) => (
                     <SettingsSwitchItem>
                       <SettingsSwitchContent>
-                        <FormLabel>{t('Refresh LinuxDO trust levels')}</FormLabel>
+                        <FormLabel>
+                          {t('Refresh LinuxDO trust levels')}
+                        </FormLabel>
                         <FormDescription>
                           {t(
                             'Periodically re-sync each LinuxDO user trust level (and auto-managed group) using their stored refresh token, without requiring them to re-authorize.'

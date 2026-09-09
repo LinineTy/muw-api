@@ -50,9 +50,9 @@ describe('parseDnfTierConditions', () => {
   })
 
   it('serializes a flat clause without parens (byte-identical to legacy)', () => {
-    expect(buildTierDnfExpr(parseDnfTierConditions('len < 32000 && c < 200'))).toBe(
-      'len < 32000 && c < 200'
-    )
+    expect(
+      buildTierDnfExpr(parseDnfTierConditions('len < 32000 && c < 200'))
+    ).toBe('len < 32000 && c < 200')
   })
 
   it('serializes multi-clause DNF with parens', () => {
@@ -200,15 +200,24 @@ describe('request rule round-trip', () => {
       'tier("base", p * 5 + c * 25)',
       '((param("a") == "x") || (param("b") == "y") ? 2 : 1)'
     )
-    const { billingExpr, requestRuleExpr } = splitBillingExprAndRequestRules(full)
+    const { billingExpr, requestRuleExpr } =
+      splitBillingExprAndRequestRules(full)
     expect(billingExpr).toBe('tier("base", p * 5 + c * 25)')
     expect(stripWs(requestRuleExpr)).toContain('param("a")=="x"')
   })
 
   it('parses trace conds with DNF and RANGE', () => {
     const groups = requestRuleGroupsFromTrace([
-      { cond: 'param("a") == "x" || param("b") == "y"', multiplier: 2, matched: true },
-      { cond: 'hour("tz") >= 12 && hour("tz") < 18', multiplier: 2, matched: false },
+      {
+        cond: 'param("a") == "x" || param("b") == "y"',
+        multiplier: 2,
+        matched: true,
+      },
+      {
+        cond: 'hour("tz") >= 12 && hour("tz") < 18',
+        multiplier: 2,
+        matched: false,
+      },
     ])
     expect(groups[0].conditions).toHaveLength(2)
     // Within-day `&&` pairs are a RANGE (the builder emits `&&` for start <= end).

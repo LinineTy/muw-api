@@ -101,7 +101,9 @@ export function useModelsColumns(
               <Checkbox
                 checked={table.getIsAllPageRowsSelected()}
                 indeterminate={table.getIsSomePageRowsSelected()}
-                onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+                onCheckedChange={(value) =>
+                  table.toggleAllPageRowsSelected(!!value)
+                }
                 aria-label='Select all'
               />
             ),
@@ -439,16 +441,11 @@ export function useModelsColumns(
       header: t('Context Window'),
       meta: { mobileHidden: true },
       cell: ({ row }) => {
-        const cw = row.getValue('context_window') as
-          | number
-          | null
-          | undefined
+        const cw = row.getValue('context_window') as number | null | undefined
         if (!cw) {
           return <span className='text-muted-foreground'>—</span>
         }
-        return (
-          <span className='font-mono text-sm'>{cw.toLocaleString()}</span>
-        )
+        return <span className='font-mono text-sm'>{cw.toLocaleString()}</span>
       },
       size: 100,
       enableSorting: false,

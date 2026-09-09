@@ -33,7 +33,6 @@ import type {
   PrefillGroupsResponse,
   SyncLocale,
   SyncSource,
-  SyncOverwritePayload,
   MetadataSyncRequest,
 } from './types'
 
@@ -224,18 +223,6 @@ export async function previewUpstreamDiff(params?: {
     ? `/api/models/sync_upstream/preview?${queryString}`
     : '/api/models/sync_upstream/preview'
   const res = await api.get(url)
-  return res.data
-}
-
-/**
- * Apply upstream overwrite (fork conflict dialog: per-field overwrite payload)
- */
-export async function applyUpstreamOverwrite(params: {
-  overwrite: SyncOverwritePayload[]
-  locale?: SyncLocale
-  source?: SyncSource
-}): Promise<SyncUpstreamResponse> {
-  const res = await api.post('/api/models/sync_upstream', params)
   return res.data
 }
 

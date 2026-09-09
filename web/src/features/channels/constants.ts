@@ -159,10 +159,16 @@ export const CHANNEL_TYPE_CODING_PLAN_SUGGEST: Record<number, string> = {
 // base_url 填这些符号键 → 渠道自动识别为对应编码套餐,转发走专用端点、余量自动可查。
 export const CODING_PLAN_SYMBOL_OPTIONS: { value: string; label: string }[] = [
   { value: 'glm-coding-plan', label: 'Zhipu (GLM) · China' },
-  { value: 'glm-coding-plan-international', label: 'Zhipu (GLM) · International' },
+  {
+    value: 'glm-coding-plan-international',
+    label: 'Zhipu (GLM) · International',
+  },
   { value: 'kimi-coding-plan', label: 'Kimi For Coding' },
   { value: 'minimax-coding-plan', label: 'MiniMax · China' },
-  { value: 'minimax-coding-plan-international', label: 'MiniMax · International' },
+  {
+    value: 'minimax-coding-plan-international',
+    label: 'MiniMax · International',
+  },
   { value: 'doubao-coding-plan', label: 'Volcengine Ark' },
 ]
 
@@ -226,7 +232,11 @@ export const CODING_PLAN_BASE_URL_PRESETS: Record<
   { value: string; display: string; plan: boolean; provider?: string }[]
 > = {
   26: [
-    { value: 'https://open.bigmodel.cn', display: 'https://open.bigmodel.cn', plan: false },
+    {
+      value: 'https://open.bigmodel.cn',
+      display: 'https://open.bigmodel.cn',
+      plan: false,
+    },
     {
       value: 'glm-coding-plan',
       display: 'https://open.bigmodel.cn/api/coding/paas/v4',
@@ -254,7 +264,11 @@ export const CODING_PLAN_BASE_URL_PRESETS: Record<
     },
   ],
   25: [
-    { value: 'https://api.moonshot.cn', display: 'https://api.moonshot.cn', plan: false },
+    {
+      value: 'https://api.moonshot.cn',
+      display: 'https://api.moonshot.cn',
+      plan: false,
+    },
     {
       value: 'kimi-coding-plan',
       display: 'https://api.kimi.com/coding/v1',
@@ -269,7 +283,11 @@ export const CODING_PLAN_BASE_URL_PRESETS: Record<
     },
   ],
   35: [
-    { value: 'https://api.minimax.chat', display: 'https://api.minimax.chat', plan: false },
+    {
+      value: 'https://api.minimax.chat',
+      display: 'https://api.minimax.chat',
+      plan: false,
+    },
     {
       value: 'minimax-coding-plan',
       display: 'https://api.minimaxi.com/v1',

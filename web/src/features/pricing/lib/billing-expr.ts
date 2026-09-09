@@ -812,7 +812,8 @@ function parseExprLiteral(
   raw: string
 ): { value: string; kind: 'string' | 'number' | 'boolean' } | null {
   const text = raw.trim()
-  if (text === 'true' || text === 'false') return { value: text, kind: 'boolean' }
+  if (text === 'true' || text === 'false')
+    return { value: text, kind: 'boolean' }
   if (NUMERIC_LITERAL_REGEX.test(text)) return { value: text, kind: 'number' }
   try {
     const parsed = JSON.parse(text) as string

@@ -19,10 +19,9 @@ For commercial licensing, please contact support@quantumnous.com
 import { memo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { successRateVariant } from '@/features/model-health/lib/success-rate-tier'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
-
-import { successRateVariant } from '@/features/model-health/lib/success-rate-tier'
 
 import {
   getDynamicDisplayGroupRatio,
@@ -71,8 +70,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const groupRatio = model.group_ratio || {}
   const effectiveGroup =
     group ??
-    (selectedGroup &&
-    (model.enable_groups || []).includes(selectedGroup)
+    (selectedGroup && (model.enable_groups || []).includes(selectedGroup)
       ? selectedGroup
       : (model.enable_groups || [])
           .filter((g) => typeof groupRatio[g] === 'number')
@@ -118,7 +116,10 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const dynamicSummary = isDynamicPricing
     ? getDynamicPricingSummary(model, {
         ...priceOptions,
-        groupRatioMultiplier: getDynamicDisplayGroupRatio(model, effectiveGroup),
+        groupRatioMultiplier: getDynamicDisplayGroupRatio(
+          model,
+          effectiveGroup
+        ),
       })
     : null
 

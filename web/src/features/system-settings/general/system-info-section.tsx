@@ -79,8 +79,7 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
     TaskPublicAddress: normalizeValue(defaultValues.TaskPublicAddress),
     Logo: normalizeValue(defaultValues.Logo),
     BackgroundImage: normalizeValue(defaultValues.BackgroundImage),
-    GlassMaskOpacity:
-      normalizeValue(defaultValues.GlassMaskOpacity) || '0.35',
+    GlassMaskOpacity: normalizeValue(defaultValues.GlassMaskOpacity) || '0.35',
     GlassBrightness: normalizeValue(defaultValues.GlassBrightness) || '1',
     GlassBlur: normalizeValue(defaultValues.GlassBlur) || '18',
     Footer: normalizeValue(defaultValues.Footer),
@@ -387,7 +386,6 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
                   </FormItem>
                 )}
               />
-
             </SettingsFormGrid>
           </SettingsForm>
         </Form>

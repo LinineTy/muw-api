@@ -118,6 +118,7 @@ import {
   tryParseVisualConfig,
 } from '@/features/pricing/lib/tier-expr'
 import { cn } from '@/lib/utils'
+
 import { ConditionBuilder } from './condition-builder'
 
 const CACHE_PRICE_VARS = BILLING_EXTRA_VARS.filter(
@@ -226,14 +227,18 @@ const PRESET_GROUPS: PresetGroup[] = [
         expr: 'tier("base", p * 5 + c * 25 + cr * 0.5 + cc * 6.25 + cc1h * 10)',
         requestRules: [
           {
-            conditions: [{ conditions: [
+            conditions: [
               {
-                source: SOURCE_HEADER as 'header',
-                path: 'anthropic-beta',
-                mode: MATCH_CONTAINS,
-                value: 'fast-mode-2026-02-01',
+                conditions: [
+                  {
+                    source: SOURCE_HEADER as 'header',
+                    path: 'anthropic-beta',
+                    mode: MATCH_CONTAINS,
+                    value: 'fast-mode-2026-02-01',
+                  },
+                ],
               },
-            ] }],
+            ],
             multiplier: '6',
           },
         ],
@@ -244,25 +249,33 @@ const PRESET_GROUPS: PresetGroup[] = [
         expr: 'len <= 272000 ? tier("standard", p * 2.5 + c * 15 + cr * 0.25) : tier("long_context", p * 5 + c * 22.5 + cr * 0.5)',
         requestRules: [
           {
-            conditions: [{ conditions: [
+            conditions: [
               {
-                source: SOURCE_PARAM as 'param',
-                path: 'service_tier',
-                mode: MATCH_EQ,
-                value: 'priority',
+                conditions: [
+                  {
+                    source: SOURCE_PARAM as 'param',
+                    path: 'service_tier',
+                    mode: MATCH_EQ,
+                    value: 'priority',
+                  },
+                ],
               },
-            ] }],
+            ],
             multiplier: '2',
           },
           {
-            conditions: [{ conditions: [
+            conditions: [
               {
-                source: SOURCE_PARAM as 'param',
-                path: 'service_tier',
-                mode: MATCH_EQ,
-                value: 'flex',
+                conditions: [
+                  {
+                    source: SOURCE_PARAM as 'param',
+                    path: 'service_tier',
+                    mode: MATCH_EQ,
+                    value: 'flex',
+                  },
+                ],
               },
-            ] }],
+            ],
             multiplier: '0.5',
           },
         ],
@@ -278,17 +291,21 @@ const PRESET_GROUPS: PresetGroup[] = [
         expr: 'tier("base", p * 3 + c * 15)',
         requestRules: [
           {
-            conditions: [{ conditions: [
+            conditions: [
               {
-                source: SOURCE_TIME as 'time',
-                timeFunc: 'hour',
-                timezone: 'Asia/Shanghai',
-                mode: MATCH_RANGE,
-                value: '',
-                rangeStart: '21',
-                rangeEnd: '6',
+                conditions: [
+                  {
+                    source: SOURCE_TIME as 'time',
+                    timeFunc: 'hour',
+                    timezone: 'Asia/Shanghai',
+                    mode: MATCH_RANGE,
+                    value: '',
+                    rangeStart: '21',
+                    rangeEnd: '6',
+                  },
+                ],
               },
-            ] }],
+            ],
             multiplier: '0.5',
           },
         ],
@@ -299,31 +316,39 @@ const PRESET_GROUPS: PresetGroup[] = [
         expr: 'tier("base", p * 3 + c * 15)',
         requestRules: [
           {
-            conditions: [{ conditions: [
+            conditions: [
               {
-                source: SOURCE_TIME as 'time',
-                timeFunc: 'weekday',
-                timezone: 'Asia/Shanghai',
-                mode: MATCH_EQ,
-                value: '0',
-                rangeStart: '',
-                rangeEnd: '',
+                conditions: [
+                  {
+                    source: SOURCE_TIME as 'time',
+                    timeFunc: 'weekday',
+                    timezone: 'Asia/Shanghai',
+                    mode: MATCH_EQ,
+                    value: '0',
+                    rangeStart: '',
+                    rangeEnd: '',
+                  },
+                ],
               },
-            ] }],
+            ],
             multiplier: '0.8',
           },
           {
-            conditions: [{ conditions: [
+            conditions: [
               {
-                source: SOURCE_TIME as 'time',
-                timeFunc: 'weekday',
-                timezone: 'Asia/Shanghai',
-                mode: MATCH_EQ,
-                value: '6',
-                rangeStart: '',
-                rangeEnd: '',
+                conditions: [
+                  {
+                    source: SOURCE_TIME as 'time',
+                    timeFunc: 'weekday',
+                    timezone: 'Asia/Shanghai',
+                    mode: MATCH_EQ,
+                    value: '6',
+                    rangeStart: '',
+                    rangeEnd: '',
+                  },
+                ],
               },
-            ] }],
+            ],
             multiplier: '0.8',
           },
         ],
@@ -595,7 +620,11 @@ function VisualTierCard({
         <ConditionBuilder<TierCondition>
           dnf={tier.conditions}
           onChange={handleConditionsChange}
-          renderRow={({ value, onChange: onRowChange, onRemove: onRowRemove }) => (
+          renderRow={({
+            value,
+            onChange: onRowChange,
+            onRemove: onRowRemove,
+          }) => (
             <TierConditionRow
               condition={value}
               onChange={onRowChange}
@@ -754,7 +783,10 @@ function VisualEditor({ visualConfig, onChange, currency }: VisualEditorProps) {
   // Explicitly marking a tier as the fallback moves it last and clears its
   // conditions (a fallback is by definition unconditional).
   const handleMakeFallback = (index: number) => {
-    const unmarked = config.tiers.map((tier) => ({ ...tier, isFallback: false }))
+    const unmarked = config.tiers.map((tier) => ({
+      ...tier,
+      isFallback: false,
+    }))
     const fallback = normalizeVisualTier({
       ...unmarked[index],
       conditions: [],
@@ -772,9 +804,12 @@ function VisualEditor({ visualConfig, onChange, currency }: VisualEditorProps) {
       // tier below it. Test the serialized form so both shapes are caught.
       if (!tier.isFallback && buildTierDnfExpr(tier.conditions) === '') {
         issues.push(
-          t('Tier {{index}} always matches and hides the tiers below it. Add a condition or remove it.', {
-            index: index + 1,
-          })
+          t(
+            'Tier {{index}} always matches and hides the tiers below it. Add a condition or remove it.',
+            {
+              index: index + 1,
+            }
+          )
         )
       }
     })
@@ -789,8 +824,8 @@ function VisualEditor({ visualConfig, onChange, currency }: VisualEditorProps) {
         )}
       </p>
       {validationIssues.length > 0 && (
-        <div className='flex items-start gap-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-2'>
-          <AlertTriangle className='mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive' />
+        <div className='border-destructive/30 bg-destructive/5 flex items-start gap-1.5 rounded-md border px-2.5 py-2'>
+          <AlertTriangle className='text-destructive mt-0.5 h-3.5 w-3.5 shrink-0' />
           <div className='space-y-0.5'>
             {validationIssues.map((issue) => (
               <p key={issue} className='text-destructive text-xs'>
@@ -1286,7 +1321,7 @@ function CollapsibleSection({
           <Button
             variant='ghost'
             size='sm'
-            className='h-8 w-full justify-start px-2 text-xs font-medium text-muted-foreground hover:text-foreground'
+            className='text-muted-foreground hover:text-foreground h-8 w-full justify-start px-2 text-xs font-medium'
           />
         }
       >
@@ -1598,7 +1633,7 @@ function LlmPromptHelper({ modelName }: LlmPromptHelperProps) {
           <Button
             variant='ghost'
             size='sm'
-            className='h-8 w-full justify-start px-2 text-xs font-medium text-muted-foreground hover:text-foreground'
+            className='text-muted-foreground hover:text-foreground h-8 w-full justify-start px-2 text-xs font-medium'
           />
         }
       >
