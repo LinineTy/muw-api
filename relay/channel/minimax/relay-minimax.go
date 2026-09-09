@@ -13,7 +13,7 @@ import (
 func GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	baseUrl := info.ChannelBaseUrl
 	if baseUrl == "" {
-		baseUrl = channelconstant.ChannelBaseURLs[channelconstant.ChannelTypeMiniMax]
+		baseUrl = channelconstant.GetChannelBaseURL(channelconstant.ChannelTypeMiniMax)
 	}
 	// 编码套餐符号键:走 ChannelSpecialBases 解析出的专属端点(MiniMax Token Plan 用
 	// OpenAI 兼容的 /v1 与 Anthropic 兼容的 /anthropic,与按量计费的通用端点不同)。

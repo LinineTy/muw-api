@@ -2,7 +2,6 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  MATCH_GTE,
   MATCH_RANGE,
   buildRequestRuleExpr,
   buildTierDnfExpr,
@@ -212,7 +211,8 @@ describe('request rule round-trip', () => {
       { cond: 'hour("tz") >= 12 && hour("tz") < 18', multiplier: 2, matched: false },
     ])
     expect(groups[0].conditions).toHaveLength(2)
-    expect(groups[1].conditions[0].conditions[0].mode).toBe(MATCH_GTE)
+    // Within-day `&&` pairs are a RANGE (the builder emits `&&` for start <= end).
+    expect(groups[1].conditions[0].conditions[0].mode).toBe(MATCH_RANGE)
   })
 })
 

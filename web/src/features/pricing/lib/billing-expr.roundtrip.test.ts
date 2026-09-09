@@ -254,13 +254,18 @@ function randRequestCondition(rng: () => number): RequestCondition {
       const timeFunc = pick(rng, TIME_FUNCS)
       const timezone = pick(rng, TIMEZONES)
       const mode = pick(rng, [MATCH_EQ, MATCH_GTE, MATCH_LT, MATCH_RANGE])
+      // Domain-valid values per time function: the builder rejects out-of-range
+      // literals (e.g. day 0, month 0), so a corpus outside the domain would no
+      // longer round-trip.
+      const domain: Record<string, { ranges: Array<[number, number]>; values: string[] }> = {
+        hour: { ranges: [[18, 6], [21, 9], [23, 0], [2, 5]], values: ['8', '0', '18', '23', '7'] },
+        minute: { ranges: [[30, 10], [50, 15], [59, 0]], values: ['30', '0', '45', '59', '7'] },
+        weekday: { ranges: [[5, 1], [6, 0]], values: ['1', '0', '5', '6', '3'] },
+        month: { ranges: [[11, 3], [12, 1]], values: ['1', '6', '12', '3', '9'] },
+        day: { ranges: [[25, 5], [28, 2]], values: ['1', '15', '31', '9', '23'] },
+      }
       if (mode === MATCH_RANGE) {
-        const [start, end] = pick(rng, [
-          [18, 6],
-          [21, 9],
-          [23, 0],
-          [2, 5],
-        ])
+        const [start, end] = pick(rng, domain[timeFunc].ranges)
         return {
           source: 'time',
           timeFunc,
@@ -276,7 +281,7 @@ function randRequestCondition(rng: () => number): RequestCondition {
         timeFunc,
         timezone,
         mode,
-        value: pick(rng, ['8', '0', '18', '23', '7']),
+        value: pick(rng, domain[timeFunc].values),
         rangeStart: '',
         rangeEnd: '',
       }

@@ -31,12 +31,9 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ROLE } from '@/lib/roles'
 
 import { updateUserSettings } from '../../api'
-import {
-  DEFAULT_QUOTA_WARNING_THRESHOLD,
-  NOTIFICATION_METHODS,
-} from '../../constants'
-import { parseUserSettings } from '../../lib'
-import type { UserProfile, UserSettings, NotifyType } from '../../types'
+import { NOTIFICATION_METHODS } from '../../constants'
+import { normalizeUserSettings } from '../../lib/user-settings'
+import type { UserProfile, NotifyType } from '../../types'
 
 const NOTIFICATION_ICONS: Record<NotifyType, typeof Mail> = {
   email: Mail,
@@ -45,21 +42,9 @@ const NOTIFICATION_ICONS: Record<NotifyType, typeof Mail> = {
   gotify: Server,
 }
 
-const NOTIFICATION_VALUES = new Set<NotifyType>(
-  NOTIFICATION_METHODS.map((method) => method.value)
-)
-
 // Preference policy keys (must match backend common.PreferenceKey*).
 const PREF_ACCEPT_UNPRICED = 'accept_unset_model_ratio_model'
-const PREF_RECORD_IP = 'record_ip_log'
 const PREF_UPSTREAM_NOTIFY = 'upstream_model_update_notify_enabled'
-
-function normalizeNotifyType(value: unknown): NotifyType {
-  return typeof value === 'string' &&
-    NOTIFICATION_VALUES.has(value as NotifyType)
-    ? (value as NotifyType)
-    : 'email'
-}
 
 // ============================================================================
 // Settings Tab Component
@@ -70,13 +55,7 @@ interface NotificationTabProps {
   onUpdate: () => void
 }
 
-function PolicyBadge({
-  forced,
-  locked,
-}: {
-  forced: boolean
-  locked: boolean
-}) {
+function PolicyBadge({ forced, locked }: { forced: boolean; locked: boolean }) {
   const { t } = useTranslation()
   if (forced) {
     return (
@@ -107,24 +86,14 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
   const forceOnSet = new Set(profile?.preference_policy?.force_on ?? [])
   const lockedSet = new Set(profile?.preference_policy?.locked ?? [])
   const [loading, setLoading] = useState(false)
-  const [settings, setSettings] = useState<UserSettings>({
-    notify_type: 'email',
-    quota_warning_threshold: DEFAULT_QUOTA_WARNING_THRESHOLD,
-    notification_email: '',
-    webhook_url: '',
-    webhook_secret: '',
-    bark_url: '',
-    gotify_url: '',
-    gotify_token: '',
-    gotify_priority: 5,
-    accept_unset_model_ratio_model: false,
-    record_ip_log: false,
-    upstream_model_update_notify_enabled: false,
-  })
+  const [settings, setSettings] = useState(() => normalizeUserSettings())
 
   // Update form field helper
   const updateField = useCallback(
-    <K extends keyof UserSettings>(field: K, value: UserSettings[K]) => {
+    <K extends keyof typeof settings>(
+      field: K,
+      value: (typeof settings)[K]
+    ) => {
       setSettings((prev) => ({ ...prev, [field]: value }))
     },
     []
@@ -132,31 +101,15 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
 
   useEffect(() => {
     if (profile?.setting) {
-      const parsed = parseUserSettings(profile.setting)
-      setSettings({
-        notify_type: normalizeNotifyType(parsed.notify_type),
-        quota_warning_threshold:
-          parsed.quota_warning_threshold ?? DEFAULT_QUOTA_WARNING_THRESHOLD,
-        notification_email: parsed.notification_email ?? '',
-        webhook_url: parsed.webhook_url ?? '',
-        webhook_secret: parsed.webhook_secret ?? '',
-        bark_url: parsed.bark_url ?? '',
-        gotify_url: parsed.gotify_url ?? '',
-        gotify_token: parsed.gotify_token ?? '',
-        gotify_priority: parsed.gotify_priority ?? 5,
-        accept_unset_model_ratio_model:
-          parsed.accept_unset_model_ratio_model || false,
-        record_ip_log: parsed.record_ip_log || false,
-        upstream_model_update_notify_enabled:
-          parsed.upstream_model_update_notify_enabled || false,
-      })
+      setSettings(normalizeUserSettings(profile.setting))
     }
   }, [profile])
 
   const handleSave = async () => {
     try {
       setLoading(true)
-      const response = await updateUserSettings(settings)
+      const { record_ip_log: _recordIpLog, ...notificationSettings } = settings
+      const response = await updateUserSettings(notificationSettings)
 
       if (response.success) {
         toast.success(t('Settings updated successfully'))
@@ -164,14 +117,14 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
       } else {
         toast.error(response.message || t('Failed to update settings'))
       }
-    } catch (_error) {
+    } catch {
       toast.error(t('Failed to update settings'))
     } finally {
       setLoading(false)
     }
   }
 
-  const notifyType = normalizeNotifyType(settings.notify_type)
+  const notifyType = settings.notify_type
 
   return (
     <div className='space-y-4 sm:space-y-6'>
@@ -182,8 +135,7 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
           value={[notifyType]}
           onValueChange={(value) => {
             const nextValue = value.find((item) => item !== notifyType)
-            if (nextValue)
-              updateField('notify_type', normalizeNotifyType(nextValue))
+            if (nextValue) updateField('notify_type', nextValue as NotifyType)
           }}
           aria-label={t('Notification Method')}
           variant='outline'
@@ -438,33 +390,6 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
             onCheckedChange={(checked) =>
               updateField('accept_unset_model_ratio_model', checked)
             }
-          />
-        </div>
-
-        {/* Record IP Log */}
-        <div className='flex items-start justify-between gap-3 rounded-lg border p-3 sm:items-center sm:p-4'>
-          <div className='space-y-0.5'>
-            <div className='flex flex-wrap items-center gap-2'>
-              <Label htmlFor='recordIp'>{t('Record IP Address')}</Label>
-              <PolicyBadge
-                forced={forceOnSet.has(PREF_RECORD_IP)}
-                locked={lockedSet.has(PREF_RECORD_IP)}
-              />
-            </div>
-            <p className='text-muted-foreground text-xs sm:text-sm'>
-              {t('Log IP address for usage and error logs')}
-            </p>
-          </div>
-          <Switch
-            id='recordIp'
-            className='shrink-0'
-            checked={
-              forceOnSet.has(PREF_RECORD_IP) || settings.record_ip_log
-            }
-            disabled={
-              forceOnSet.has(PREF_RECORD_IP) || lockedSet.has(PREF_RECORD_IP)
-            }
-            onCheckedChange={(checked) => updateField('record_ip_log', checked)}
           />
         </div>
       </div>

@@ -133,6 +133,7 @@ export function RedemptionsTable({ batchMode }: { batchMode: boolean }) {
     data: redemptions,
     columns,
     enableRowSelection: batchMode,
+    getRowId: (row) => String(row.id),
     columnFilters,
     globalFilter,
     pagination,

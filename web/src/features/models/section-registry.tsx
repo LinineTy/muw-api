@@ -20,12 +20,18 @@ import { createSectionRegistry } from '@/features/system-settings/utils/section-
 
 /**
  * Models page section definitions
+ * MERGE-DECISION: 不采用上游部署功能，deployments section 已删除。
  */
 const MODELS_SECTIONS = [
   {
     id: 'metadata',
-    titleKey: 'Metadata',
+    titleKey: 'Models',
     build: () => null, // Content is rendered directly in the page component
+  },
+  {
+    id: 'vendors',
+    titleKey: 'Vendors',
+    build: () => null,
   },
 ] as const
 
