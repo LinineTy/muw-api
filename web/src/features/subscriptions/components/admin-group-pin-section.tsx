@@ -151,6 +151,9 @@ export function AdminGroupPinSection() {
             searchPlaceholder: t('Filter products...'),
           }}
           applyHeaderSize
+          /* 分页器跟随表格（内联）：默认的 footer portal 会把它传到页面底部，
+             与钉子表的 footer 分页器叠在一起 */
+          paginationInFooter={false}
         />
       </section>
 
