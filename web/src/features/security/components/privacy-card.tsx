@@ -27,6 +27,11 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { TitledCard } from '@/components/ui/titled-card'
 import { updateUserSettings } from '@/features/profile/api'
+import {
+  PolicyBadge,
+  PREFERENCE_KEY_RECORD_IP_LOG,
+  usePreferencePolicy,
+} from '@/features/profile/components/preference-policy'
 import { parseUserSettings } from '@/features/profile/lib/format'
 import type { UserProfile } from '@/features/profile/types'
 
@@ -40,6 +45,12 @@ export function PrivacyCard(props: PrivacyCardProps) {
   const [recordIpLog, setRecordIpLog] = useState(() =>
     Boolean(parseUserSettings(props.profile.setting).record_ip_log)
   )
+  // 管理员偏好策略:强制开启时开关锁定为开,禁止修改时不可改动
+  const { forceOnSet, lockedSet } = usePreferencePolicy(
+    props.profile.preference_policy
+  )
+  const forced = forceOnSet.has(PREFERENCE_KEY_RECORD_IP_LOG)
+  const locked = lockedSet.has(PREFERENCE_KEY_RECORD_IP_LOG)
   useEffect(() => {
     setRecordIpLog(
       Boolean(parseUserSettings(props.profile.setting).record_ip_log)
@@ -67,19 +78,22 @@ export function PrivacyCard(props: PrivacyCardProps) {
       disableHoverEffect
     >
       <div className='flex items-center justify-between gap-4'>
-        <Label htmlFor='security-record-ip'>{t('Record IP Address')}</Label>
+        <div className='flex flex-wrap items-center gap-2'>
+          <Label htmlFor='security-record-ip'>{t('Record IP Address')}</Label>
+          <PolicyBadge forced={forced} locked={locked} />
+        </div>
         <Switch
           id='security-record-ip'
-          checked={recordIpLog}
+          checked={forced || recordIpLog}
           onCheckedChange={setRecordIpLog}
-          disabled={save.isPending}
+          disabled={forced || locked || save.isPending}
         />
       </div>
       <div className='mt-4 flex justify-end'>
         <Button
           type='button'
           onClick={() => save.mutate()}
-          disabled={save.isPending}
+          disabled={forced || locked || save.isPending}
         >
           {save.isPending && <Loader2 className='size-4 animate-spin' />}
           {save.isPending ? t('Saving...') : t('Save Settings')}

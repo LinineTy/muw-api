@@ -22,7 +22,6 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { PasswordInput } from '@/components/password-input'
-import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -34,6 +33,12 @@ import { updateUserSettings } from '../../api'
 import { NOTIFICATION_METHODS } from '../../constants'
 import { normalizeUserSettings } from '../../lib/user-settings'
 import type { UserProfile, NotifyType } from '../../types'
+import {
+  PolicyBadge,
+  PREFERENCE_KEY_ACCEPT_UNPRICED,
+  PREFERENCE_KEY_UPSTREAM_NOTIFY,
+  usePreferencePolicy,
+} from '../preference-policy'
 
 const NOTIFICATION_ICONS: Record<NotifyType, typeof Mail> = {
   email: Mail,
@@ -41,10 +46,6 @@ const NOTIFICATION_ICONS: Record<NotifyType, typeof Mail> = {
   bark: Bell,
   gotify: Server,
 }
-
-// Preference policy keys (must match backend common.PreferenceKey*).
-const PREF_ACCEPT_UNPRICED = 'accept_unset_model_ratio_model'
-const PREF_UPSTREAM_NOTIFY = 'upstream_model_update_notify_enabled'
 
 // ============================================================================
 // Settings Tab Component
@@ -55,36 +56,12 @@ interface NotificationTabProps {
   onUpdate: () => void
 }
 
-function PolicyBadge({ forced, locked }: { forced: boolean; locked: boolean }) {
-  const { t } = useTranslation()
-  if (forced) {
-    return (
-      <StatusBadge
-        label={t('Admin Enforced')}
-        variant='warning'
-        copyable={false}
-        className='shrink-0'
-      />
-    )
-  }
-  if (locked) {
-    return (
-      <StatusBadge
-        label={t('Locked by Admin')}
-        variant='neutral'
-        copyable={false}
-        className='shrink-0'
-      />
-    )
-  }
-  return null
-}
-
 export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
   const { t } = useTranslation()
   const isAdmin = (profile?.role ?? 0) >= ROLE.ADMIN
-  const forceOnSet = new Set(profile?.preference_policy?.force_on ?? [])
-  const lockedSet = new Set(profile?.preference_policy?.locked ?? [])
+  const { forceOnSet, lockedSet } = usePreferencePolicy(
+    profile?.preference_policy
+  )
   const [loading, setLoading] = useState(false)
   const [settings, setSettings] = useState(() => normalizeUserSettings())
 
@@ -332,8 +309,8 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
                   {t('Receive Upstream Model Update Notifications')}
                 </Label>
                 <PolicyBadge
-                  forced={forceOnSet.has(PREF_UPSTREAM_NOTIFY)}
-                  locked={lockedSet.has(PREF_UPSTREAM_NOTIFY)}
+                  forced={forceOnSet.has(PREFERENCE_KEY_UPSTREAM_NOTIFY)}
+                  locked={lockedSet.has(PREFERENCE_KEY_UPSTREAM_NOTIFY)}
                 />
               </div>
               <p className='text-muted-foreground line-clamp-3 text-xs sm:line-clamp-none sm:text-sm'>
@@ -346,12 +323,12 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
               id='upstreamModelUpdateNotify'
               className='shrink-0'
               checked={
-                forceOnSet.has(PREF_UPSTREAM_NOTIFY) ||
+                forceOnSet.has(PREFERENCE_KEY_UPSTREAM_NOTIFY) ||
                 settings.upstream_model_update_notify_enabled
               }
               disabled={
-                forceOnSet.has(PREF_UPSTREAM_NOTIFY) ||
-                lockedSet.has(PREF_UPSTREAM_NOTIFY)
+                forceOnSet.has(PREFERENCE_KEY_UPSTREAM_NOTIFY) ||
+                lockedSet.has(PREFERENCE_KEY_UPSTREAM_NOTIFY)
               }
               onCheckedChange={(checked) =>
                 updateField('upstream_model_update_notify_enabled', checked)
@@ -368,8 +345,8 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
                 {t('Accept Unpriced Models')}
               </Label>
               <PolicyBadge
-                forced={forceOnSet.has(PREF_ACCEPT_UNPRICED)}
-                locked={lockedSet.has(PREF_ACCEPT_UNPRICED)}
+                forced={forceOnSet.has(PREFERENCE_KEY_ACCEPT_UNPRICED)}
+                locked={lockedSet.has(PREFERENCE_KEY_ACCEPT_UNPRICED)}
               />
             </div>
             <p className='text-muted-foreground text-xs sm:text-sm'>
@@ -380,12 +357,12 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
             id='acceptUnsetPrice'
             className='shrink-0'
             checked={
-              forceOnSet.has(PREF_ACCEPT_UNPRICED) ||
+              forceOnSet.has(PREFERENCE_KEY_ACCEPT_UNPRICED) ||
               settings.accept_unset_model_ratio_model
             }
             disabled={
-              forceOnSet.has(PREF_ACCEPT_UNPRICED) ||
-              lockedSet.has(PREF_ACCEPT_UNPRICED)
+              forceOnSet.has(PREFERENCE_KEY_ACCEPT_UNPRICED) ||
+              lockedSet.has(PREFERENCE_KEY_ACCEPT_UNPRICED)
             }
             onCheckedChange={(checked) =>
               updateField('accept_unset_model_ratio_model', checked)
