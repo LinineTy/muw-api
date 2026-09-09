@@ -2,8 +2,8 @@ package model
 
 import (
 	"fmt"
-	"math"
 	"maps"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -380,7 +380,11 @@ func updateOptionMap(key string, value string) (err error) {
 			common.ImageDownloadPermission = intValue
 		}
 	}
-	if strings.HasSuffix(key, "Enabled") || key == "DefaultCollapseSidebar" || key == "DefaultUseAutoGroup" || key == "SMTPForceAuthLogin" || key == "SMTPInsecureSkipVerify" {
+	// 两个后缀都要判:三个限流开关叫 CriticalRateLimitEnable / GlobalApiRateLimitEnable /
+	// GlobalWebRateLimitEnable(结尾 "Enable"),其余布尔开关是 *Enabled(结尾 "Enabled",
+	// 它不以 "Enable" 结尾——少一个 d 就是两批键)。只判 "Enabled" 会漏掉限流开关,
+	// 于是设置页改了只写库、运行时永不生效。
+	if strings.HasSuffix(key, "Enabled") || strings.HasSuffix(key, "Enable") || key == "DefaultCollapseSidebar" || key == "DefaultUseAutoGroup" || key == "SMTPForceAuthLogin" || key == "SMTPInsecureSkipVerify" {
 		boolValue := value == "true"
 		switch key {
 		case "PasswordRegisterEnabled":
