@@ -1,11 +1,17 @@
 // @muw-owned
 import type { ColumnDef } from '@tanstack/react-table'
+import { PinOff, Pencil, Trash2 } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { StatusBadge } from '@/components/status-badge'
 import { TableId } from '@/components/table-id'
 import { Button } from '@/components/ui/button'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { GroupBadge } from '@/components/group-badge'
 import { getCurrencyDisplay } from '@/lib/currency'
 import { formatTimestamp } from '../lib'
@@ -88,24 +94,41 @@ export function useGroupPinProductColumns(callbacks: {
         enableSorting: false,
         meta: { mobileHidden: true },
         cell: ({ row }) => (
-          <div className='flex justify-end gap-2'>
-            <Button
-              size='sm'
-              variant='outline'
-              onClick={() => callbacks.onEdit(row.original)}
-            >
-              {t('Edit')}
-            </Button>
-            <Button
-              size='sm'
-              variant='destructive'
-              onClick={() => callbacks.onDelete(row.original)}
-            >
-              {t('Delete')}
-            </Button>
+          <div className='-ml-1.5 flex items-center gap-1'>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant='ghost'
+                    size='icon-sm'
+                    aria-label={t('Edit')}
+                    onClick={() => callbacks.onEdit(row.original)}
+                  />
+                }
+              >
+                <Pencil />
+              </TooltipTrigger>
+              <TooltipContent>{t('Edit')}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant='ghost'
+                    size='icon-sm'
+                    aria-label={t('Delete')}
+                    className='text-destructive hover:text-destructive'
+                    onClick={() => callbacks.onDelete(row.original)}
+                  />
+                }
+              >
+                <Trash2 />
+              </TooltipTrigger>
+              <TooltipContent>{t('Delete')}</TooltipContent>
+            </Tooltip>
           </div>
         ),
-        size: 120,
+        size: 90,
       },
     ],
     [t, currencySymbol, callbacks]
@@ -193,19 +216,26 @@ export function useGroupPinColumns(callbacks: {
         header: t('Actions'),
         enableSorting: false,
         meta: { mobileHidden: true },
-        cell: ({ row }) => (
-          <div className='flex justify-end'>
-            {row.original.status === 'active' && (
-              <Button
-                size='sm'
-                variant='outline'
-                onClick={() => callbacks.onRelease(row.original)}
-              >
-                {t('Unpin')}
-              </Button>
-            )}
-          </div>
-        ),
+        cell: ({ row }) =>
+          row.original.status === 'active' ? (
+            <div className='-ml-1.5 flex items-center gap-1'>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant='ghost'
+                      size='icon-sm'
+                      aria-label={t('Unpin')}
+                      onClick={() => callbacks.onRelease(row.original)}
+                    />
+                  }
+                >
+                  <PinOff />
+                </TooltipTrigger>
+                <TooltipContent>{t('Unpin')}</TooltipContent>
+              </Tooltip>
+            </div>
+          ) : null,
         size: 90,
       },
     ],
