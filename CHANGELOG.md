@@ -3,6 +3,19 @@
 本文件记录 muw fork 的发布版本与变更。版本号格式：`vYY.MM.DD.muw.N`
 （发版日期 + muw 小标记），自 v26.08.14.muw.1 起从上游 semver 版本号迁移到日期制。
 
+## v26.09.10.muw.2 (2026-09-10)
+
+### 个人资料页整页改造
+
+- **新增**：profile 双列主侧布局——左主栏（身份 header + 设置/偏好），右栏「分组与固定」卡（当前分组、钉 v2/订阅 v3 锚点行、到期回落预告）与「信用分」卡；header 单行化（身份左、余额/用量/请求三统计右置）；七语言 i18n；`GroupPinCard` 新增
+- **修复**：分组卡锚点行在英文界面文字重叠——detail 只留 Permanent/到期日期（YYYY-MM-DD），行布局 shrink-0 + truncate 双侧防御
+- **修复**：上游同步覆盖了登录结果中间页收束（`handleLoginSuccess` 尾部被改成直接跳 dashboard），恢复「先经 /login-result 再自动跳转」；禁用提示与激活分支未受影响
+
+### 其他
+
+- **修复**：移除上游同步带回的 StripeCustomer 残留（controller/user.go、model/user.go）
+- **修复**：解钉后组缓存刷新失败落日志（之前静默失败）
+
 ## v26.09.10.muw.1 (2026-09-10)
 
 ### 上游同步（对齐 new-api 4fc9d1f1f，84 个提交）
