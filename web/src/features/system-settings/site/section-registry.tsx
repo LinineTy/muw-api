@@ -26,9 +26,9 @@ import {
 import { HeaderNavigationSection } from '../maintenance/header-navigation-section'
 import { NoticeSection } from '../maintenance/notice-section'
 import { SidebarModulesSection } from '../maintenance/sidebar-modules-section'
-import { LandingPageThemeSection } from './landing-theme/landing-theme-section'
 import type { SiteSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
+import { LandingPageThemeSection } from './landing-theme/landing-theme-section'
 
 const SITE_SECTIONS = [
   {
@@ -57,9 +57,7 @@ const SITE_SECTIONS = [
       <NoticeSection
         defaultValue={settings.Notice ?? ''}
         popupEnabled={settings['console_setting.announcement_popup_enabled']}
-        popupDuration={
-          settings['console_setting.announcement_popup_duration']
-        }
+        popupDuration={settings['console_setting.announcement_popup_duration']}
       />
     ),
   },

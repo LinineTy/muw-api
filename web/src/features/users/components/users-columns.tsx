@@ -71,7 +71,9 @@ export function useUsersColumns({
               <Checkbox
                 checked={table.getIsAllPageRowsSelected()}
                 indeterminate={table.getIsSomePageRowsSelected()}
-                onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+                onCheckedChange={(value) =>
+                  table.toggleAllPageRowsSelected(!!value)
+                }
                 aria-label={t('Select all')}
                 className='translate-y-[2px]'
               />
@@ -234,7 +236,10 @@ export function useUsersColumns({
           <span className='text-muted-foreground text-sm'>
             {formatBytes(used)}
             {capacity > 0 && (
-              <span className='text-foreground'> / {formatBytes(capacity)}</span>
+              <span className='text-foreground'>
+                {' '}
+                / {formatBytes(capacity)}
+              </span>
             )}
           </span>
         )

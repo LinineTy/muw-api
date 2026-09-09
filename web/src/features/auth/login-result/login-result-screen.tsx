@@ -7,19 +7,15 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
-import dayjs from '@/lib/dayjs'
 import {
   loginMethodLabel,
   sessionDevice,
 } from '@/features/security/components/login-session-utils'
+import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
+import dayjs from '@/lib/dayjs'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { LOGIN_RESULT_REDIRECT_SECONDS } from '../constants'
@@ -138,7 +134,7 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
           className={
             isSuccess
               ? 'rounded-2xl bg-emerald-500/10 p-4 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-300'
-              : 'rounded-2xl bg-destructive/10 p-4 text-destructive dark:bg-destructive/20'
+              : 'bg-destructive/10 text-destructive dark:bg-destructive/20 rounded-2xl p-4'
           }
         >
           {isSuccess ? (
@@ -241,9 +237,7 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
                   </div>
                   <p className='text-muted-foreground min-w-0 truncate text-xs'>
                     {session.ip || t('Unknown')} ·{' '}
-                    {dayjs
-                      .unix(session.created_at)
-                      .format('YYYY-MM-DD HH:mm')}
+                    {dayjs.unix(session.created_at).format('YYYY-MM-DD HH:mm')}
                   </p>
                 </div>
               </div>
@@ -255,7 +249,7 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
       {/* 倒计时进度条 + 未自动跳转时的兜底链接 */}
       <div className='space-y-3'>
         <div className='space-y-2'>
-          <div className='h-1 w-full overflow-hidden rounded-full bg-muted'>
+          <div className='bg-muted h-1 w-full overflow-hidden rounded-full'>
             <div
               className='bg-primary h-full rounded-full transition-[width] duration-1000 ease-linear'
               style={{ width: `${progressPercent}%` }}
@@ -269,7 +263,7 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
           <button
             type='button'
             onClick={navigateAway}
-            className='text-muted-foreground text-xs underline underline-offset-4 transition-colors hover:text-foreground'
+            className='text-muted-foreground hover:text-foreground text-xs underline underline-offset-4 transition-colors'
           >
             {isSuccess
               ? t('Not redirected automatically? Continue to the dashboard')

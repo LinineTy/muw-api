@@ -359,8 +359,9 @@ type MuwAuthBridge = {
 function parentAuthBridge(): MuwAuthBridge | null {
   try {
     if (window.self === window.top) return null
-    const bridge = (window.parent as Window & { __muwAuthBridge?: MuwAuthBridge })
-      ?.__muwAuthBridge
+    const bridge = (
+      window.parent as Window & { __muwAuthBridge?: MuwAuthBridge }
+    )?.__muwAuthBridge
     return bridge ?? null
   } catch {
     return null
@@ -368,7 +369,9 @@ function parentAuthBridge(): MuwAuthBridge | null {
 }
 
 /** iframe 委托主层刷新:主层 refreshPromise 自带去重,多窗并发只发一次请求 */
-async function adoptBridgeRefresh(bridge: MuwAuthBridge): Promise<RefreshOutcome> {
+async function adoptBridgeRefresh(
+  bridge: MuwAuthBridge
+): Promise<RefreshOutcome> {
   try {
     const result = await bridge.refresh()
     if (result.ok) {
@@ -379,7 +382,10 @@ async function adoptBridgeRefresh(bridge: MuwAuthBridge): Promise<RefreshOutcome
       clearAuthentication(true)
       return { kind: 'anonymous' }
     }
-    return { kind: 'transient_error', error: new Error('bridge refresh failed') }
+    return {
+      kind: 'transient_error',
+      error: new Error('bridge refresh failed'),
+    }
   } catch (error) {
     // 主层桥异常(极端时序),退回自刷
     return { kind: 'transient_error', error }
@@ -390,7 +396,9 @@ async function adoptBridgeRefresh(bridge: MuwAuthBridge): Promise<RefreshOutcome
 export function installParentAuthBridge(): void {
   try {
     if (window.self === window.top) {
-      ;(window as Window & { __muwAuthBridge?: MuwAuthBridge }).__muwAuthBridge = {
+      ;(
+        window as Window & { __muwAuthBridge?: MuwAuthBridge }
+      ).__muwAuthBridge = {
         refresh: async () => {
           // token 仍有 ≥60s 余量时直接复用,串行开窗零额外请求
           const fresh = currentValidAuthBundle()
@@ -405,8 +413,10 @@ export function installParentAuthBridge(): void {
             const bundle = currentValidAuthBundle()
             if (bundle) return { ok: true, bundle }
           }
-          if (outcome.kind === 'anonymous') return { ok: false, kind: 'anonymous' }
-          if (outcome.kind === 'out_of_sync') return { ok: false, kind: 'out_of_sync' }
+          if (outcome.kind === 'anonymous')
+            return { ok: false, kind: 'anonymous' }
+          if (outcome.kind === 'out_of_sync')
+            return { ok: false, kind: 'out_of_sync' }
           return { ok: false, kind: 'transient_error' }
         },
       }

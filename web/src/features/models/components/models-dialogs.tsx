@@ -21,7 +21,6 @@ import { MissingModelsDialog } from './dialogs/missing-models-dialog'
 import { PrefillGroupManagement } from './dialogs/prefill-group-management'
 import { PriceSyncDialog } from './dialogs/price-sync-dialog'
 import { SyncWizardDialog } from './dialogs/sync-wizard-dialog'
-import { UpstreamConflictDialog } from './dialogs/upstream-conflict-dialog'
 import { ModelMutateDrawer } from './drawers/model-mutate-drawer'
 import { useModels } from './models-provider'
 import { VendorManagement } from './vendor-management'
@@ -64,12 +63,6 @@ export function ModelsDialogs() {
       {/* Sync Wizard Dialog */}
       <SyncWizardDialog
         open={open === 'sync-wizard'}
-        onOpenChange={(v) => !v && setOpen(null)}
-      />
-
-      {/* Upstream Conflict Dialog */}
-      <UpstreamConflictDialog
-        open={open === 'upstream-conflict'}
         onOpenChange={(v) => !v && setOpen(null)}
       />
 
