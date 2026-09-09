@@ -1182,8 +1182,11 @@ body[data-theme-preset='liquid-glass']::before {
   background-color: oklch(0.13 0 0 / 0.3);
 }
 
-/* 按钮玻璃化:半透明 primary + 模糊 + 内描边,与玻璃面板统一(默认实色块突兀)。 */
-[data-theme-preset='liquid-glass'] [data-slot='button'] {
+/* 按钮玻璃化:半透明 primary + 模糊 + 内描边,与玻璃面板统一(默认实色块突兀)。
+ * 只给「有表面」的变体:ghost/link 本身没有底色,套上内高光 + 投影后会在表格里
+ * 变成一块浮起的玻璃小方块(模型页定价列整列都是),与它们的极简语义冲突。 */
+[data-theme-preset='liquid-glass']
+  [data-slot='button']:not([data-variant='ghost']):not([data-variant='link']) {
   backdrop-filter: blur(16px) saturate(170%);
   box-shadow:
     inset 0 1px 0 oklch(1 0 0 / 0.35),
