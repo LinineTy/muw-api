@@ -665,7 +665,6 @@ func buildSelfUserData(user *model.User) map[string]any {
 		"group_auto":           user.GroupAuto,
 		"avatar":               user.Avatar,
 		"setting":              user.Setting,
-		"stripe_customer":      user.StripeCustomer,
 		"preference_policy":    common.GetUserPreferencePolicy(),
 		"sidebar_modules":      userSetting.SidebarModules, // 正确提取sidebar_modules字段
 		"permissions":          permissions,
