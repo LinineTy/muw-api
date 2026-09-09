@@ -1174,6 +1174,7 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 		refCol = `"trade_no"`
 	}
 	var logUserId int
+	var logKind string
 	var logPlanTitle string
 	var logMoney float64
 	var logPaymentMethod string
@@ -1263,6 +1264,7 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 			return err
 		}
 		logUserId = order.UserId
+		logKind = order.Kind
 		logPlanTitle = itemTitle
 		logMoney = order.Money
 		logPaymentMethod = order.PaymentMethod
@@ -1277,7 +1279,12 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 	if logUserId > 0 {
 		// 购买与续费都会改变活跃订阅的到期时间，到期标记须同步（续费不升组也要刷）。
 		refreshSubscriptionStamp(logUserId)
+		// 固定分组订单与订阅共用这张表和这个回调，日志文案按 kind 分流：写成
+		// 「订阅购买成功，套餐: X」会把固定分组商品说成套餐。
 		msg := fmt.Sprintf("订阅购买成功，套餐: %s，支付金额: %.2f，支付方式: %s", logPlanTitle, logMoney, logPaymentMethod)
+		if logKind == OrderKindGroupPin {
+			msg = fmt.Sprintf("固定分组购买成功，商品: %s，支付金额: %.2f，支付方式: %s", logPlanTitle, logMoney, logPaymentMethod)
+		}
 		RecordTopupLogWithPayment(logUserId, msg, logPaymentMethod)
 	}
 	return nil

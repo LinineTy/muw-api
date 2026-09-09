@@ -348,5 +348,16 @@ func PurchaseGroupPin(userId, pinProductId int) (string, error) {
 	if pinChanged {
 		refreshSubscriptionUserGroupCache(userId, "group pin purchase")
 	}
+	if requiredQuota > 0 {
+		// 与订阅余额购买同口径：DB 已扣，缓存必须同步，否则用户端余额停在旧值。
+		if err := cacheDecrUserQuota(userId, int64(requiredQuota)); err != nil {
+			common.SysLog("failed to decrease user quota cache after group pin purchase: " + err.Error())
+		}
+	}
+	// 与订阅余额购买一致地落一条 type=1 购买日志：此前余额购钉只在订单中心留单，
+	// 计费/账单记录里没有任何痕迹（在线支付通道经 CompleteSubscriptionOrder 有日志）。
+	RecordTopupLogWithPayment(userId,
+		fmt.Sprintf("固定分组购买成功，商品: %s，金额: %.2f，扣除额度: %d", product.Title, product.PriceAmount, requiredQuota),
+		PaymentMethodBalance)
 	return fmt.Sprintf("固定分组已生效: %s", product.Group), nil
 }
