@@ -67,8 +67,33 @@ export interface WindowState {
   next_reset_at: number
 }
 
+// 管理端套餐表的行模型：普通订阅套餐与固定分组商品共用一张表/一套卡片/一个抽屉，
+// 用 kind 区分。固定分组商品存于独立表（group_pin_products），行上保留原始商品
+// 以便启停/删除时回传完整字段。
+//
+// 注意：固定分组商品的 id 与套餐 id 会撞号，任何按 plan_id 建索引的判定（限购计数、
+// 已订阅判定）都不得喂固定分组行 —— 见 my-subscriptions 的 resolveGroupPinState。
 export interface PlanRecord {
   plan: SubscriptionPlan
+  kind?: PlanKind
+  groupPin?: GroupPinProduct
+}
+
+export type PlanKind = 'plan' | 'group_pin'
+
+// 固定分组商品（group_pin_products 行）。管理端与用户端接口返回同一形状，字段面
+// 与订阅套餐的「商品面」对齐（无时长、无额度、无互斥组）。
+export interface GroupPinProduct {
+  id: number
+  title: string
+  subtitle: string
+  group: string
+  price_amount: number
+  enabled: boolean
+  is_recommended: boolean
+  allow_balance_pay?: boolean
+  sort_order: number
+  allowed_groups: string
 }
 
 // ============================================================================

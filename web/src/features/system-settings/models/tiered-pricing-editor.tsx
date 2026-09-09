@@ -21,6 +21,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -37,6 +38,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
+import { Combobox } from '@/components/ui/combobox'
 import { DraftNumberInput } from '@/components/ui/draft-number-input'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -51,6 +53,12 @@ import {
 } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  formatPricingAmount,
+  USD_PRICING_CURRENCY,
+  type PricingCurrency,
+} from '@/features/model-pricing/currency'
+import { PricingAmountInput } from '@/features/model-pricing/pricing-amount-input'
 import {
   BILLING_EXTRA_VARS,
   BILLING_VARS,
@@ -110,9 +118,9 @@ import {
   tryParseVisualConfig,
 } from '@/features/pricing/lib/tier-expr'
 import { cn } from '@/lib/utils'
+
 import { ConditionBuilder } from './condition-builder'
 
-const PRICE_SUFFIX = '$/1M tokens'
 const CACHE_PRICE_VARS = BILLING_EXTRA_VARS.filter(
   (variable) => variable.group === 'cache'
 )
@@ -219,14 +227,18 @@ const PRESET_GROUPS: PresetGroup[] = [
         expr: 'tier("base", p * 5 + c * 25 + cr * 0.5 + cc * 6.25 + cc1h * 10)',
         requestRules: [
           {
-            conditions: [{ conditions: [
+            conditions: [
               {
-                source: SOURCE_HEADER as 'header',
-                path: 'anthropic-beta',
-                mode: MATCH_CONTAINS,
-                value: 'fast-mode-2026-02-01',
+                conditions: [
+                  {
+                    source: SOURCE_HEADER as 'header',
+                    path: 'anthropic-beta',
+                    mode: MATCH_CONTAINS,
+                    value: 'fast-mode-2026-02-01',
+                  },
+                ],
               },
-            ] }],
+            ],
             multiplier: '6',
           },
         ],
@@ -237,25 +249,33 @@ const PRESET_GROUPS: PresetGroup[] = [
         expr: 'len <= 272000 ? tier("standard", p * 2.5 + c * 15 + cr * 0.25) : tier("long_context", p * 5 + c * 22.5 + cr * 0.5)',
         requestRules: [
           {
-            conditions: [{ conditions: [
+            conditions: [
               {
-                source: SOURCE_PARAM as 'param',
-                path: 'service_tier',
-                mode: MATCH_EQ,
-                value: 'priority',
+                conditions: [
+                  {
+                    source: SOURCE_PARAM as 'param',
+                    path: 'service_tier',
+                    mode: MATCH_EQ,
+                    value: 'priority',
+                  },
+                ],
               },
-            ] }],
+            ],
             multiplier: '2',
           },
           {
-            conditions: [{ conditions: [
+            conditions: [
               {
-                source: SOURCE_PARAM as 'param',
-                path: 'service_tier',
-                mode: MATCH_EQ,
-                value: 'flex',
+                conditions: [
+                  {
+                    source: SOURCE_PARAM as 'param',
+                    path: 'service_tier',
+                    mode: MATCH_EQ,
+                    value: 'flex',
+                  },
+                ],
               },
-            ] }],
+            ],
             multiplier: '0.5',
           },
         ],
@@ -271,17 +291,21 @@ const PRESET_GROUPS: PresetGroup[] = [
         expr: 'tier("base", p * 3 + c * 15)',
         requestRules: [
           {
-            conditions: [{ conditions: [
+            conditions: [
               {
-                source: SOURCE_TIME as 'time',
-                timeFunc: 'hour',
-                timezone: 'Asia/Shanghai',
-                mode: MATCH_RANGE,
-                value: '',
-                rangeStart: '21',
-                rangeEnd: '6',
+                conditions: [
+                  {
+                    source: SOURCE_TIME as 'time',
+                    timeFunc: 'hour',
+                    timezone: 'Asia/Shanghai',
+                    mode: MATCH_RANGE,
+                    value: '',
+                    rangeStart: '21',
+                    rangeEnd: '6',
+                  },
+                ],
               },
-            ] }],
+            ],
             multiplier: '0.5',
           },
         ],
@@ -292,31 +316,39 @@ const PRESET_GROUPS: PresetGroup[] = [
         expr: 'tier("base", p * 3 + c * 15)',
         requestRules: [
           {
-            conditions: [{ conditions: [
+            conditions: [
               {
-                source: SOURCE_TIME as 'time',
-                timeFunc: 'weekday',
-                timezone: 'Asia/Shanghai',
-                mode: MATCH_EQ,
-                value: '0',
-                rangeStart: '',
-                rangeEnd: '',
+                conditions: [
+                  {
+                    source: SOURCE_TIME as 'time',
+                    timeFunc: 'weekday',
+                    timezone: 'Asia/Shanghai',
+                    mode: MATCH_EQ,
+                    value: '0',
+                    rangeStart: '',
+                    rangeEnd: '',
+                  },
+                ],
               },
-            ] }],
+            ],
             multiplier: '0.8',
           },
           {
-            conditions: [{ conditions: [
+            conditions: [
               {
-                source: SOURCE_TIME as 'time',
-                timeFunc: 'weekday',
-                timezone: 'Asia/Shanghai',
-                mode: MATCH_EQ,
-                value: '6',
-                rangeStart: '',
-                rangeEnd: '',
+                conditions: [
+                  {
+                    source: SOURCE_TIME as 'time',
+                    timeFunc: 'weekday',
+                    timezone: 'Asia/Shanghai',
+                    mode: MATCH_EQ,
+                    value: '6',
+                    rangeStart: '',
+                    rangeEnd: '',
+                  },
+                ],
               },
-            ] }],
+            ],
             multiplier: '0.8',
           },
         ],
@@ -356,18 +388,16 @@ function TierConditionRow({
   return (
     <div className='flex items-center gap-2'>
       <Select
-        items={[
-          ...CONDITION_INPUT_OPTIONS.map((option) => ({
-            value: option.value,
-            label: t(option.labelKey),
-          })),
-        ]}
+        items={CONDITION_INPUT_OPTIONS.map((option) => ({
+          value: option.value,
+          label: t(option.labelKey),
+        }))}
         value={condition.var}
         onValueChange={(value) =>
           onChange({ ...condition, var: value as TierCondition['var'] })
         }
       >
-        <SelectTrigger className='w-32' size='sm'>
+        <SelectTrigger size='sm'>
           <SelectValue>
             {currentInputOption
               ? t(currentInputOption.labelKey)
@@ -391,7 +421,7 @@ function TierConditionRow({
           onChange({ ...condition, op: value as TierCondition['op'] })
         }
       >
-        <SelectTrigger className='w-20' size='sm'>
+        <SelectTrigger size='sm'>
           <SelectValue />
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false}>
@@ -434,21 +464,32 @@ function TierConditionRow({
 // ---------------------------------------------------------------------------
 
 type PriceFieldProps = {
+  currency: PricingCurrency
   label: string
   hint?: string
   value: number
   onChange: (next: number) => void
 }
 
-function PriceField({ label, hint, value, onChange }: PriceFieldProps) {
+function PriceField({
+  label,
+  hint,
+  value,
+  onChange,
+  currency,
+}: PriceFieldProps) {
+  const id = useId()
   return (
     <div className='w-36 space-y-0.5'>
-      <Label className='text-muted-foreground text-xs'>{label}</Label>
-      <DraftNumberInput
-        min={0}
-        step={0.000001}
-        value={Number.isFinite(value) ? value : 0}
-        onValueChange={onChange}
+      <Label htmlFor={id} className='text-muted-foreground text-xs'>
+        {label}
+      </Label>
+      <PricingAmountInput
+        id={id}
+        currency={currency}
+        aria-label={label}
+        value={value}
+        onChange={(next) => onChange(Number(next))}
         className='h-8 w-full'
       />
       {hint && <p className='text-muted-foreground text-xs'>{hint}</p>}
@@ -461,6 +502,7 @@ function PriceField({ label, hint, value, onChange }: PriceFieldProps) {
 // ---------------------------------------------------------------------------
 
 type VisualTierCardProps = {
+  currency: PricingCurrency
   tier: VisualTier
   index: number
   total: number
@@ -470,6 +512,7 @@ type VisualTierCardProps = {
 }
 
 function VisualTierCard({
+  currency,
   tier,
   index,
   total,
@@ -517,6 +560,7 @@ function VisualTierCard({
 
     return (
       <PriceField
+        currency={currency}
         key={variable.key}
         label={t(variable.label)}
         value={value}
@@ -576,7 +620,11 @@ function VisualTierCard({
         <ConditionBuilder<TierCondition>
           dnf={tier.conditions}
           onChange={handleConditionsChange}
-          renderRow={({ value, onChange: onRowChange, onRemove: onRowRemove }) => (
+          renderRow={({
+            value,
+            onChange: onRowChange,
+            onRemove: onRowRemove,
+          }) => (
             <TierConditionRow
               condition={value}
               onChange={onRowChange}
@@ -601,13 +649,14 @@ function VisualTierCard({
         <div className='flex items-center justify-between gap-3'>
           <Label className='text-sm font-semibold'>{t('Token prices')}</Label>
           <span className='bg-muted text-muted-foreground rounded-md px-2 py-1 text-xs'>
-            {PRICE_SUFFIX}
+            {currency.symbol}/{t('1M token')}
           </span>
         </div>
 
         <div className='space-y-3'>
           <div className='flex flex-wrap gap-x-4 gap-y-2'>
             <PriceField
+              currency={currency}
               label={t('Input price')}
               value={inputUnitPrice}
               onChange={(value) =>
@@ -615,6 +664,7 @@ function VisualTierCard({
               }
             />
             <PriceField
+              currency={currency}
               label={t('Output price')}
               value={outputUnitPrice}
               onChange={(value) =>
@@ -691,11 +741,12 @@ function VisualTierCard({
 // ---------------------------------------------------------------------------
 
 type VisualEditorProps = {
+  currency: PricingCurrency
   visualConfig: VisualConfig | null
   onChange: (next: VisualConfig) => void
 }
 
-function VisualEditor({ visualConfig, onChange }: VisualEditorProps) {
+function VisualEditor({ visualConfig, onChange, currency }: VisualEditorProps) {
   const { t } = useTranslation()
   const config = useMemo(
     () => normalizeVisualConfig(visualConfig),
@@ -732,7 +783,10 @@ function VisualEditor({ visualConfig, onChange }: VisualEditorProps) {
   // Explicitly marking a tier as the fallback moves it last and clears its
   // conditions (a fallback is by definition unconditional).
   const handleMakeFallback = (index: number) => {
-    const unmarked = config.tiers.map((tier) => ({ ...tier, isFallback: false }))
+    const unmarked = config.tiers.map((tier) => ({
+      ...tier,
+      isFallback: false,
+    }))
     const fallback = normalizeVisualTier({
       ...unmarked[index],
       conditions: [],
@@ -750,9 +804,12 @@ function VisualEditor({ visualConfig, onChange }: VisualEditorProps) {
       // tier below it. Test the serialized form so both shapes are caught.
       if (!tier.isFallback && buildTierDnfExpr(tier.conditions) === '') {
         issues.push(
-          t('Tier {{index}} always matches and hides the tiers below it. Add a condition or remove it.', {
-            index: index + 1,
-          })
+          t(
+            'Tier {{index}} always matches and hides the tiers below it. Add a condition or remove it.',
+            {
+              index: index + 1,
+            }
+          )
         )
       }
     })
@@ -767,8 +824,8 @@ function VisualEditor({ visualConfig, onChange }: VisualEditorProps) {
         )}
       </p>
       {validationIssues.length > 0 && (
-        <div className='flex items-start gap-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-2'>
-          <AlertTriangle className='mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive' />
+        <div className='border-destructive/30 bg-destructive/5 flex items-start gap-1.5 rounded-md border px-2.5 py-2'>
+          <AlertTriangle className='text-destructive mt-0.5 h-3.5 w-3.5 shrink-0' />
           <div className='space-y-0.5'>
             {validationIssues.map((issue) => (
               <p key={issue} className='text-destructive text-xs'>
@@ -780,6 +837,8 @@ function VisualEditor({ visualConfig, onChange }: VisualEditorProps) {
       )}
       {config.tiers.map((tier, index) => (
         <VisualTierCard
+          currency={currency}
+          // eslint-disable-next-line react/no-array-index-key -- Parsed editor rows have no IDs; preserve input identity while their editable labels and values change.
           key={index}
           tier={tier}
           index={index}
@@ -880,7 +939,7 @@ function RuleConditionRow({
       case MATCH_LTE:
         return t('Less than or equal')
       case MATCH_RANGE:
-        return t('Overnight range')
+        return t('Time range')
       default:
         return mode
     }
@@ -901,12 +960,9 @@ function RuleConditionRow({
         return timeFunc
     }
   }
-  const sourceLabel =
-    condition.source === SOURCE_PARAM
-      ? t('Body param')
-      : condition.source === SOURCE_HEADER
-        ? t('Header')
-        : t('Time')
+  let sourceLabel = t('Time')
+  if (condition.source === SOURCE_PARAM) sourceLabel = t('Body param')
+  else if (condition.source === SOURCE_HEADER) sourceLabel = t('Header')
 
   const handleSourceChange = (source: string) => {
     if (source === SOURCE_TIME) {
@@ -936,7 +992,7 @@ function RuleConditionRow({
             value !== null && onChange({ ...timeCond, value: String(value) })
           }
         >
-          <SelectTrigger className='w-32' size='sm'>
+          <SelectTrigger size='sm'>
             <SelectValue>
               {/^[0-6]$/.test(timeCond.value)
                 ? t(`Every week on day ${timeCond.value}`)
@@ -993,18 +1049,16 @@ function RuleConditionRow({
   const renderTimeCondition = (timeCond: TimeCondition) => (
     <>
       <Select
-        items={[
-          ...TIME_FUNCS.map((fn) => ({
-            value: fn,
-            label: getTimeFuncLabel(fn),
-          })),
-        ]}
+        items={TIME_FUNCS.map((fn) => ({
+          value: fn,
+          label: getTimeFuncLabel(fn),
+        }))}
         value={timeCond.timeFunc}
         onValueChange={(value) =>
           onChange({ ...timeCond, timeFunc: value as TimeFunc })
         }
       >
-        <SelectTrigger className='w-32' size='sm'>
+        <SelectTrigger size='sm'>
           <SelectValue>{getTimeFuncLabel(timeCond.timeFunc)}</SelectValue>
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false}>
@@ -1017,45 +1071,26 @@ function RuleConditionRow({
           </SelectGroup>
         </SelectContent>
       </Select>
-      <Select
-        items={[
-          ...COMMON_TIMEZONES.map((tz) => ({
-            value: tz.value,
-            label: tz.label,
-          })),
-        ]}
+      <Combobox
+        options={COMMON_TIMEZONES.map((tz) => ({
+          value: tz.value,
+          label: tz.label,
+        }))}
         value={timeCond.timezone}
         onValueChange={(value) =>
           value !== null && onChange({ ...timeCond, timezone: value })
         }
-      >
-        <SelectTrigger className='w-56' size='sm'>
-          <SelectValue>
-            {COMMON_TIMEZONES.find((tz) => tz.value === timeCond.timezone)
-              ?.label ?? timeCond.timezone}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent alignItemWithTrigger={false}>
-          <SelectGroup>
-            {COMMON_TIMEZONES.map((tz) => (
-              <SelectItem key={tz.value} value={tz.value}>
-                {tz.label}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
+        className='w-56'
+      />
       <Select
-        items={[
-          ...matchOptions.map((option) => ({
-            value: option.value,
-            label: getMatchLabel(option.value),
-          })),
-        ]}
+        items={matchOptions.map((option) => ({
+          value: option.value,
+          label: getMatchLabel(option.value),
+        }))}
         value={timeCond.mode}
         onValueChange={(v) => v !== null && handleModeChange(v)}
       >
-        <SelectTrigger className='w-32' size='sm'>
+        <SelectTrigger size='sm'>
           <SelectValue>{getMatchLabel(timeCond.mode)}</SelectValue>
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false}>
@@ -1083,16 +1118,14 @@ function RuleConditionRow({
         className='w-44'
       />
       <Select
-        items={[
-          ...matchOptions.map((option) => ({
-            value: option.value,
-            label: getMatchLabel(option.value),
-          })),
-        ]}
+        items={matchOptions.map((option) => ({
+          value: option.value,
+          label: getMatchLabel(option.value),
+        }))}
         value={phCond.mode}
         onValueChange={(v) => v !== null && handleModeChange(v)}
       >
-        <SelectTrigger className='w-32' size='sm'>
+        <SelectTrigger size='sm'>
           <SelectValue>{getMatchLabel(phCond.mode)}</SelectValue>
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false}>
@@ -1134,7 +1167,7 @@ function RuleConditionRow({
           value={condition.source}
           onValueChange={(v) => v !== null && handleSourceChange(v)}
         >
-          <SelectTrigger className='w-28' size='sm'>
+          <SelectTrigger size='sm'>
             <SelectValue>{sourceLabel}</SelectValue>
           </SelectTrigger>
           <SelectContent alignItemWithTrigger={false}>
@@ -1288,7 +1321,7 @@ function CollapsibleSection({
           <Button
             variant='ghost'
             size='sm'
-            className='h-8 w-full justify-start px-2 text-xs font-medium text-muted-foreground hover:text-foreground'
+            className='text-muted-foreground hover:text-foreground h-8 w-full justify-start px-2 text-xs font-medium'
           />
         }
       >
@@ -1365,11 +1398,14 @@ function PresetSection({ applyPreset }: PresetSectionProps) {
 // ---------------------------------------------------------------------------
 
 type EstimatorProps = {
+  currency: PricingCurrency
   effectiveExpr: string
 }
 
-function CostEstimator({ effectiveExpr }: EstimatorProps) {
+function CostEstimator({ effectiveExpr, currency }: EstimatorProps) {
   const { t } = useTranslation()
+  const inputId = useId()
+  const outputId = useId()
   const [promptTokens, setPromptTokens] = useState(0)
   const [completionTokens, setCompletionTokens] = useState(0)
   const [extras, setExtras] = useState<ExtraTokenValues>({
@@ -1402,16 +1438,22 @@ function CostEstimator({ effectiveExpr }: EstimatorProps) {
       </p>
       <div className='grid grid-cols-2 gap-3'>
         <div className='space-y-1'>
-          <Label className='text-xs'>{t('Input tokens')}</Label>
+          <Label htmlFor={inputId} className='text-xs'>
+            {t('Input tokens')}
+          </Label>
           <DraftNumberInput
+            id={inputId}
             min={0}
             value={promptTokens}
             onValueChange={setPromptTokens}
           />
         </div>
         <div className='space-y-1'>
-          <Label className='text-xs'>{t('Output tokens')}</Label>
+          <Label htmlFor={outputId} className='text-xs'>
+            {t('Output tokens')}
+          </Label>
           <DraftNumberInput
+            id={outputId}
             min={0}
             value={completionTokens}
             onValueChange={setCompletionTokens}
@@ -1462,7 +1504,8 @@ function CostEstimator({ effectiveExpr }: EstimatorProps) {
         ) : (
           <div className='flex items-center gap-2'>
             <span className='font-medium'>
-              {t('Estimated quota cost')}: {result.cost.toLocaleString()}
+              {t('Estimated cost')}:{' '}
+              {formatPricingAmount(result.cost / 1_000_000, currency)}
             </span>
             {result.matchedTier && (
               <Badge variant='outline' className='text-xs'>
@@ -1569,7 +1612,7 @@ function LlmPromptHelper({ modelName }: LlmPromptHelperProps) {
 
   const prompt = useMemo(() => {
     if (modelName) {
-      return LLM_PROMPT_TEMPLATE + `\n\nCurrent model: ${modelName}`
+      return `${LLM_PROMPT_TEMPLATE}\n\nCurrent model: ${modelName}`
     }
     return LLM_PROMPT_TEMPLATE
   }, [modelName])
@@ -1590,7 +1633,7 @@ function LlmPromptHelper({ modelName }: LlmPromptHelperProps) {
           <Button
             variant='ghost'
             size='sm'
-            className='h-8 w-full justify-start px-2 text-xs font-medium text-muted-foreground hover:text-foreground'
+            className='text-muted-foreground hover:text-foreground h-8 w-full justify-start px-2 text-xs font-medium'
           />
         }
       >
@@ -1633,6 +1676,7 @@ function LlmPromptHelper({ modelName }: LlmPromptHelperProps) {
 // ---------------------------------------------------------------------------
 
 export type TieredPricingEditorProps = {
+  currency?: PricingCurrency
   modelName?: string
   billingExpr: string
   requestRuleExpr: string
@@ -1643,6 +1687,7 @@ export type TieredPricingEditorProps = {
 type EditorMode = 'visual' | 'raw'
 
 export const TieredPricingEditor = memo(function TieredPricingEditor({
+  currency = USD_PRICING_CURRENCY,
   modelName,
   billingExpr: currentExpr,
   requestRuleExpr: currentRequestRuleExpr,
@@ -1650,7 +1695,9 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
   onRequestRuleExprChange,
 }: TieredPricingEditorProps) {
   const { t } = useTranslation()
-  const [editorMode, setEditorMode] = useState<EditorMode>('visual')
+  const [editorMode, setEditorMode] = useState<EditorMode>(() =>
+    currentExpr && !tryParseVisualConfig(currentExpr) ? 'raw' : 'visual'
+  )
   const [visualConfig, setVisualConfig] = useState<VisualConfig | null>(() =>
     tryParseVisualConfig(currentExpr)
   )
@@ -1838,6 +1885,7 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
       <div className='space-y-3 rounded-lg border p-3'>
         {editorMode === 'visual' ? (
           <VisualEditor
+            currency={currency}
             visualConfig={visualConfig}
             onChange={handleVisualChange}
           />
@@ -1870,6 +1918,7 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
               <>
                 {requestRuleGroups.map((group, groupIndex) => (
                   <RuleGroupCard
+                    // eslint-disable-next-line react/no-array-index-key -- Parsed editor rows have no IDs; preserve input identity while their editable labels and values change.
                     key={groupIndex}
                     group={group}
                     onChange={(next) => {
@@ -1905,7 +1954,7 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
       </div>
 
       <CollapsibleSection title={t('Token estimator')}>
-        <CostEstimator effectiveExpr={previewExpr} />
+        <CostEstimator effectiveExpr={previewExpr} currency={currency} />
       </CollapsibleSection>
     </div>
   )

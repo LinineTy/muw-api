@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { ColumnDef } from '@tanstack/react-table'
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { BadgeCell, BadgeListCell } from '@/components/data-table'
@@ -24,6 +25,7 @@ import { GroupBadge } from '@/components/group-badge'
 import { ProviderBadge } from '@/components/provider-badge'
 import { StatusBadge } from '@/components/status-badge'
 import { TableId } from '@/components/table-id'
+import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   Tooltip,
@@ -31,6 +33,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import {
+  useCanEditModelPricing,
+  type ModelPricingConfig,
+} from '@/features/model-pricing/api'
+import { modelPricingDisplay } from '@/features/model-pricing/pricing'
+import { ModelPriceCell } from '@/features/pricing/components/model-price-cell'
 import { formatTimestampToDate } from '@/lib/format'
 import { getLobeIcon } from '@/lib/lobe-icon'
 
@@ -43,6 +51,7 @@ import { parseModelTags, formatEndpointsDisplay } from '../lib'
 import type { Model, Vendor } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
 import { DescriptionCell } from './description-cell'
+import { useModels } from './models-provider'
 
 function getCompactModelIcon(iconKey: string) {
   const baseIconKey = iconKey.split('.')[0]
@@ -55,19 +64,32 @@ function getCompactModelIcon(iconKey: string) {
  */
 export function useModelsColumns(
   vendors: Vendor[] = [],
+  pricing?: ModelPricingConfig,
+  pricingState?: 'loading' | 'error',
   { enableSelection = true }: { enableSelection?: boolean } = {}
 ): ColumnDef<Model>[] {
   const { t } = useTranslation()
+  const canPrice = useCanEditModelPricing()
+  const { setCurrentRow, setOpen } = useModels()
 
   // Get translated configs
   const NAME_RULE_CONFIG = getNameRuleConfig(t)
   const MODEL_STATUS_CONFIG = getModelStatusConfig(t)
   const QUOTA_TYPE_CONFIG = getQuotaTypeConfig(t)
 
-  const vendorMap: Record<number, Vendor> = {}
-  vendors.forEach((v) => {
-    vendorMap[v.id] = v
-  })
+  const vendorMap = useMemo(() => {
+    const map: Record<number, Vendor> = {}
+    vendors.forEach((v) => {
+      map[v.id] = v
+    })
+    return map
+  }, [vendors])
+
+  const priceMap = useMemo(
+    () =>
+      new Map(pricing?.entries.map((entry) => [entry.model_name, entry]) ?? []),
+    [pricing]
+  )
 
   return [
     // Checkbox column
@@ -79,7 +101,9 @@ export function useModelsColumns(
               <Checkbox
                 checked={table.getIsAllPageRowsSelected()}
                 indeterminate={table.getIsSomePageRowsSelected()}
-                onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+                onCheckedChange={(value) =>
+                  table.toggleAllPageRowsSelected(!!value)
+                }
                 aria-label='Select all'
               />
             ),
@@ -141,6 +165,64 @@ export function useModelsColumns(
       },
       size: 260,
       minSize: 200,
+    },
+
+    // Pricing column
+    // MERGE-DECISION: 列集以 fork 为准（含 Context Window），仅并入上游的定价列。
+    {
+      id: 'pricing',
+      header: t('Pricing'),
+      meta: { label: t('Pricing') },
+      size: 225,
+      enableSorting: false,
+      cell: ({ row }) => {
+        if (!canPrice) {
+          return (
+            <span className='text-muted-foreground text-xs'>
+              {t('Super admin')}
+            </span>
+          )
+        }
+        if (row.original.name_rule !== 0) {
+          return (
+            <span className='text-muted-foreground text-xs'>
+              {t('Per matched model')}
+            </span>
+          )
+        }
+        if (pricingState) {
+          return (
+            <span className='text-muted-foreground text-xs'>
+              {pricingState === 'error'
+                ? t('Failed to load model pricing')
+                : t('Loading...')}
+            </span>
+          )
+        }
+        const entry = priceMap.get(row.original.model_name)
+        return (
+          <Button
+            variant='ghost'
+            className='h-auto w-full max-w-full min-w-0 justify-start px-0 py-1 text-left font-normal hover:bg-transparent'
+            aria-label={t('View pricing for {{model}}', {
+              model: row.original.model_name,
+            })}
+            onClick={() => {
+              setCurrentRow(row.original)
+              setOpen('price-model')
+            }}
+          >
+            <ModelPriceCell
+              model={modelPricingDisplay(
+                entry ?? { model_name: row.original.model_name, effective: {} }
+              )}
+              options={{ tokenUnit: 'M' }}
+              showExpression={false}
+              compact
+            />
+          </Button>
+        )
+      },
     },
 
     // Name Rule column
@@ -360,16 +442,11 @@ export function useModelsColumns(
       header: t('Context Window'),
       meta: { mobileHidden: true },
       cell: ({ row }) => {
-        const cw = row.getValue('context_window') as
-          | number
-          | null
-          | undefined
+        const cw = row.getValue('context_window') as number | null | undefined
         if (!cw) {
           return <span className='text-muted-foreground'>—</span>
         }
-        return (
-          <span className='font-mono text-sm'>{cw.toLocaleString()}</span>
-        )
+        return <span className='font-mono text-sm'>{cw.toLocaleString()}</span>
       },
       size: 100,
       enableSorting: false,

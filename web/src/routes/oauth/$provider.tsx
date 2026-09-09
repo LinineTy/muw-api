@@ -24,14 +24,15 @@ import {
 } from '@tanstack/react-router'
 import type { AxiosRequestConfig } from 'axios'
 import i18next from 'i18next'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 
 import { OAuthCallbackScreen } from '@/features/auth/components/oauth-callback-screen'
 import {
-  OAUTH_BIND_CALLBACK_MESSAGE,
-  OAUTH_BIND_RESULT_MESSAGE,
+  OAUTH_POPUP_CALLBACK_MESSAGE,
+  OAUTH_POPUP_RESULT_MESSAGE,
 } from '@/features/auth/constants'
+import { useAuthRedirect } from '@/features/auth/hooks/use-auth-redirect'
 import { sanitizeAuthRedirect } from '@/features/auth/lib/auth-redirect'
 import {
   buildLoginDeniedSearch,
@@ -44,17 +45,21 @@ import {
 } from '@/features/auth/lib/oauth-bind-window'
 import {
   getOAuthSessionStorage,
+  consumeOAuthLoginRedirect,
   resolveOAuthCallbackMode,
 } from '@/features/auth/lib/oauth-callback-mode'
+import type { LoginResponse } from '@/features/auth/types'
 import { api, applyAuthBundle, isAuthBundle } from '@/lib/api'
 import { getServerErrorMessageKey } from '@/lib/server-error-message'
 
 type OAuthRequestConfig = AxiosRequestConfig & {
   skipBusinessError?: boolean
+  skipAuthRefresh?: boolean
 }
 
-interface OAuthBindingResult {
-  type: typeof OAUTH_BIND_RESULT_MESSAGE
+interface OAuthPopupResult {
+  intent: 'bind' | 'verify' | 'refresh'
+  type: typeof OAUTH_POPUP_RESULT_MESSAGE
   provider: string
   state: string
   success: boolean
@@ -63,6 +68,12 @@ interface OAuthBindingResult {
 
 function OAuthCallback() {
   const navigate = useNavigate()
+  const { handleLoginResult } = useAuthRedirect()
+  const loginExchange = useRef<{
+    key: string
+    request: Promise<{ data: LoginResponse }>
+  } | null>(null)
+  const completedLogin = useRef<string | null>(null)
   const { provider } = useParams({ from: '/oauth/$provider' }) as {
     provider: string
   }
@@ -80,7 +91,7 @@ function OAuthCallback() {
   const isTelegramBindCallback =
     provider === 'telegram' &&
     (search.telegram_bind === 'success' || search.telegram_bind === 'error')
-  let mode: 'login' | 'bind' | 'refresh' = 'login'
+  let mode: 'login' | 'bind' | 'verify' | 'refresh' = 'login'
   if (isTelegramBindCallback) {
     mode = 'bind'
   } else if (typeof window !== 'undefined') {
@@ -120,10 +131,10 @@ function OAuthCallback() {
       return
     }
 
-    if (mode === 'bind' || mode === 'refresh') {
+    if (mode === 'bind' || mode === 'verify' || mode === 'refresh') {
       const opener = window.opener
       if (!opener || opener.closed) {
-        toast.error(i18next.t('OAuth binding window is no longer available'))
+        toast.error(i18next.t('OAuth window is no longer available.'))
         return
       }
 
@@ -136,10 +147,11 @@ function OAuthCallback() {
         ) {
           return
         }
-        const result = event.data as Partial<OAuthBindingResult> | null
+        const result = event.data as Partial<OAuthPopupResult> | null
         if (
           !result ||
-          result.type !== OAUTH_BIND_RESULT_MESSAGE ||
+          result.type !== OAUTH_POPUP_RESULT_MESSAGE ||
+          result.intent !== mode ||
           result.provider !== provider ||
           result.state !== state
         ) {
@@ -147,13 +159,10 @@ function OAuthCallback() {
         }
         cancelResultTimeout()
         if (result.success) {
-          toast.success(
-            i18next.t(
-              mode === 'refresh'
-                ? 'LinuxDo trust level refreshed!'
-                : 'Binding successful!'
-            )
-          )
+          if (mode === 'bind') toast.success(i18next.t('Binding successful!'))
+          if (mode === 'refresh') {
+            toast.success(i18next.t('LinuxDo trust level refreshed!'))
+          }
           window.close()
           return
         }
@@ -163,14 +172,16 @@ function OAuthCallback() {
 
       window.addEventListener('message', handleBindingResult)
       cancelResultTimeout = startOAuthBindResponseDeadline(() => {
-        toast.error(i18next.t('OAuth binding timed out. Please try again.'))
+        toast.error(
+          i18next.t('OAuth authorization timed out. Please try again.')
+        )
         delayedClose = window.setTimeout(() => window.close(), 1500)
       })
       opener.postMessage(
         {
-          type: OAUTH_BIND_CALLBACK_MESSAGE,
-          provider,
+          type: OAUTH_POPUP_CALLBACK_MESSAGE,
           intent: mode,
+          provider,
           code,
           state,
           error: search.error,
@@ -197,6 +208,9 @@ function OAuthCallback() {
       return
     }
 
+    const loginKey = `${provider}:${state}:${code}`
+    if (completedLogin.current === loginKey) return
+    let active = true
     void (async () => {
       try {
         const config: OAuthRequestConfig = {
@@ -207,23 +221,33 @@ function OAuthCallback() {
             error_description: search.error_description,
           },
           skipBusinessError: true,
+          skipAuthRefresh: true,
         }
-        const response = await api.get(`/api/oauth/${provider}`, config)
-        if (response.data?.success && isAuthBundle(response.data?.data)) {
-          applyAuthBundle(response.data.data)
+        if (loginExchange.current?.key !== loginKey) {
+          loginExchange.current = {
+            key: loginKey,
+            request: api.get<LoginResponse>(`/api/oauth/${provider}`, config),
+          }
+        }
+        const response = await loginExchange.current.request
+        if (!active) return
+        if (response.data?.success) {
+          completedLogin.current = loginKey
+          const bundle = response.data.data
           // 激活制：未激活（临时）账号直接去专属激活页，不经过登录结果页。
-          if (response.data.data.user.activated === false) {
+          if (isAuthBundle(bundle) && bundle.user.activated === false) {
+            applyAuthBundle(bundle)
             navigate({ to: '/activate', replace: true })
             return
           }
-          const target =
-            sanitizeAuthRedirect(search.redirect, window.location.origin) ??
-            undefined
-          navigate({
-            to: '/login-result',
-            search: { redirect: target },
-            replace: true,
-          })
+          if (
+            await handleLoginResult(
+              bundle,
+              search.redirect ?? consumeOAuthLoginRedirect(state) ?? undefined
+            )
+          ) {
+            toast.success(i18next.t('Signed in successfully!'))
+          }
           return
         }
         const denied = getLoginDeniedInfo(response.data)
@@ -247,6 +271,7 @@ function OAuthCallback() {
             : response.data?.message || i18next.t('OAuth failed')
         )
       } catch (error: unknown) {
+        if (!active) return
         const messageKey = getServerErrorMessageKey(error)
         const responseMessage = (
           error as { response?: { data?: { message?: string } } }
@@ -262,10 +287,14 @@ function OAuthCallback() {
       }
       safeNavigate('/sign-in', '/sign-in')
     })()
+    return () => {
+      active = false
+    }
   }, [
     callbackState,
     mode,
     navigate,
+    handleLoginResult,
     provider,
     search.code,
     search.error,

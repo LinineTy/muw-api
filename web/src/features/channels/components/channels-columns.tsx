@@ -65,6 +65,7 @@ import {
   CODING_PLAN_PROVIDER_DISABLED,
   CODING_PLAN_PROVIDER_OPTIONS,
   detectCodingPlanProvider,
+  CHANNEL_TYPE_TASK_PLUGIN,
   MODEL_FETCHABLE_TYPES,
 } from '../constants'
 import {
@@ -88,6 +89,7 @@ import {
 import { parseUpstreamUpdateMeta } from '../lib/upstream-update-utils'
 import type { Channel } from '../types'
 import { ChannelRowActionsLayoutContext } from './channel-row-actions-context'
+import { TaskPluginChannelBadge } from './channel-type-badge'
 import { useChannels } from './channels-provider'
 import { DataTableRowActions } from './data-table-row-actions'
 import { DataTableTagRowActions } from './data-table-tag-row-actions'
@@ -180,7 +182,7 @@ function DisabledModelsBadge({ channel }: { channel: Channel }) {
       <Tooltip>
         <TooltipTrigger
           render={
-            <EyeOff className='text-violet-600 dark:text-violet-300 h-3.5 w-3.5 flex-shrink-0' />
+            <EyeOff className='h-3.5 w-3.5 flex-shrink-0 text-violet-600 dark:text-violet-300' />
           }
         />
         <TooltipContent side='top'>
@@ -216,7 +218,7 @@ function ContextWindowOverrideBadge({ channel }: { channel: Channel }) {
       <Tooltip>
         <TooltipTrigger
           render={
-            <Ruler className='text-sky-600 dark:text-sky-300 h-3.5 w-3.5 flex-shrink-0' />
+            <Ruler className='h-3.5 w-3.5 flex-shrink-0 text-sky-600 dark:text-sky-300' />
           }
         />
         <TooltipContent side='top'>
@@ -245,12 +247,9 @@ function CodingPlanLinkedBadge({ channel }: { channel: Channel }) {
   }
 
   const provider =
-    channel.coding_plan_provider ||
-    detectCodingPlanProvider(channel.base_url)
+    channel.coding_plan_provider || detectCodingPlanProvider(channel.base_url)
   const option = provider
-    ? CODING_PLAN_PROVIDER_OPTIONS.find(
-        (item) => item.value === provider
-      )
+    ? CODING_PLAN_PROVIDER_OPTIONS.find((item) => item.value === provider)
     : undefined
   if (!option) {
     return null
@@ -260,9 +259,7 @@ function CodingPlanLinkedBadge({ channel }: { channel: Channel }) {
     <TooltipProvider delay={100}>
       <Tooltip>
         <TooltipTrigger
-          render={
-            <Gauge className='text-warning h-3.5 w-3.5 flex-shrink-0' />
-          }
+          render={<Gauge className='text-warning h-3.5 w-3.5 flex-shrink-0' />}
         />
         <TooltipContent side='top'>
           {t('Coding-plan quota monitoring is enabled ({{provider}}).', {
@@ -957,26 +954,34 @@ export function useChannelsColumns(
                   </Tooltip>
                 </TooltipProvider>
               )}
-              <TooltipProvider delay={300}>
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <div className='max-w-full min-w-0 overflow-hidden' />
-                    }
-                  >
-                    <ProviderBadge
-                      iconKey={`${iconName}.Color`}
-                      iconSize={18}
-                      label={typeName}
-                      colorText={false}
-                      copyable={false}
-                      showDot={false}
-                      className='max-w-full min-w-0 overflow-hidden'
-                    />
-                  </TooltipTrigger>
-                  <TooltipContent side='top'>{typeName}</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              {type === CHANNEL_TYPE_TASK_PLUGIN ? (
+                <TaskPluginChannelBadge
+                  pluginKey={
+                    parseChannelSettings(channel.setting)?.task_plugin_key
+                  }
+                />
+              ) : (
+                <TooltipProvider delay={300}>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <div className='max-w-full min-w-0 overflow-hidden' />
+                      }
+                    >
+                      <ProviderBadge
+                        iconKey={`${iconName}.Color`}
+                        iconSize={18}
+                        label={typeName}
+                        colorText={false}
+                        copyable={false}
+                        showDot={false}
+                        className='max-w-full min-w-0 overflow-hidden'
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent side='top'>{typeName}</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </div>
           )
         },
@@ -1129,9 +1134,10 @@ export function useChannelsColumns(
         cell: ({ row }) => {
           const models = row.getValue('models') as string
           const modelArray = parseModelsList(models)
-          const settings = (row.getValue('model_settings') as
-            | Array<{ model: string; enabled: boolean }>
-            | undefined) ?? []
+          const settings =
+            (row.getValue('model_settings') as
+              | Array<{ model: string; enabled: boolean }>
+              | undefined) ?? []
           const disabledSet = new Set(
             settings.filter((s) => !s.enabled).map((s) => s.model)
           )

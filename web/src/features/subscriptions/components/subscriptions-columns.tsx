@@ -47,6 +47,9 @@ function parseAllowedGroups(raw?: string): string[] {
   }
 }
 
+// 固定分组商品没有时长/额度/互斥组，相关列统一渲染占位符。
+const NOT_APPLICABLE = <span className='text-muted-foreground'>—</span>
+
 export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
   const { t } = useTranslation()
   const { meta: currencyMeta } = getCurrencyDisplay()
@@ -62,6 +65,32 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
         meta: { mobileHidden: true },
         cell: ({ row }) => <TableId value={row.original.plan.id} />,
         size: 60,
+      },
+      {
+        // 用显示文案做 accessor：客户端搜索按列值匹配，若放 'plan'/'group_pin'
+        // 原始值，搜 "plan" 会命中全部套餐行。
+        accessorFn: (row) =>
+          row.kind === 'group_pin' ? t('Fixed Groups') : t('Subscription'),
+        id: 'type',
+        header: t('Type'),
+        meta: { mobileBadge: true },
+        cell: ({ row }) =>
+          row.original.kind === 'group_pin' ? (
+            <StatusBadge
+              label={t('Fixed Groups')}
+              variant='info'
+              copyable={false}
+              className='-ml-1.5'
+            />
+          ) : (
+            <StatusBadge
+              label={t('Subscription')}
+              variant='neutral'
+              copyable={false}
+              className='-ml-1.5'
+            />
+          ),
+        size: 110,
       },
       {
         accessorFn: (row) => row.plan.title,
@@ -98,20 +127,28 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
       {
         id: 'duration',
         header: t('Validity'),
-        cell: ({ row }) => (
-          <span className='text-muted-foreground'>
-            {formatDuration(row.original.plan, t)}
-          </span>
-        ),
+        cell: ({ row }) =>
+          row.original.kind === 'group_pin' ? (
+            NOT_APPLICABLE
+          ) : (
+            <span className='text-muted-foreground'>
+              {formatDuration(row.original.plan, t)}
+            </span>
+          ),
         size: 100,
       },
       {
         id: 'reset',
         header: t('Quota Reset'),
         meta: { mobileHidden: true },
-        cell: () => (
-          <span className='text-muted-foreground'>{t('Rolling windows')}</span>
-        ),
+        cell: ({ row }) =>
+          row.original.kind === 'group_pin' ? (
+            NOT_APPLICABLE
+          ) : (
+            <span className='text-muted-foreground'>
+              {t('Rolling windows')}
+            </span>
+          ),
         size: 100,
       },
       {
@@ -131,11 +168,14 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
         id: 'plan_tier',
         header: t('Plan Tier'),
         meta: { mobileHidden: true },
-        cell: ({ row }) => (
-          <span className='text-muted-foreground'>
-            {row.original.plan.priority ?? 0}
-          </span>
-        ),
+        cell: ({ row }) =>
+          row.original.kind === 'group_pin' ? (
+            NOT_APPLICABLE
+          ) : (
+            <span className='text-muted-foreground'>
+              {row.original.plan.priority ?? 0}
+            </span>
+          ),
         size: 100,
       },
       {
@@ -197,6 +237,7 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
         header: t('Exclusive Group'),
         meta: { mobileHidden: true },
         cell: ({ row }) => {
+          if (row.original.kind === 'group_pin') return NOT_APPLICABLE
           const group = row.original.plan.exclusive_group
           return group ? (
             <GroupBadge group={group} />
@@ -211,6 +252,7 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
         header: t('Quota Limits'),
         meta: { mobileHidden: true },
         cell: ({ row }) => {
+          if (row.original.kind === 'group_pin') return NOT_APPLICABLE
           const p = row.original.plan
           const windows = parsePlanResetWindows(p.reset_windows)
           // 全部窗口额度为 0 = 无限额度。
@@ -237,6 +279,7 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
         header: t('Max Duration'),
         meta: { mobileHidden: true },
         cell: ({ row }) => {
+          if (row.original.kind === 'group_pin') return NOT_APPLICABLE
           const seconds = Number(row.original.plan.max_cumulative_seconds || 0)
           return seconds > 0 ? (
             <span className='text-muted-foreground'>

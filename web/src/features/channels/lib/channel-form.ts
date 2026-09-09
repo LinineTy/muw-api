@@ -22,6 +22,7 @@ import {
   CLAUDE_FIELD_PASSTHROUGH_TYPES,
   CHANNEL_TYPE_NEW_API,
   CHANNEL_TYPE_OPENCODE_ZEN,
+  CHANNEL_TYPE_TASK_PLUGIN,
   CHANNEL_STATUS,
   ERROR_MESSAGES,
   FIELD_PASSTHROUGH_TYPES,
@@ -202,6 +203,7 @@ export const channelFormSchema = z
     name: z.string().min(1, ERROR_MESSAGES.REQUIRED_NAME),
     type: z.number().min(0, ERROR_MESSAGES.REQUIRED_TYPE),
     base_url: z.string().optional(),
+    task_plugin_key: z.string().optional(),
     key: z.string(),
     // 凭证与渠道解耦:新建时选中绑定的共享账户(提交顶层 account_id,凭证走账户)
     account_id: z.number().nullable().optional(),
@@ -305,7 +307,9 @@ export const channelFormSchema = z
   })
   .superRefine((data, ctx) => {
     if (
-      [3, 8, 36, 45, CHANNEL_TYPE_NEW_API].includes(data.type) &&
+      [3, 8, 36, 45, CHANNEL_TYPE_NEW_API, CHANNEL_TYPE_TASK_PLUGIN].includes(
+        data.type
+      ) &&
       !data.base_url?.trim()
     ) {
       addRequiredIssue(
@@ -313,6 +317,12 @@ export const channelFormSchema = z
         'base_url',
         'Base URL is required for this channel type'
       )
+    }
+    if (
+      data.type === CHANNEL_TYPE_TASK_PLUGIN &&
+      !data.task_plugin_key?.trim()
+    ) {
+      addRequiredIssue(ctx, 'task_plugin_key', 'Task plugin is required')
     }
 
     if (data.type === CHANNEL_TYPE_ADVANCED_CUSTOM) {
@@ -425,6 +435,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   name: '',
   type: 1,
   base_url: '',
+  task_plugin_key: '',
   key: '',
   openai_organization: '',
   models: '',
@@ -496,6 +507,7 @@ export function transformChannelToFormDefaults(
 ): ChannelFormValues {
   // Parse channel extra settings from setting field
   let extraSettings = {
+    task_plugin_key: '',
     force_format: false,
     thinking_to_content: false,
     proxy: '',
@@ -514,6 +526,7 @@ export function transformChannelToFormDefaults(
         parsed.http2_connection_shards
       )
       extraSettings = {
+        task_plugin_key: parsed.task_plugin_key || '',
         force_format: parsed.force_format || false,
         thinking_to_content: parsed.thinking_to_content || false,
         proxy: parsed.proxy || '',
@@ -647,6 +660,10 @@ export function transformChannelToFormDefaults(
  */
 export function buildSettingJSON(formData: ChannelFormValues): string {
   const settingObj: Record<string, unknown> = {
+    task_plugin_key:
+      formData.type === CHANNEL_TYPE_TASK_PLUGIN
+        ? formData.task_plugin_key?.trim() || ''
+        : undefined,
     force_format: formData.force_format || false,
     thinking_to_content: formData.thinking_to_content || false,
     proxy: formData.proxy?.trim() || '',
@@ -829,11 +846,13 @@ function normalizeBaseUrl(value: string | undefined): string {
  * models 列表外的失效行，不会累积。
  */
 export function serializeModelSettings(
-  settings: Array<{
-    model: string
-    enabled: boolean
-    context_window?: number | null
-  }> | undefined
+  settings:
+    | Array<{
+        model: string
+        enabled: boolean
+        context_window?: number | null
+      }>
+    | undefined
 ): ChannelModelSettingForm[] {
   if (!settings?.length) return []
   return settings.map((s) => ({

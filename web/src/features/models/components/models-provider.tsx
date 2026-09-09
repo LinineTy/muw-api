@@ -21,7 +21,8 @@ import React, { createContext, useContext, useState } from 'react'
 
 import type {
   Model,
-  SyncDiffData,
+  ModelTabCategory,
+  Vendor,
   SyncLocale,
   SyncSource,
 } from '../types'
@@ -33,10 +34,14 @@ import type {
 type DialogType =
   | 'create-model'
   | 'update-model'
+  | 'price-model'
+  | 'create-vendor'
+  | 'vendors'
+  | 'price-sync'
+  | 'update-vendor'
   | 'vendor-management'
   | 'missing-models'
   | 'sync-wizard'
-  | 'upstream-conflict'
   | 'prefill-groups'
   | 'description'
   | null
@@ -46,18 +51,22 @@ type ModelsContextType = {
   setOpen: (open: DialogType) => void
   currentRow: Model | null
   setCurrentRow: (model: Model | null) => void
+  // MERGE-DECISION: 保留上游 currentVendor/tabCategory 与 vendor 对话框类型，
+  // 供合并树里仍在的 vendors-table.tsx 复用；fork 单页方案不消费。
+  currentVendor: Vendor | null
+  setCurrentVendor: (vendor: Vendor | null) => void
   selectedVendor: string | null
   setSelectedVendor: (vendor: string | null) => void
   descriptionData: { modelName: string; description: string } | null
   setDescriptionData: (
     data: { modelName: string; description: string } | null
   ) => void
-  upstreamConflicts: SyncDiffData['conflicts']
-  setUpstreamConflicts: (conflicts: SyncDiffData['conflicts']) => void
   syncWizardOptions: { locale: SyncLocale; source: SyncSource }
   setSyncWizardOptions: React.Dispatch<
     React.SetStateAction<{ locale: SyncLocale; source: SyncSource }>
   >
+  tabCategory: ModelTabCategory
+  setTabCategory: (category: ModelTabCategory) => void
 }
 
 // ============================================================================
@@ -73,14 +82,12 @@ const ModelsContext = createContext<ModelsContextType | undefined>(undefined)
 export function ModelsProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState<DialogType>(null)
   const [currentRow, setCurrentRow] = useState<Model | null>(null)
+  const [currentVendor, setCurrentVendor] = useState<Vendor | null>(null)
   const [selectedVendor, setSelectedVendor] = useState<string | null>(null)
   const [descriptionData, setDescriptionData] = useState<{
     modelName: string
     description: string
   } | null>(null)
-  const [upstreamConflicts, setUpstreamConflicts] = useState<
-    SyncDiffData['conflicts']
-  >([])
   const [syncWizardOptions, setSyncWizardOptions] = useState<{
     locale: SyncLocale
     source: SyncSource
@@ -88,6 +95,7 @@ export function ModelsProvider({ children }: { children: React.ReactNode }) {
     locale: 'zh',
     source: 'official',
   })
+  const [tabCategory, setTabCategory] = useState<ModelTabCategory>('metadata')
 
   return (
     <ModelsContext.Provider
@@ -96,14 +104,16 @@ export function ModelsProvider({ children }: { children: React.ReactNode }) {
         setOpen,
         currentRow,
         setCurrentRow,
+        currentVendor,
+        setCurrentVendor,
         selectedVendor,
         setSelectedVendor,
         descriptionData,
         setDescriptionData,
-        upstreamConflicts,
-        setUpstreamConflicts,
         syncWizardOptions,
         setSyncWizardOptions,
+        tabCategory,
+        setTabCategory,
       }}
     >
       {children}

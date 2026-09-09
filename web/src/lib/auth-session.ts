@@ -21,6 +21,7 @@ import axios from 'axios'
 import { t } from 'i18next'
 
 import { publishAuthSessionEvent } from '@/lib/auth-session-sync'
+import { hasSessionHint } from '@/lib/session-hint'
 import {
   useAuthStore,
   type AuthBootstrapState,
@@ -70,7 +71,8 @@ const authClient = axios.create({
   baseURL: '',
   withCredentials: true,
   headers: {
-    'Cache-Control': 'no-store',
+    // no-store forbids storage; no-cache also revalidates any older cached response.
+    'Cache-Control': 'no-cache, no-store',
   },
 })
 
@@ -357,8 +359,9 @@ type MuwAuthBridge = {
 function parentAuthBridge(): MuwAuthBridge | null {
   try {
     if (window.self === window.top) return null
-    const bridge = (window.parent as Window & { __muwAuthBridge?: MuwAuthBridge })
-      ?.__muwAuthBridge
+    const bridge = (
+      window.parent as Window & { __muwAuthBridge?: MuwAuthBridge }
+    )?.__muwAuthBridge
     return bridge ?? null
   } catch {
     return null
@@ -366,7 +369,9 @@ function parentAuthBridge(): MuwAuthBridge | null {
 }
 
 /** iframe 委托主层刷新:主层 refreshPromise 自带去重,多窗并发只发一次请求 */
-async function adoptBridgeRefresh(bridge: MuwAuthBridge): Promise<RefreshOutcome> {
+async function adoptBridgeRefresh(
+  bridge: MuwAuthBridge
+): Promise<RefreshOutcome> {
   try {
     const result = await bridge.refresh()
     if (result.ok) {
@@ -377,7 +382,10 @@ async function adoptBridgeRefresh(bridge: MuwAuthBridge): Promise<RefreshOutcome
       clearAuthentication(true)
       return { kind: 'anonymous' }
     }
-    return { kind: 'transient_error', error: new Error('bridge refresh failed') }
+    return {
+      kind: 'transient_error',
+      error: new Error('bridge refresh failed'),
+    }
   } catch (error) {
     // 主层桥异常(极端时序),退回自刷
     return { kind: 'transient_error', error }
@@ -388,7 +396,9 @@ async function adoptBridgeRefresh(bridge: MuwAuthBridge): Promise<RefreshOutcome
 export function installParentAuthBridge(): void {
   try {
     if (window.self === window.top) {
-      ;(window as Window & { __muwAuthBridge?: MuwAuthBridge }).__muwAuthBridge = {
+      ;(
+        window as Window & { __muwAuthBridge?: MuwAuthBridge }
+      ).__muwAuthBridge = {
         refresh: async () => {
           // token 仍有 ≥60s 余量时直接复用,串行开窗零额外请求
           const fresh = currentValidAuthBundle()
@@ -403,8 +413,10 @@ export function installParentAuthBridge(): void {
             const bundle = currentValidAuthBundle()
             if (bundle) return { ok: true, bundle }
           }
-          if (outcome.kind === 'anonymous') return { ok: false, kind: 'anonymous' }
-          if (outcome.kind === 'out_of_sync') return { ok: false, kind: 'out_of_sync' }
+          if (outcome.kind === 'anonymous')
+            return { ok: false, kind: 'anonymous' }
+          if (outcome.kind === 'out_of_sync')
+            return { ok: false, kind: 'out_of_sync' }
           return { ok: false, kind: 'transient_error' }
         },
       }
@@ -434,7 +446,15 @@ function currentValidAuthBundle(): AuthBundle | null {
   }
 }
 
-export async function bootstrapAuthentication(): Promise<RefreshOutcome> {
+/**
+ * Resolve authentication from memory, or from the server when memory is empty.
+ *
+ * Use this wherever the answer decides what the user sees: route guards that
+ * redirect on the result, and the sign-in page. It contacts the server on a
+ * cold cache even when no session hint is present, so a usable Refresh Cookie
+ * is always honoured.
+ */
+export async function resolveAuthentication(): Promise<RefreshOutcome> {
   const bundle = currentValidAuthBundle()
   if (bundle) {
     useAuthStore.getState().auth.setBootstrapState('complete')
@@ -449,6 +469,26 @@ export async function bootstrapAuthentication(): Promise<RefreshOutcome> {
 
   auth.setBootstrapState('checking')
   return refreshAuthentication()
+}
+
+/**
+ * Resolve authentication on the public boot path, skipping a refresh that the
+ * server's session hint says would fail.
+ *
+ * The skip leaves `bootstrapState` at `idle` rather than `complete`: a missing
+ * hint is not a server verdict, so it must not be recorded as a finished
+ * anonymous check. `resolveAuthentication` therefore still reaches the network
+ * later, which is what lets a hintless visitor holding a valid Refresh Cookie
+ * recover the moment authentication actually matters.
+ */
+export async function bootstrapAuthentication(): Promise<RefreshOutcome> {
+  if (!currentValidAuthBundle() && !hasSessionHint()) {
+    const auth = useAuthStore.getState().auth
+    if (!auth.user && !auth.session) {
+      return { kind: 'anonymous' }
+    }
+  }
+  return resolveAuthentication()
 }
 
 export function getCommonHeaders(): Record<string, string> {

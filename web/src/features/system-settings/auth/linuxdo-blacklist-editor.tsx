@@ -230,7 +230,7 @@ function BlacklistRowsDialog({
                   type !== null && updateType(row.id, type)
                 }
               >
-                <SelectTrigger className='w-32 shrink-0'>
+                <SelectTrigger className='shrink-0'>
                   <SelectValue placeholder={t('Type')} />
                 </SelectTrigger>
                 <SelectContent alignItemWithTrigger={false}>

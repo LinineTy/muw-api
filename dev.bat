@@ -13,6 +13,13 @@ echo Rebuilding web frontend (web/dist)...
 cd /d "%~dp0web"
 REM `call` is required: npm-installed `bun` is a cmd shim whose trailing
 REM goto kills the rest of this batch file when run without it.
+REM Install first: a pull/merge can add dependencies (node-forge 就是合并带进来的),
+REM node_modules 落后时 build 会以 "Module not found" 失败。bun install 幂等且很快。
+call bun install
+if errorlevel 1 (
+  echo Dependency install failed, aborting.
+  exit /b 1
+)
 call bun run build
 if errorlevel 1 (
   echo Frontend build failed, aborting.

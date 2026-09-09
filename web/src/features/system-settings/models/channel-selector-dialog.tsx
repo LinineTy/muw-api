@@ -320,7 +320,7 @@ export function ChannelSelectorDialog({
                 value={endpointType}
                 onValueChange={(v) => v !== null && handleTypeChange(v)}
               >
-                <SelectTrigger className='h-8 w-32'>
+                <SelectTrigger className='h-8'>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent alignItemWithTrigger={false}>

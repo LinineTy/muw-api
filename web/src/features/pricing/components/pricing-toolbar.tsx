@@ -205,7 +205,7 @@ export function PricingToolbar(props: PricingToolbarProps) {
             <ArrowUpDown className='size-3.5' />
             <span>{sortLabels[props.sortBy as SortOption] || t('Sort')}</span>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align='end' className='w-44'>
+          <DropdownMenuContent align='end' className='min-w-44'>
             {Object.entries(sortLabels).map(([value, label]) => (
               <DropdownMenuItem
                 key={value}

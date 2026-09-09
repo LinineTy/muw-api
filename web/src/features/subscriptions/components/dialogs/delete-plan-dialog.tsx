@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
 
-import { deletePlan } from '../../api'
+import { adminDeleteGroupPinProduct, deletePlan } from '../../api'
 import { useSubscriptions } from '../subscriptions-provider'
 
 export function DeletePlanDialog() {
@@ -16,10 +16,15 @@ export function DeletePlanDialog() {
 
   if (open !== 'delete' || !currentRow) return null
 
+  // 固定分组商品与套餐 id 会撞号，必须按 kind 分派到各自的删除接口。
+  const isGroupPin = currentRow.kind === 'group_pin'
+
   const handleConfirm = async () => {
     setLoading(true)
     try {
-      const res = await deletePlan(currentRow.plan.id)
+      const res = isGroupPin
+        ? await adminDeleteGroupPinProduct(currentRow.plan.id)
+        : await deletePlan(currentRow.plan.id)
       if (res.success) {
         toast.success(t('Deleted successfully'))
         triggerRefresh()
@@ -44,10 +49,17 @@ export function DeletePlanDialog() {
           {t('Confirm delete')}
         </>
       }
-      desc={t(
-        'Delete subscription plan "{{title}}"? This cannot be undone. Only plans without active subscriptions or pending orders can be deleted.',
-        { title: currentRow.plan.title }
-      )}
+      desc={
+        isGroupPin
+          ? t(
+              'Delete fixed group product "{{title}}"? This cannot be undone. Existing pins of users are not affected.',
+              { title: currentRow.plan.title }
+            )
+          : t(
+              'Delete subscription plan "{{title}}"? This cannot be undone. Only plans without active subscriptions or pending orders can be deleted.',
+              { title: currentRow.plan.title }
+            )
+      }
       handleConfirm={handleConfirm}
       isLoading={loading}
       confirmText={t('Delete')}

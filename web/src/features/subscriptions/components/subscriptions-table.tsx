@@ -22,7 +22,8 @@ import { useTranslation } from 'react-i18next'
 
 import { DataTablePage, useDataTable } from '@/components/data-table'
 
-import { getAdminPlans } from '../api'
+import { adminListGroupPinProducts, getAdminPlans } from '../api'
+import { planRecordFromGroupPinProduct } from '../lib'
 import { GroupedPlansList } from './grouped-plans'
 import { PlanCard } from './plan-card'
 import { useSubscriptionsColumns } from './subscriptions-columns'
@@ -35,16 +36,28 @@ export function SubscriptionsTable() {
   const columns = useSubscriptionsColumns()
   const { refreshTrigger, grouped } = useSubscriptions()
 
-  const { data, isLoading } = useQuery({
+  // 订阅套餐与固定分组商品同表：商品来自独立表（group_pin_products），这里合并成
+  // 一套行模型，共用列定义、卡片视图、搜索与行操作。两个查询独立，商品接口失败
+  // 不影响套餐照常展示。
+  const { data: planRows, isLoading: plansLoading } = useQuery({
     queryKey: ['admin-subscription-plans', refreshTrigger],
-    queryFn: async () => {
-      const result = await getAdminPlans()
-      return result.data || []
-    },
+    queryFn: async () => (await getAdminPlans()).data || [],
     placeholderData: (prev) => prev,
   })
 
-  const plans = useMemo(() => data || [], [data])
+  const { data: pinProductRows, isLoading: productsLoading } = useQuery({
+    queryKey: ['admin-group-pin-products', refreshTrigger],
+    queryFn: async () => (await adminListGroupPinProducts()).data || [],
+    placeholderData: (prev) => prev,
+  })
+
+  const plans = useMemo(
+    () => [
+      ...(planRows || []).map((row) => ({ ...row, kind: 'plan' as const })),
+      ...(pinProductRows || []).map(planRecordFromGroupPinProduct),
+    ],
+    [planRows, pinProductRows]
+  )
 
   const { table } = useDataTable({
     data: plans,
@@ -61,10 +74,10 @@ export function SubscriptionsTable() {
         <DataTablePage
           table={table}
           columns={columns}
-          isLoading={isLoading}
+          isLoading={plansLoading || productsLoading}
           emptyTitle={t('No subscription plans yet')}
           emptyDescription={t(
-            'Click "Create Plan" to create your first subscription plan'
+            'Use "Create" to add a subscription plan or a fixed group product'
           )}
           skeletonKeyPrefix='subscriptions-skeleton'
           enableCardView

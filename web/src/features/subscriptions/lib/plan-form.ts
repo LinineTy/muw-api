@@ -22,32 +22,35 @@ import { z } from 'zod'
 
 import { parseQuotaFromDollars, quotaUnitsToDollars } from '@/lib/format'
 
-import type { SubscriptionPlan, PlanPayload } from '../types'
+import type { PlanKind, SubscriptionPlan, PlanPayload } from '../types'
 
-export function getPlanFormSchema(t: TFunction) {
-  return z.object({
-    title: z.string().min(1, t('Please enter plan title')),
-    subtitle: z.string().optional(),
-    price_amount: z.coerce.number().min(0, t('Please enter amount')),
-    duration_unit: z.enum(['year', 'month', 'day', 'hour', 'custom']),
-    duration_value: z.coerce.number().min(1),
-    custom_seconds: z.coerce.number().min(0).optional(),
-    max_cumulative_days: z.coerce.number().min(0),
-    exclusive_group: z.string().optional(),
-    allowed_groups: z.array(z.string()).optional(),
-    priority: z.coerce.number().min(0),
-    enabled: z.boolean(),
-    sort_order: z.coerce.number(),
-    is_recommended: z.boolean(),
-    allow_balance_pay: z.boolean(),
-    allow_wallet_overflow: z.boolean(),
-    max_purchase_per_user: z.coerce.number().min(0),
-    upgrade_group: z.string().optional(),
-    downgrade_group: z.string().optional(),
-    // 动态窗口是唯一额度模型：列表必须非空（doSubmit 拦截空列表）；全部窗口额度为 0 =
-    // 无限额度（合法，展示为 Unlimited）。
-    reset_windows: z
-      .array(
+// 单一表单 schema：普通套餐与固定分组商品共用一个 useForm，字段形状必须保持一致
+// （形状随 kind 变化会让 z.infer 退化成 union，被抽屉里的 Resolver 断言吞掉）。
+// kind 只影响校验强度：固定分组商品没有额度窗口，跳过窗口的严格递增校验。
+export function getPlanFormSchema(t: TFunction, kind: PlanKind = 'plan') {
+  return z
+    .object({
+      title: z.string().min(1, t('Please enter plan title')),
+      subtitle: z.string().optional(),
+      price_amount: z.coerce.number().min(0, t('Please enter amount')),
+      duration_unit: z.enum(['year', 'month', 'day', 'hour', 'custom']),
+      duration_value: z.coerce.number().min(1),
+      custom_seconds: z.coerce.number().min(0).optional(),
+      max_cumulative_days: z.coerce.number().min(0),
+      exclusive_group: z.string().optional(),
+      allowed_groups: z.array(z.string()).optional(),
+      priority: z.coerce.number().min(0),
+      enabled: z.boolean(),
+      sort_order: z.coerce.number(),
+      is_recommended: z.boolean(),
+      allow_balance_pay: z.boolean(),
+      allow_wallet_overflow: z.boolean(),
+      max_purchase_per_user: z.coerce.number().min(0),
+      upgrade_group: z.string().optional(),
+      downgrade_group: z.string().optional(),
+      // 动态窗口是唯一额度模型：列表必须非空（doSubmit 拦截空列表）；全部窗口额度为 0 =
+      // 无限额度（合法，展示为 Unlimited）。
+      reset_windows: z.array(
         z.object({
           // 表单内稳定行 key（创建时生成、编辑期间不变）；不落库，序列化时剥掉。
           id: z.string(),
@@ -55,30 +58,43 @@ export function getPlanFormSchema(t: TFunction) {
           value: z.coerce.number().min(1),
           limit: z.coerce.number().min(0),
         })
-      )
-      .superRefine((rows, ctx) => {
-        // 严格递增：后一个窗口时长必须大于前一个，保证列表天然按时长升序。
-        let prev = -1
-        for (const row of rows) {
-          const secs = windowRowDurationSeconds(row)
-          if (secs <= prev) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              message: t(
-                'Windows must be ordered by duration: each window must be strictly longer than the previous one.'
-              ),
-            })
-            break
-          }
-          prev = secs
+      ),
+    })
+    .superRefine((values, ctx) => {
+      // 固定分组商品只钉组，没有额度窗口：窗口规则不适用，改为要求目标分组非空
+      //（该值由 upgrade_group 承载）。
+      if (kind === 'group_pin') {
+        if (!values.upgrade_group?.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['upgrade_group'],
+            message: t('Please select a group'),
+          })
         }
-      }),
-  })
+        return
+      }
+      // 严格递增：后一个窗口时长必须大于前一个，保证列表天然按时长升序。
+      let prev = -1
+      for (const row of values.reset_windows) {
+        const secs = windowRowDurationSeconds(row)
+        if (secs <= prev) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['reset_windows'],
+            message: t(
+              'Windows must be ordered by duration: each window must be strictly longer than the previous one.'
+            ),
+          })
+          break
+        }
+        prev = secs
+      }
+    })
 }
 
 export type PlanFormValues = z.infer<ReturnType<typeof getPlanFormSchema>>
 
-function parseAllowedGroups(raw?: string): string[] {
+export function parseAllowedGroups(raw?: string): string[] {
   if (!raw) return []
   try {
     const parsed: unknown = JSON.parse(raw)

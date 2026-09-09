@@ -31,11 +31,35 @@ For commercial licensing, please contact support@quantumnous.com
  * The popup we open for a bind is same-origin (`about:blank`) before it is sent
  * to the provider, so we stamp its own sessionStorage. That stamp rides along
  * through the provider round trip and is scoped to the popup alone, which makes
- * it positive proof of a bind flow.
+ * it positive proof of a bind flow. A LinuxDO trust-level refresh re-consent
+ * uses the same transport with its own marker key.
  */
 
-const OAUTH_BIND_FLOW_KEY_PREFIX = 'oauth_bind_flow:'
+const OAUTH_POPUP_FLOW_KEY_PREFIX = 'oauth_popup_flow:'
 const OAUTH_REFRESH_FLOW_KEY_PREFIX = 'oauth_refresh_flow:'
+
+export function rememberOAuthLoginRedirect(
+  state: string,
+  redirect?: string
+): void {
+  if (!redirect) return
+  try {
+    window.sessionStorage.setItem(`oauth_login_redirect:${state}`, redirect)
+  } catch {
+    // Login can still complete using the default destination.
+  }
+}
+
+export function consumeOAuthLoginRedirect(state: string): string | null {
+  try {
+    const key = `oauth_login_redirect:${state}`
+    const redirect = window.sessionStorage.getItem(key)
+    window.sessionStorage.removeItem(key)
+    return redirect
+  } catch {
+    return null
+  }
+}
 
 /** Minimal shape of `sessionStorage`, kept structural so tests can fake it. */
 export interface OAuthModeStorage {
@@ -58,7 +82,7 @@ export interface OAuthCallbackModeContext {
   storage: OAuthModeStorage | null | undefined
 }
 
-export type OAuthCallbackMode = 'login' | 'bind' | 'refresh'
+export type OAuthCallbackMode = 'login' | 'bind' | 'verify' | 'refresh'
 
 /**
  * Access `sessionStorage` without letting browser privacy settings crash the
@@ -75,20 +99,22 @@ export function getOAuthSessionStorage(
 }
 
 /**
- * Stamp a freshly opened, still same-origin popup as an OAuth bind flow.
+ * Stamp a freshly opened, still same-origin popup as an OAuth popup flow.
  * Call this before navigating the popup to the provider.
  */
-export function markOAuthBindPopup(
+export function markOAuthPopup(
   storage: OAuthModeStorage | null | undefined,
   provider: string,
-  state: string
+  state: string,
+  intent: 'bind' | 'verify'
 ): boolean {
   if (!storage || !provider || !state) return false
 
   try {
-    const key = `${OAUTH_BIND_FLOW_KEY_PREFIX}${provider}`
-    storage.setItem(key, state)
-    return storage.getItem(key) === state
+    const key = `${OAUTH_POPUP_FLOW_KEY_PREFIX}${provider}`
+    const marker = JSON.stringify({ state, intent })
+    storage.setItem(key, marker)
+    return storage.getItem(key) === marker
   } catch {
     return false
   }
@@ -97,7 +123,7 @@ export function markOAuthBindPopup(
 /**
  * Stamp a freshly opened, still same-origin popup as an OAuth refresh flow
  * (re-consent for a LinuxDO trust-level refresh). Call this before navigating
- * the popup to the provider, mirroring markOAuthBindPopup.
+ * the popup to the provider, mirroring markOAuthPopup.
  */
 export function markOAuthRefreshPopup(
   storage: OAuthModeStorage | null | undefined,
@@ -132,20 +158,33 @@ export function resolveOAuthCallbackMode(
 ): OAuthCallbackMode {
   if (!opener || opener.closed || !storage || !state) return 'login'
 
-  let markedState: string | null = null
   try {
-    markedState = storage.getItem(
+    const refreshState = storage.getItem(
       `${OAUTH_REFRESH_FLOW_KEY_PREFIX}${provider}`
     )
+    if (refreshState === state) return 'refresh'
   } catch {
     return 'login'
   }
-  if (markedState === state) return 'refresh'
 
   try {
-    markedState = storage.getItem(`${OAUTH_BIND_FLOW_KEY_PREFIX}${provider}`)
+    const value = storage.getItem(`${OAUTH_POPUP_FLOW_KEY_PREFIX}${provider}`)
+    if (!value) return 'login'
+    const marker: unknown = JSON.parse(value)
+    if (
+      !marker ||
+      typeof marker !== 'object' ||
+      !('state' in marker) ||
+      !('intent' in marker)
+    ) {
+      return 'login'
+    }
+    if (marker.state !== state) return 'login'
+    if (marker.intent === 'bind' || marker.intent === 'verify') {
+      return marker.intent
+    }
   } catch {
     return 'login'
   }
-  return markedState === state ? 'bind' : 'login'
+  return 'login'
 }

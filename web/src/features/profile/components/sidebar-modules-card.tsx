@@ -95,6 +95,11 @@ export function SidebarModulesCard() {
           description: t('API usage records'),
         },
         {
+          key: 'audit',
+          title: t('Audit Logs'),
+          description: t('Login, security and access records'),
+        },
+        {
           key: 'midjourney',
           title: t('Drawing Logs'),
           description: t('Drawing task records'),
@@ -124,7 +129,9 @@ export function SidebarModulesCard() {
         {
           key: 'orders',
           title: t('Order Center'),
-          description: t('Recharge, subscription and cloud space purchase orders.'),
+          description: t(
+            'Recharge, subscription and cloud space purchase orders.'
+          ),
         },
         {
           key: 'space',
@@ -135,6 +142,11 @@ export function SidebarModulesCard() {
           key: 'personal',
           title: t('Personal Settings'),
           description: t('Personal info settings'),
+        },
+        {
+          key: 'security',
+          title: t('Security & Access'),
+          description: t('Manage your security settings and account access'),
         },
       ],
     },
@@ -198,7 +210,9 @@ export function SidebarModulesCard() {
             {
               key: 'risk_control',
               title: t('Risk Control'),
-              description: t('Credit score, conversation retention and marker analysis.'),
+              description: t(
+                'Credit score, conversation retention and marker analysis.'
+              ),
             },
           ],
         },

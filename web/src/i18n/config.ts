@@ -20,6 +20,8 @@ import i18n from 'i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
 import { initReactI18next } from 'react-i18next'
 
+import { syncDayjsLocale } from '@/lib/dayjs'
+
 import { convertDetectedLanguage } from './languages'
 import en from './locales/en.json'
 import fr from './locales/fr.json'
@@ -76,5 +78,9 @@ i18n
       convertDetectedLanguage,
     },
   })
+
+// 相对时间(fromNow)跟随界面语言:初始化时同步一次,切换语言时再同步
+i18n.on('languageChanged', syncDayjsLocale)
+syncDayjsLocale(i18n.language)
 
 export default i18n

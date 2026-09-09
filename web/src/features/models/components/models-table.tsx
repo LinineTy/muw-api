@@ -22,6 +22,7 @@ import { useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { DataTablePage, useDataTable } from '@/components/data-table'
+import { useModelPricing } from '@/features/model-pricing/api'
 import { useMediaQuery } from '@/hooks'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 
@@ -154,8 +155,22 @@ export function ModelsTable({ batchMode }: { batchMode: boolean }) {
   const totalCount = data?.data?.total || 0
   const vendorCounts = data?.data?.vendor_counts
 
+  // Pricing data for the pricing column (upstream feature merged into the
+  // fork's single-page metadata table).
+  const pricingQuery = useModelPricing(
+    models
+      .filter((item) => item.name_rule === 0)
+      .map((item) => item.model_name),
+    models.length > 0
+  )
+  let pricingState: 'loading' | 'error' | undefined
+  if (pricingQuery.isError) pricingState = 'error'
+  else if (pricingQuery.isLoading) pricingState = 'loading'
+
   // Columns configuration
-  const columns = useModelsColumns(vendors, { enableSelection: batchMode })
+  const columns = useModelsColumns(vendors, pricingQuery.data, pricingState, {
+    enableSelection: batchMode,
+  })
 
   // React Table instance
   const { table } = useDataTable({

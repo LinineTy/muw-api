@@ -307,5 +307,11 @@
   "Your balance does not meet the pool requirement": "Your balance does not meet the pool requirement",
   "and all of its claim records. This action cannot be undone.": "and all of its claim records. This action cannot be undone.",
   "e.g. 131072, 0 or empty = unlimited": "e.g. 131072, 0 or empty = unlimited",
-  "How strongly the background image is blurred (0px = sharp original; higher = softer behind the glass)": "How strongly the background image is blurred (0px = sharp original; higher = softer behind the glass)"
+  "How strongly the background image is blurred (0px = sharp original; higher = softer behind the glass)": "How strongly the background image is blurred (0px = sharp original; higher = softer behind the glass)",
+  "Please select a group": "Please select a group",
+  "Restrict which user groups can purchase. Leave empty to allow all groups.": "Restrict which user groups can purchase. Leave empty to allow all groups.",
+  "Every pin of this user, including released ones. The active pin is what currently anchors the group.": "Every pin of this user, including released ones. The active pin is what currently anchors the group.",
+  "Release the fixed group \"{{group}}\" for this user? The group falls back to the highest remaining subscription anchor, or the last downgrade target.": "Release the fixed group \"{{group}}\" for this user? The group falls back to the highest remaining subscription anchor, or the last downgrade target.",
+  "Fixed group products: one-time purchase pins the user to the group permanently": "Fixed group products: one-time purchase pins the user to the group permanently",
+  "Use \"Create\" to add a subscription plan or a fixed group product": "Use \"Create\" to add a subscription plan or a fixed group product"
 }

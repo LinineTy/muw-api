@@ -150,7 +150,7 @@ export function LandingPageThemeSection() {
           value={filterPage}
           onValueChange={(value) => value !== null && setFilterPage(value)}
         >
-          <SelectTrigger className='w-40' aria-label={t('Filter by page')}>
+          <SelectTrigger aria-label={t('Filter by page')}>
             <SelectValue>
               {t(
                 ALL_PAGE_FILTERS.find((filter) => filter.value === filterPage)

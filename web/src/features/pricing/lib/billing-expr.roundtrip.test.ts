@@ -232,7 +232,12 @@ function randRequestCondition(rng: () => number): RequestCondition {
         value: pick(rng, STRING_VALUES),
       }
     case 5:
-      return { source: 'param', path: pick(rng, PARAM_PATHS), mode: MATCH_EXISTS, value: '' }
+      return {
+        source: 'param',
+        path: pick(rng, PARAM_PATHS),
+        mode: MATCH_EXISTS,
+        value: '',
+      }
     case 6:
       return {
         source: 'header',
@@ -242,7 +247,12 @@ function randRequestCondition(rng: () => number): RequestCondition {
         valueKind: 'string',
       }
     case 7:
-      return { source: 'header', path: pick(rng, HEADER_NAMES), mode: MATCH_EXISTS, value: '' }
+      return {
+        source: 'header',
+        path: pick(rng, HEADER_NAMES),
+        mode: MATCH_EXISTS,
+        value: '',
+      }
     case 8:
       return {
         source: 'header',
@@ -254,13 +264,54 @@ function randRequestCondition(rng: () => number): RequestCondition {
       const timeFunc = pick(rng, TIME_FUNCS)
       const timezone = pick(rng, TIMEZONES)
       const mode = pick(rng, [MATCH_EQ, MATCH_GTE, MATCH_LT, MATCH_RANGE])
+      // Domain-valid values per time function: the builder rejects out-of-range
+      // literals (e.g. day 0, month 0), so a corpus outside the domain would no
+      // longer round-trip.
+      const domain: Record<
+        string,
+        { ranges: Array<[number, number]>; values: string[] }
+      > = {
+        hour: {
+          ranges: [
+            [18, 6],
+            [21, 9],
+            [23, 0],
+            [2, 5],
+          ],
+          values: ['8', '0', '18', '23', '7'],
+        },
+        minute: {
+          ranges: [
+            [30, 10],
+            [50, 15],
+            [59, 0],
+          ],
+          values: ['30', '0', '45', '59', '7'],
+        },
+        weekday: {
+          ranges: [
+            [5, 1],
+            [6, 0],
+          ],
+          values: ['1', '0', '5', '6', '3'],
+        },
+        month: {
+          ranges: [
+            [11, 3],
+            [12, 1],
+          ],
+          values: ['1', '6', '12', '3', '9'],
+        },
+        day: {
+          ranges: [
+            [25, 5],
+            [28, 2],
+          ],
+          values: ['1', '15', '31', '9', '23'],
+        },
+      }
       if (mode === MATCH_RANGE) {
-        const [start, end] = pick(rng, [
-          [18, 6],
-          [21, 9],
-          [23, 0],
-          [2, 5],
-        ])
+        const [start, end] = pick(rng, domain[timeFunc].ranges)
         return {
           source: 'time',
           timeFunc,
@@ -276,7 +327,7 @@ function randRequestCondition(rng: () => number): RequestCondition {
         timeFunc,
         timezone,
         mode,
-        value: pick(rng, ['8', '0', '18', '23', '7']),
+        value: pick(rng, domain[timeFunc].values),
         rangeStart: '',
         rangeEnd: '',
       }
@@ -343,7 +394,10 @@ describe('round-trip properties (seeded corpus)', () => {
       )
       // Raw → visual must be allowed for everything the editor itself produces.
       expect(tryParseVisualConfig(billingExpr), `case ${i}`).not.toBeNull()
-      expect(tryParseRequestRuleExpr(requestRuleExpr), `case ${i}`).not.toBeNull()
+      expect(
+        tryParseRequestRuleExpr(requestRuleExpr),
+        `case ${i}`
+      ).not.toBeNull()
     }
   })
 
@@ -370,7 +424,9 @@ describe('round-trip properties (seeded corpus)', () => {
     // dropped.
     expect(tryParseRequestRuleExpr('(len < 5 ? 2 : 1)')).toBeNull()
     expect(
-      tryParseRequestRuleExpr('(param("a") == "x" ? 2 : 1) * (len > 10 ? 3 : 1)')
+      tryParseRequestRuleExpr(
+        '(param("a") == "x" ? 2 : 1) * (len > 10 ? 3 : 1)'
+      )
     ).toBeNull()
   })
 })
@@ -409,7 +465,9 @@ describe('hand-picked round-trip edges', () => {
       },
     ]
     const expr = buildRequestRuleExpr(groups)
-    expect(expr).toBe('(param("a") == "true" && (hour("Asia/Shanghai") >= 18 || hour("Asia/Shanghai") < 6) ? 2 : 1)')
+    expect(expr).toBe(
+      '(param("a") == "true" && (hour("Asia/Shanghai") >= 18 || hour("Asia/Shanghai") < 6) ? 2 : 1)'
+    )
     expect(tryParseRequestRuleExpr(expr)).toEqual(groups)
   })
 
@@ -490,7 +548,12 @@ describe('hand-picked round-trip edges', () => {
         conditions: [
           {
             conditions: [
-              { source: 'header', path: 'X-Tier', mode: MATCH_EXISTS, value: '' },
+              {
+                source: 'header',
+                path: 'X-Tier',
+                mode: MATCH_EXISTS,
+                value: '',
+              },
               {
                 source: 'param',
                 path: 'user_role',
@@ -500,7 +563,11 @@ describe('hand-picked round-trip edges', () => {
               },
             ],
           },
-          { conditions: [{ source: 'param', path: 'model', mode: MATCH_GT, value: '1e3' }] },
+          {
+            conditions: [
+              { source: 'param', path: 'model', mode: MATCH_GT, value: '1e3' },
+            ],
+          },
         ],
         multiplier: '0.5',
       },
@@ -519,7 +586,12 @@ describe('hand-picked round-trip edges', () => {
         conditions: [
           {
             conditions: [
-              { source: 'param', path: 'user_role', mode: MATCH_EXISTS, value: '' },
+              {
+                source: 'param',
+                path: 'user_role',
+                mode: MATCH_EXISTS,
+                value: '',
+              },
               {
                 source: 'header',
                 path: 'X-Region',
@@ -530,7 +602,13 @@ describe('hand-picked round-trip edges', () => {
           },
           {
             conditions: [
-              { source: 'param', path: 'model', mode: MATCH_EQ, value: '5', valueKind: 'number' },
+              {
+                source: 'param',
+                path: 'model',
+                mode: MATCH_EQ,
+                value: '5',
+                valueKind: 'number',
+              },
             ],
           },
         ],
@@ -587,7 +665,9 @@ describe('hand-picked round-trip edges', () => {
         multiplier: '2',
       },
     ]
-    expect(tryParseRequestRuleExpr(buildRequestRuleExpr(quoted))).toEqual(quoted)
+    expect(tryParseRequestRuleExpr(buildRequestRuleExpr(quoted))).toEqual(
+      quoted
+    )
   })
 
   it('round-trips parens inside header/param paths', () => {

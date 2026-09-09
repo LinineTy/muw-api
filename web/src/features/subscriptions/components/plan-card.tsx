@@ -8,9 +8,10 @@ import { StatusBadge } from '@/components/status-badge'
 import type { PlanRecord } from '../types'
 
 /**
- * 订阅套餐卡片，用于表格的卡片视图。复用 subscriptions-columns.tsx 中每一列的
- * cell 渲染器（flexRender），保证表格与卡片的信息、交互完全一致：标题/副标题、
- * 价格、状态、支付渠道、配额、升级分组以及行内操作菜单。
+ * 订阅套餐 / 固定分组商品卡片，用于表格的卡片视图。复用 subscriptions-columns.tsx
+ * 中每一列的 cell 渲染器（flexRender），保证表格与卡片的信息、交互完全一致：
+ * 标题/副标题、价格、状态、支付渠道、配额、升级分组以及行内操作菜单。
+ * 固定分组商品没有时长/额度/互斥组，这些字段按 kind 隐藏。
  */
 function PlanCardComponent({
   row,
@@ -21,6 +22,7 @@ function PlanCardComponent({
 }) {
   const { t } = useTranslation()
   const plan = row.original.plan
+  const isGroupPin = row.original.kind === 'group_pin'
   const cells = row.getAllCells()
 
   const renderCell = (id: string) => {
@@ -52,11 +54,19 @@ function PlanCardComponent({
       data-state={isSelected ? 'selected' : undefined}
       className='flex flex-col gap-3'
     >
-      {/* 头部：ID + 标题/副标题 + 推荐徽标，右侧状态与操作 */}
+      {/* 头部：ID + 类型/推荐徽标 + 标题/副标题，右侧状态与操作 */}
       <div className='flex items-start justify-between gap-2'>
         <div className='flex min-w-0 flex-1 flex-col gap-1'>
           <div className='flex flex-wrap items-center gap-2'>
             {idCell}
+            {isGroupPin && (
+              <StatusBadge
+                label={t('Fixed Groups')}
+                variant='info'
+                size='sm'
+                copyable={false}
+              />
+            )}
             {plan.is_recommended && (
               <StatusBadge
                 label={t('Recommended')}
@@ -74,20 +84,24 @@ function PlanCardComponent({
         </div>
       </div>
 
-      {/* 价格 + 有效期 */}
+      {/* 价格 + 有效期（固定分组无时长，只显示价格） */}
       <div className='flex items-baseline gap-2'>
         <span className='text-2xl font-bold text-emerald-600'>{priceCell}</span>
-        <span className='text-muted-foreground text-sm'>{durationCell}</span>
+        {!isGroupPin && (
+          <span className='text-muted-foreground text-sm'>{durationCell}</span>
+        )}
       </div>
 
-      {/* 元信息：重置 / 支付渠道 / 升级分组 */}
+      {/* 元信息：支付渠道 / 目标分组 / 白名单；套餐额外展示重置与额度 */}
       <div className='grid grid-cols-2 gap-x-4 gap-y-2'>
-        <div className='min-w-0'>
-          <div className={labelClass}>{t('Quota Reset')}</div>
-          <div className='text-muted-foreground min-w-0 overflow-hidden text-sm'>
-            {resetCell}
+        {!isGroupPin && (
+          <div className='min-w-0'>
+            <div className={labelClass}>{t('Quota Reset')}</div>
+            <div className='text-muted-foreground min-w-0 overflow-hidden text-sm'>
+              {resetCell}
+            </div>
           </div>
-        </div>
+        )}
         <div className='min-w-0'>
           <div className={labelClass}>{t('Payment Channel')}</div>
           <div className='text-muted-foreground min-w-0 overflow-hidden text-sm'>
@@ -95,29 +109,37 @@ function PlanCardComponent({
           </div>
         </div>
         <div className='min-w-0'>
-          <div className={labelClass}>{t('Upgrade Group')}</div>
+          <div className={labelClass}>
+            {isGroupPin ? t('Pinned Group') : t('Upgrade Group')}
+          </div>
           <div className='text-muted-foreground min-w-0 overflow-hidden text-sm'>
             {upgradeCell}
           </div>
         </div>
-        <div className='min-w-0'>
-          <div className={labelClass}>{t('Exclusive Group')}</div>
-          <div className='text-muted-foreground min-w-0 overflow-hidden text-sm'>
-            {exclusiveCell}
+        {!isGroupPin && (
+          <div className='min-w-0'>
+            <div className={labelClass}>{t('Exclusive Group')}</div>
+            <div className='text-muted-foreground min-w-0 overflow-hidden text-sm'>
+              {exclusiveCell}
+            </div>
           </div>
-        </div>
-        <div className='min-w-0'>
-          <div className={labelClass}>{t('Quota Limits')}</div>
-          <div className='text-muted-foreground min-w-0 overflow-hidden text-sm'>
-            {limitsCell}
+        )}
+        {!isGroupPin && (
+          <div className='min-w-0'>
+            <div className={labelClass}>{t('Quota Limits')}</div>
+            <div className='text-muted-foreground min-w-0 overflow-hidden text-sm'>
+              {limitsCell}
+            </div>
           </div>
-        </div>
-        <div className='min-w-0'>
-          <div className={labelClass}>{t('Max Duration')}</div>
-          <div className='text-muted-foreground min-w-0 overflow-hidden text-sm'>
-            {maxDurationCell}
+        )}
+        {!isGroupPin && (
+          <div className='min-w-0'>
+            <div className={labelClass}>{t('Max Duration')}</div>
+            <div className='text-muted-foreground min-w-0 overflow-hidden text-sm'>
+              {maxDurationCell}
+            </div>
           </div>
-        </div>
+        )}
         <div className='min-w-0'>
           <div className={labelClass}>{t('Allowed Groups')}</div>
           <div className='text-muted-foreground min-w-0 overflow-hidden text-sm'>
@@ -126,11 +148,13 @@ function PlanCardComponent({
         </div>
       </div>
 
-      {/* 底线：套餐档位（仅卡片视图展示） */}
-      <div className='flex items-center gap-2 text-xs'>
-        <span className={labelClass}>{t('Plan Tier')}</span>
-        <span className='text-muted-foreground'>{plan.priority ?? 0}</span>
-      </div>
+      {/* 底线：套餐档位（固定分组商品无档位概念） */}
+      {!isGroupPin && (
+        <div className='flex items-center gap-2 text-xs'>
+          <span className={labelClass}>{t('Plan Tier')}</span>
+          <span className='text-muted-foreground'>{plan.priority ?? 0}</span>
+        </div>
+      )}
     </div>
   )
 }

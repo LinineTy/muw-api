@@ -22,8 +22,9 @@ For commercial licensing, please contact support@quantumnous.com
 // ============================================================================
 
 export const CHANNEL_TYPE_NEW_API = 60
-
+// MERGE-DECISION: 撞号对齐 Go 侧 constant/channel.go —— SenseNova=61、OpenCodeZen=62、TaskPlugin=63。
 export const CHANNEL_TYPE_OPENCODE_ZEN = 62
+export const CHANNEL_TYPE_TASK_PLUGIN = 63
 
 export const CHANNEL_TYPES = {
   0: 'Unknown',
@@ -84,12 +85,13 @@ export const CHANNEL_TYPES = {
   60: 'New API',
   61: 'SenseNova',
   62: 'OpenCode Zen',
+  63: 'Task Plugin',
 } as const
 
 const CHANNEL_TYPE_DISPLAY_ORDER: number[] = [
   1, 14, 33, 24, 43, 3, 41, 48, 60, 58, 42, 34, 20, 4, 40, 27, 25, 17, 26, 15,
   46, 23, 18, 45, 31, 35, 49, 19, 47, 37, 38, 39, 11, 8, 57, 59, 22, 21, 44, 2,
-  5, 36, 50, 51, 52, 53, 54, 55, 56, 61, 62,
+  5, 36, 50, 51, 52, 53, 54, 55, 56, 61, 62, 63,
 ]
 
 export const CHANNEL_TYPE_OPTIONS: { value: number; label: string }[] = (() => {
@@ -110,6 +112,17 @@ export const CHANNEL_TYPE_OPTIONS: { value: number; label: string }[] = (() => {
   }
   return ordered
 })()
+
+export function channelTypeOptionsForTaskPluginBind(
+  canBindTaskPlugin: boolean
+): { value: number; label: string }[] {
+  if (canBindTaskPlugin) {
+    return CHANNEL_TYPE_OPTIONS
+  }
+  return CHANNEL_TYPE_OPTIONS.filter(
+    (option) => option.value !== CHANNEL_TYPE_TASK_PLUGIN
+  )
+}
 
 // ============================================================================
 // Coding-Plan Quota (余量监控挂在渠道上,仅查询,不影响转发)
@@ -146,10 +159,16 @@ export const CHANNEL_TYPE_CODING_PLAN_SUGGEST: Record<number, string> = {
 // base_url 填这些符号键 → 渠道自动识别为对应编码套餐,转发走专用端点、余量自动可查。
 export const CODING_PLAN_SYMBOL_OPTIONS: { value: string; label: string }[] = [
   { value: 'glm-coding-plan', label: 'Zhipu (GLM) · China' },
-  { value: 'glm-coding-plan-international', label: 'Zhipu (GLM) · International' },
+  {
+    value: 'glm-coding-plan-international',
+    label: 'Zhipu (GLM) · International',
+  },
   { value: 'kimi-coding-plan', label: 'Kimi For Coding' },
   { value: 'minimax-coding-plan', label: 'MiniMax · China' },
-  { value: 'minimax-coding-plan-international', label: 'MiniMax · International' },
+  {
+    value: 'minimax-coding-plan-international',
+    label: 'MiniMax · International',
+  },
   { value: 'doubao-coding-plan', label: 'Volcengine Ark' },
 ]
 
@@ -213,7 +232,11 @@ export const CODING_PLAN_BASE_URL_PRESETS: Record<
   { value: string; display: string; plan: boolean; provider?: string }[]
 > = {
   26: [
-    { value: 'https://open.bigmodel.cn', display: 'https://open.bigmodel.cn', plan: false },
+    {
+      value: 'https://open.bigmodel.cn',
+      display: 'https://open.bigmodel.cn',
+      plan: false,
+    },
     {
       value: 'glm-coding-plan',
       display: 'https://open.bigmodel.cn/api/coding/paas/v4',
@@ -241,7 +264,11 @@ export const CODING_PLAN_BASE_URL_PRESETS: Record<
     },
   ],
   25: [
-    { value: 'https://api.moonshot.cn', display: 'https://api.moonshot.cn', plan: false },
+    {
+      value: 'https://api.moonshot.cn',
+      display: 'https://api.moonshot.cn',
+      plan: false,
+    },
     {
       value: 'kimi-coding-plan',
       display: 'https://api.kimi.com/coding/v1',
@@ -256,7 +283,11 @@ export const CODING_PLAN_BASE_URL_PRESETS: Record<
     },
   ],
   35: [
-    { value: 'https://api.minimax.chat', display: 'https://api.minimax.chat', plan: false },
+    {
+      value: 'https://api.minimax.chat',
+      display: 'https://api.minimax.chat',
+      plan: false,
+    },
     {
       value: 'minimax-coding-plan',
       display: 'https://api.minimaxi.com/v1',
