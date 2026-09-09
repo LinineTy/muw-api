@@ -228,7 +228,11 @@ func AdminReleaseGroupPin(c *gin.Context) {
 		return
 	}
 	if changed {
-		model.RefreshUserGroupCache(pin.UserId)
+		// 与管理员改组等其他组变更路径一致：刷新失败必须落日志，静默丢弃会让
+		// 用户停留在旧组缓存（按旧组鉴权/计费）直到 TTL 或下次刷新才自愈。
+		if err := model.RefreshUserGroupCache(pin.UserId); err != nil {
+			common.SysError(fmt.Sprintf("failed to refresh user group cache after group pin release for user %d: %v", pin.UserId, err))
+		}
 	}
 	common.ApiSuccess(c, gin.H{"group": target, "changed": changed})
 }
