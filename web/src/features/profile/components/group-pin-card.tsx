@@ -25,9 +25,9 @@ import { useTranslation } from 'react-i18next'
 
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { formatTimestamp } from '@/lib/format'
 
 import { getMyGroupPin, getSelfSubscriptionFull } from '@/features/subscriptions/api'
+import { formatTimestampToDate } from '@/lib/format'
 import type { UserProfile } from '../types'
 
 interface GroupPinCardProps {
@@ -90,15 +90,11 @@ export function GroupPinCard({ profile, loading }: GroupPinCardProps) {
 
   const rows: AnchorRow[] = []
   if (pin) {
-    const sourceLabel =
-      pin.source === 'purchase'
-        ? t('Purchased "{{item}}"', { item: pin.note || '' })
-        : t('Set by admin')
     rows.push({
       key: 'pin',
       group: pin.group,
       label: t('Pinned group'),
-      detail: `${sourceLabel} · ${t('Permanent')}`,
+      detail: t('Permanent'),
     })
   }
   for (const r of activeSubAnchors) {
@@ -106,7 +102,10 @@ export function GroupPinCard({ profile, loading }: GroupPinCardProps) {
       key: `sub-${r.subscription.id}`,
       group: r.plan?.upgrade_group ?? '',
       label: t('Subscription upgrade'),
-      detail: `${r.plan?.title ?? ''} · ${t('Expires {{time}}', { time: formatTimestamp(r.subscription.end_time) })}`,
+      detail: t('Expires {{time}}', {
+        // 只留日期（YYYY-MM-DD）——窄右栏放完整时间戳会挤压 label
+        time: formatTimestampToDate(r.subscription.end_time).slice(0, 10),
+      }),
     })
   }
 
@@ -142,18 +141,18 @@ export function GroupPinCard({ profile, loading }: GroupPinCardProps) {
           {rows.map((row) => (
             <div
               key={row.key}
-              className='bg-background/60 flex items-center justify-between rounded-md border p-2.5'
+              className='bg-background/60 flex items-center justify-between gap-2 rounded-md border p-2.5'
             >
               <div className='flex min-w-0 items-center gap-2'>
                 <span className='bg-primary/10 text-primary inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium'>
                   {row.key === 'pin' ? <Pin className='size-3' /> : null}
                   {row.group}
                 </span>
-                <span className='text-xs'>{row.label}</span>
+                <span className='truncate text-xs'>{row.label}</span>
               </div>
-              <div className='text-muted-foreground shrink-0 text-right text-xs'>
+              <span className='text-muted-foreground shrink-0 text-xs'>
                 {row.detail}
-              </div>
+              </span>
             </div>
           ))}
         </div>
