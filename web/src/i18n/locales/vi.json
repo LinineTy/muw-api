@@ -1,5 +1,8 @@
 {
   "translation": {
+    "360": "360",
+    "1000": "1000",
+    "10000": "10000",
     "\"default\": \"us-central1\", \"claude-3-5-sonnet-20240620\": \"europe-west1\"": "\"default\": \"us-central1\", \"claude-3-5-sonnet-20240620\": \"europe-west1\"",
     "#1 App": "#1 Ứng dụng",
     "#1 Model": "#1 Mô hình",
@@ -41,8 +44,6 @@
     "1. Create an application in your Gotify server": "1. Tạo một ứng dụng trong máy chủ Gotify của bạn",
     "10 / page": "10 / trang",
     "100 / page": "100 / trang",
-    "1000": "1000",
-    "10000": "10000",
     "14 Days": "14 ngày",
     "192.168.1.1&#10;10.0.0.0/8": "192.168.1.1&#10;10.0.0.0/8",
     "1M": "1M",
@@ -57,7 +58,6 @@
     "30 Days": "30 ngày",
     "30 days ago": "30 ngày trước",
     "30d change": "Thay đổi 30 ngày",
-    "360": "360",
     "5 Hour Window": "5 Hour Window",
     "5 minutes": "5 phút",
     "5-Hour Window": "Cửa sổ 5 giờ",
@@ -6336,7 +6336,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "Các Dự Án Liên Quan",
     "footer.defaultCopyright": "Bản quyền được bảo lưu.",
-    "footer.newapi.projectAttributionSuffix": "Bản quyền được bảo lưu. Được thiết kế và phát triển bởi các cộng tác viên dự án.",
+    "footer.new\u0061pi.projectAttributionSuffix": "Bản quyền được bảo lưu. Được thiết kế và phát triển bởi các cộng tác viên dự án.",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -6561,6 +6561,15 @@
     "© 2025 Your Company. All rights reserved.": "© 2025 Công ty của bạn. Mọi quyền được bảo lưu.",
     "、": ", ",
     "，": ", ",
-    "，and ": " và "
+    "，and ": " và ",
+    "Purchase Fixed Group": "Mua nhóm cố định",
+    "Pinned Group": "Nhóm được ghim",
+    "Permanent": "Vĩnh viễn",
+    "No fixed group products": "Chưa có sản phẩm nhóm cố định",
+    "Click \"New Product\" to create your first fixed group product": "Nhấp \"Sản phẩm mới\" để tạo sản phẩm nhóm cố định đầu tiên",
+    "Filter products...": "Lọc sản phẩm...",
+    "No user group pins": "Chưa có ghim nhóm cố định của người dùng",
+    "Filter by user ID": "Lọc theo ID người dùng",
+    "Delete fixed group product \"{{title}}\"? This cannot be undone.": "Xóa sản phẩm nhóm cố định \"{{title}}\"? Hành động này không thể hoàn tác."
   }
 }

@@ -367,7 +367,7 @@ function TierConditionRow({
           onChange({ ...condition, var: value as TierCondition['var'] })
         }
       >
-        <SelectTrigger className='w-32' size='sm'>
+        <SelectTrigger size='sm'>
           <SelectValue>
             {currentInputOption
               ? t(currentInputOption.labelKey)
@@ -391,7 +391,7 @@ function TierConditionRow({
           onChange({ ...condition, op: value as TierCondition['op'] })
         }
       >
-        <SelectTrigger className='w-20' size='sm'>
+        <SelectTrigger size='sm'>
           <SelectValue />
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false}>
@@ -936,7 +936,7 @@ function RuleConditionRow({
             value !== null && onChange({ ...timeCond, value: String(value) })
           }
         >
-          <SelectTrigger className='w-32' size='sm'>
+          <SelectTrigger size='sm'>
             <SelectValue>
               {/^[0-6]$/.test(timeCond.value)
                 ? t(`Every week on day ${timeCond.value}`)
@@ -1004,7 +1004,7 @@ function RuleConditionRow({
           onChange({ ...timeCond, timeFunc: value as TimeFunc })
         }
       >
-        <SelectTrigger className='w-32' size='sm'>
+        <SelectTrigger size='sm'>
           <SelectValue>{getTimeFuncLabel(timeCond.timeFunc)}</SelectValue>
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false}>
@@ -1029,7 +1029,7 @@ function RuleConditionRow({
           value !== null && onChange({ ...timeCond, timezone: value })
         }
       >
-        <SelectTrigger className='w-56' size='sm'>
+        <SelectTrigger size='sm'>
           <SelectValue>
             {COMMON_TIMEZONES.find((tz) => tz.value === timeCond.timezone)
               ?.label ?? timeCond.timezone}
@@ -1055,7 +1055,7 @@ function RuleConditionRow({
         value={timeCond.mode}
         onValueChange={(v) => v !== null && handleModeChange(v)}
       >
-        <SelectTrigger className='w-32' size='sm'>
+        <SelectTrigger size='sm'>
           <SelectValue>{getMatchLabel(timeCond.mode)}</SelectValue>
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false}>
@@ -1092,7 +1092,7 @@ function RuleConditionRow({
         value={phCond.mode}
         onValueChange={(v) => v !== null && handleModeChange(v)}
       >
-        <SelectTrigger className='w-32' size='sm'>
+        <SelectTrigger size='sm'>
           <SelectValue>{getMatchLabel(phCond.mode)}</SelectValue>
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false}>
@@ -1134,7 +1134,7 @@ function RuleConditionRow({
           value={condition.source}
           onValueChange={(v) => v !== null && handleSourceChange(v)}
         >
-          <SelectTrigger className='w-28' size='sm'>
+          <SelectTrigger size='sm'>
             <SelectValue>{sourceLabel}</SelectValue>
           </SelectTrigger>
           <SelectContent alignItemWithTrigger={false}>

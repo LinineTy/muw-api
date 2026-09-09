@@ -489,7 +489,7 @@ export function LogSettingsSection({
                       value !== null && setServerLogCleanupMode(value)
                     }
                   >
-                    <SelectTrigger className='w-[160px]'>
+                    <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent alignItemWithTrigger={false}>

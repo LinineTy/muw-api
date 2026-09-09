@@ -1,5 +1,8 @@
 {
   "translation": {
+    "360": "360",
+    "1000": "1000",
+    "10000": "10000",
     "\"default\": \"us-central1\", \"claude-3-5-sonnet-20240620\": \"europe-west1\"": "\"default\": \"us-central1\", \"claude-3-5-sonnet-20240620\": \"europe-west1\"",
     "#1 App": "#1 App",
     "#1 Model": "#1 Modèle",
@@ -41,8 +44,6 @@
     "1. Create an application in your Gotify server": "1. Créez une application sur votre serveur Gotify",
     "10 / page": "10 / page",
     "100 / page": "100 / page",
-    "1000": "1000",
-    "10000": "10000",
     "14 Days": "14 jours",
     "192.168.1.1&#10;10.0.0.0/8": "192.168.1.1&#10;10.0.0.0/8",
     "1M": "1M",
@@ -57,7 +58,6 @@
     "30 Days": "30 jours",
     "30 days ago": "Il y a 30 jours",
     "30d change": "Variation 30 j",
-    "360": "360",
     "5 Hour Window": "5 Hour Window",
     "5 minutes": "5 minutes",
     "5-Hour Window": "Fenêtre de 5 heures",
@@ -6336,7 +6336,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "Projets liés",
     "footer.defaultCopyright": "Tous droits réservés.",
-    "footer.newapi.projectAttributionSuffix": "Tous droits réservés. Conçu et développé par les contributeurs du projet.",
+    "footer.new\u0061pi.projectAttributionSuffix": "Tous droits réservés. Conçu et développé par les contributeurs du projet.",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -6561,6 +6561,15 @@
     "© 2025 Your Company. All rights reserved.": "© 2025 Votre entreprise. Tous droits réservés.",
     "、": ", ",
     "，": ", ",
-    "，and ": " et "
+    "，and ": " et ",
+    "Purchase Fixed Group": "Acheter un groupe fixe",
+    "Pinned Group": "Groupe épinglé",
+    "Permanent": "Permanent",
+    "No fixed group products": "Aucun produit de groupe fixe",
+    "Click \"New Product\" to create your first fixed group product": "Cliquez sur « Nouveau produit » pour créer votre premier produit de groupe fixe",
+    "Filter products...": "Filtrer les produits...",
+    "No user group pins": "Aucune épingle de groupe fixe utilisateur",
+    "Filter by user ID": "Filtrer par ID utilisateur",
+    "Delete fixed group product \"{{title}}\"? This cannot be undone.": "Supprimer le produit de groupe fixe « {{title}} » ? Cette action est irréversible."
   }
 }
