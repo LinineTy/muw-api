@@ -48,6 +48,9 @@ func TestMain(m *testing.M) {
 		&TwoFABackupCode{},
 		&Log{},
 		&Channel{},
+		// fork 独有的渠道内模型设置表:GetChannel 选路会读它,不建表则上游带来的
+		// 渠道选路测试直接报 "no such table: channel_model_settings"
+		&ChannelModelSetting{},
 		&QuotaData{},
 		&Ability{},
 		&TopUp{},

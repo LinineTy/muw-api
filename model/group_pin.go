@@ -205,6 +205,11 @@ func ReleaseGroupPinTx(tx *gorm.DB, pinId, operatorId int, reason string) (strin
 	}).Error; err != nil {
 		return "", false, err
 	}
+	// 已知取舍(legacy 态,未配置 SubscriptionGroupPriorities):钉释放只落库、
+	// 不收敛用户组——锚点重算(settleUserSubscriptionGroupTx)在未配置优先级时整体
+	// 关闭,避免"全 0 优先级"把同级比较误伤成永不回退。此时用户会留在钉住的分组,
+	// 直到下一次订阅生命周期事件(到期/取消)按 legacy 语义回退。
+	// 想要"释放即回退",运营侧配好组优先级即可进入锚点态。
 	if !common.SubscriptionGroupUpgradeEnabled || !SubscriptionGroupPrioritiesEnabled() {
 		return "", false, nil
 	}
