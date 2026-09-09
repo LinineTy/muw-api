@@ -226,7 +226,7 @@ export type OpenInContentProps = ComponentProps<typeof DropdownMenuContent>
 export const OpenInContent = ({ className, ...props }: OpenInContentProps) => (
   <DropdownMenuContent
     align='start'
-    className={cn('w-[240px]', className)}
+    className={cn('min-w-[240px]', className)}
     {...props}
   />
 )

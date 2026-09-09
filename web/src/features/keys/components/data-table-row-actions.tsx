@@ -234,7 +234,7 @@ export function DataTableRowActions<TData>({
 
       <DataTableRowActionMenu
         ariaLabel={t('Open menu')}
-        contentClassName='w-[200px]'
+        contentClassName='min-w-[200px]'
         modal={false}
         onOpenChange={handleMenuOpenChange}
       >
