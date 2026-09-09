@@ -22,32 +22,35 @@ import { z } from 'zod'
 
 import { parseQuotaFromDollars, quotaUnitsToDollars } from '@/lib/format'
 
-import type { SubscriptionPlan, PlanPayload } from '../types'
+import type { PlanKind, SubscriptionPlan, PlanPayload } from '../types'
 
-export function getPlanFormSchema(t: TFunction) {
-  return z.object({
-    title: z.string().min(1, t('Please enter plan title')),
-    subtitle: z.string().optional(),
-    price_amount: z.coerce.number().min(0, t('Please enter amount')),
-    duration_unit: z.enum(['year', 'month', 'day', 'hour', 'custom']),
-    duration_value: z.coerce.number().min(1),
-    custom_seconds: z.coerce.number().min(0).optional(),
-    max_cumulative_days: z.coerce.number().min(0),
-    exclusive_group: z.string().optional(),
-    allowed_groups: z.array(z.string()).optional(),
-    priority: z.coerce.number().min(0),
-    enabled: z.boolean(),
-    sort_order: z.coerce.number(),
-    is_recommended: z.boolean(),
-    allow_balance_pay: z.boolean(),
-    allow_wallet_overflow: z.boolean(),
-    max_purchase_per_user: z.coerce.number().min(0),
-    upgrade_group: z.string().optional(),
-    downgrade_group: z.string().optional(),
-    // 动态窗口是唯一额度模型：列表必须非空（doSubmit 拦截空列表）；全部窗口额度为 0 =
-    // 无限额度（合法，展示为 Unlimited）。
-    reset_windows: z
-      .array(
+// 单一表单 schema：普通套餐与固定分组商品共用一个 useForm，字段形状必须保持一致
+// （形状随 kind 变化会让 z.infer 退化成 union，被抽屉里的 Resolver 断言吞掉）。
+// kind 只影响校验强度：固定分组商品没有额度窗口，跳过窗口的严格递增校验。
+export function getPlanFormSchema(t: TFunction, kind: PlanKind = 'plan') {
+  return z
+    .object({
+      title: z.string().min(1, t('Please enter plan title')),
+      subtitle: z.string().optional(),
+      price_amount: z.coerce.number().min(0, t('Please enter amount')),
+      duration_unit: z.enum(['year', 'month', 'day', 'hour', 'custom']),
+      duration_value: z.coerce.number().min(1),
+      custom_seconds: z.coerce.number().min(0).optional(),
+      max_cumulative_days: z.coerce.number().min(0),
+      exclusive_group: z.string().optional(),
+      allowed_groups: z.array(z.string()).optional(),
+      priority: z.coerce.number().min(0),
+      enabled: z.boolean(),
+      sort_order: z.coerce.number(),
+      is_recommended: z.boolean(),
+      allow_balance_pay: z.boolean(),
+      allow_wallet_overflow: z.boolean(),
+      max_purchase_per_user: z.coerce.number().min(0),
+      upgrade_group: z.string().optional(),
+      downgrade_group: z.string().optional(),
+      // 动态窗口是唯一额度模型：列表必须非空（doSubmit 拦截空列表）；全部窗口额度为 0 =
+      // 无限额度（合法，展示为 Unlimited）。
+      reset_windows: z.array(
         z.object({
           // 表单内稳定行 key（创建时生成、编辑期间不变）；不落库，序列化时剥掉。
           id: z.string(),
@@ -55,30 +58,43 @@ export function getPlanFormSchema(t: TFunction) {
           value: z.coerce.number().min(1),
           limit: z.coerce.number().min(0),
         })
-      )
-      .superRefine((rows, ctx) => {
-        // 严格递增：后一个窗口时长必须大于前一个，保证列表天然按时长升序。
-        let prev = -1
-        for (const row of rows) {
-          const secs = windowRowDurationSeconds(row)
-          if (secs <= prev) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              message: t(
-                'Windows must be ordered by duration: each window must be strictly longer than the previous one.'
-              ),
-            })
-            break
-          }
-          prev = secs
+      ),
+    })
+    .superRefine((values, ctx) => {
+      // 固定分组商品只钉组，没有额度窗口：窗口规则不适用，改为要求目标分组非空
+      //（该值由 upgrade_group 承载）。
+      if (kind === 'group_pin') {
+        if (!values.upgrade_group?.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['upgrade_group'],
+            message: t('Please select a group'),
+          })
         }
-      }),
-  })
+        return
+      }
+      // 严格递增：后一个窗口时长必须大于前一个，保证列表天然按时长升序。
+      let prev = -1
+      for (const row of values.reset_windows) {
+        const secs = windowRowDurationSeconds(row)
+        if (secs <= prev) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['reset_windows'],
+            message: t(
+              'Windows must be ordered by duration: each window must be strictly longer than the previous one.'
+            ),
+          })
+          break
+        }
+        prev = secs
+      }
+    })
 }
 
 export type PlanFormValues = z.infer<ReturnType<typeof getPlanFormSchema>>
 
-function parseAllowedGroups(raw?: string): string[] {
+export function parseAllowedGroups(raw?: string): string[] {
   if (!raw) return []
   try {
     const parsed: unknown = JSON.parse(raw)
@@ -255,85 +271,5 @@ export function planValiditySeconds(values: {
       return Number(values.custom_seconds || 0)
     default:
       return v * 30 * 86400
-  }
-}
-
-// ---------------------------------------------------------------------------
-// 固定分组商品（GroupPin product）表单：与套餐表单共用同一套 drawer/Form 基建，
-// 仅字段子集不同；提交/回填映射对齐 AdminGroupPinProduct。
-// ---------------------------------------------------------------------------
-
-export function getGroupPinFormSchema(t: TFunction) {
-  return z.object({
-    title: z.string().min(1, t('Please enter plan title')),
-    subtitle: z.string(),
-    group: z.string().min(1, t('Please select a group')),
-    price_amount: z.coerce.number().min(0, t('Please enter amount')),
-    sort_order: z.coerce.number(),
-    allowed_groups: z.array(z.string()),
-    is_recommended: z.boolean(),
-    allow_balance_pay: z.boolean(),
-  })
-}
-
-export type GroupPinFormValues = z.infer<
-  ReturnType<typeof getGroupPinFormSchema>
->
-
-export const GROUP_PIN_FORM_DEFAULTS: GroupPinFormValues = {
-  title: '',
-  subtitle: '',
-  group: '',
-  price_amount: 0,
-  sort_order: 0,
-  allowed_groups: [],
-  is_recommended: false,
-  allow_balance_pay: true,
-}
-
-export function groupPinToFormValues(
-  product: GroupPinProductLike
-): GroupPinFormValues {
-  return {
-    title: product.title || '',
-    subtitle: product.subtitle || '',
-    group: product.group || '',
-    price_amount: Number(product.price_amount || 0),
-    sort_order: Number(product.sort_order || 0),
-    allowed_groups: parseAllowedGroups(product.allowed_groups),
-    is_recommended: product.is_recommended === true,
-    allow_balance_pay: product.allow_balance_pay !== false,
-  }
-}
-
-// 结构子集：AdminGroupPinProduct 满足即可，避免 lib 反向依赖 api 层类型。
-export interface GroupPinProductLike {
-  title?: string
-  subtitle?: string
-  group?: string
-  price_amount?: number
-  sort_order?: number
-  allowed_groups?: string
-  is_recommended?: boolean
-  allow_balance_pay?: boolean
-}
-
-export function groupPinFormToPayload(
-  values: GroupPinFormValues,
-  id?: number
-): GroupPinProductLike & { id?: number; enabled: true } {
-  return {
-    id,
-    title: values.title,
-    subtitle: values.subtitle,
-    group: values.group,
-    price_amount: Number(values.price_amount || 0),
-    sort_order: Number(values.sort_order || 0),
-    allowed_groups: values.allowed_groups.length
-      ? JSON.stringify(values.allowed_groups)
-      : '',
-    is_recommended: values.is_recommended,
-    allow_balance_pay: values.allow_balance_pay,
-    enabled: true,
   }
 }

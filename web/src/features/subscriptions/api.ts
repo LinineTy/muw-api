@@ -22,6 +22,7 @@ import type { SubscriptionSortBy } from './constants'
 import type {
   AdminUserSubscriptionSummary,
   ApiResponse,
+  GroupPinProduct,
   PlanRecord,
   PlanPayload,
   UserSubscriptionRecord,
@@ -284,23 +285,15 @@ export async function getGroups(): Promise<ApiResponse<string[]>> {
 }
 
 // ============================================================================
-// Group pin (固定分组) admin APIs
+// Group pin (固定分组)：商品与钉子
+// 商品在管理端与订阅套餐同表（见 lib/group-pin.ts 的行模型适配），用户端与套餐
+// 同网格（见 my-subscriptions 的目录卡片）。
 // ============================================================================
 
-export interface AdminGroupPinProduct {
-  id: number
-  title: string
-  subtitle: string
-  group: string
-  price_amount: number
-  enabled: boolean
-  is_recommended: boolean
-  allow_balance_pay?: boolean
-  sort_order: number
-  allowed_groups: string
-}
+export type { GroupPinProduct }
 
-export interface AdminGroupPin {
+/** 用户固定分组钉记录（管理端列表与用户端 /self 返回同一模型，released 仅留痕）。 */
+export interface GroupPin {
   id: number
   user_id: number
   group: string
@@ -314,16 +307,50 @@ export interface AdminGroupPin {
   release_reason: string
 }
 
+/** 当前用户 active 钉；无钉时 data 为 null。 */
+export async function getMyGroupPin(): Promise<ApiResponse<GroupPin | null>> {
+  const res = await api.get('/api/group_pin/self')
+  return res.data
+}
+
+/** 上架的固定分组商品（购买页）。 */
+export async function getGroupPinProducts(): Promise<
+  ApiResponse<GroupPinProduct[]>
+> {
+  const res = await api.get('/api/group_pin/products')
+  return res.data
+}
+
+/** 余额购买固定分组。 */
+export async function purchaseGroupPinBalance(
+  pinProductId: number
+): Promise<ApiResponse<{ message: string }>> {
+  const res = await api.post('/api/group_pin/balance/pay', {
+    pin_product_id: pinProductId,
+  })
+  return res.data
+}
+
+/** epay 购买固定分组（返回支付跳转参数）。 */
+export async function purchaseGroupPinEpay(params: {
+  pin_product_id: number
+  payment_method: string
+}): Promise<ApiResponse & { data?: unknown; url?: string }> {
+  const res = await api.post('/api/group_pin/epay/pay', params)
+  return res.data
+}
+
+/** 全部固定分组商品（含未上架）。 */
 export async function adminListGroupPinProducts(): Promise<
-  ApiResponse<AdminGroupPinProduct[]>
+  ApiResponse<GroupPinProduct[]>
 > {
   const res = await api.get('/api/group_pin/admin/products')
   return res.data
 }
 
 export async function adminSaveGroupPinProduct(
-  data: Partial<AdminGroupPinProduct>
-): Promise<ApiResponse<AdminGroupPinProduct>> {
+  data: GroupPinProduct
+): Promise<ApiResponse<GroupPinProduct>> {
   const res = await api.post('/api/group_pin/admin/product/save', data)
   return res.data
 }
@@ -339,7 +366,7 @@ export async function adminListGroupPins(params: {
   user_id?: number
   page?: number
   page_size?: number
-}): Promise<ApiResponse<{ items: AdminGroupPin[]; total: number }>> {
+}): Promise<ApiResponse<{ items: GroupPin[]; total: number }>> {
   const res = await api.get('/api/group_pin/admin/pins', { params })
   return res.data
 }

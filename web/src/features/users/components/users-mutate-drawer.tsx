@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
@@ -91,6 +91,7 @@ import {
 } from '../lib'
 import { type User } from '../types'
 import { UserQuotaDialog } from './user-quota-dialog'
+import { UserGroupPinSection } from './user-group-pin-section'
 import { useUsers } from './users-provider'
 
 type UsersMutateDrawerProps = {
@@ -107,6 +108,7 @@ export function UsersMutateDrawer({
   const { t } = useTranslation()
   const isUpdate = !!currentRow
   const { triggerRefresh } = useUsers()
+  const queryClient = useQueryClient()
   const currentUser = useAuthStore((s) => s.auth.user)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [quotaDialogOpen, setQuotaDialogOpen] = useState(false)
@@ -187,6 +189,8 @@ export function UsersMutateDrawer({
         )
         onOpenChange(false)
         triggerRefresh()
+        // 改组会自动建固定分组钉，钉区块要重新拉取。
+        void queryClient.invalidateQueries({ queryKey: ['admin-group-pins'] })
       } else {
         toast.error(
           result.message ||
@@ -539,6 +543,16 @@ export function UsersMutateDrawer({
                         <FormMessage />
                       </FormItem>
                     )}
+                  />
+                </SideDrawerSection>
+              )}
+
+              {/* 固定分组（更新）：管理员改组即自动建钉，这里查看/解除当前钉 */}
+              {isUpdate && currentRow && (
+                <SideDrawerSection>
+                  <UserGroupPinSection
+                    userId={currentRow.id}
+                    onChanged={refreshUserData}
                   />
                 </SideDrawerSection>
               )}
