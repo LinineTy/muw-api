@@ -636,6 +636,9 @@ func GetSelfUserById(id int) (*User, error) {
 		"group", "quota", "used_quota", "request_count", "aff_code", "aff_count",
 		"aff_quota", "aff_history", "inviter_id", "linux_do_id", "setting",
 		"stripe_customer", "auth_version",
+		// fork 独有列：buildSelfUserData 会读它们，漏选会让响应里这些字段恒为零值
+		// （activated 恒 false 会把所有已激活用户踢去 /activate 页）。
+		"activated", "group_auto", "avatar", "linux_do_trust_level",
 		"CASE WHEN password <> '' THEN 1 ELSE 0 END AS has_password",
 	}).First(&profile, "id = ?", id).Error
 	profile.User.HasPassword = profile.HasPassword
