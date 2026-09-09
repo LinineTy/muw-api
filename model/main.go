@@ -366,6 +366,12 @@ func migrateDB() error {
 	if err := ensureModelsContextWindowColumn(DB); err != nil {
 		return err
 	}
+	// 上游同步新增的 schema(task_plugins / login_encryption_keys 表、
+	// users.access_token_created_at 列):已到最新迁移戳的库走"跳过 AutoMigrate"
+	// 路径,必须在这里幂等补齐,否则升级库启动即报 no such table。
+	if err := ensureUpstreamSyncSchema(DB); err != nil {
+		return err
+	}
 	applied, err := readAppliedMigrationNames(DB)
 	if err != nil {
 		return err
@@ -1118,6 +1124,22 @@ func ensureChannelCodingPlanAutoControlColumns(db *gorm.DB) error {
 			if err := db.Migrator().AddColumn(&Channel{}, column); err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+// ensureUpstreamSyncSchema 幂等补齐上游同步引入的 schema：task_plugins /
+// login_encryption_keys 两张新表，以及 users.access_token_created_at 新列。
+// 它们都在 autoMigrateAll 的模型列表里，但已到最新迁移戳的库会跳过 AutoMigrate，
+// 因此这里显式补，保证升级库与全新建库的 schema 一致。
+func ensureUpstreamSyncSchema(db *gorm.DB) error {
+	if err := db.AutoMigrate(&LoginEncryptionKey{}, &TaskPlugin{}); err != nil {
+		return err
+	}
+	if db.Migrator().HasTable(&User{}) && !db.Migrator().HasColumn(&User{}, "access_token_created_at") {
+		if err := db.Migrator().AddColumn(&User{}, "access_token_created_at"); err != nil {
+			return err
 		}
 	}
 	return nil
