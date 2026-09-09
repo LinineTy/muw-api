@@ -64,6 +64,7 @@ import {
   CODING_PLAN_PROVIDER_DISABLED,
   CODING_PLAN_PROVIDER_OPTIONS,
   detectCodingPlanProvider,
+  CHANNEL_TYPE_TASK_PLUGIN,
   MODEL_FETCHABLE_TYPES,
 } from '../constants'
 import {
@@ -87,6 +88,7 @@ import {
 import { parseUpstreamUpdateMeta } from '../lib/upstream-update-utils'
 import type { Channel } from '../types'
 import { ChannelRowActionsLayoutContext } from './channel-row-actions-context'
+import { TaskPluginChannelBadge } from './channel-type-badge'
 import { useChannels } from './channels-provider'
 import { DataTableRowActions } from './data-table-row-actions'
 import { DataTableTagRowActions } from './data-table-tag-row-actions'
@@ -918,6 +920,13 @@ export function useChannelsColumns(
                   </Tooltip>
                 </TooltipProvider>
               )}
+              {type === CHANNEL_TYPE_TASK_PLUGIN ? (
+                <TaskPluginChannelBadge
+                  pluginKey={
+                    parseChannelSettings(channel.setting)?.task_plugin_key
+                  }
+                />
+              ) : (
               <TooltipProvider delay={300}>
                 <Tooltip>
                   <TooltipTrigger
@@ -938,6 +947,7 @@ export function useChannelsColumns(
                   <TooltipContent side='top'>{typeName}</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+              )}
             </div>
           )
         },

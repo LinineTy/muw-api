@@ -58,7 +58,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
+import {
+  formatQuotaWithCurrency,
+  getCurrencyDisplay,
+  getCurrencyLabel,
+} from '@/lib/currency'
 import {
   formatQuota,
   getEditableQuotaStep,
@@ -81,6 +85,10 @@ import {
   transformRedemptionToFormDefaults,
 } from '../lib'
 import type { Redemption } from '../types'
+import {
+  RedemptionsExportDialog,
+  type RedemptionExportData,
+} from './redemptions-export-dialog'
 import { useRedemptions } from './redemptions-provider'
 
 type RedemptionsMutateDrawerProps = {
@@ -99,6 +107,9 @@ export function RedemptionsMutateDrawer({
   const redemptionId = currentRow?.id
   const { triggerRefresh } = useRedemptions()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [createdCodes, setCreatedCodes] = useState<RedemptionExportData | null>(
+    null
+  )
   const [redemptionLoadState, setRedemptionLoadState] = useState<
     'idle' | 'loading' | 'ready' | 'error'
   >('idle')
@@ -202,6 +213,15 @@ export function RedemptionsMutateDrawer({
                 })
               : t(SUCCESS_MESSAGES.REDEMPTION_CREATED)
           )
+          if (result.data?.length) {
+            setCreatedCodes({
+              keys: result.data,
+              name: basePayload.name,
+              quota: formatQuotaWithCurrency(basePayload.quota, {
+                abbreviate: false,
+              }),
+            })
+          }
           onOpenChange(false)
           triggerRefresh()
         }
@@ -245,7 +265,8 @@ export function RedemptionsMutateDrawer({
   }
 
   return (
-    <Sheet
+    <>
+      <Sheet
       open={open}
       onOpenChange={(v) => {
         onOpenChange(v)
@@ -512,6 +533,13 @@ export function RedemptionsMutateDrawer({
           </Button>
         </SheetFooter>
       </SheetContent>
-    </Sheet>
+      </Sheet>
+      {createdCodes && (
+        <RedemptionsExportDialog
+          data={createdCodes}
+          onClose={() => setCreatedCodes(null)}
+        />
+      )}
+    </>
   )
 }

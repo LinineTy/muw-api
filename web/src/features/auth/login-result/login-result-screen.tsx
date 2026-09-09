@@ -19,7 +19,7 @@ import dayjs from '@/lib/dayjs'
 import {
   loginMethodLabel,
   sessionDevice,
-} from '@/features/profile/components/login-session-utils'
+} from '@/features/security/components/login-session-utils'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { LOGIN_RESULT_REDIRECT_SECONDS } from '../constants'

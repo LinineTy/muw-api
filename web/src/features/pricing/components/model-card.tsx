@@ -31,6 +31,7 @@ import {
 import { parseTags } from '../lib/filters'
 import { isTokenBasedModel } from '../lib/model-helpers'
 import { formatFixedPrice, formatGroupPrice } from '../lib/price'
+import { taskPriceLabel } from '../lib/task-price-display'
 import type { PricingModel, TokenUnit } from '../types'
 import { ModelBillingModeBadge } from './model-billing-mode-badge'
 
@@ -58,7 +59,7 @@ export interface ModelCardProps {
  * The whole card is clickable and opens the details drawer.
  */
 export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const tokenUnit = props.tokenUnit ?? ('M' as TokenUnit)
   const priceRate = props.priceRate ?? 1
   const usdExchangeRate = props.usdExchangeRate ?? 1
@@ -129,11 +130,13 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     )
   } else if (dynamicSummary && dynamicSummary.entries.length > 0) {
     // Dynamic pricing: base entries (input/output) + cache entries (read/write),
-    // joined with the same "·" separator as token-based models.
+    // joined with the same "·" separator as token-based models. Task-usage
+    // entries carry a schema label (raw field name) instead of an i18n key, so
+    // they resolve through the usage-schema description.
     const priceItems = [
       ...dynamicSummary.primaryEntries,
       ...dynamicSummary.secondaryEntries.filter(
-        (entry) => entry.variable.group === 'cache'
+        (entry) => entry.variable?.group === 'cache'
       ),
     ]
     priceSummary = (
@@ -147,7 +150,9 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
               <span className='text-muted-foreground/40 -mx-1'>·</span>
             )}
             <span className='text-muted-foreground'>
-              {t(entry.shortLabel)}{' '}
+              {entry.labelKind === 'schema'
+                ? taskPriceLabel(entry.description, entry.field, i18n.language)
+                : t(entry.shortLabel)}{' '}
               <span className='text-foreground font-mono font-semibold'>
                 {entry.formatted}
               </span>

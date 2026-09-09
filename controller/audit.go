@@ -9,12 +9,12 @@ import (
 )
 
 // auditOperatorInfo 从上下文构建操作者身份信息（管理员 id/用户名/角色）。
-func auditOperatorInfo(c *gin.Context) map[string]interface{} {
-	return map[string]interface{}{
-		"admin_id":       c.GetInt("id"),
-		"admin_username": c.GetString("username"),
-		"admin_role":     c.GetInt("role"),
-		"auth_method":    auditAuthMethod(c),
+func auditOperatorInfo(c *gin.Context) *model.AuditAdminInfo {
+	return &model.AuditAdminInfo{
+		AdminID:       c.GetInt("id"),
+		AdminUsername: c.GetString("username"),
+		AdminRole:     c.GetInt("role"),
+		AuthMethod:    auditAuthMethod(c),
 	}
 }
 
@@ -33,15 +33,15 @@ func markAuditLogged(c *gin.Context) {
 
 // recordManageAudit 记录一条由操作者本人归属的管理/高危审计日志（资源类操作：
 // 渠道 / 系统设置 / 兑换码等）。content 由 action+params 自动渲染。
-func recordManageAudit(c *gin.Context, action string, params map[string]interface{}) {
+func recordManageAudit(c *gin.Context, action string, params map[string]any) {
 	recordManageAuditFor(c, c.GetInt("id"), action, params)
 }
 
 // recordManageAuditFor 记录一条管理审计日志，日志归属于操作者；targetUserId
 // 只表示被操作用户，用于在结构化参数中保留目标上下文。
-func recordManageAuditFor(c *gin.Context, targetUserId int, action string, params map[string]interface{}) {
+func recordManageAuditFor(c *gin.Context, targetUserId int, action string, params map[string]any) {
 	if params == nil {
-		params = map[string]interface{}{}
+		params = map[string]any{}
 	}
 	operatorUserId := c.GetInt("id")
 	if _, ok := params["target_user_id"]; !ok && targetUserId > 0 && targetUserId != operatorUserId {
@@ -49,7 +49,7 @@ func recordManageAuditFor(c *gin.Context, targetUserId int, action string, param
 	}
 	// 手动埋点的 action 均有模板；未登记时回退 action 本身。
 	content, _ := common.AuditContentEN(action, params)
-	model.RecordOperationAuditLog(operatorUserId, content, c.ClientIP(), action, params, auditOperatorInfo(c), nil)
+	model.RecordOperationAuditLog(operatorUserId, c.GetInt("role"), content, c.ClientIP(), action, params, auditOperatorInfo(c), nil, c)
 	markAuditLogged(c)
 }
 
@@ -57,5 +57,28 @@ func recordManageAuditFor(c *gin.Context, targetUserId int, action string, param
 // 这类日志没有管理员操作者，不写 admin_info；同时不依赖 AdminAuth/RootAuth 的兜底。
 func recordUserSecurityAudit(c *gin.Context, userId int, action string, params map[string]interface{}) {
 	content, _ := common.AuditContentEN(action, params)
-	model.RecordOperationAuditLog(userId, content, c.ClientIP(), action, params, nil, nil)
+	model.RecordOperationAuditLog(userId, c.GetInt("role"), content, c.ClientIP(), action, params, nil, nil, c)
+}
+
+// tokenAuditParams 返回当前请求的 API token 审计参数（中间件 TokenOperationAudit 已
+// 写入 ContextKeyTokenAuditParams）；缺失时初始化一个空集合。
+func tokenAuditParams(c *gin.Context) model.AuditFields {
+	params, ok := common.GetContextKeyType[model.AuditFields](c, constant.ContextKeyTokenAuditParams)
+	if !ok {
+		params = model.AuditFields{}
+		common.SetContextKey(c, constant.ContextKeyTokenAuditParams, params)
+	}
+	return params
+}
+
+// tokenBatchAuditParams 在 tokenAuditParams 基础上补充批量操作的规模信息。
+func tokenBatchAuditParams(c *gin.Context, ids []int) model.AuditFields {
+	params := tokenAuditParams(c)
+	params["total"] = len(ids)
+	// Bound audit payloads without changing the batch operation's limits.
+	params["requested_ids"] = append([]int{}, ids[:min(len(ids), 100)]...)
+	if len(ids) > 100 {
+		params["requested_ids_truncated"] = true
+	}
+	return params
 }

@@ -37,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ToggleMenuItem, TogglePill } from '@/components/ui/responsive-toggle'
+import { useCanEditModelPricing } from '@/features/model-pricing/api'
 
 import { useModels } from './models-provider'
 
@@ -49,6 +50,7 @@ export function ModelsPrimaryButtons({
 }) {
   const { t } = useTranslation()
   const { setOpen, setCurrentRow } = useModels()
+  const canPrice = useCanEditModelPricing()
 
   const handleCreateModel = () => {
     setCurrentRow(null)
@@ -72,7 +74,7 @@ export function ModelsPrimaryButtons({
   }
 
   return (
-    <div className='flex items-center gap-2'>
+    <div className='flex flex-wrap items-center gap-2'>
       {/* Batch Operations（移动端并入下方 More Actions） */}
       <TogglePill
         id='models-batch-mode'
@@ -82,6 +84,19 @@ export function ModelsPrimaryButtons({
         onCheckedChange={onBatchModeChange}
       />
 
+      <Button onClick={handleSync} variant='outline' size='sm'>
+        {t('Sync metadata')}
+      </Button>
+      {canPrice && (
+        <Button
+          onClick={() => setOpen('price-sync')}
+          variant='outline'
+          size='sm'
+        >
+          {t('Sync pricing')}
+        </Button>
+      )}
+
       {/* Create Model */}
       <Button onClick={handleCreateModel} size='sm'>
         <Plus className='h-4 w-4' />
@@ -90,7 +105,11 @@ export function ModelsPrimaryButtons({
 
       {/* More Actions */}
       <DropdownMenu>
-        <DropdownMenuTrigger render={<Button variant='outline' size='sm' />}>
+        <DropdownMenuTrigger
+          render={
+            <Button variant='outline' size='sm' aria-label={t('Open menu')} />
+          }
+        >
           <MoreHorizontal className='h-4 w-4' />
         </DropdownMenuTrigger>
         <DropdownMenuContent align='end' className='min-w-56'>

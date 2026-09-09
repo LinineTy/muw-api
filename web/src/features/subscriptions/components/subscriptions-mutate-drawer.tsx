@@ -47,14 +47,7 @@ import {
 } from '@/components/ui/form'
 import { IconBadge } from '@/components/ui/icon-badge'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Sheet,
   SheetClose,
@@ -431,7 +424,7 @@ export function SubscriptionsMutateDrawer({
                             ? [{ value: field.value, label: field.value }]
                             : []),
                         ]}
-                        onValueChange={(v) =>
+onValueChange={(v) =>
                           field.onChange(v === '__none__' ? '' : v)
                         }
                         value={field.value || ''}

@@ -25,7 +25,7 @@ import { AuthLayout } from '../auth-layout'
 
 type OAuthCallbackScreenProps = {
   provider: string
-  mode: 'login' | 'bind' | 'refresh'
+  mode: 'login' | 'bind' | 'verify' | 'refresh'
 }
 
 type ProviderMeta = {
@@ -72,10 +72,12 @@ export function OAuthCallbackScreen({
   }, [provider])
 
   const providerLabel = t(label)
-  const isPopupMode = mode === 'bind' || mode === 'refresh'
+  const isPopupMode = mode !== 'login'
 
-  let headline: string
-  let description: string
+  let headline = t('Signing you in with {{provider}}', {
+    provider: providerLabel,
+  })
+  let description = t('Hang tight while we finish connecting your account.')
   if (mode === 'refresh') {
     headline = t('Refreshing your {{provider}} trust level', {
       provider: providerLabel,
@@ -84,16 +86,18 @@ export function OAuthCallbackScreen({
       'Hang tight while we re-authorize with {{provider}} and sync your level.',
       { provider: providerLabel }
     )
-  } else if (isPopupMode) {
+  } else if (mode === 'bind') {
     headline = t('Binding your {{provider}} account', {
       provider: providerLabel,
     })
-    description = t('Hang tight while we securely link this account to your profile.')
-  } else {
-    headline = t('Signing you in with {{provider}}', {
+    description = t(
+      'Hang tight while we securely link this account to your profile.'
+    )
+  } else if (mode === 'verify') {
+    headline = t('Verifying your {{provider}} account', {
       provider: providerLabel,
     })
-    description = t('Hang tight while we finish connecting your account.')
+    description = t('Confirming the account linked to your profile.')
   }
 
   const secondaryNote = isPopupMode

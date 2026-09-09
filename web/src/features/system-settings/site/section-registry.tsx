@@ -45,6 +45,7 @@ const SITE_SECTIONS = [
           GlassBlur: settings.GlassBlur,
           Footer: settings.Footer,
           ServerAddress: settings.ServerAddress,
+          TaskPublicAddress: settings.TaskPublicAddress,
         }}
       />
     ),
