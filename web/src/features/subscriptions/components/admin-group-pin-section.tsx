@@ -1,27 +1,14 @@
 // @muw-owned
-
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { Badge } from '@/components/ui/badge'
+import { ConfirmDialog } from '@/components/confirm-dialog'
+import { DataTablePage, useDataTable } from '@/components/data-table'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { SubscriptionsMutateDrawer } from './subscriptions-mutate-drawer'
+
 import {
   adminDeleteGroupPinProduct,
   adminListGroupPinProducts,
@@ -29,20 +16,44 @@ import {
   adminReleaseGroupPin,
   type AdminGroupPinProduct,
 } from '../api'
+import { useGroupPinColumns, useGroupPinProductColumns } from './admin-group-pin-columns'
+import { SubscriptionsMutateDrawer } from './subscriptions-mutate-drawer'
 
+/**
+ * 固定分组管理（订阅页 tab）：商品表 + 用户钉子表，
+ * 与订阅查看页同写法（useDataTable + DataTablePage：工具栏搜索/分页/列行为全对齐）。
+ */
 export function AdminGroupPinSection() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<AdminGroupPinProduct | null>(null)
+  const [deleting, setDeleting] = useState<AdminGroupPinProduct | null>(null)
+  const [pinSearch, setPinSearch] = useState('')
+  const [pinPagination, setPinPagination] = useState({
+    pageIndex: 0,
+    pageSize: 20,
+  })
 
   const productsQuery = useQuery({
     queryKey: ['admin-group-pin-products'],
     queryFn: adminListGroupPinProducts,
   })
+  const searchUserId = Number.parseInt(pinSearch.trim(), 10)
   const pinsQuery = useQuery({
-    queryKey: ['admin-group-pins'],
-    queryFn: () => adminListGroupPins({ page: 1, page_size: 50 }),
+    queryKey: [
+      'admin-group-pins',
+      pinPagination.pageIndex + 1,
+      pinPagination.pageSize,
+      Number.isNaN(searchUserId) ? 0 : searchUserId,
+    ],
+    queryFn: () =>
+      adminListGroupPins({
+        page: pinPagination.pageIndex + 1,
+        page_size: pinPagination.pageSize,
+        user_id: Number.isNaN(searchUserId) ? undefined : searchUserId,
+      }),
+    placeholderData: (previousData) => previousData,
   })
 
   const invalidateAll = () => {
@@ -54,10 +65,11 @@ export function AdminGroupPinSection() {
     mutationFn: adminDeleteGroupPinProduct,
     onSuccess: (res) => {
       if (res.success) {
-        toast.success(t('Deleted'))
+        toast.success(t('Deleted successfully'))
+        setDeleting(null)
         invalidateAll()
       } else {
-        toast.error(res.message)
+        toast.error(res.message || t('Operation failed'))
       }
     },
   })
@@ -69,21 +81,53 @@ export function AdminGroupPinSection() {
         toast.success(t('Fixed group removed'))
         invalidateAll()
       } else {
-        toast.error(res.message)
+        toast.error(res.message || t('Operation failed'))
       }
     },
   })
 
   const products = productsQuery.data?.data ?? []
   const pins = pinsQuery.data?.data?.items ?? []
+  const pinsTotal = pinsQuery.data?.data?.total || 0
+
+  // ---- 商品表：客户端搜索（数据量小，同订阅套餐表配置） ----
+  const productColumns = useGroupPinProductColumns({
+    onEdit: (product) => {
+      setEditing(product)
+      setEditorOpen(true)
+    },
+    onDelete: (product) => setDeleting(product),
+  })
+  const { table: productTable } = useDataTable({
+    data: products,
+    columns: productColumns,
+    withFacetedRowModel: false,
+  })
+
+  // ---- 钉子表：服务端分页 + user_id 过滤（同历史订阅表的手动模式） ----
+  const pinColumns = useGroupPinColumns({
+    onRelease: (pin) => releaseMutation.mutate(pin.id),
+  })
+  const { table: pinTable } = useDataTable({
+    data: pins,
+    columns: pinColumns,
+    globalFilter: pinSearch,
+    onGlobalFilterChange: setPinSearch,
+    globalFilterFn: () => true,
+    manualFiltering: true,
+    manualPagination: true,
+    totalCount: pinsTotal,
+    pagination: pinPagination,
+    onPaginationChange: setPinPagination,
+  })
 
   return (
-    <div className='flex flex-col gap-4'>
-      <Card>
-        <CardHeader className='flex flex-row items-center justify-between'>
-          <CardTitle className='text-base'>
+    <div className='flex h-full min-h-0 flex-col gap-4'>
+      <section className='flex flex-col gap-3'>
+        <div className='flex items-center justify-between'>
+          <h3 className='text-sm font-semibold tracking-tight'>
             {t('Fixed Group Products')}
-          </CardTitle>
+          </h3>
           <Button
             size='sm'
             onClick={() => {
@@ -93,115 +137,71 @@ export function AdminGroupPinSection() {
           >
             {t('New Product')}
           </Button>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('Title')}</TableHead>
-                <TableHead>{t('Group')}</TableHead>
-                <TableHead>{t('Price')}</TableHead>
-                <TableHead>{t('Status')}</TableHead>
-                <TableHead className='text-right'>{t('Actions')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {products.map((product) => (
-                <TableRow key={product.id}>
-                  <TableCell>{product.title}</TableCell>
-                  <TableCell>
-                    <Badge variant='secondary'>{product.group}</Badge>
-                  </TableCell>
-                  <TableCell>${product.price_amount.toFixed(2)}</TableCell>
-                  <TableCell>
-                    <Badge variant={product.enabled ? 'default' : 'outline'}>
-                      {product.enabled ? t('Enabled') : t('Disabled')}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className='space-x-2 text-right'>
-                    <Button
-                      size='sm'
-                      variant='outline'
-                      onClick={() => {
-                        setEditing(product)
-                        setEditorOpen(true)
-                      }}
-                    >
-                      {t('Edit')}
-                    </Button>
-                    <Button
-                      size='sm'
-                      variant='destructive'
-                      onClick={() => deleteMutation.mutate(product.id)}
-                    >
-                      {t('Delete')}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+        </div>
+        <DataTablePage
+          table={productTable}
+          columns={productColumns}
+          isLoading={productsQuery.isLoading}
+          emptyTitle={t('No fixed group products')}
+          emptyDescription={t(
+            'Click "New Product" to create your first fixed group product'
+          )}
+          skeletonKeyPrefix='admin-group-pin-products-skeleton'
+          toolbarProps={{
+            searchPlaceholder: t('Filter products...'),
+          }}
+          applyHeaderSize
+        />
+      </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className='text-base'>
-            {t('User Fixed Group Pins')}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('User ID')}</TableHead>
-                <TableHead>{t('Group')}</TableHead>
-                <TableHead>{t('Source')}</TableHead>
-                <TableHead>{t('Status')}</TableHead>
-                <TableHead className='text-right'>{t('Actions')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pins.map((pin) => (
-                <TableRow key={pin.id}>
-                  <TableCell>{pin.user_id}</TableCell>
-                  <TableCell>
-                    <Badge variant='secondary'>{pin.group}</Badge>
-                  </TableCell>
-                  <TableCell>{pin.source}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        pin.status === 'active' ? 'default' : 'outline'
-                      }
-                    >
-                      {pin.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className='text-right'>
-                    {pin.status === 'active' && (
-                      <Button
-                        size='sm'
-                        variant='outline'
-                        disabled={releaseMutation.isPending}
-                        onClick={() => releaseMutation.mutate(pin.id)}
-                      >
-                        {t('Unpin')}
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <section className='flex min-h-0 flex-1 flex-col gap-3'>
+        <h3 className='text-sm font-semibold tracking-tight'>
+          {t('User Fixed Group Pins')}
+        </h3>
+        <DataTablePage
+          table={pinTable}
+          columns={pinColumns}
+          isLoading={pinsQuery.isLoading}
+          isFetching={pinsQuery.isFetching}
+          emptyTitle={t('No user group pins')}
+          emptyDescription={t('No user group pins')}
+          skeletonKeyPrefix='admin-group-pins-skeleton'
+          applyHeaderSize
+          toolbarProps={{
+            searchPlaceholder: t('Filter by user ID'),
+          }}
+          className='min-h-0 flex-1'
+        />
+      </section>
 
       {/* 商品编辑复用订阅配置抽屉（特殊订阅，顶部 Tabs 切换类型） */}
       <SubscriptionsMutateDrawer
         open={editorOpen}
         onOpenChange={(v) => !v && setEditorOpen(false)}
         groupPinProduct={editing ?? undefined}
+      />
+
+      <ConfirmDialog
+        open={!!deleting}
+        onOpenChange={(v) => !v && setDeleting(null)}
+        title={
+          <>
+            <Trash2 className='h-4 w-4' />
+            {t('Confirm delete')}
+          </>
+        }
+        desc={t(
+          'Delete fixed group product "{{title}}"? This cannot be undone.',
+          { title: deleting?.title ?? '' }
+        )}
+        handleConfirm={() => {
+          if (deleting) {
+            deleteMutation.mutate(deleting.id)
+          }
+        }}
+        isLoading={deleteMutation.isPending}
+        confirmText={t('Delete')}
+        destructive
       />
     </div>
   )

@@ -303,7 +303,7 @@ export function MultiKeyManageDialog({
               value={statusFilter === null ? 'all' : statusFilter.toString()}
               onValueChange={(v) => v !== null && handleStatusFilterChange(v)}
             >
-              <SelectTrigger className='w-40'>
+              <SelectTrigger>
                 <SelectValue placeholder={t('All Status')} />
               </SelectTrigger>
               <SelectContent alignItemWithTrigger={false}>

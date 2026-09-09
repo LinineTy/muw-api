@@ -243,7 +243,7 @@ function GroupNameSelect(props: GroupNameSelectProps) {
         if (typeof v === 'string' && v !== '') props.onValueChange(v)
       }}
     >
-      <SelectTrigger className={props.className ?? 'w-48'}>
+      <SelectTrigger className={props.className}>
         <SelectValue placeholder={props.placeholder} />
       </SelectTrigger>
       <SelectContent alignItemWithTrigger={false}>

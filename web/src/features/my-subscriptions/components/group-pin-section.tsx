@@ -1,27 +1,12 @@
 // @muw-owned
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
-import { Sparkles } from 'lucide-react'
+import { Pin, Sparkles } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { GroupBadge } from '@/components/group-badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useMySubscriptions } from '@/features/my-subscriptions/components/my-subscriptions-provider'
 import {
@@ -30,182 +15,10 @@ import {
   purchaseGroupPinEpay,
   type GroupPinProduct,
 } from '@/features/profile/api'
+import { ProductPurchaseDialog } from '@/features/subscriptions/components/dialogs/product-purchase-dialog'
 import { getEpayMethods } from '../lib/helpers'
-import type { PaymentMethod } from '@/features/wallet/types'
-import { formatQuota } from '@/lib/format'
 import { getCurrencyDisplay } from '@/lib/currency'
-import { DEFAULT_CURRENCY_CONFIG } from '@/stores/system-config-store'
 import { cn } from '@/lib/utils'
-
-// ---- 支付对话框：固定分组购买（Epay 在线支付 / 余额兑换，与订阅购买一致） ----
-
-function GroupPinPayDialog({
-  product,
-  balance,
-  epayMethods,
-  onClose,
-}: {
-  product: GroupPinProduct
-  balance: number
-  epayMethods: PaymentMethod[]
-  onClose: () => void
-}) {
-  const { t } = useTranslation()
-  const queryClient = useQueryClient()
-  const { meta: currencyMeta } = getCurrencyDisplay()
-  const currencySymbol = currencyMeta.kind === 'tokens' ? '$' : currencyMeta.symbol
-  const quotaPerUnit =
-    currencyMeta.kind === 'tokens' ? DEFAULT_CURRENCY_CONFIG.quotaPerUnit : 1
-  const price = Number(product.price_amount || 0).toFixed(2)
-  const balanceCost = Math.max(0, Math.ceil(Number(product.price_amount || 0) * quotaPerUnit))
-  const insufficientBalance = balance < balanceCost
-
-  const hasEpay = epayMethods.length > 0
-  const allowBalance = product.allow_balance_pay !== false
-  const [method, setMethod] = useState(
-    hasEpay ? `epay:${epayMethods[0].type}` : allowBalance ? 'balance' : ''
-  )
-  const [paying, setPaying] = useState(false)
-  const isBalance = method === 'balance'
-
-  useEffect(() => {
-    if (!hasEpay && allowBalance) setMethod('balance')
-    if (!allowBalance && method === 'balance') setMethod(hasEpay ? `epay:${epayMethods[0].type}` : '')
-  }, [hasEpay, allowBalance])
-
-  const finish = () => {
-    toast.success(t('Fixed group activated'))
-    queryClient.invalidateQueries({ queryKey: ['group-pin'] })
-    onClose()
-  }
-
-  const payBalance = useMutation({
-    mutationFn: () => purchaseGroupPinBalance(product.id),
-    onSettled: () => setPaying(false),
-    onSuccess: (res) => {
-      if (res.success) {
-        finish()
-      } else {
-        toast.error(res.message ?? t('Purchase failed'))
-      }
-    },
-    onError: () => toast.error(t('Purchase failed')),
-  })
-
-  const payEpay = useMutation({
-    mutationFn: () =>
-      purchaseGroupPinEpay({
-        pin_product_id: product.id,
-        payment_method: method.slice(5),
-      }),
-    onSettled: () => setPaying(false),
-    onSuccess: (res) => {
-      if (res.message === 'success' && res.url) {
-        const form = document.createElement('form')
-        form.action = res.url
-        form.method = 'POST'
-        form.target = '_blank'
-        Object.entries(res.data || {}).forEach(([key, value]) => {
-          const input = document.createElement('input')
-          input.type = 'hidden'
-          input.name = key
-          input.value = String(value)
-          form.appendChild(input)
-        })
-        document.body.appendChild(form)
-        form.submit()
-        document.body.removeChild(form)
-        toast.success(t('Payment initiated'))
-        onClose()
-      } else {
-        toast.error(
-          res.message && res.message !== 'success'
-            ? res.message
-            : t('Payment request failed')
-        )
-      }
-    },
-    onError: () => toast.error(t('Payment request failed')),
-  })
-
-  const paymentItems = [
-    ...epayMethods.map((m) => ({
-      value: `epay:${m.type}`,
-      label: m.name || m.type,
-    })),
-    ...(allowBalance ? [{ value: 'balance', label: t('Balance') }] : []),
-  ]
-  const selectedPaymentLabel =
-    paymentItems.find((it) => it.value === method)?.label ?? method
-
-  return (
-    <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {t('Subscribe Now')} — {product.title}
-          </DialogTitle>
-        </DialogHeader>
-        <div className='space-y-3 py-2'>
-          <p className='text-muted-foreground text-xs'>
-            {t('Select payment method')}
-          </p>
-          <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
-            <Select
-              items={paymentItems}
-              value={method}
-              onValueChange={(v) => v !== null && setMethod(v)}
-            >
-              <SelectTrigger className='flex-1'>
-                <SelectValue>{selectedPaymentLabel}</SelectValue>
-              </SelectTrigger>
-              <SelectContent alignItemWithTrigger={false}>
-                <SelectGroup>
-                  {paymentItems.map((it) => (
-                    <SelectItem key={it.value} value={it.value}>
-                      {it.label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-            <Button
-              disabled={paying || (isBalance && insufficientBalance)}
-              onClick={() => (isBalance ? payBalance.mutate() : payEpay.mutate())}
-            >
-              {isBalance ? t('Subscribe Now') : t('Pay')}
-            </Button>
-          </div>
-          {isBalance && (
-            <div className='text-muted-foreground grid gap-1 text-xs'>
-              <div className='flex justify-between'>
-                <span>{t('Required')}</span>
-                <span>
-                  {currencySymbol}
-                  {price}
-                </span>
-              </div>
-              <div className='flex justify-between'>
-                <span>{t('Available')}</span>
-                <span>{formatQuota(balance)}</span>
-              </div>
-            </div>
-          )}
-          {isBalance && insufficientBalance && (
-            <p className='text-destructive text-xs'>
-              {t('Insufficient balance')}
-            </p>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant='outline' onClick={onClose}>
-            {t('Cancel')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
 
 // ---- 固定分组商品区块：卡片结构与订阅套餐卡片一致 ----
 
@@ -303,6 +116,7 @@ function GroupPinCard({
  */
 export function GroupPinCatalogSection() {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const { topupInfo, userQuota } = useMySubscriptions()
   const [buying, setBuying] = useState<GroupPinProduct | null>(null)
 
@@ -348,11 +162,57 @@ export function GroupPinCatalogSection() {
         ))}
       </div>
       {buying && (
-        <GroupPinPayDialog
-          product={buying}
-          balance={userQuota}
+        <ProductPurchaseDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              setBuying(null)
+            }
+          }}
+          title={
+            <>
+              <Pin className='h-5 w-5' />
+              {t('Purchase Fixed Group')}
+            </>
+          }
+          summaryRows={[
+            {
+              key: 'title',
+              label: t('Product Name'),
+              value: buying.title,
+            },
+            {
+              key: 'group',
+              label: t('Pinned Group'),
+              value: <GroupBadge group={buying.group} />,
+            },
+            {
+              key: 'validity',
+              label: t('Validity Period'),
+              value: t('Permanent'),
+            },
+          ]}
+          priceAmount={Number(buying.price_amount || 0)}
+          allowBalancePay={buying.allow_balance_pay !== false}
+          userQuota={userQuota}
+          enableOnlineTopUp={!!topupInfo?.enable_online_topup}
           epayMethods={epayMethods}
-          onClose={() => setBuying(null)}
+          onPayEpay={async (paymentMethod) => {
+            const res = await purchaseGroupPinEpay({
+              pin_product_id: buying.id,
+              payment_method: paymentMethod,
+            })
+            return {
+              message: res.message,
+              url: res.url,
+              data: res.data as Record<string, unknown> | undefined,
+            }
+          }}
+          onPayBalance={() => purchaseGroupPinBalance(buying.id)}
+          successMessage={t('Fixed group activated')}
+          onPurchaseSuccess={() => {
+            void queryClient.invalidateQueries({ queryKey: ['group-pin'] })
+          }}
         />
       )}
     </section>

@@ -246,7 +246,7 @@ function GroupSection(props: GroupSectionProps) {
                     props.onUpdate(rule._id, 'visible', v === 'visible')
                   }
                 >
-                  <SelectTrigger className='w-[130px]'>
+                  <SelectTrigger>
                     <SelectValue>
                       <StatusBadge
                         label={rule.visible ? t('Extra visible') : t('Hidden')}

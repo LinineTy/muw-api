@@ -562,7 +562,7 @@ export function UpstreamConflictDialog({
                           setPageIndex(0)
                         }}
                       >
-                        <SelectTrigger className='h-8 w-[70px] text-xs sm:h-8 sm:w-[72px]'>
+                        <SelectTrigger className='h-8 text-xs sm:h-8'>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent alignItemWithTrigger={false}>

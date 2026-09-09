@@ -1775,7 +1775,7 @@ export function ParamOverrideEditorDialog(
               setTemplatePresetKey(v || 'operations_default')
             }
           >
-            <SelectTrigger className='h-8 w-[220px]'>
+            <SelectTrigger className='h-8'>
               <SelectValue />
             </SelectTrigger>
             <SelectContent alignItemWithTrigger={false}>
@@ -2379,7 +2379,7 @@ function RuleEditor(ruleEditorProps: RuleEditorProps) {
                   })
                 }
               >
-                <SelectTrigger className='h-7 w-[120px] text-xs'>
+                <SelectTrigger className='h-7 text-xs'>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent alignItemWithTrigger={false}>
@@ -3202,7 +3202,7 @@ function SyncFieldsEditor(syncFieldsEditorProps: SyncFieldsEditorProps) {
                 )
               }
             >
-              <SelectTrigger className='h-8 w-[110px] text-xs'>
+              <SelectTrigger className='h-8 text-xs'>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent alignItemWithTrigger={false}>
@@ -3259,7 +3259,7 @@ function SyncFieldsEditor(syncFieldsEditorProps: SyncFieldsEditorProps) {
                 )
               }
             >
-              <SelectTrigger className='h-8 w-[110px] text-xs'>
+              <SelectTrigger className='h-8 text-xs'>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent alignItemWithTrigger={false}>

@@ -1,5 +1,8 @@
 {
   "translation": {
+    "360": "360",
+    "1000": "1000",
+    "10000": "10000",
     "\"default\": \"us-central1\", \"claude-3-5-sonnet-20240620\": \"europe-west1\"": "\"default\": \"us-central1\", \"claude-3-5-sonnet-20240620\": \"europe-west1\"",
     "#1 App": "#1 Приложение",
     "#1 Model": "#1 Модель",
@@ -41,8 +44,6 @@
     "1. Create an application in your Gotify server": "1. Создайте приложение на вашем сервере Gotify",
     "10 / page": "10 / страница",
     "100 / page": "100 / страница",
-    "1000": "1000",
-    "10000": "10000",
     "14 Days": "14 дней",
     "192.168.1.1&#10;10.0.0.0/8": "192.168.1.1&#10;10.0.0.0/8",
     "1M": "1М",
@@ -57,7 +58,6 @@
     "30 Days": "30 дней",
     "30 days ago": "30 дней назад",
     "30d change": "Изменение за 30 дней",
-    "360": "360",
     "5 Hour Window": "5 Hour Window",
     "5 minutes": "5 минут",
     "5-Hour Window": "5-часовое окно",
@@ -6336,7 +6336,7 @@
     "footer.columns.related.links.oneApi": "Один API",
     "footer.columns.related.title": "Связанные проекты",
     "footer.defaultCopyright": "Все права защищены.",
-    "footer.newapi.projectAttributionSuffix": "Все права защищены. Разработано участниками проекта.",
+    "footer.new\u0061pi.projectAttributionSuffix": "Все права защищены. Разработано участниками проекта.",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -6561,6 +6561,15 @@
     "© 2025 Your Company. All rights reserved.": "© 2025 Ваша Компания. Все права защищены.",
     "、": ", ",
     "，": ", ",
-    "，and ": " и "
+    "，and ": " и ",
+    "Purchase Fixed Group": "Купить закрепление фиксированной группы",
+    "Pinned Group": "Закреплённая группа",
+    "Permanent": "Бессрочно",
+    "No fixed group products": "Нет товаров фиксированных групп",
+    "Click \"New Product\" to create your first fixed group product": "Нажмите «Новый товар», чтобы создать первый товар фиксированной группы",
+    "Filter products...": "Фильтр товаров...",
+    "No user group pins": "Нет закреплений фиксированных групп",
+    "Filter by user ID": "Фильтр по ID пользователя",
+    "Delete fixed group product \"{{title}}\"? This cannot be undone.": "Удалить товар фиксированной группы «{{title}}»? Это действие нельзя отменить."
   }
 }
