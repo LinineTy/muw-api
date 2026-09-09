@@ -5,15 +5,12 @@ package controller
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/Calcium-Ion/go-epay/epay"
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
@@ -254,8 +251,11 @@ func GroupPinRequestEpay(c *gin.Context) {
 		common.ApiErrorMsg(c, "固定分组商品不存在")
 		return
 	}
-	if !product.Enabled {
-		common.ApiErrorMsg(c, "该固定分组商品未上架")
+	userId := c.GetInt("id")
+	// 与余额通道共用同一套门禁（上架/功能开关/目标组存在/用户组白名单），
+	// 否则 epay 直连会绕过购买白名单。
+	if err := model.ValidateGroupPinProductForUser(userId, product); err != nil {
+		common.ApiError(c, err)
 		return
 	}
 	if product.PriceAmount < 0.01 {
@@ -266,30 +266,13 @@ func GroupPinRequestEpay(c *gin.Context) {
 		common.ApiErrorMsg(c, "支付方式不存在")
 		return
 	}
-	userId := c.GetInt("id")
-	if !common.SubscriptionGroupUpgradeEnabled {
-		common.ApiErrorMsg(c, "订阅分组功能未启用")
+
+	purchase, ok := prepareEpayPurchase(c)
+	if !ok {
 		return
 	}
 
-	client := GetEpayClient()
-	if client == nil {
-		common.ApiErrorMsg(c, "当前管理员未配置支付信息")
-		return
-	}
-	callBackAddress := service.GetCallbackAddress()
-	returnUrl, err := url.Parse(callBackAddress + "/api/subscription/epay/return")
-	if err != nil {
-		common.ApiErrorMsg(c, "回调地址配置错误")
-		return
-	}
-	notifyUrl, err := url.Parse(callBackAddress + "/api/subscription/epay/notify")
-	if err != nil {
-		common.ApiErrorMsg(c, "回调地址配置错误")
-		return
-	}
-
-	tradeNo := fmt.Sprintf("PINGRP%dNO%s%d", userId, common.GetRandomString(6), time.Now().Unix())
+	tradeNo := model.NewSubscriptionTradeNo("PINGRP", userId)
 	order := &model.SubscriptionOrder{
 		UserId:          userId,
 		Kind:            model.OrderKindGroupPin,
@@ -305,18 +288,8 @@ func GroupPinRequestEpay(c *gin.Context) {
 		common.ApiErrorMsg(c, "创建订单失败")
 		return
 	}
-	uri, params, err := client.Purchase(&epay.PurchaseArgs{
-		Type:           req.PaymentMethod,
-		ServiceTradeNo: tradeNo,
-		Name:           fmt.Sprintf("PIN:%s", product.Title),
-		Money:          strconv.FormatFloat(product.PriceAmount, 'f', 2, 64),
-		Device:         epay.PC,
-		NotifyUrl:      notifyUrl,
-		ReturnUrl:      returnUrl,
-	})
-	if err != nil {
-		_ = model.ExpireSubscriptionOrder(tradeNo, model.PaymentProviderEpay)
-		common.ApiErrorMsg(c, "拉起支付失败")
+	uri, params, ok := purchase.request(c, tradeNo, fmt.Sprintf("PIN:%s", product.Title), product.PriceAmount, req.PaymentMethod)
+	if !ok {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "success", "data": params, "url": uri})
