@@ -16,6 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { Info } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+
+import { SectionPageLayout } from '@/components/layout'
 import {
   CardStaggerContainer,
   CardStaggerItem,
@@ -25,8 +29,6 @@ import { useStatus } from '@/hooks/use-status'
 import { ROLE } from '@/lib/roles'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
-import { Info } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
 
 import { useDashboardContentVisibility } from '../../hooks/use-status-data'
 import { useSystemLoad } from '../../hooks/use-system-load'
@@ -63,88 +65,100 @@ export function OverviewDashboard() {
     'Images sent to models without vision support are automatically described by a vision model, which may incur extra charges. This applies only to the OpenAI chat interface (/v1/chat/completions); Claude Messages and Responses requests are not affected.'
   )
 
+  // 上游同步暗坑修复：上游 index.tsx 对 overview 走 early-return（不再提供
+  // SectionPageLayout 壳），滚动容器必须由本组件自带，否则 overflow-hidden
+  // 布局体系下（手机 SidebarInset / OS 窗口 Main）整页锁死无法滚动。
   return (
-    <div className='flex flex-col gap-4'>
-      {showSystemLoad && load && visionFallbackEnabled && (
-        // 桌面端单行：负载 1/3 + 提示 2/3；移动端上下两行（负载在上）
-        <div className='flex flex-col gap-3 lg:flex-row'>
-          <div className='flex items-center rounded-lg border px-4 py-3 lg:w-1/3'>
-            <SystemLoadIndicator load={load} />
-          </div>
-          <div className='flex items-center gap-2 rounded-lg border px-4 py-3 lg:w-2/3'>
-            <Info className='h-4 w-4 shrink-0' />
-            <div className='min-w-0'>
-              <p className='text-sm font-medium'>
-                {t('Image vision assistance enabled')}
-              </p>
-              <p className='text-muted-foreground text-sm'>
-                {visionFallbackHint}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-      {visionFallbackEnabled && (!showSystemLoad || !load) && (
-        <Alert>
-          <Info />
-          <AlertTitle>{t('Image vision assistance enabled')}</AlertTitle>
-          <AlertDescription>{visionFallbackHint}</AlertDescription>
-        </Alert>
-      )}
-      {!visionFallbackEnabled && showSystemLoad && load && (
-        <div className='flex items-center rounded-lg border px-4 py-3'>
-          <SystemLoadIndicator load={load} />
-        </div>
-      )}
-
-      <SummaryCards />
-
-      {showContentPanels && (
-        <CardStaggerContainer
-          className={cn(
-            'grid grid-cols-1 gap-4',
-            showLeftContentPanels &&
-              showUptimePanel &&
-              'xl:grid-cols-[minmax(0,1fr)_22rem]'
+    <SectionPageLayout>
+      <SectionPageLayout.Title>{t('Overview')}</SectionPageLayout.Title>
+      <SectionPageLayout.Content>
+        <div className='flex flex-col gap-4'>
+          {showSystemLoad &&
+            load &&
+            visionFallbackEnabled && (
+              // 桌面端单行：负载 1/3 + 提示 2/3；移动端上下两行（负载在上）
+              <div className='flex flex-col gap-3 lg:flex-row'>
+                <div className='flex items-center rounded-lg border px-4 py-3 lg:w-1/3'>
+                  <SystemLoadIndicator load={load} />
+                </div>
+                <div className='flex items-center gap-2 rounded-lg border px-4 py-3 lg:w-2/3'>
+                  <Info className='h-4 w-4 shrink-0' />
+                  <div className='min-w-0'>
+                    <p className='text-sm font-medium'>
+                      {t('Image vision assistance enabled')}
+                    </p>
+                    <p className='text-muted-foreground text-sm'>
+                      {visionFallbackHint}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          {visionFallbackEnabled && (!showSystemLoad || !load) && (
+            <Alert>
+              <Info />
+              <AlertTitle>{t('Image vision assistance enabled')}</AlertTitle>
+              <AlertDescription>{visionFallbackHint}</AlertDescription>
+            </Alert>
           )}
-        >
-          {showLeftContentPanels && (
-            <div
+          {!visionFallbackEnabled && showSystemLoad && load && (
+            <div className='flex items-center rounded-lg border px-4 py-3'>
+              <SystemLoadIndicator load={load} />
+            </div>
+          )}
+
+          <SummaryCards />
+
+          {showContentPanels && (
+            <CardStaggerContainer
               className={cn(
-                'grid min-w-0 grid-cols-1 gap-4',
-                (showApiInfoPanel || showAnnouncementsPanel || showFAQPanel) &&
-                  'lg:grid-cols-2'
+                'grid grid-cols-1 gap-4',
+                showLeftContentPanels &&
+                  showUptimePanel &&
+                  'xl:grid-cols-[minmax(0,1fr)_22rem]'
               )}
             >
-              {isAdmin && (
-                <CardStaggerItem className='lg:col-span-2'>
-                  <PerformanceHealthPanel />
-                </CardStaggerItem>
+              {showLeftContentPanels && (
+                <div
+                  className={cn(
+                    'grid min-w-0 grid-cols-1 gap-4',
+                    (showApiInfoPanel ||
+                      showAnnouncementsPanel ||
+                      showFAQPanel) &&
+                      'lg:grid-cols-2'
+                  )}
+                >
+                  {isAdmin && (
+                    <CardStaggerItem className='lg:col-span-2'>
+                      <PerformanceHealthPanel />
+                    </CardStaggerItem>
+                  )}
+                  {showApiInfoPanel && (
+                    <CardStaggerItem>
+                      <ApiInfoPanel />
+                    </CardStaggerItem>
+                  )}
+                  {showAnnouncementsPanel && (
+                    <CardStaggerItem>
+                      <AnnouncementsPanel />
+                    </CardStaggerItem>
+                  )}
+                  {showFAQPanel && (
+                    <CardStaggerItem>
+                      <FAQPanel />
+                    </CardStaggerItem>
+                  )}
+                </div>
               )}
-              {showApiInfoPanel && (
+              {showUptimePanel && (
                 <CardStaggerItem>
-                  <ApiInfoPanel />
+                  <UptimePanel />
                 </CardStaggerItem>
               )}
-              {showAnnouncementsPanel && (
-                <CardStaggerItem>
-                  <AnnouncementsPanel />
-                </CardStaggerItem>
-              )}
-              {showFAQPanel && (
-                <CardStaggerItem>
-                  <FAQPanel />
-                </CardStaggerItem>
-              )}
-            </div>
+            </CardStaggerContainer>
           )}
-          {showUptimePanel && (
-            <CardStaggerItem>
-              <UptimePanel />
-            </CardStaggerItem>
-          )}
-        </CardStaggerContainer>
-      )}
-    </div>
+        </div>
+      </SectionPageLayout.Content>
+    </SectionPageLayout>
   )
 }

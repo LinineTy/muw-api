@@ -17,17 +17,20 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 // @muw-owned
+import { useQuery } from '@tanstack/react-query'
 // 「分组与固定」卡：用户页右栏展示当前分组的来源分解（固定分组钉 + 订阅升级）
 // 与到期回落预告。数据 = /api/group_pin/self（钉）+ /api/subscription/self（订阅锚）。
 import { Pin } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-
-import { getMyGroupPin, getSelfSubscriptionFull } from '@/features/subscriptions/api'
+import {
+  getMyGroupPin,
+  getSelfSubscriptionFull,
+} from '@/features/subscriptions/api'
 import { formatTimestampToDate } from '@/lib/format'
+
 import type { UserProfile } from '../types'
 
 interface GroupPinCardProps {
@@ -80,7 +83,9 @@ export function GroupPinCard({ profile, loading }: GroupPinCardProps) {
       r.plan.upgrade_group !== ''
   )
 
-  if (!pin && activeSubAnchors.length === 0) return null
+  // 无钉无订阅也必须渲染：header 已不含分组展示，本卡是 profile 页分组信息
+  // 的唯一来源，整卡消失 = 用户看不到自己当前分组（2026-09-10 maintainer反馈）。
+  // 空锚点态由 rows 空态说明兜底。
 
   const currentGroup = profile?.group ?? ''
   const pinnedActive = !!pin && currentGroup === pin.group
@@ -155,6 +160,11 @@ export function GroupPinCard({ profile, loading }: GroupPinCardProps) {
               </span>
             </div>
           ))}
+          {rows.length === 0 && (
+            <div className='text-muted-foreground rounded-md border border-dashed p-2.5 text-xs'>
+              {t('No pinned group or active subscription')}
+            </div>
+          )}
         </div>
 
         {pin && !pinnedActive && (
