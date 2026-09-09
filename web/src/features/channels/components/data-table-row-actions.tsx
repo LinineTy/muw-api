@@ -263,7 +263,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           <MoreHorizontal className='h-4 w-4' />
           <span className='sr-only'>{t('Open menu')}</span>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align='end' className='w-48'>
+        <DropdownMenuContent align='end' className='min-w-48'>
           {layout === 'card' && (
             <DropdownMenuItem onClick={handleEdit}>
               {t('Edit')}

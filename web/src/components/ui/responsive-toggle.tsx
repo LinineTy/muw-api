@@ -53,7 +53,7 @@ export function MobileToggleMenu({ children }: { children: ReactNode }) {
         <DropdownMenuTrigger render={<Button variant='outline' size='sm' />}>
           <MoreHorizontal className='size-4' />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align='end' className='w-56'>
+        <DropdownMenuContent align='end' className='min-w-56'>
           {children}
         </DropdownMenuContent>
       </DropdownMenu>

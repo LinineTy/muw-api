@@ -63,12 +63,8 @@ export function SubscriptionsPrimaryButtons() {
           <Plus className='h-4 w-4' />
           {t('Create')}
         </DropdownMenuTrigger>
-        {/* 弹层默认取触发按钮宽度（w-(--anchor-width) + min-w-32），"新建"按钮太窄
-            会把「固定分组商品」压到两行；改成按内容撑开、至少与按钮同宽。 */}
-        <DropdownMenuContent
-          align='end'
-          className='w-fit min-w-(--anchor-width)'
-        >
+        {/* 弹层宽度由 DropdownMenuContent 默认按内容撑开，此处无需再覆盖。 */}
+        <DropdownMenuContent align='end'>
           <DropdownMenuItem onClick={() => handleCreate('plan')}>
             {t('Create Plan')}
           </DropdownMenuItem>

@@ -52,7 +52,7 @@ export function DataTableRowActionMenu(props: DataTableRowActionMenuProps) {
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align='end'
-        className={cn('w-48', props.contentClassName)}
+        className={cn('min-w-48', props.contentClassName)}
       >
         {props.children}
       </DropdownMenuContent>

@@ -93,7 +93,7 @@ export function ModelsPrimaryButtons({
         <DropdownMenuTrigger render={<Button variant='outline' size='sm' />}>
           <MoreHorizontal className='h-4 w-4' />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align='end' className='w-56'>
+        <DropdownMenuContent align='end' className='min-w-56'>
           {/* Mobile-only: Batch Operations */}
           <ToggleMenuItem
             label={t('Batch Operations')}
