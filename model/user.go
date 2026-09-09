@@ -136,7 +136,6 @@ type User struct {
 	// 账号，仅能访问激活页）。default:1 让存量行回填、管理员建号默认正式；激活制
 	// 开启时由 Register/OAuth/微信建号后显式置 0。
 	Activated        int                        `json:"activated" gorm:"type:int;column:activated;default:1"`
-	StripeCustomer   string                     `json:"stripe_customer" gorm:"type:varchar(64);column:stripe_customer;index"`
 	AdminPermissions map[string]map[string]bool `json:"admin_permissions,omitempty" gorm:"-:all"`
 }
 
@@ -635,7 +634,7 @@ func GetSelfUserById(id int) (*User, error) {
 		"github_id", "discord_id", "oidc_id", "wechat_id", "telegram_id",
 		"group", "quota", "used_quota", "request_count", "aff_code", "aff_count",
 		"aff_quota", "aff_history", "inviter_id", "linux_do_id", "setting",
-		"stripe_customer", "auth_version",
+		"auth_version",
 		// fork 独有列：buildSelfUserData 会读它们，漏选会让响应里这些字段恒为零值
 		// （activated 恒 false 会把所有已激活用户踢去 /activate 页）。
 		"activated", "group_auto", "avatar", "linux_do_trust_level",
