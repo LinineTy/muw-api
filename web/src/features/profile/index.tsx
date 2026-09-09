@@ -53,7 +53,15 @@ export function Profile() {
           </CardStaggerItem>
 
           <CardStaggerItem>
-            <div className='grid gap-4 sm:gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.46fr)] xl:items-start'>
+            {/* 右栏(边栏模块)对 root 不显示(sidebar_settings=false),此时不要保留
+                两列栅格——否则左栏被压到 1fr,右边空一大块 */}
+            <div
+              className={
+                canConfigureSidebar
+                  ? 'grid gap-4 sm:gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.46fr)] xl:items-start'
+                  : 'space-y-4 sm:space-y-6'
+              }
+            >
               <div className='space-y-4 sm:space-y-6'>
                 <ProfileSettingsCard
                   profile={profile}
@@ -66,9 +74,11 @@ export function Profile() {
                 />
               </div>
 
-              <div className='space-y-4 sm:space-y-6 xl:sticky xl:top-6'>
-                {canConfigureSidebar && <SidebarModulesCard />}
-              </div>
+              {canConfigureSidebar && (
+                <div className='space-y-4 sm:space-y-6 xl:sticky xl:top-6'>
+                  <SidebarModulesCard />
+                </div>
+              )}
             </div>
           </CardStaggerItem>
         </CardStaggerContainer>
