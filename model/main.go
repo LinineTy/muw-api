@@ -1189,8 +1189,13 @@ func ensureUpstreamSyncSchema(db *gorm.DB) error {
 	if err := db.AutoMigrate(&LoginEncryptionKey{}, &TaskPlugin{}); err != nil {
 		return err
 	}
-	if db.Migrator().HasTable(&User{}) && !db.Migrator().HasColumn(&User{}, "access_token_created_at") {
-		if err := db.Migrator().AddColumn(&User{}, "access_token_created_at"); err != nil {
+	// users 表整体幂等 AutoMigrate 补列，而不是逐列手写清单——上游同步对 users 的
+	// 改动不止一列（access_token_created_at / stripe_customer 等），清单漏一列就是
+	// 老库升级后登录 500（2026-09-10 实测：muw.5 时代测试库缺 stripe_customer，
+	// 登录即 "no such column"，演练用的生产 dump schema 新暴露不了）。
+	// AutoMigrate 幂等：存在的列不动、缺的补，与全新建库结构对齐。
+	if db.Migrator().HasTable(&User{}) {
+		if err := db.AutoMigrate(&User{}); err != nil {
 			return err
 		}
 	}
