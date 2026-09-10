@@ -332,6 +332,110 @@ func SearchAccounts(keyword string) ([]*Account, error) {
 	return accounts, err
 }
 
+// AccountListFilter 账户列表的过滤条件；零值表示该项不限。
+type AccountListFilter struct {
+	Keyword    string
+	Type       int
+	Status     int
+	Referenced *bool // nil = 不限：被渠道引用的 / 没被引用的
+	Monitoring *bool // nil = 不限：开了套餐余量监控的 / 没开的
+}
+
+// applyAccountListFilter 把过滤条件落到查询上（列表与计数共用同一份条件，口径必须一致）。
+func applyAccountListFilter(q *gorm.DB, f AccountListFilter) *gorm.DB {
+	if f.Keyword != "" {
+		baseURLCol := "`base_url`"
+		if common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
+			baseURLCol = `"base_url"`
+		}
+		q = q.Where("id = ? OR name LIKE ? OR "+baseURLCol+" LIKE ?",
+			common.String2Int(f.Keyword), "%"+f.Keyword+"%", "%"+f.Keyword+"%")
+	}
+	if f.Type > 0 {
+		q = q.Where("type = ?", f.Type)
+	}
+	if f.Status > 0 {
+		q = q.Where("status = ?", f.Status)
+	}
+	if f.Monitoring != nil {
+		// 与前端口径一致：显式配了厂商才算开启监控，空串 / "none" 都算关闭。
+		if *f.Monitoring {
+			q = q.Where("coding_plan_provider IS NOT NULL AND coding_plan_provider NOT IN ('', 'none')")
+		} else {
+			q = q.Where("coding_plan_provider IS NULL OR coding_plan_provider IN ('', 'none')")
+		}
+	}
+	if f.Referenced != nil {
+		sub := "SELECT DISTINCT account_id FROM channel_accounts"
+		if *f.Referenced {
+			q = q.Where("id IN (" + sub + ")")
+		} else {
+			q = q.Where("id NOT IN (" + sub + ")")
+		}
+	}
+	return q
+}
+
+// GetAccountsFiltered 过滤 + 分页查询（脱敏：不返回 key / coding_plan_key）。
+func GetAccountsFiltered(startIdx int, num int, f AccountListFilter) ([]*Account, error) {
+	var accounts []*Account
+	err := applyAccountListFilter(DB.Model(&Account{}), f).
+		Omit("key", "coding_plan_key").
+		Order("id desc").Limit(num).Offset(startIdx).Find(&accounts).Error
+	return accounts, err
+}
+
+// CountAccountsFiltered 与列表同一口径的计数（分页 total）。
+func CountAccountsFiltered(f AccountListFilter) (int64, error) {
+	var total int64
+	err := applyAccountListFilter(DB.Model(&Account{}), f).Count(&total).Error
+	return total, err
+}
+
+// AccountFacets 账户列表筛选下拉需要的计数。
+type AccountFacets struct {
+	Type       map[int]int64 `json:"type"`
+	Status     map[int]int64 `json:"status"`
+	Referenced int64         `json:"referenced"`
+	Monitoring int64         `json:"monitoring"`
+}
+
+// GetAccountFacets 汇总各筛选项的计数（账户表很小，逐项 GROUP BY 足够）。
+func GetAccountFacets() (AccountFacets, error) {
+	facets := AccountFacets{Type: map[int]int64{}, Status: map[int]int64{}}
+	type countRow struct {
+		Value int
+		Count int64
+	}
+	var rows []countRow
+	if err := DB.Model(&Account{}).Select("type AS value, count(*) AS count").
+		Group("type").Scan(&rows).Error; err != nil {
+		return facets, err
+	}
+	for _, row := range rows {
+		facets.Type[row.Value] = row.Count
+	}
+	rows = nil
+	if err := DB.Model(&Account{}).Select("status AS value, count(*) AS count").
+		Group("status").Scan(&rows).Error; err != nil {
+		return facets, err
+	}
+	for _, row := range rows {
+		facets.Status[row.Value] = row.Count
+	}
+	refCounts, err := CountChannelAccountReferences()
+	if err != nil {
+		return facets, err
+	}
+	facets.Referenced = int64(len(refCounts))
+	if err := DB.Model(&Account{}).
+		Where("coding_plan_provider IS NOT NULL AND coding_plan_provider NOT IN ('', 'none')").
+		Count(&facets.Monitoring).Error; err != nil {
+		return facets, err
+	}
+	return facets, nil
+}
+
 // CountAllAccounts 账户总数（分页用）。
 func CountAllAccounts() (int64, error) {
 	var total int64

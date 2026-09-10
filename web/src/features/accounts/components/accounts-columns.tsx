@@ -170,6 +170,21 @@ export function useAccountsColumns(options: {
         cell: ({ row }) => <CodingPlanQuotaCell account={row.original.account} />,
       },
       {
+        // 隐藏列：仅用于工具栏的「是否被引用 / 是否开启监控」筛选（toolbar 只在列存在时
+        // 才渲染对应筛选），表格与卡片都不展示它。
+        id: 'referenced',
+        accessorFn: (item) => (item.channel_count > 0 ? 1 : 0),
+        header: () => t('Referenced by'),
+        cell: () => null,
+      },
+      {
+        // 隐藏列：供「套餐余量监控」筛选使用。
+        id: 'monitoring',
+        accessorFn: (item) => (item.account.coding_plan_provider ? 1 : 0),
+        header: () => t('Quota monitoring'),
+        cell: () => null,
+      },
+      {
         id: 'actions',
         header: () => <span className='sr-only'>{t('Actions')}</span>,
         cell: ({ row }) => {

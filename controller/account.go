@@ -92,22 +92,38 @@ func GetAllAccounts(c *gin.Context) {
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 20
 	}
-	var keyword string
-	if c.Query("keyword") != "" {
-		keyword = c.Query("keyword")
-	}
 	var accounts []*model.Account
 	var err error
-	if keyword != "" {
-		accounts, err = model.SearchAccounts(keyword)
-	} else {
-		accounts, err = model.GetAllAccounts((page-1)*pageSize, pageSize)
+	// 筛选：关键词（id/名称/base_url）、类型、状态、是否被渠道引用、是否开了套餐监控。
+	filter := model.AccountListFilter{
+		Keyword: c.Query("keyword"),
 	}
+	if v, convErr := strconv.Atoi(c.Query("type")); convErr == nil {
+		filter.Type = v
+	}
+	if v, convErr := strconv.Atoi(c.Query("status")); convErr == nil {
+		filter.Status = v
+	}
+	if v := c.Query("referenced"); v == "1" || v == "0" {
+		flag := v == "1"
+		filter.Referenced = &flag
+	}
+	if v := c.Query("monitoring"); v == "1" || v == "0" {
+		flag := v == "1"
+		filter.Monitoring = &flag
+	}
+	accounts, err = model.GetAccountsFiltered((page-1)*pageSize, pageSize, filter)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	total, err := model.CountAllAccounts()
+	total, err := model.CountAccountsFiltered(filter)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	// 筛选下拉的计数：类型/状态分布 + 被引用数 + 监控数。
+	facets, err := model.GetAccountFacets()
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -146,6 +162,7 @@ func GetAllAccounts(c *gin.Context) {
 			"total":     total,
 			"page":      page,
 			"page_size": pageSize,
+			"facets":    facets,
 		},
 	})
 }
