@@ -27,7 +27,7 @@ import (
 // 账户——这是 (渠道, 账户) 维度的状态，不能放在账户上（同一账户在 A 渠道停用、在
 // B 渠道仍可用）。不用 gorm default 标签（仓库规则），创建路径显式赋值。
 type ChannelAccount struct {
-	Id           int   `json:"id"`
+	Id int `json:"id"`
 	// 复合唯一键 (channel_id, account_id)：同一渠道对同一账户只能有一条绑定
 	// （OnConflict 幂等绑定的前提）。列级 index 供反查。
 	ChannelId    int   `json:"channel_id" gorm:"index;uniqueIndex:idx_channel_accounts_pair;not null"`
@@ -472,4 +472,59 @@ func HasUsableBoundAccount(channelId int) (bool, error) {
 		return false, err
 	}
 	return len(ids) > 0, nil
+}
+
+// BoundAccountView 绑定关系视图（渠道抽屉回显用）：绑定本身的启停状态 + 账户摘要。
+// 与 BoundAccounts（只含启用项、供选路）不同，这里含停用项，前端才能把开关恢复。
+type BoundAccountView struct {
+	AccountId int     `json:"account_id"`
+	Enabled   bool    `json:"enabled"`
+	Name      string  `json:"name"`
+	Type      int     `json:"type"`
+	Status    int     `json:"status"`
+	KeyMasked string  `json:"key_masked"`
+	BaseURL   *string `json:"base_url"`
+}
+
+// buildBoundAccountViews 按绑定顺序构造视图（账户缺失时保留绑定行、摘要素空，
+// 让前端能看见这张"坏绑定"并删除）。
+func buildBoundAccountViews(bindings []*ChannelAccount, accounts map[int]*Account) []BoundAccountView {
+	if len(bindings) == 0 {
+		return nil
+	}
+	views := make([]BoundAccountView, 0, len(bindings))
+	for _, b := range bindings {
+		view := BoundAccountView{AccountId: b.AccountId, Enabled: b.Enabled}
+		if acc := accounts[b.AccountId]; acc != nil {
+			view.Name = acc.Name
+			view.Type = acc.Type
+			view.Status = acc.Status
+			view.KeyMasked = acc.KeyMasked
+			view.BaseURL = acc.BaseURL
+		}
+		views = append(views, view)
+	}
+	return views
+}
+
+// LoadBoundAccountViews 单渠道填充视图（详情接口路径）。
+func (channel *Channel) LoadBoundAccountViews() {
+	bindings, err := GetChannelAccountBindings(channel.Id)
+	if err != nil || len(bindings) == 0 {
+		return
+	}
+	ids := make([]int, 0, len(bindings))
+	for _, b := range bindings {
+		ids = append(ids, b.AccountId)
+	}
+	accounts, err := GetAccountsByIds(ids)
+	if err != nil {
+		return
+	}
+	byId := make(map[int]*Account, len(accounts))
+	for _, acc := range accounts {
+		prefillAccountMasked(acc)
+		byId[acc.Id] = acc
+	}
+	channel.BoundAccountViews = buildBoundAccountViews(bindings, byId)
 }

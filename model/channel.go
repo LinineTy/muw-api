@@ -101,9 +101,12 @@ type Channel struct {
 	AccountId int `json:"account_id" gorm:"index"`
 
 	// BoundAccounts 本渠道绑定的账户（按绑定轮询顺序，仅含渠道内启用的绑定；运行时挂载、
-	// 不入库不下发）。长度 >1 时 GetNextEnabledKey 在账户之间轮询；Account/BoundAccounts
-	// 里的对象与缓存共享同一指针（多 key 轮询状态跨渠道一致）。
-	BoundAccounts []*Account `json:"bound_accounts,omitempty" gorm:"-"`
+	// 不入库）。长度 >0 时 GetNextEnabledKey 在账户之间轮询；对象与缓存共享同一指针
+	// （多 key 轮询状态跨渠道一致）。
+	BoundAccounts []*Account `json:"-" gorm:"-"`
+
+	// BoundAccountViews 绑定关系视图（含渠道内停用的绑定），下发给出渠道抽屉用。
+	BoundAccountViews []BoundAccountView `json:"account_bindings,omitempty" gorm:"-"`
 
 	// Account 运行时挂载的账户对象（缓存路径同一账户的多个渠道共享同一指针，
 	// 多 key 轮询状态跨渠道一致；非持久列，由 loadAccount/loadChannelsAccounts
@@ -309,11 +312,22 @@ func loadChannelsAccounts(channels []*Channel) error {
 	}
 	// 多账户：按绑定顺序挂全部启用账户（共享同一批 *Account 指针，与上面的主账户一致）
 	bindingsByChannel := make(map[int][]int)
+	// 视图需要含停用项，这里查全量绑定（启用项另外用于选路挂载）。
+	allBindingsByChannel := make(map[int][]*ChannelAccount)
 	{
 		boundIds := make([]int, 0, len(channelIds))
 		for _, ch := range channels {
 			bindingsByChannel[ch.Id] = nil
 			boundIds = append(boundIds, ch.Id)
+		}
+		var allBindings []*ChannelAccount
+		if len(channelIds) > 0 {
+			if err := DB.Where("channel_id IN ?", channelIds).
+				Order("account_order asc, id asc").Find(&allBindings).Error; err == nil {
+				for _, b := range allBindings {
+					allBindingsByChannel[b.ChannelId] = append(allBindingsByChannel[b.ChannelId], b)
+				}
+			}
 		}
 		var bindings []*ChannelAccount
 		if len(boundIds) > 0 {
@@ -342,6 +356,24 @@ func loadChannelsAccounts(channels []*Channel) error {
 			}
 		}
 	}
+	// 视图里也要能显示停用绑定的账户摘要，补齐缺失的账户对象。
+	viewMissing := make(map[int]bool)
+	for _, list := range allBindingsByChannel {
+		for _, b := range list {
+			if _, ok := byId[b.AccountId]; !ok {
+				viewMissing[b.AccountId] = true
+			}
+		}
+	}
+	if len(viewMissing) > 0 {
+		extra, err := GetAccountsByIds(lo.Keys(viewMissing))
+		if err == nil {
+			for _, acc := range extra {
+				prefillAccountMasked(acc)
+				byId[acc.Id] = acc
+			}
+		}
+	}
 	for _, ch := range channels {
 		bound := make([]*Account, 0, len(bindingsByChannel[ch.Id]))
 		for _, id := range bindingsByChannel[ch.Id] {
@@ -350,6 +382,7 @@ func loadChannelsAccounts(channels []*Channel) error {
 			}
 		}
 		ch.BoundAccounts = bound
+		ch.BoundAccountViews = buildBoundAccountViews(allBindingsByChannel[ch.Id], byId)
 	}
 	return nil
 }
@@ -391,6 +424,7 @@ func (channel *Channel) loadBoundAccounts() {
 		}
 	}
 	channel.BoundAccounts = bound
+	channel.BoundAccountViews = buildBoundAccountViews(bindings, byId)
 }
 
 // prefillAccountMasked 填充响应侧脱敏预览（key 多行时展示首个 + 计数）。
@@ -844,6 +878,8 @@ func GetChannelById(id int, selectAll bool) (*Channel, error) {
 	_ = channel.loadModelSettings(nil)
 	// 挂载账户（凭证真相源）
 	_ = channel.loadAccount()
+	// 绑定关系视图（含渠道内停用的绑定），渠道抽屉回显用
+	channel.LoadBoundAccountViews()
 	return channel, nil
 }
 
