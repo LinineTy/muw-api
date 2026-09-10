@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -195,4 +196,78 @@ func TestGetChannelsBoundToAccount(t *testing.T) {
 	count, err := CountChannelsBoundToAccount(acc.Id)
 	require.NoError(t, err)
 	assert.EqualValues(t, 2, count)
+}
+
+// 多账户轮询：绑两个账户时轮询在两个账户之间接力（用法对齐多 key）；
+// 账户被全局禁用/账户内 key 全废时自动跳过；全不可用才报"无可用 key"。
+func TestMultiAccountRotationSkipsUnavailable(t *testing.T) {
+	setupChannelAccountTestDB(t)
+	ch := &Channel{Name: "multi", Key: "k", Status: common.ChannelStatusEnabled}
+	require.NoError(t, DB.Create(ch).Error)
+	a1 := newTestAccount(t, "rotate-a1")
+	a2 := newTestAccount(t, "rotate-a2")
+
+	require.NoError(t, ReplaceChannelAccountBindings(ch.Id, []int{a1.Id, a2.Id}))
+	ch.loadBoundAccounts()
+	require.Len(t, ch.BoundAccounts, 2)
+
+	key1, _, err1 := ch.GetNextEnabledKey()
+	key2, _, err2 := ch.GetNextEnabledKey()
+	require.Nil(t, err1)
+	require.Nil(t, err2)
+	assert.Equal(t, "sk-rotate-a1", key1)
+	assert.Equal(t, "sk-rotate-a2", key2, "第二次应轮到第二个账户")
+	key3, _, _ := ch.GetNextEnabledKey()
+	assert.Equal(t, "sk-rotate-a1", key3, "第三次回到第一个账户")
+
+	// a1 全局禁用 → 始终落到 a2
+	require.NoError(t, DB.Model(&Account{}).Where("id = ?", a1.Id).Update("status", common.ChannelStatusAutoDisabled).Error)
+	ch.loadBoundAccounts()
+	require.Len(t, ch.BoundAccounts, 2, "挂载包含全部启用绑定，账户级可用性在选路时判定")
+	for i := 0; i < 3; i++ {
+		keyLoop, _, apiErrLoop := ch.GetNextEnabledKey()
+		require.Nil(t, apiErrLoop)
+		assert.Equal(t, "sk-rotate-a2", keyLoop)
+	}
+
+	// a2 也禁用 → 无可用 key（调用方据此处置渠道）
+	require.NoError(t, DB.Model(&Account{}).Where("id = ?", a2.Id).Update("status", common.ChannelStatusAutoDisabled).Error)
+	ch.loadBoundAccounts()
+	_, _, apiErr := ch.GetNextEnabledKey()
+	require.NotNil(t, apiErr, "绑定的账户全不可用时应报无可用 key")
+	assert.Equal(t, types.ErrorCodeChannelNoAvailableKey, apiErr.GetErrorCode())
+
+	// 渠道内停用 a2（绑定 enabled=false）→ 只剩 a1；a1 恢复后应正常取到 key
+	require.NoError(t, DB.Model(&Account{}).Where("id = ?", a1.Id).Update("status", common.ChannelStatusEnabled).Error)
+	require.NoError(t, DB.Model(&ChannelAccount{}).
+		Where("channel_id = ? AND account_id = ?", ch.Id, a2.Id).Update("enabled", false).Error)
+	ch.loadBoundAccounts()
+	require.Len(t, ch.BoundAccounts, 1)
+	keyTail, _, apiErrTail := ch.GetNextEnabledKey()
+	require.Nil(t, apiErrTail)
+	assert.Equal(t, "sk-rotate-a1", keyTail)
+}
+
+// 渠道可用账户判定（套餐自动启停"是否连渠道一起禁"的依据）。
+func TestHasUsableBoundAccount(t *testing.T) {
+	setupChannelAccountTestDB(t)
+	ch := &Channel{Name: "usable", Key: "k", Status: common.ChannelStatusEnabled}
+	require.NoError(t, DB.Create(ch).Error)
+	a1 := newTestAccount(t, "u1")
+	a2 := newTestAccount(t, "u2")
+	require.NoError(t, ReplaceChannelAccountBindings(ch.Id, []int{a1.Id, a2.Id}))
+
+	usable, err := HasUsableBoundAccount(ch.Id)
+	require.NoError(t, err)
+	assert.True(t, usable)
+
+	require.NoError(t, DB.Model(&Account{}).Where("id = ?", a1.Id).Update("status", common.ChannelStatusAutoDisabled).Error)
+	usable, err = HasUsableBoundAccount(ch.Id)
+	require.NoError(t, err)
+	assert.True(t, usable, "还有第二个账户可用")
+
+	require.NoError(t, DB.Model(&Account{}).Where("id = ?", a2.Id).Update("status", common.ChannelStatusAutoDisabled).Error)
+	usable, err = HasUsableBoundAccount(ch.Id)
+	require.NoError(t, err)
+	assert.False(t, usable, "绑定的账户全不可用")
 }

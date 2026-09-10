@@ -2,9 +2,14 @@
 package model
 
 import (
+	"errors"
 	"fmt"
+	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -362,4 +367,68 @@ func DeleteChannelAccountBindingsForChannels(db *gorm.DB, channelIds []int) erro
 		return nil
 	}
 	return db.Delete(&ChannelAccount{}, "channel_id IN ?", channelIds).Error
+}
+
+// ── 多账户选路（Phase B）──────────────────────────────────────
+
+// channelAccountRotation 账户层轮询游标（渠道维度、进程内）。与"多 key 轮询索引"不同，
+// 账户轮询没有跨重启需要保持的语义，进程内自增即可，不产生 DB 写。
+var channelAccountRotation sync.Map // channelId -> *atomic.Int64
+
+func nextAccountRotation(channelId, n int) int {
+	if n <= 0 {
+		return 0
+	}
+	value, _ := channelAccountRotation.LoadOrStore(channelId, new(atomic.Int64))
+	counter, ok := value.(*atomic.Int64)
+	if !ok {
+		return 0
+	}
+	seq := counter.Add(1)
+	if seq <= 0 {
+		return 0
+	}
+	return int((seq - 1) % int64(n))
+}
+
+// getNextKeyAcrossAccounts 账户层轮询：从渠道游标起，按绑定顺序找第一个能给出可用 key 的
+// 账户；跳过被全局禁用的账户（渠道内停用的绑定在挂载时已剔除）。
+//
+// 全部不可用 → 返回 no available key 错误。调用方（middleware/distributor）据此把渠道
+// 置为不可用，语义与单账户渠道"key 全废"一致——即"绑定的账户全不可用，渠道才不可用"。
+func (channel *Channel) getNextKeyAcrossAccounts() (string, int, *types.NewAPIError) {
+	accounts := channel.BoundAccounts
+	n := len(accounts)
+	if n == 0 {
+		return "", 0, types.NewError(errors.New("no bound accounts"), types.ErrorCodeChannelNoAvailableKey)
+	}
+	start := nextAccountRotation(channel.Id, n)
+	for i := 0; i < n; i++ {
+		account := accounts[(start+i)%n]
+		if account == nil || account.Status != common.ChannelStatusEnabled {
+			continue
+		}
+		key, keyIndex, apiErr := account.GetNextEnabledKey()
+		if apiErr != nil {
+			// 该账户的 key 全不可用：换下一个账户（不在这里改账户状态，交给既有
+			// 多 key 失败计数/套餐自动启停逻辑处置）。
+			continue
+		}
+		if strings.TrimSpace(key) == "" {
+			continue
+		}
+		return key, keyIndex, nil
+	}
+	return "", 0, types.NewError(errors.New("no available account keys"), types.ErrorCodeChannelNoAvailableKey)
+}
+
+// HasUsableBoundAccount 渠道是否还有可用账户（渠道内启用的绑定 + 账户未被全局禁用）。
+// 套餐自动启停据此决定"要不要把渠道也置为不可用"：账户烧完只让渠道选路跳过它，
+// 只有当绑定账户全废时渠道才不可用（避免一个账户拖垮共享它的其它渠道）。
+func HasUsableBoundAccount(channelId int) (bool, error) {
+	ids, err := GetEnabledBoundAccountIdsByChannel(channelId)
+	if err != nil {
+		return false, err
+	}
+	return len(ids) > 0, nil
 }

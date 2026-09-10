@@ -149,6 +149,12 @@ func accountIds(accounts []*model.Account) []int {
 
 // disableAccountWithChannels 禁用落点(maintainer拍板):禁账户 + 联动禁用全部引用渠道。
 // 渠道侧 status_reason 用套餐耗尽标记,恢复只认这个标记(手动禁用不误伤)。
+// disableAccountWithChannels 禁用账户自身（套餐耗尽）。
+//
+// 语义（2026-09-10 maintainer定，随渠道↔账户 N:N 改造）：**不再连带禁用引用它的渠道**——
+// 一个渠道可绑多个账户，某个账户烧完只让该渠道在选路时跳过它（见
+// model.Channel.getNextKeyAcrossAccounts）。只有当渠道绑定的账户**全部**不可用时，
+// 才把渠道自己也置为不可用，保持"渠道不可用"的对外语义（单账户渠道行为与旧版一致）。
 func disableAccountWithChannels(ctx context.Context, account *model.Account, members []*model.Channel) bool {
 	changed := false
 	// 账户置禁用 + 状态原因(滞回判据)。
@@ -162,11 +168,20 @@ func disableAccountWithChannels(ctx context.Context, account *model.Account, mem
 		return false
 	}
 	logger.LogInfo(ctx, fmt.Sprintf("coding plan auto-control: disabled account_id=%d name=%s", account.Id, account.Name))
-	// 联动禁用引用渠道(已禁用的跳过,UpdateChannelStatus 同状态幂等返回 false)。
+	// 渠道侧：绑定的账户还有能用的就只跳过本账户；全不可用才禁用渠道。
 	for _, ch := range members {
+		usable, err := model.HasUsableBoundAccount(ch.Id)
+		if err != nil {
+			logger.LogWarn(ctx, fmt.Sprintf("coding plan auto-control: check channel accounts failed: channel_id=%d err=%v", ch.Id, err))
+			continue
+		}
+		if usable {
+			logger.LogInfo(ctx, fmt.Sprintf("coding plan auto-control: account skipped by channel (still has usable account): account_id=%d channel_id=%d name=%s", account.Id, ch.Id, ch.Name))
+			continue
+		}
 		if model.UpdateChannelStatus(ch.Id, "", common.ChannelStatusAutoDisabled, CodingPlanExhaustedReason) {
 			changed = true
-			logger.LogInfo(ctx, fmt.Sprintf("coding plan auto-control: linked channel disabled: account_id=%d channel_id=%d name=%s", account.Id, ch.Id, ch.Name))
+			logger.LogInfo(ctx, fmt.Sprintf("coding plan auto-control: channel disabled (all bound accounts unusable): account_id=%d channel_id=%d name=%s", account.Id, ch.Id, ch.Name))
 		}
 	}
 	return changed
