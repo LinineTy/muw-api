@@ -758,11 +758,21 @@ export function ChannelMutateDrawer({
     [bindableAccounts, boundBindings]
   )
   // 绑定多起来抽屉会很长：默认超过 3 个就收起，点标题展开；添加账户时自动展开
+  // 新建渠道的凭证来源：默认「使用账户」（账户是凭证唯一真相源）。「手动填写」只是给
+  // 还没有账户的人快速建渠道的入口——保存时后端会为该渠道自动创建一个私有账户（账户页
+  // 里带「自动」标记）。编辑已有渠道不出现这个切换：凭证始终在账户上。
+  const [credentialMode, setCredentialMode] = useState<'account' | 'manual'>(
+    'account'
+  )
   const [accountsExpanded, setAccountsExpanded] = useState<boolean | null>(null)
   const accountsOpen = accountsExpanded ?? boundBindings.length <= 3
   // 抽屉关闭时忘掉本次手动展开/收起，下次打开重新按数量判断默认态
   useEffect(() => {
     if (!open) setAccountsExpanded(null)
+  }, [open])
+  // 关闭抽屉后凭证来源复位为默认的「使用账户」
+  useEffect(() => {
+    if (!open) setCredentialMode('account')
   }, [open])
   const boundAccountNames = boundBindings
     .map(
@@ -3249,9 +3259,62 @@ export function ChannelMutateDrawer({
                             )}
 
                             <ChannelAuthSection>
+                              {/* 凭证来源：默认账户（唯一真相源）；手动填写只是快速建渠道的
+                                入口，保存后后端会为该渠道自动建一个私有账户 */}
+                              {!isEditing && (
+                                <div className='flex flex-col gap-1.5'>
+                                  <div className='flex flex-wrap items-center gap-2'>
+                                    <span className='text-muted-foreground text-xs font-medium'>
+                                      {t('Credential source')}
+                                    </span>
+                                    <div className='flex items-center gap-1.5'>
+                                      <Button
+                                        type='button'
+                                        size='sm'
+                                        variant={
+                                          credentialMode === 'account'
+                                            ? 'default'
+                                            : 'outline'
+                                        }
+                                        onClick={() =>
+                                          setCredentialMode('account')
+                                        }
+                                      >
+                                        {t('Use accounts')}
+                                      </Button>
+                                      <Button
+                                        type='button'
+                                        size='sm'
+                                        variant={
+                                          credentialMode === 'manual'
+                                            ? 'default'
+                                            : 'outline'
+                                        }
+                                        onClick={() => {
+                                          setCredentialMode('manual')
+                                          // 两个模式互斥：切到手动填写就清掉已选的账户
+                                          setBoundBindings([])
+                                        }}
+                                      >
+                                        {t('Manual entry')}
+                                      </Button>
+                                    </div>
+                                  </div>
+                                  <p className='text-muted-foreground text-xs'>
+                                    {credentialMode === 'account'
+                                      ? t(
+                                          'Share credentials from existing accounts. Keys are managed on the account page.'
+                                        )
+                                      : t(
+                                          'An account will be created for this channel on save.'
+                                        )}
+                                  </p>
+                                </div>
+                              )}
                               {/* 账户绑定（N:N）：一个渠道可绑多个账户，顺序即轮询顺序，
                                 每个绑定可在本渠道单独停用 */}
-                              {(!isEditing || hasBoundAccount) && (
+                              {(!isEditing || hasBoundAccount) &&
+                                (isEditing || credentialMode === 'account') && (
                                 <div className='flex flex-col gap-2'>
                                   <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
                                     <button
@@ -3317,7 +3380,7 @@ export function ChannelMutateDrawer({
                                   {boundBindings.length === 0 ? (
                                     <div className='text-muted-foreground rounded-md border border-dashed px-3 py-2.5 text-sm'>
                                       {t(
-                                        'No bound account. Add one above, or fill the key below to keep credentials on the channel.'
+                                        'No bound account yet. Pick one above, or switch to manual entry and we will create one on save.'
                                       )}
                                     </div>
                                   ) : !accountsOpen ? (
@@ -3469,13 +3532,20 @@ export function ChannelMutateDrawer({
                                 </div>
                               )}
 
-                              {boundAccountId !== null ? (
+                              {(isEditing
+                                ? boundAccountId !== null
+                                : credentialMode === 'account') ? (
                                 <div className='text-muted-foreground space-y-1 rounded-md border border-dashed px-3 py-2.5 text-sm'>
                                   <p>
-                                    {t(
-                                      'Credentials come from the bound accounts. Edit keys on the account page.'
-                                    )}
+                                    {boundAccountId !== null
+                                      ? t(
+                                          'Credentials come from the bound accounts. Edit keys on the account page.'
+                                        )
+                                      : t(
+                                          'Pick at least one account, or switch to manual entry to create one on save.'
+                                        )}
                                   </p>
+                                  {boundAccountId !== null && (
                                   <Link
                                     to='/accounts'
                                     className='text-primary inline-flex items-center gap-1 text-xs hover:underline'
@@ -3483,6 +3553,7 @@ export function ChannelMutateDrawer({
                                     <ExternalLink className='size-3' />
                                     {t('Manage in Accounts')}
                                   </Link>
+                                  )}
                                 </div>
                               ) : (
                                 <>
