@@ -7423,6 +7423,7 @@
     "Add account": "Thêm tài khoản",
     "No account available": "Không có tài khoản khả dụng",
     "No bound account. Add one above, or fill the key below to keep credentials on the channel.": "Chưa liên kết tài khoản. Thêm ở trên hoặc điền khóa bên dưới để giữ thông tin xác thực trên kênh.",
-    "Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.": "Các tài khoản đã liên kết được luân phiên theo thứ tự danh sách (giống nhiều khóa): mỗi tài khoản có thể tắt riêng cho kênh này và tài khoản lỗi sẽ được bỏ qua."
+    "Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.": "Các tài khoản đã liên kết được luân phiên theo thứ tự danh sách (giống nhiều khóa): mỗi tài khoản có thể tắt riêng cho kênh này và tài khoản lỗi sẽ được bỏ qua.",
+    "Enabled for this channel": "Bật cho kênh này"
   }
 }

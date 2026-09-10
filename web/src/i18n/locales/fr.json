@@ -7423,6 +7423,7 @@
     "Add account": "Ajouter un compte",
     "No account available": "Aucun compte disponible",
     "No bound account. Add one above, or fill the key below to keep credentials on the channel.": "Aucun compte lié. Ajoutez-en un ci-dessus ou saisissez la clé ci-dessous pour conserver les identifiants sur le canal.",
-    "Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.": "Les comptes liés sont utilisés en rotation dans l'ordre de la liste (comme plusieurs clés) : chacun peut être désactivé pour ce canal et un compte en échec est ignoré."
+    "Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.": "Les comptes liés sont utilisés en rotation dans l'ordre de la liste (comme plusieurs clés) : chacun peut être désactivé pour ce canal et un compte en échec est ignoré.",
+    "Enabled for this channel": "Activé pour ce canal"
   }
 }

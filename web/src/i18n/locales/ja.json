@@ -7423,6 +7423,7 @@
     "Add account": "アカウントを追加",
     "No account available": "追加できるアカウントがありません",
     "No bound account. Add one above, or fill the key below to keep credentials on the channel.": "アカウントが未バインドです。上の欄で追加するか、下の欄にキーを入力して認証情報をチャネル側に保持できます。",
-    "Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.": "バインドしたアカウントはリスト順にローテーションします（マルチキーと同じ扱い）。各アカウントはこのチャネル単位で無効化でき、使用できない場合は自動的にスキップされます。"
+    "Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.": "バインドしたアカウントはリスト順にローテーションします（マルチキーと同じ扱い）。各アカウントはこのチャネル単位で無効化でき、使用できない場合は自動的にスキップされます。",
+    "Enabled for this channel": "このチャネルで有効"
   }
 }

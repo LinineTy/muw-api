@@ -7423,6 +7423,7 @@
     "Add account": "新增帳戶",
     "No account available": "沒有可新增的帳戶",
     "No bound account. Add one above, or fill the key below to keep credentials on the channel.": "尚未綁定帳戶。可於上方新增帳戶，或在下方填寫密鑰、把憑證留在渠道上。",
-    "Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.": "綁定的帳戶依列表順序輪詢（用法同多 key）：每個都可在本渠道單獨停用，某個帳戶不可用時會自動跳過。"
+    "Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.": "綁定的帳戶依列表順序輪詢（用法同多 key）：每個都可在本渠道單獨停用，某個帳戶不可用時會自動跳過。",
+    "Enabled for this channel": "在本渠道啟用"
   }
 }
