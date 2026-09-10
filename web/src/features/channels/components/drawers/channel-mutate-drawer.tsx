@@ -774,6 +774,18 @@ export function ChannelMutateDrawer({
   useEffect(() => {
     if (!open) setCredentialMode('account')
   }, [open])
+  // 上游地址归账户：绑定了账户的渠道，渠道侧地址控件不再生效
+  //（Channel.GetBaseURL 以账户地址为准），这里统一决定是否隐藏与展示只读地址。
+  const addressFromAccount = isEditing
+    ? hasBoundAccount
+    : credentialMode === 'account'
+  const boundAccountAddress =
+    (boundAccountId !== null
+      ? (accountMetaById.get(boundAccountId)?.base_url ??
+        bindingMetaById.get(boundAccountId)?.base_url)
+      : undefined) ??
+    (isEditing ? channelData?.data?.account?.base_url : undefined) ??
+    ''
   const boundAccountNames = boundBindings
     .map(
       (b) =>
@@ -3085,6 +3097,8 @@ export function ChannelMutateDrawer({
 
                             {/* General base_url for other types */}
                             {![3, 8, 22, 36, 45].includes(currentType) &&
+                              (!addressFromAccount ||
+                                currentType === CHANNEL_TYPE_TASK_PLUGIN) &&
                               ([26, 25, 35].includes(currentType) ? (
                                 <CodingPlanBaseUrlField
                                   form={form}
@@ -3259,6 +3273,27 @@ export function ChannelMutateDrawer({
                             )}
 
                             <ChannelAuthSection>
+                              {/* 上游地址以账户为准（Channel.GetBaseURL）：绑了账户就不看渠道侧地址 */}
+                              {addressFromAccount && (
+                                <div className='border-border/60 bg-muted/10 flex items-start justify-between gap-3 rounded-lg border p-3'>
+                                  <div className='min-w-0'>
+                                    <div className='text-muted-foreground text-xs font-medium'>
+                                      {t('Upstream address')}
+                                    </div>
+                                    <div className='truncate font-mono text-sm'>
+                                      {boundAccountAddress ||
+                                        t('Provider default address')}
+                                    </div>
+                                  </div>
+                                  <Link
+                                    to='/accounts'
+                                    className='text-primary inline-flex shrink-0 items-center gap-1 text-xs hover:underline'
+                                  >
+                                    <ExternalLink className='size-3' />
+                                    {t('Manage in Accounts')}
+                                  </Link>
+                                </div>
+                              )}
                               {/* 凭证来源：默认账户（唯一真相源）；手动填写只是快速建渠道的
                                 入口，保存后后端会为该渠道自动建一个私有账户 */}
                               {!isEditing && (
@@ -3380,7 +3415,7 @@ export function ChannelMutateDrawer({
                                   {boundBindings.length === 0 ? (
                                     <div className='text-muted-foreground rounded-md border border-dashed px-3 py-2.5 text-sm'>
                                       {t(
-                                        'No bound account yet. Pick one above, or switch to manual entry and we will create one on save.'
+                                        'No bound account yet.'
                                       )}
                                     </div>
                                   ) : !accountsOpen ? (
