@@ -134,45 +134,31 @@ func ResolveChannelCodingPlanProvider(channel *model.Channel) (CodingPlanProvide
 			return "", fmt.Errorf("unsupported coding plan provider: %s", p)
 		}
 	}
-	var baseURL string
-	if channel.BaseURL != nil {
-		baseURL = *channel.BaseURL
-	}
-	if detected, ok := DetectCodingPlanProvider(baseURL); ok {
-		return detected, nil
-	}
-	if detected, ok := CodingPlanProviderFromChannelType(channel.Type); ok {
-		return detected, nil
-	}
+	// 2026-09-10 定：监控开关只认显式配置（渠道/账户上的「开监控 + 厂商」），
+	// base_url 探测与渠道类型映射不再替用户做决定——探测结果只用于表单预填
+	// （前端 detectCodingPlanProvider 与 DetectCodingPlanProvider 同源）。
 	return "", errors.New("coding plan quota is not enabled for this channel (set coding_plan_provider)")
 }
 
 // ResolveAccountCodingPlanProvider 账户版套餐厂商解析（凭证与渠道解耦后配置在
 // 账户上），优先级与渠道版一致：显式 provider > base_url 探测 > 类型映射。
 func ResolveAccountCodingPlanProvider(account *model.Account) (CodingPlanProvider, error) {
-	if account.CodingPlanProvider != nil {
-		p := strings.TrimSpace(*account.CodingPlanProvider)
-		if p == string(CodingPlanProviderDisabled) {
-			return "", errors.New("coding plan monitoring is disabled for this account")
-		}
-		if p != "" {
-			if IsKnownCodingPlanProvider(p) {
-				return CodingPlanProvider(p), nil
-			}
-			return "", fmt.Errorf("unsupported coding plan provider: %s", p)
-		}
+	// 只认显式配置（账户上的「开监控 + 厂商」），不做 base_url/渠道类型猜测——余量查询
+	// 地址永远是所选厂商的官方地址，绝不从 base_url 反推（中转地址打官方接口必失败）。
+	if account.CodingPlanProvider == nil {
+		return "", errors.New("coding plan quota is not enabled for this account (set coding_plan_provider)")
 	}
-	var baseURL string
-	if account.BaseURL != nil {
-		baseURL = *account.BaseURL
+	p := strings.TrimSpace(*account.CodingPlanProvider)
+	if p == string(CodingPlanProviderDisabled) {
+		return "", errors.New("coding plan monitoring is disabled for this account")
 	}
-	if detected, ok := DetectCodingPlanProvider(baseURL); ok {
-		return detected, nil
+	if p == "" {
+		return "", errors.New("coding plan quota is not enabled for this account (set coding_plan_provider)")
 	}
-	if detected, ok := CodingPlanProviderFromChannelType(account.Type); ok {
-		return detected, nil
+	if !IsKnownCodingPlanProvider(p) {
+		return "", fmt.Errorf("unsupported coding plan provider: %s", p)
 	}
-	return "", errors.New("coding plan quota is not enabled for this account (set coding_plan_provider)")
+	return CodingPlanProvider(p), nil
 }
 
 // ── 编码套餐自动启停(按余量)────────────────────────────────────
