@@ -7478,6 +7478,7 @@
     "Accounts hold credentials shared by channels. Create one and bind it from a channel.": "账户持有被渠道共享的凭证。先建账户，再在渠道里绑定它。",
     "Account deleted": "账户已删除",
     "This will permanently delete account": "将永久删除账户",
-    "Plan provider": "套餐厂商"
+    "Plan provider": "套餐厂商",
+    "Previous versions": "历史版本"
   }
 }

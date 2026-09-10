@@ -66,16 +66,19 @@ func parseChangelogHeading(heading string) (version string, date string) {
 }
 
 // pickChangelogEntry 找到与运行版本匹配的段落；没有匹配时回退到最新一版并返回 false。
+// 比较前两侧都去掉空白：VERSION 文件在 Windows 检出会被加上 \r，经构建期注入后
+// 会粘在版本号尾部（`v26.09.11.muw.8\r`），不 trim 就会永远匹配不上。
 func pickChangelogEntry(entries []changelogEntry, version string) (changelogEntry, bool) {
+	target := strings.TrimSpace(version)
 	for _, entry := range entries {
-		if entry.Version == version {
+		if strings.TrimSpace(entry.Version) == target {
 			return entry, true
 		}
 	}
 	return entries[0], false
 }
 
-// GetChangelog 返回当前运行版本对应的更新日志段落。
+// GetChangelog 返回当前运行版本对应的更新日志段落，以及其余段落供「历史版本」折叠。
 // 版本不在内置日志里时（如直接跑上游版本号）回退到最新一版，并以 matched=false 告知前端。
 func GetChangelog(c *gin.Context) {
 	entries := parseChangelog(changelogContent)
@@ -86,13 +89,27 @@ func GetChangelog(c *gin.Context) {
 
 	entry, matched := pickChangelogEntry(entries, common.Version)
 
+	// 其余段落按文件顺序（最新在前）一并下发，已展示的那一段不重复下发。
+	history := make([]gin.H, 0, len(entries))
+	for _, item := range entries {
+		if item.Version == entry.Version {
+			continue
+		}
+		history = append(history, gin.H{
+			"version":  item.Version,
+			"date":     item.Date,
+			"markdown": item.Body,
+		})
+	}
+
 	common.ApiSuccess(c, gin.H{
-		"version": common.Version,
+		"version": strings.TrimSpace(common.Version),
 		"matched": matched,
 		"note": gin.H{
 			"version":  entry.Version,
 			"date":     entry.Date,
 			"markdown": entry.Body,
 		},
+		"history": history,
 	})
 }

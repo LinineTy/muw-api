@@ -67,3 +67,41 @@ func TestPickChangelogEntry(t *testing.T) {
 		t.Fatalf("未知版本应回退到最新一段，实际 %q", fallback.Version)
 	}
 }
+
+// 版本号带 \r 也必须匹配：VERSION 文件在 Windows 检出会被加上 CRLF，
+// 构建期经 ldflags 注入后 \r 会粘在版本号尾部（生产实测就是这样）。
+func TestPickChangelogEntryTrimsVersion(t *testing.T) {
+	entries := parseChangelog(changelogFixture)
+
+	for _, version := range []string{
+		"v26.09.11.muw.6",
+		"v26.09.11.muw.6\r",
+		"v26.09.11.muw.6\n",
+		" v26.09.11.muw.6 ",
+	} {
+		hit, matched := pickChangelogEntry(entries, version)
+		if !matched {
+			t.Fatalf("版本 %q 应命中", version)
+		}
+		if hit.Version != "v26.09.11.muw.6" {
+			t.Fatalf("版本 %q 命中了错误的段落: %q", version, hit.Version)
+		}
+	}
+}
+
+// 内置更新日志的源文件在 Windows 检出下是 CRLF，分段与正文解析必须照常。
+func TestParseChangelogWithCRLF(t *testing.T) {
+	entries := parseChangelog(strings.ReplaceAll(changelogFixture, "\n", "\r\n"))
+	if len(entries) != 3 {
+		t.Fatalf("CRLF 下期望 3 段，实际 %d 段", len(entries))
+	}
+	if entries[0].Version != "v26.09.11.muw.6" || entries[0].Date != "2026-09-11" {
+		t.Fatalf("CRLF 下第一段版本/日期解析错误: %+v", entries[0])
+	}
+	if !strings.Contains(entries[0].Body, "甲条目") || strings.Contains(entries[0].Body, "\r") {
+		t.Fatalf("CRLF 下第一段正文异常: %q", entries[0].Body)
+	}
+	if strings.Contains(entries[0].Body, "\n\n\n") {
+		t.Fatalf("CRLF 下正文换行异常: %q", entries[0].Body)
+	}
+}

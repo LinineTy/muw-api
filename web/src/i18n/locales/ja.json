@@ -7478,6 +7478,7 @@
     "Accounts hold credentials shared by channels. Create one and bind it from a channel.": "アカウントはチャネル間で共有される認証情報を保持します。作成してチャネルからバインドしてください。",
     "Account deleted": "アカウントを削除しました",
     "This will permanently delete account": "アカウントを完全に削除します:",
-    "Plan provider": "プラン提供元"
+    "Plan provider": "プラン提供元",
+    "Previous versions": "過去のバージョン"
   }
 }

@@ -7478,6 +7478,7 @@
     "Accounts hold credentials shared by channels. Create one and bind it from a channel.": "Accounts hold credentials shared by channels. Create one and bind it from a channel.",
     "Account deleted": "Account deleted",
     "This will permanently delete account": "This will permanently delete account",
-    "Plan provider": "Plan provider"
+    "Plan provider": "Plan provider",
+    "Previous versions": "Previous versions"
   }
 }
