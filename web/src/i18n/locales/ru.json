@@ -7478,6 +7478,7 @@
     "Accounts hold credentials shared by channels. Create one and bind it from a channel.": "Аккаунты хранят учётные данные, общие для каналов. Создайте аккаунт и привяжите его в канале.",
     "Account deleted": "Аккаунт удалён",
     "This will permanently delete account": "Аккаунт будет удалён безвозвратно:",
-    "Plan provider": "Провайдер тарифа"
+    "Plan provider": "Провайдер тарифа",
+    "Previous versions": "Предыдущие версии"
   }
 }

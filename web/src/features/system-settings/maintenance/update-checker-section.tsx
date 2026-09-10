@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { RefreshCcwIcon } from 'lucide-react'
+import { ChevronDownIcon, RefreshCcwIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -24,8 +24,14 @@ import { toast } from 'sonner'
 import { Dialog } from '@/components/dialog'
 import { Markdown } from '@/components/ui/markdown'
 import { Button } from '@/components/ui/button'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import { api } from '@/lib/api'
 import { formatTimestamp } from '@/lib/format'
+import { cn } from '@/lib/utils'
 
 import { SettingsSection } from '../components/settings-section'
 
@@ -41,6 +47,12 @@ type UpdateCheckerSectionProps = {
   startTime?: number | null
 }
 
+type ChangelogHistoryEntry = {
+  version: string
+  date?: string
+  markdown: string
+}
+
 type ChangelogData = {
   version: string
   matched: boolean
@@ -49,6 +61,46 @@ type ChangelogData = {
     date?: string
     markdown: string
   }
+  history?: ChangelogHistoryEntry[]
+}
+
+function ChangelogHistoryRow({ entry }: { entry: ChangelogHistoryEntry }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className='rounded-md border'
+    >
+      <CollapsibleTrigger
+        render={
+          <button
+            type='button'
+            className='hover:bg-muted/40 flex w-full items-center justify-between gap-x-3 rounded-md px-3 py-2 text-left transition-colors'
+            aria-expanded={open}
+          />
+        }
+      >
+        <span className='text-[13px] font-medium'>{entry.version}</span>
+        <span className='flex items-center gap-2'>
+          {entry.date && (
+            <span className='text-muted-foreground text-xs'>{entry.date}</span>
+          )}
+          <ChevronDownIcon
+            className={cn(
+              'h-3.5 w-3.5 transition-transform',
+              open && 'rotate-180'
+            )}
+            aria-hidden='true'
+          />
+        </span>
+      </CollapsibleTrigger>
+      <CollapsibleContent className='border-t px-3 py-2'>
+        <Markdown>{entry.markdown}</Markdown>
+      </CollapsibleContent>
+    </Collapsible>
+  )
 }
 
 export function UpdateCheckerSection({
@@ -62,6 +114,7 @@ export function UpdateCheckerSection({
   const [latestChangelog, setLatestChangelog] = useState('')
   const [serverVersion, setServerVersion] = useState('')
   const [changelog, setChangelog] = useState<ChangelogData | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
 
   const uptime = startTime ? formatTimestamp(startTime) : t('Unknown')
   const version = currentVersion || t('Unknown')
@@ -165,6 +218,43 @@ export function UpdateCheckerSection({
                 </div>
               )}
               <Markdown className='mt-3'>{changelog.note.markdown}</Markdown>
+            </div>
+          )}
+
+          {changelog?.history && changelog.history.length > 0 && (
+            <div className='rounded-lg border p-4'>
+              <Collapsible open={historyOpen} onOpenChange={setHistoryOpen}>
+                <CollapsibleTrigger
+                  render={
+                    <button
+                      type='button'
+                      className='flex w-full items-center justify-between gap-x-3 text-left'
+                      aria-expanded={historyOpen}
+                    />
+                  }
+                >
+                  <span className='text-sm font-medium'>
+                    {t('Previous versions')}
+                  </span>
+                  <span className='flex items-center gap-2'>
+                    <span className='text-muted-foreground text-xs'>
+                      {changelog.history.length}
+                    </span>
+                    <ChevronDownIcon
+                      className={cn(
+                        'h-4 w-4 transition-transform',
+                        historyOpen && 'rotate-180'
+                      )}
+                      aria-hidden='true'
+                    />
+                  </span>
+                </CollapsibleTrigger>
+                <CollapsibleContent className='mt-3 flex flex-col gap-2'>
+                  {changelog.history.map((item) => (
+                    <ChangelogHistoryRow key={item.version} entry={item} />
+                  ))}
+                </CollapsibleContent>
+              </Collapsible>
             </div>
           )}
         </div>
