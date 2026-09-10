@@ -31,8 +31,10 @@ import { getAccountCodingPlanQuota } from '../api'
 import { QUOTA_REFRESH_MS } from '../constants'
 import type { Account, AccountCodingPlanTier } from '../types'
 
-// 进度条固定宽度：表格列与卡片视图都用它，避免在 auto 布局的表格里被内容撑得忽宽忽窄。
-const BAR_WIDTH_CLASS = 'w-16'
+// 进度条宽度：表格单元格（窄）里靠外层的最小轨道撑住，卡片里随列宽拉伸成左右多列。
+const TIER_ROW_CLASS = 'flex items-center gap-1.5'
+const TIER_GRID_CLASS =
+  'grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-x-4 gap-y-1.5'
 
 function providerLabel(provider: string | null | undefined): string {
   if (!provider) return ''
@@ -42,10 +44,12 @@ function providerLabel(provider: string | null | undefined): string {
   )
 }
 
-/** 窗口短名：5h / Weekly，其余厂商窗口（monthly_limit 等）转成可读文本。 */
+/** 窗口短名：5h / Weekly / Monthly / Daily，其余厂商窗口（xx_limit 等）转成可读文本。 */
 function tierLabel(name: string, t: (key: string) => string): string {
   if (name === 'five_hour') return t('5h')
   if (name === 'weekly_limit') return t('Weekly')
+  if (name === 'monthly_limit') return t('Monthly')
+  if (name === 'daily_limit') return t('Daily')
   return name
     .replaceAll('_', ' ')
     .replaceAll(/\b\w/g, (ch) => ch.toUpperCase())
@@ -85,16 +89,11 @@ function QuotaTierBar({ tier }: { tier: AccountCodingPlanTier }) {
     : detail
 
   return (
-    <div className='flex items-center gap-1.5' title={title}>
+    <div className={TIER_ROW_CLASS} title={title}>
       <span className='text-muted-foreground min-w-8 shrink-0 text-[11px] whitespace-nowrap'>
         {tierLabel(tier.name, t)}
       </span>
-      <div
-        className={cn(
-          'bg-muted h-1.5 shrink-0 overflow-hidden rounded-full',
-          BAR_WIDTH_CLASS
-        )}
-      >
+      <div className='bg-muted h-1.5 min-w-12 flex-1 overflow-hidden rounded-full'>
         <div
           className={cn('h-full rounded-full', remainingToneClass(remaining))}
           style={{ width: `${remaining}%` }}
@@ -117,8 +116,9 @@ function QuotaTierBar({ tier }: { tier: AccountCodingPlanTier }) {
  * 共享同一张卡）。
  *
  * 2026-09-11 起：账户开了监控（`coding_plan_provider`）就**进页面自动查询**并用进度条
- * 直显，不再需要点「查询」；统一由账户页工具栏的「自动刷新」开关控制轮询（默认 5 分钟
- * 一轮，关掉后只有手动刷新才更新）。只有当前页里开了监控的账户会发请求，量可控。
+ * 直显，不再需要点「查询」；统一由账户页工具栏的「自动刷新」开关控制轮询（默认 30s 一轮，
+ * 与后端自动启停任务的 tick 对齐；关掉后只有手动刷新才更新）。只有当前页里开了监控的
+ * 账户会发请求，量可控。
  */
 export function CodingPlanQuotaCell({
   account,
@@ -134,7 +134,7 @@ export function CodingPlanQuotaCell({
     queryKey: ['account-coding-plan-quota', account.id],
     queryFn: () => getAccountCodingPlanQuota(account.id),
     enabled: monitored,
-    staleTime: 60_000,
+    staleTime: QUOTA_REFRESH_MS,
     refetchInterval: autoRefresh && monitored ? QUOTA_REFRESH_MS : false,
     refetchOnWindowFocus: autoRefresh,
     retry: false,
@@ -159,9 +159,9 @@ export function CodingPlanQuotaCell({
   let body
   if (isLoading) {
     body = (
-      <div className='flex flex-col gap-1'>
-        <Skeleton className='h-1.5 w-28' />
-        <Skeleton className='h-1.5 w-28' />
+      <div className={TIER_GRID_CLASS}>
+        <Skeleton className='h-1.5 w-full' />
+        <Skeleton className='h-1.5 w-full' />
       </div>
     )
   } else if (failed) {
@@ -181,7 +181,7 @@ export function CodingPlanQuotaCell({
     )
   } else {
     body = (
-      <div className='flex flex-col gap-1'>
+      <div className={TIER_GRID_CLASS}>
         {tiers.map((tier) => (
           <QuotaTierBar key={tier.name} tier={tier} />
         ))}
