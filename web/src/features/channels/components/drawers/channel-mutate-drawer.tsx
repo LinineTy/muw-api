@@ -33,6 +33,7 @@ import {
   Sparkles,
   ArrowDown,
   ArrowUp,
+  ChevronRight,
   ExternalLink,
   Trash2,
   X,
@@ -757,6 +758,21 @@ export function ChannelMutateDrawer({
       ),
     [bindableAccounts, boundBindings]
   )
+  // 绑定多起来抽屉会很长：默认超过 3 个就收起，点标题展开；添加账户时自动展开
+  const [accountsExpanded, setAccountsExpanded] = useState<boolean | null>(null)
+  const accountsOpen = accountsExpanded ?? boundBindings.length <= 3
+  // 抽屉关闭时忘掉本次手动展开/收起，下次打开重新按数量判断默认态
+  useEffect(() => {
+    if (!open) setAccountsExpanded(null)
+  }, [open])
+  const boundAccountNames = boundBindings
+    .map(
+      (b) =>
+        accountMetaById.get(b.account_id)?.name ??
+        bindingMetaById.get(b.account_id)?.name ??
+        `#${b.account_id}`
+    )
+    .join(' · ')
   const channelTypeLabelOf = (type: number) =>
     CHANNEL_TYPE_OPTIONS.find((o) => o.value === type)?.label ?? String(type)
   const setBoundBindings = (
@@ -771,6 +787,7 @@ export function ChannelMutateDrawer({
   const addBoundAccount = (id: number) => {
     if (!id || boundBindings.some((b) => b.account_id === id)) return
     setBoundBindings([...boundBindings, { account_id: id, enabled: true }])
+    setAccountsExpanded(true)
   }
   const removeBoundAccount = (id: number) =>
     setBoundBindings(boundBindings.filter((b) => b.account_id !== id))
@@ -3250,9 +3267,24 @@ export function ChannelMutateDrawer({
                               {(!isEditing || hasBoundAccount) && (
                                 <div className='flex flex-col gap-2'>
                                   <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
-                                    <FormLabel className='text-muted-foreground text-xs font-medium'>
-                                      {t('Bound accounts')}
-                                    </FormLabel>
+                                    <button
+                                      type='button'
+                                      onClick={() =>
+                                        setAccountsExpanded(!accountsOpen)
+                                      }
+                                      className='text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-xs font-medium'
+                                    >
+                                      <ChevronRight
+                                        className={cn(
+                                          'size-3.5 transition-transform',
+                                          accountsOpen && 'rotate-90'
+                                        )}
+                                      />
+                                      <span>{t('Bound accounts')}</span>
+                                      <Badge variant='secondary'>
+                                        {boundBindings.length}
+                                      </Badge>
+                                    </button>
                                     <Select
                                       items={addableAccounts.map((acc) => ({
                                         value: String(acc.id),
@@ -3301,6 +3333,10 @@ export function ChannelMutateDrawer({
                                         'No bound account. Add one above, or fill the key below to keep credentials on the channel.'
                                       )}
                                     </div>
+                                  ) : !accountsOpen ? (
+                                    <p className='text-muted-foreground truncate text-xs'>
+                                      {boundAccountNames}
+                                    </p>
                                   ) : (
                                     <div className='flex flex-col gap-1.5'>
                                       {boundBindings.map((binding, index) => {
@@ -3436,11 +3472,13 @@ export function ChannelMutateDrawer({
                                       })}
                                     </div>
                                   )}
-                                  <p className='text-muted-foreground text-xs'>
-                                    {t(
-                                      'Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.'
-                                    )}
-                                  </p>
+                                  {accountsOpen && (
+                                    <p className='text-muted-foreground text-xs'>
+                                      {t(
+                                        'Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.'
+                                      )}
+                                    </p>
+                                  )}
                                 </div>
                               )}
 

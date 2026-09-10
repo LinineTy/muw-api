@@ -42,31 +42,31 @@ import (
 // Type 为厂商权威来源；channels.type 是反规范化副本（列表过滤/渠道测试仍按渠道列，
 // 换绑/换类型时由 controller 同步收敛，见 SyncChannelTypeFromAccount）。
 type Account struct {
-	Id         int    `json:"id"`
-	Name       string `json:"name" gorm:"index"`
-	Type       int    `json:"type" gorm:"default:0"`
-	Status     int    `json:"status" gorm:"default:1"`
-	Key        string `json:"-" gorm:"not null"` // 永不下发；响应经 KeyMasked 脱敏预览
-	KeyMasked  string `json:"key_masked" gorm:"-"`
-	Other      string `json:"other"`
-	BaseURL    *string `json:"base_url" gorm:"column:base_url;default:''"`
-	Setting    *string `json:"setting" gorm:"type:text"`     // 代理等（原渠道 Setting）
-	Balance    float64 `json:"balance"`                      // in USD
-	OtherInfo  string  `json:"other_info" gorm:"type:text"`  // status_reason/status_time（自动启停滞回）
-	OtherSettings string `json:"settings" gorm:"column:settings"` // Azure 版本等（原渠道 OtherSettings，AdvancedCustom 留渠道覆盖）
-	Remark     *string `json:"remark" gorm:"type:varchar(255)" validate:"max=255"`
-	CreatedTime int64  `json:"created_time" gorm:"bigint"`
-	BalanceUpdatedTime int64 `json:"balance_updated_time" gorm:"bigint"`
+	Id                 int     `json:"id"`
+	Name               string  `json:"name" gorm:"index"`
+	Type               int     `json:"type" gorm:"default:0"`
+	Status             int     `json:"status" gorm:"default:1"`
+	Key                string  `json:"-" gorm:"not null"` // 永不下发；响应经 KeyMasked 脱敏预览
+	KeyMasked          string  `json:"key_masked" gorm:"-"`
+	Other              string  `json:"other"`
+	BaseURL            *string `json:"base_url" gorm:"column:base_url;default:''"`
+	Setting            *string `json:"setting" gorm:"type:text"`        // 代理等（原渠道 Setting）
+	Balance            float64 `json:"balance"`                         // in USD
+	OtherInfo          string  `json:"other_info" gorm:"type:text"`     // status_reason/status_time（自动启停滞回）
+	OtherSettings      string  `json:"settings" gorm:"column:settings"` // Azure 版本等（原渠道 OtherSettings，AdvancedCustom 留渠道覆盖）
+	Remark             *string `json:"remark" gorm:"type:varchar(255)" validate:"max=255"`
+	CreatedTime        int64   `json:"created_time" gorm:"bigint"`
+	BalanceUpdatedTime int64   `json:"balance_updated_time" gorm:"bigint"`
 	OpenAIOrganization *string `json:"openai_organization"`
 
 	// 多key状态（轮询索引/各 key 启停）随凭证走，跨渠道共享。
 	ChannelInfo ChannelInfo `json:"channel_info" gorm:"type:json"`
 
 	// 编码套餐余量监控（原渠道 CodingPlan* 字段账户化：套餐账号跟凭证走）。
-	CodingPlanProvider  *string `json:"coding_plan_provider" gorm:"size:32"`
-	CodingPlanKey       string  `json:"-" gorm:"size:512"`               // 套餐专用密钥，永不下发
-	CodingPlanKeyMasked string  `json:"coding_plan_key_masked" gorm:"-"` // 响应脱敏预览
-	CodingPlanQuotaGroup string `json:"coding_plan_quota_group,omitempty" gorm:"-"`
+	CodingPlanProvider   *string `json:"coding_plan_provider" gorm:"size:32"`
+	CodingPlanKey        string  `json:"-" gorm:"size:512"`               // 套餐专用密钥，永不下发
+	CodingPlanKeyMasked  string  `json:"coding_plan_key_masked" gorm:"-"` // 响应脱敏预览
+	CodingPlanQuotaGroup string  `json:"coding_plan_quota_group,omitempty" gorm:"-"`
 
 	// 编码套餐自动启停：组级语义天然归一（共享账户的渠道一起禁用/恢复）。
 	// *bool/*int 与渠道侧同理由：允许 GORM Updates(struct) 写入零值关闭。
@@ -360,6 +360,39 @@ func CountChannelAccountReferences() (map[int]int64, error) {
 	return CountChannelAccountBindingMap()
 }
 
+// ChannelRefView 账户被引用渠道的摘要（列表页"被哪些渠道引用"展示用）。
+type ChannelRefView struct {
+	Id     int    `json:"id"`
+	Name   string `json:"name"`
+	Status int    `json:"status"`
+}
+
+// ListChannelRefsByAccount 一次查出所有账户的引用渠道摘要（列表页用，走绑定表）。
+func ListChannelRefsByAccount() (map[int][]ChannelRefView, error) {
+	type refRow struct {
+		AccountId int
+		Id        int
+		Name      string
+		Status    int
+	}
+	var rows []refRow
+	err := DB.Table("channel_accounts AS ca").
+		Select("ca.account_id AS account_id, ch.id AS id, ch.name AS name, ch.status AS status").
+		Joins("JOIN channels AS ch ON ch.id = ca.channel_id").
+		Order("ca.account_id ASC, ca.account_order ASC, ca.id ASC").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int][]ChannelRefView)
+	for _, r := range rows {
+		out[r.AccountId] = append(out[r.AccountId], ChannelRefView{
+			Id: r.Id, Name: r.Name, Status: r.Status,
+		})
+	}
+	return out, nil
+}
+
 // GetChannelsByAccount 查询引用某账户的渠道（换绑/删除确认视图、类型同步），走绑定表。
 func GetChannelsByAccount(accountId int) ([]*Channel, error) {
 	return GetChannelsBoundToAccount(accountId)
@@ -396,7 +429,7 @@ func CleanupOrphanPrivateAccounts() (int64, error) {
 	if err := DB.Model(&Account{}).
 		// 只认"指向仍然存在的渠道"的绑定：渠道被批量删除（不逐个走 Channel.Delete）时
 		// 绑定行可能残留，这里按 join 判活，避免孤儿账户永远收不回来。
-		Where("auto_generated = " + commonTrueVal +
+		Where("auto_generated = "+commonTrueVal+
 			" AND id NOT IN (SELECT ca.account_id FROM channel_accounts ca JOIN channels c ON c.id = ca.channel_id)").
 		Pluck("id", &orphans).Error; err != nil {
 		return 0, err
