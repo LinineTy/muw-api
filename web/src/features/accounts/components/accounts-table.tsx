@@ -203,7 +203,9 @@ export function AccountsTable({
       renderCard={(row, { isSelected }) => (
         <AccountCard row={row} isSelected={isSelected} />
       )}
-      cardGridClassName='grid grid-cols-1 items-start gap-3 sm:gap-4 lg:grid-cols-3'
+      // 卡片瀑布流：卡片高度不一（开了监控的多一块余量），用 CSS 多列让后面的卡片
+      // 上浮填洞。代价是阅读顺序变成「先竖后横」（第 N 张落在哪一列由列高决定）。
+      cardGridClassName='columns-1 gap-3 sm:columns-2 sm:gap-4 lg:columns-3 [&>*]:mb-3 [&>*]:break-inside-avoid sm:[&>*]:mb-4'
       applyHeaderSize
       toolbarProps={{
         searchPlaceholder: t('Search accounts...'),
