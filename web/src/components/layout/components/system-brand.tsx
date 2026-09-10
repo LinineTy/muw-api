@@ -35,8 +35,9 @@ type SystemBrandProps = {
    * Visual layout:
    * - 'sidebar': stacked card style (used inside the sidebar header).
    * - 'inline': compact horizontal pill (used inside the top app bar).
+   * - 'icon': logo only, no name (used inside the OS shell's thin left rail).
    */
-  variant?: 'sidebar' | 'inline'
+  variant?: 'sidebar' | 'inline' | 'icon'
 }
 
 /**
@@ -54,6 +55,29 @@ export function SystemBrand(props: SystemBrandProps) {
   const name = status?.system_name || props.defaultName || 'New API'
   const version =
     status?.version || props.defaultVersion || t('Unknown version')
+
+  if (variant === 'icon') {
+    // 左细条用:只留 logo,点击去站点首页(细条放不下名字)
+    return (
+      <Link
+        to='/'
+        aria-label={t('Go to home')}
+        title={name}
+        className={cn(
+          'inline-flex size-8 items-center justify-center rounded-lg transition-colors outline-none select-none',
+          'hover:bg-accent focus-visible:ring-ring/40 focus-visible:ring-2'
+        )}
+      >
+        <span className='flex size-6 items-center justify-center overflow-hidden rounded-md'>
+          <img
+            src={logo}
+            alt={t('Logo')}
+            className='size-full rounded-md object-cover'
+          />
+        </span>
+      </Link>
+    )
+  }
 
   if (variant === 'inline') {
     return (

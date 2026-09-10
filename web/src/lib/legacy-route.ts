@@ -19,7 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 const legacyOrigin = 'https://legacy-route.invalid'
 
 const legacyConsoleRoutes: Record<string, string> = {
-  '/console': '/dashboard',
+  // 旧 /console 进入的本来就是"控制台壳",现在壳的桌面有独立路径
+  '/console': '/os-desktop',
   '/console/models': '/models',
   '/console/subscription': '/subscriptions',
   '/console/channel': '/channels',
