@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { RefreshCcwIcon } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -41,6 +41,16 @@ type UpdateCheckerSectionProps = {
   startTime?: number | null
 }
 
+type ChangelogData = {
+  version: string
+  matched: boolean
+  note?: {
+    version: string
+    date?: string
+    markdown: string
+  }
+}
+
 export function UpdateCheckerSection({
   currentVersion,
   startTime,
@@ -51,9 +61,27 @@ export function UpdateCheckerSection({
   const [latestTag, setLatestTag] = useState('')
   const [latestChangelog, setLatestChangelog] = useState('')
   const [serverVersion, setServerVersion] = useState('')
+  const [changelog, setChangelog] = useState<ChangelogData | null>(null)
 
   const uptime = startTime ? formatTimestamp(startTime) : t('Unknown')
   const version = currentVersion || t('Unknown')
+
+  // 更新日志随二进制内置，拿不到时静默降级（不影响版本号与检查更新）
+  useEffect(() => {
+    let cancelled = false
+    api
+      .get('/api/status/changelog')
+      .then((res) => {
+        const data = res.data?.data as ChangelogData | undefined
+        if (!cancelled && res.data?.success && data?.note?.markdown) {
+          setChangelog(data)
+        }
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const handleCheckUpdates = async () => {
     setChecking(true)
@@ -117,6 +145,28 @@ export function UpdateCheckerSection({
               </>
             )}
           </Button>
+
+          {changelog?.note?.markdown && (
+            <div className='rounded-lg border p-4'>
+              <div className='flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1'>
+                <div className='text-sm font-medium'>
+                  {t('Release notes for this version')}
+                </div>
+                <div className='text-muted-foreground text-xs'>
+                  {changelog.note.version}
+                  {changelog.note.date ? ` · ${changelog.note.date}` : ''}
+                </div>
+              </div>
+              {!changelog.matched && (
+                <div className='text-muted-foreground mt-1 text-xs'>
+                  {t(
+                    'No release notes for the running version, showing the latest release'
+                  )}
+                </div>
+              )}
+              <Markdown className='mt-3'>{changelog.note.markdown}</Markdown>
+            </div>
+          )}
         </div>
       </SettingsSection>
 

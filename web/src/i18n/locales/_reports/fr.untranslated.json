@@ -312,5 +312,6 @@
   "Your account is on the blacklist and is not allowed to sign in": "Your account is on the blacklist and is not allowed to sign in",
   "Your balance does not meet the pool requirement": "Your balance does not meet the pool requirement",
   "and all of its claim records. This action cannot be undone.": "and all of its claim records. This action cannot be undone.",
-  "e.g. 131072, 0 or empty = unlimited": "e.g. 131072, 0 or empty = unlimited"
+  "e.g. 131072, 0 or empty = unlimited": "e.g. 131072, 0 or empty = unlimited",
+  "The overnight range requires start > end. For a normal window, use a ≥ and a < condition instead.": "The overnight range requires start > end. For a normal window, use a ≥ and a < condition instead."
 }
