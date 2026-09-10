@@ -79,11 +79,20 @@ export interface AccountCodingPlanQuota {
   queried_at: number
 }
 
+// 账户列表筛选下拉的计数（类型/状态分布 + 被引用数 + 监控数）
+export interface AccountFacets {
+  type: Record<string, number>
+  status: Record<string, number>
+  referenced: number
+  monitoring: number
+}
+
 export interface GetAccountsResponse {
   items: AccountListItem[]
   total: number
   page: number
   page_size: number
+  facets?: AccountFacets
 }
 
 export interface GetAccountResponse {

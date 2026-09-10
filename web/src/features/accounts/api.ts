@@ -31,8 +31,21 @@ export async function getAccounts(params: {
   p?: number
   page_size?: number
   keyword?: string
+  type?: number
+  status?: number
+  referenced?: boolean
+  monitoring?: boolean
 }): Promise<GetAccountsResponse> {
-  const res = await api.get('/api/account/', { params })
+  const res = await api.get('/api/account/', {
+    params: {
+      ...params,
+      // 后端用 1/0 区分「是/否」两态，不传 = 不限
+      referenced:
+        params.referenced === undefined ? undefined : params.referenced ? 1 : 0,
+      monitoring:
+        params.monitoring === undefined ? undefined : params.monitoring ? 1 : 0,
+    },
+  })
   return res.data.data
 }
 

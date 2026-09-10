@@ -17,10 +17,21 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute, redirect } from '@tanstack/react-router'
+import z from 'zod'
 
 import { Accounts } from '@/features/accounts'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
+
+const accountsSearchSchema = z.object({
+  page: z.number().optional().catch(1),
+  pageSize: z.number().optional().catch(undefined),
+  filter: z.string().optional().catch(''),
+  status: z.array(z.string()).optional().catch([]),
+  type: z.array(z.string()).optional().catch([]),
+  referenced: z.array(z.string()).optional().catch([]),
+  monitoring: z.array(z.string()).optional().catch([]),
+})
 
 export const Route = createFileRoute('/_authenticated/accounts/')({
   beforeLoad: () => {
@@ -32,5 +43,6 @@ export const Route = createFileRoute('/_authenticated/accounts/')({
       })
     }
   },
+  validateSearch: accountsSearchSchema,
   component: Accounts,
 })
