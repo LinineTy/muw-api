@@ -326,11 +326,11 @@ export function OsSideStrip() {
       {/* 上端:品牌,点击去站点首页 */}
       <SystemBrand variant='icon' />
 
-      {/* 下端:两坨,中间一道细线 */}
+      {/* 下端:两坨,中间一道细线(工具在上、系统项含头像在下) */}
       <div className='flex flex-col items-center'>
-        <RailSystemGroup side={side} />
-        <span className='bg-border/60 my-1.5 h-px w-6' aria-hidden='true' />
         <RailToolsGroup side={side} />
+        <span className='bg-border/60 my-1.5 h-px w-6' aria-hidden='true' />
+        <RailSystemGroup side={side} />
       </div>
     </nav>
   )
