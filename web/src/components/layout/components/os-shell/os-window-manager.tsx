@@ -1,15 +1,17 @@
 // @muw-owned
-import { useEffect, useRef } from 'react'
 import { useNavigate } from '@tanstack/react-router'
+import { useEffect, useRef } from 'react'
 
-import { isSettingsUrl } from './os-open'
-import { useOsNavItems, matchOsNavItem } from './use-os-nav'
+import { MOBILE_BREAKPOINT } from '@/hooks/use-mobile'
 import {
   useOsWindowsStore,
   readPersistedWindows,
 } from '@/stores/os-windows-store'
-import { OsWindowFrame } from './os-window'
+
 import { OsDesktopPlaceholder } from './os-desktop-placeholder'
+import { isSettingsUrl } from './os-open'
+import { OsWindowFrame } from './os-window'
+import { useOsNavItems, matchOsNavItem } from './use-os-nav'
 
 /**
  * OS 桌面壳 · 窗口层:
@@ -63,6 +65,10 @@ export function OsWindowManager() {
   useEffect(() => {
     if (booted.current) return
     booted.current = true
+
+    // 手机视口不走 OS 壳(布局层不挂本组件):深链=普通路由渲染,
+    // 不做"开窗+回桌面"。桌面窄窗口同理走手机布局。
+    if (window.innerWidth < MOBILE_BREAKPOINT) return
 
     const path = window.location.pathname
     if (path !== '/console') {

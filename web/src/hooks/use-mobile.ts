@@ -18,10 +18,14 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import * as React from 'react'
 
-const MOBILE_BREAKPOINT = 768
+export const MOBILE_BREAKPOINT = 768
 
 export function useIsMobile() {
-  const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)
+  // 初始即按视口计算:首帧就渲染正确布局。曾因初始 undefined 被当桌面,
+  // OsWindowManager 深链 boot 抢跑——手机全页加载 /profile 被改写跳 /dashboard。
+  const [isMobile, setIsMobile] = React.useState<boolean>(
+    () => typeof window !== 'undefined' && window.innerWidth < MOBILE_BREAKPOINT
+  )
 
   React.useEffect(() => {
     const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
@@ -33,5 +37,5 @@ export function useIsMobile() {
     return () => mql.removeEventListener('change', onChange)
   }, [])
 
-  return !!isMobile
+  return isMobile
 }
