@@ -118,22 +118,33 @@ func GetAllAccounts(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// 引用渠道摘要（名称/状态）：同样一次查完，列表页直接展示"被哪些渠道引用"。
+	refsByAccount, err := model.ListChannelRefsByAccount()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	items := make([]gin.H, 0, len(accounts))
 	for _, account := range accounts {
 		fillAccountView(account)
+		refs := refsByAccount[account.Id]
+		if refs == nil {
+			refs = []model.ChannelRefView{}
+		}
 		items = append(items, gin.H{
-			"account":         account,
-			"channel_count":   refCounts[account.Id],
-			"referenced":      refCounts[account.Id] > 0,
+			"account":       account,
+			"channel_count": refCounts[account.Id],
+			"referenced":    refCounts[account.Id] > 0,
+			"channels":      refs,
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
 		"data": gin.H{
-			"items": items,
-			"total": total,
-			"page":  page,
+			"items":     items,
+			"total":     total,
+			"page":      page,
 			"page_size": pageSize,
 		},
 	})
@@ -217,21 +228,21 @@ func validateAccount(account *model.Account, isAdd bool) error {
 // AddAccount 创建账户。key 经请求体独立字段接收（json:"-" 不绑入 model）。
 func AddAccount(c *gin.Context) {
 	var req struct {
-		Name           string `json:"name"`
-		Type           int    `json:"type"`
-		Key            string `json:"key"`
-		BaseURL        *string `json:"base_url"`
-		OpenAIOrganization *string `json:"openai_organization"`
-		Setting        *string `json:"setting"`
-		Other          string `json:"other"`
-		CodingPlanProvider *string `json:"coding_plan_provider"`
-		CodingPlanKey   *string `json:"coding_plan_key"`
-		CodingPlanAutoControl *bool `json:"coding_plan_auto_control"`
-		CodingPlanDisableThreshold *int `json:"coding_plan_disable_threshold"`
-		CodingPlanEnableThreshold  *int `json:"coding_plan_enable_threshold"`
-		Remark         *string `json:"remark"`
+		Name                       string  `json:"name"`
+		Type                       int     `json:"type"`
+		Key                        string  `json:"key"`
+		BaseURL                    *string `json:"base_url"`
+		OpenAIOrganization         *string `json:"openai_organization"`
+		Setting                    *string `json:"setting"`
+		Other                      string  `json:"other"`
+		CodingPlanProvider         *string `json:"coding_plan_provider"`
+		CodingPlanKey              *string `json:"coding_plan_key"`
+		CodingPlanAutoControl      *bool   `json:"coding_plan_auto_control"`
+		CodingPlanDisableThreshold *int    `json:"coding_plan_disable_threshold"`
+		CodingPlanEnableThreshold  *int    `json:"coding_plan_enable_threshold"`
+		Remark                     *string `json:"remark"`
 		// 多 key 支持：multi_to_single 语义（换行分隔 key 合一存储）
-		IsMultiKey bool   `json:"is_multi_key"`
+		IsMultiKey   bool   `json:"is_multi_key"`
 		MultiKeyMode string `json:"multi_key_mode"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -239,21 +250,21 @@ func AddAccount(c *gin.Context) {
 		return
 	}
 	account := &model.Account{
-		Name:                    req.Name,
-		Type:                    req.Type,
-		Status:                  common.ChannelStatusEnabled,
-		Key:                     req.Key,
-		BaseURL:                 req.BaseURL,
-		OpenAIOrganization:      req.OpenAIOrganization,
-		Setting:                 req.Setting,
-		Other:                   req.Other,
-		CodingPlanProvider:      req.CodingPlanProvider,
-		CodingPlanKey:           derefString(req.CodingPlanKey),
-		CodingPlanAutoControl:   req.CodingPlanAutoControl,
+		Name:                       req.Name,
+		Type:                       req.Type,
+		Status:                     common.ChannelStatusEnabled,
+		Key:                        req.Key,
+		BaseURL:                    req.BaseURL,
+		OpenAIOrganization:         req.OpenAIOrganization,
+		Setting:                    req.Setting,
+		Other:                      req.Other,
+		CodingPlanProvider:         req.CodingPlanProvider,
+		CodingPlanKey:              derefString(req.CodingPlanKey),
+		CodingPlanAutoControl:      req.CodingPlanAutoControl,
 		CodingPlanDisableThreshold: req.CodingPlanDisableThreshold,
 		CodingPlanEnableThreshold:  req.CodingPlanEnableThreshold,
-		Remark:                  req.Remark,
-		CreatedTime:             common.GetTimestamp(),
+		Remark:                     req.Remark,
+		CreatedTime:                common.GetTimestamp(),
 	}
 	if req.CodingPlanKey != nil {
 		account.CodingPlanKey = *req.CodingPlanKey
@@ -298,22 +309,22 @@ func derefString(s *string) string {
 // 换 key 后多 key 状态失效重算 MultiKeySize。
 func UpdateAccount(c *gin.Context) {
 	var req struct {
-		Id    int    `json:"id"`
-		Name  *string `json:"name"`
-		Type  *int   `json:"type"`
-		Key   *string `json:"key"`
-		BaseURL *string `json:"base_url"`
-		OpenAIOrganization *string `json:"openai_organization"`
-		Setting *string `json:"setting"`
-		Other  *string `json:"other"`
-		CodingPlanProvider *string `json:"coding_plan_provider"`
-		CodingPlanKey *string `json:"coding_plan_key"`
-		CodingPlanAutoControl *bool `json:"coding_plan_auto_control"`
-		CodingPlanDisableThreshold *int `json:"coding_plan_disable_threshold"`
-		CodingPlanEnableThreshold  *int `json:"coding_plan_enable_threshold"`
-		Remark *string `json:"remark"`
-		Status *int `json:"status"`
-		MultiKeyMode *string `json:"multi_key_mode"`
+		Id                         int     `json:"id"`
+		Name                       *string `json:"name"`
+		Type                       *int    `json:"type"`
+		Key                        *string `json:"key"`
+		BaseURL                    *string `json:"base_url"`
+		OpenAIOrganization         *string `json:"openai_organization"`
+		Setting                    *string `json:"setting"`
+		Other                      *string `json:"other"`
+		CodingPlanProvider         *string `json:"coding_plan_provider"`
+		CodingPlanKey              *string `json:"coding_plan_key"`
+		CodingPlanAutoControl      *bool   `json:"coding_plan_auto_control"`
+		CodingPlanDisableThreshold *int    `json:"coding_plan_disable_threshold"`
+		CodingPlanEnableThreshold  *int    `json:"coding_plan_enable_threshold"`
+		Remark                     *string `json:"remark"`
+		Status                     *int    `json:"status"`
+		MultiKeyMode               *string `json:"multi_key_mode"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		common.ApiError(c, err)

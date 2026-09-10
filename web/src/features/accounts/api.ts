@@ -21,6 +21,7 @@ import { api } from '@/lib/api'
 import type {
   Account,
   AccountChannelRef,
+  AccountCodingPlanQuota,
   CreateAccountRequest,
   GetAccountsResponse,
   UpdateAccountRequest,
@@ -45,6 +46,17 @@ export async function getAccountChannelRefs(
 ): Promise<AccountChannelRef[]> {
   const res = await api.get(`/api/account/${id}/channels`)
   return res.data.data ?? []
+}
+
+/**
+ * 查询账户的编码套餐余量。账户需显式开启监控（coding_plan_provider），
+ * 查询地址固定走厂商官方，与账户 base_url 无关。
+ */
+export async function getAccountCodingPlanQuota(
+  id: number
+): Promise<AccountCodingPlanQuota> {
+  const res = await api.get(`/api/account/${id}/coding_plan/quota`)
+  return res.data.data
 }
 
 export async function createAccount(

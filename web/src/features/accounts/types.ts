@@ -57,6 +57,26 @@ export interface AccountListItem {
   account: Account
   channel_count: number
   referenced: boolean
+  /** 引用该账户的渠道摘要（列表页直接展示"被哪些渠道引用"） */
+  channels?: AccountChannelRef[]
+}
+
+/** 编码套餐余量（与渠道侧同构，见 dto/coding_plan.go） */
+export interface AccountCodingPlanTier {
+  name: string
+  utilization: number
+  resets_at?: string | null
+  limit?: number
+  remaining?: number
+  used?: number
+}
+
+export interface AccountCodingPlanQuota {
+  success: boolean
+  error?: string
+  level?: string
+  tiers: AccountCodingPlanTier[]
+  queried_at: number
 }
 
 export interface GetAccountsResponse {

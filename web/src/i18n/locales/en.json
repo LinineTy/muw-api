@@ -7425,6 +7425,27 @@
     "No bound account. Add one above, or fill the key below to keep credentials on the channel.": "No bound account. Add one above, or fill the key below to keep credentials on the channel.",
     "Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.": "Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.",
     "Enabled for this channel": "Enabled for this channel",
-    "Credentials come from the bound accounts. Edit keys on the account page.": "Credentials come from the bound accounts. Edit keys on the account page."
+    "Credentials come from the bound accounts. Edit keys on the account page.": "Credentials come from the bound accounts. Edit keys on the account page.",
+    "Not monitored": "Not monitored",
+    "Query failed": "Query failed",
+    "Query quota": "Query quota",
+    "5h": "5h",
+    "Not referenced": "Not referenced",
+    "Referenced by": "Referenced by",
+    "Coding plan quota": "Coding plan quota",
+    "Coding plan quota monitoring": "Coding plan quota monitoring",
+    "Query the plan quota of this account from the provider official endpoint.": "Query the plan quota of this account from the provider official endpoint.",
+    "Plan key (optional)": "Plan key (optional)",
+    "Leave empty to use this account key": "Leave empty to use this account key",
+    "Auto control": "Auto control",
+    "Disable the account when quota runs out, restore when it recovers.": "Disable the account when quota runs out, restore when it recovers.",
+    "Disable threshold (%)": "Disable threshold (%)",
+    "Restore threshold (%)": "Restore threshold (%)",
+    "Disabled accounts are skipped by every bound channel.": "Disabled accounts are skipped by every bound channel.",
+    "Manage in Channels": "Manage in Channels",
+    "No channel references this account yet.": "No channel references this account yet.",
+    "Accounts hold credentials shared by channels. Create one and bind it from a channel.": "Accounts hold credentials shared by channels. Create one and bind it from a channel.",
+    "Account deleted": "Account deleted",
+    "This will permanently delete account": "This will permanently delete account"
   }
 }
