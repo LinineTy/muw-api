@@ -64,6 +64,15 @@ func TestActivateInviteCodeTrapDisablesUserWithoutActivating(t *testing.T) {
 	require.NoError(t, db.Where("user_id = ? AND type = ?", user.Id, model.LogTypeSystem).Find(&logs).Error)
 	require.Len(t, logs, 1)
 	assert.Equal(t, "钓到一条鱼", logs[0].Content)
+
+	// 审计独立落一条（category=security，action=invite.trap_hit）。
+	var audits []model.AuditLog
+	require.NoError(t, db.Where("user_id = ? AND category = ?", user.Id, model.AuditCategorySecurity).
+		Find(&audits).Error)
+	require.Len(t, audits, 1)
+	assert.Equal(t, "invite.trap_hit", audits[0].Action)
+	assert.Equal(t, "钓到一条鱼", audits[0].Content)
+	assert.Contains(t, audits[0].Other.Op.Params, "code_id")
 }
 
 // 回归：普通邀请码照旧激活账号，remark 不被改动。
@@ -106,6 +115,11 @@ func TestActivateInviteCodeNormalInviteStillActivates(t *testing.T) {
 	require.NoError(t, db.Model(&model.Log{}).
 		Where("user_id = ? AND type = ?", user.Id, model.LogTypeSystem).Count(&systemLogs).Error)
 	assert.Equal(t, int64(0), systemLogs, "普通邀请码不写钓鱼日志")
+
+	var securityAudits int64
+	require.NoError(t, db.Model(&model.AuditLog{}).
+		Where("user_id = ? AND action = ?", user.Id, "invite.trap_hit").Count(&securityAudits).Error)
+	assert.Equal(t, int64(0), securityAudits, "普通邀请码不写钓鱼审计")
 }
 
 // 钓鱼码被停用/用尽后不再命中钩子：仍是"邀请码无效/已被使用"，账号不会被二次处理。

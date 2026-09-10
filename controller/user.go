@@ -438,6 +438,10 @@ func ActivateInviteCode(c *gin.Context) {
 		}
 		common.SysLog(fmt.Sprintf("钓到一条鱼: user_id=%d, code_id=%d, ip=%s", id, codeId, c.ClientIP()))
 		model.RecordLog(id, model.LogTypeSystem, "钓到一条鱼")
+		// 审计独立落一条（category=security）：RecordAuditLog 自动补 IP/UA/路由/请求号，
+		// 便于在「使用日志 → 审计」按事件取证；action 机器可读，content 为展示文案。
+		model.RecordOperationAuditLog(id, c.GetInt("role"), "钓到一条鱼", c.ClientIP(),
+			"invite.trap_hit", map[string]any{"code_id": codeId}, nil, nil, c)
 		common.ApiErrorI18n(c, i18n.MsgInviteCodeInvalid)
 		return
 	}
