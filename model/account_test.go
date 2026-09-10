@@ -28,11 +28,12 @@ import (
 
 func setupAccountTestDB(t *testing.T) {
 	t.Helper()
-	require.NoError(t, DB.AutoMigrate(&Account{}, &Channel{}, &Ability{}, &ChannelModelSetting{}))
+	require.NoError(t, DB.AutoMigrate(&Account{}, &Channel{}, &Ability{}, &ChannelModelSetting{}, &ChannelAccount{}))
 	require.NoError(t, DB.Where("1 = 1").Delete(&Channel{}).Error)
 	require.NoError(t, DB.Where("1 = 1").Delete(&Account{}).Error)
 	require.NoError(t, DB.Where("1 = 1").Delete(&Ability{}).Error)
 	require.NoError(t, DB.Where("1 = 1").Delete(&ChannelModelSetting{}).Error)
+	require.NoError(t, DB.Where("1 = 1").Delete(&ChannelAccount{}).Error)
 }
 
 // TestChannelAccountBackfillIdempotentAndComplete 保护存量渠道 backfill 的核心契约：
@@ -138,6 +139,9 @@ func TestSharedAccountPollingIndexCrossChannel(t *testing.T) {
 	chB := &Channel{Type: 1, Name: "poll-ch-b", AccountId: acc.Id, Models: "gpt-4o", Group: "default", Status: common.ChannelStatusEnabled}
 	require.NoError(t, DB.Create(chA).Error)
 	require.NoError(t, DB.Create(chB).Error)
+	// 绑定关系真相源 = channel_accounts（channels.account_id 仅迁移期兜底）
+	require.NoError(t, BindChannelAccountWithDB(DB, chA.Id, acc.Id, 0))
+	require.NoError(t, BindChannelAccountWithDB(DB, chB.Id, acc.Id, 0))
 
 	// 共享同一账户指针（模拟缓存路径的共享挂载）
 	require.NoError(t, loadChannelsAccounts([]*Channel{chA, chB}))
@@ -159,6 +163,7 @@ func TestAccountDeleteReferencedRejectedAndOrphanCleanup(t *testing.T) {
 	require.NoError(t, DB.Create(acc).Error)
 	ch := &Channel{Type: 1, Name: "bound", AccountId: acc.Id, Models: "gpt-4o", Group: "default", Status: common.ChannelStatusEnabled}
 	require.NoError(t, DB.Create(ch).Error)
+	require.NoError(t, BindChannelAccountWithDB(DB, ch.Id, acc.Id, 0))
 
 	err := acc.Delete()
 	require.Error(t, err, "被引用账户删除应被拒绝")

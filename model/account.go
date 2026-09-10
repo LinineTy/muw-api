@@ -284,10 +284,10 @@ func (account *Account) Save() error {
 	return DB.Save(account).Error
 }
 
-// Delete 删除账户：仍有渠道引用时拒绝（先解绑/删除渠道）。
+// Delete 删除账户：仍有渠道引用时拒绝（先解绑/删除渠道）。引用关系以绑定表为准。
 func (account *Account) Delete() error {
-	var count int64
-	if err := DB.Model(&Channel{}).Where("account_id = ?", account.Id).Count(&count).Error; err != nil {
+	count, err := CountChannelsBoundToAccount(account.Id)
+	if err != nil {
 		return err
 	}
 	if count > 0 {
@@ -349,39 +349,20 @@ func GetAccountsByIds(ids []int) ([]*Account, error) {
 	return accounts, err
 }
 
-// CountChannelsByAccountId 统计引用某账户的渠道数。
+// CountChannelsByAccountId 统计引用某账户的渠道数（走绑定表：账户 N:N 后
+// channels.account_id 不再是真相源）。
 func CountChannelsByAccountId(accountId int) (int64, error) {
-	var count int64
-	err := DB.Model(&Channel{}).Where("account_id = ?", accountId).Count(&count).Error
-	return count, err
+	return CountChannelsBoundToAccount(accountId)
 }
 
-// CountChannelAccountReferences 一次 GROUP BY 统计各账户引用渠道数（列表页用）。
+// CountChannelAccountReferences 一次 GROUP BY 统计各账户引用渠道数（列表页用，走绑定表）。
 func CountChannelAccountReferences() (map[int]int64, error) {
-	type result struct {
-		AccountId int   `gorm:"column:account_id"`
-		Count     int64 `gorm:"column:count"`
-	}
-	var results []result
-	err := DB.Model(&Channel{}).
-		Where("account_id != 0").
-		Select("account_id, count(*) as count").
-		Group("account_id").Find(&results).Error
-	if err != nil {
-		return nil, err
-	}
-	counts := make(map[int]int64, len(results))
-	for _, r := range results {
-		counts[r.AccountId] = r.Count
-	}
-	return counts, nil
+	return CountChannelAccountBindingMap()
 }
 
-// GetChannelsByAccount 查询引用某账户的渠道（换绑/删除确认视图）。
+// GetChannelsByAccount 查询引用某账户的渠道（换绑/删除确认视图、类型同步），走绑定表。
 func GetChannelsByAccount(accountId int) ([]*Channel, error) {
-	var channels []*Channel
-	err := DB.Where("account_id = ?", accountId).Omit("key").Find(&channels).Error
-	return channels, err
+	return GetChannelsBoundToAccount(accountId)
 }
 
 // SyncChannelsTypeByAccount 账户换类型后同步所有引用渠道的 channels.type（反规范化
@@ -389,11 +370,12 @@ func GetChannelsByAccount(accountId int) ([]*Channel, error) {
 // abilities。事务内执行；完成后由调用方刷新渠道缓存。
 func SyncChannelsTypeByAccount(accountId int, newType int) error {
 	return DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&Channel{}).Where("account_id = ?", accountId).Update("type", newType).Error; err != nil {
+		boundChannelIds := tx.Model(&ChannelAccount{}).Select("channel_id").Where("account_id = ?", accountId)
+		if err := tx.Model(&Channel{}).Where("id IN (?)", boundChannelIds).Update("type", newType).Error; err != nil {
 			return err
 		}
 		var channels []*Channel
-		if err := tx.Where("account_id = ?", accountId).Find(&channels).Error; err != nil {
+		if err := tx.Where("id IN (?)", boundChannelIds).Find(&channels).Error; err != nil {
 			return err
 		}
 		for _, ch := range channels {
@@ -412,7 +394,10 @@ func SyncChannelsTypeByAccount(accountId int, newType int) error {
 func CleanupOrphanPrivateAccounts() (int64, error) {
 	var orphans []int
 	if err := DB.Model(&Account{}).
-		Where("auto_generated = "+commonTrueVal+" AND id NOT IN (SELECT account_id FROM channels WHERE account_id != 0)").
+		// 只认"指向仍然存在的渠道"的绑定：渠道被批量删除（不逐个走 Channel.Delete）时
+		// 绑定行可能残留，这里按 join 判活，避免孤儿账户永远收不回来。
+		Where("auto_generated = " + commonTrueVal +
+			" AND id NOT IN (SELECT ca.account_id FROM channel_accounts ca JOIN channels c ON c.id = ca.channel_id)").
 		Pluck("id", &orphans).Error; err != nil {
 		return 0, err
 	}
