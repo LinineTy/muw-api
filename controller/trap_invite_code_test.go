@@ -167,6 +167,8 @@ func performActivateInviteCodeRequest(t *testing.T, userId int, inviteCode strin
 		strings.NewReader(fmt.Sprintf(`{"invite_code":%q}`, inviteCode)))
 	c.Request.Header.Set("Content-Type", "application/json")
 	c.Set("id", userId)
+	c.Set("role", common.RoleCommonUser)
+	c.Set("username", "trap-target")
 	ActivateInviteCode(c)
 	return recorder
 }
