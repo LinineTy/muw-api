@@ -86,7 +86,7 @@ function QuotaTierBar({ tier }: { tier: AccountCodingPlanTier }) {
 
   return (
     <div className='flex items-center gap-1.5' title={title}>
-      <span className='text-muted-foreground w-8 shrink-0 text-[11px]'>
+      <span className='text-muted-foreground min-w-8 shrink-0 text-[11px] whitespace-nowrap'>
         {tierLabel(tier.name, t)}
       </span>
       <div
