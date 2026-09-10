@@ -672,8 +672,52 @@ type AddChannelRequest struct {
 	// 与 batch/multi_to_single 模式互斥(账户已有固定 key 列表)。
 	AccountID *int `json:"account_id"`
 	// AccountIDs 账户绑定列表(N:N):一个渠道可绑多个账户,用法与渠道多 key 一致——
-	// 按列表顺序轮询、单个在渠道侧启停。与 AccountID 同时出现时以本字段为准。
+	// 按列表顺序轮询。与 AccountID 同时出现时以本字段为准。
 	AccountIDs []int `json:"account_ids"`
+	// AccountBindings 账户绑定列表(带渠道内启停):优先级最高,前端抽屉提交的形态。
+	AccountBindings []BindingInput `json:"account_bindings"`
+}
+
+// specIDs 取绑定意图里的账户 id（保序）。
+func specIDs(specs []model.BindingSpec) []int {
+	ids := make([]int, 0, len(specs))
+	for _, spec := range specs {
+		if spec.AccountID > 0 {
+			ids = append(ids, spec.AccountID)
+		}
+	}
+	return ids
+}
+
+// BindingInput 渠道绑定账户的请求形态（顺序即轮询顺序）。
+type BindingInput struct {
+	AccountID int   `json:"account_id"`
+	Enabled   *bool `json:"enabled"`
+}
+
+// normalizeBindingSpecs 归一绑定意图：account_bindings（带启停）> account_ids >
+// account_id（兼容旧客户端）。去重去零、保序。
+func normalizeBindingSpecs(bindings []BindingInput, ids []int, single *int) []model.BindingSpec {
+	specs := make([]model.BindingSpec, 0, len(bindings))
+	seen := make(map[int]bool, len(bindings))
+	for _, b := range bindings {
+		if b.AccountID <= 0 || seen[b.AccountID] {
+			continue
+		}
+		seen[b.AccountID] = true
+		enabled := true
+		if b.Enabled != nil {
+			enabled = *b.Enabled
+		}
+		specs = append(specs, model.BindingSpec{AccountID: b.AccountID, Enabled: enabled})
+	}
+	if len(specs) > 0 {
+		return specs
+	}
+	for _, id := range normalizeBoundAccountIDs(ids, single) {
+		specs = append(specs, model.BindingSpec{AccountID: id, Enabled: true})
+	}
+	return specs
 }
 
 // normalizeBoundAccountIDs 归一账户绑定列表：account_ids 优先（去重去零、保序），
@@ -764,6 +808,10 @@ func AddChannel(c *gin.Context) {
 	// 共享账户路径：凭证全部来自既有账户，忽略 key 输入；单渠道创建。
 	// 账户绑定列表（N:N）：account_ids 优先，account_id 兼容保留。
 	boundAccountIDs := normalizeBoundAccountIDs(addChannelRequest.AccountIDs, addChannelRequest.AccountID)
+	boundSpecs := normalizeBindingSpecs(addChannelRequest.AccountBindings, addChannelRequest.AccountIDs, addChannelRequest.AccountID)
+	if len(boundAccountIDs) == 0 && len(boundSpecs) > 0 {
+		boundAccountIDs = specIDs(boundSpecs)
+	}
 	if len(boundAccountIDs) > 0 {
 		if addChannelRequest.Mode != "" && addChannelRequest.Mode != "single" {
 			c.JSON(http.StatusOK, gin.H{
@@ -794,7 +842,7 @@ func AddChannel(c *gin.Context) {
 			common.ApiError(c, err)
 			return
 		}
-		if err := model.ReplaceChannelAccountBindings(addChannelRequest.Channel.Id, boundAccountIDs); err != nil {
+		if err := model.ReplaceChannelAccountBindingsWithSpecs(addChannelRequest.Channel.Id, boundSpecs); err != nil {
 			common.ApiError(c, err)
 			return
 		}
@@ -1218,7 +1266,54 @@ func UpdateChannel(c *gin.Context) {
 	// 为准。旧账户若为系统生成的私有账户且无其他引用，换绑成功后回收。
 	accountRebound := false
 	var reboundAccountIDs []int
-	if accountIDsProvided, ok := requestData["account_ids"]; ok {
+	var reboundSpecs []model.BindingSpec
+	if bindingsProvided, ok := requestData["account_bindings"]; ok {
+		if rawList, valid := bindingsProvided.([]any); valid {
+			for _, item := range rawList {
+				entry, okMap := item.(map[string]any)
+				if !okMap {
+					continue
+				}
+				idValue, okID := entry["account_id"].(float64)
+				if !okID || int(idValue) <= 0 {
+					continue
+				}
+				enabled := true
+				if enabledValue, okEnabled := entry["enabled"].(bool); okEnabled {
+					enabled = enabledValue
+				}
+				reboundSpecs = append(reboundSpecs, model.BindingSpec{AccountID: int(idValue), Enabled: enabled})
+			}
+		}
+		seen := make(map[int]bool, len(reboundSpecs))
+		specs := make([]model.BindingSpec, 0, len(reboundSpecs))
+		for _, spec := range reboundSpecs {
+			if seen[spec.AccountID] {
+				continue
+			}
+			seen[spec.AccountID] = true
+			specs = append(specs, spec)
+		}
+		reboundSpecs = specs
+		for _, spec := range reboundSpecs {
+			account, accErr := model.GetAccountById(spec.AccountID, true)
+			if accErr != nil {
+				c.JSON(http.StatusOK, gin.H{"success": false, "message": "账户不存在: " + accErr.Error()})
+				return
+			}
+			if account.Status != common.ChannelStatusEnabled {
+				c.JSON(http.StatusOK, gin.H{"success": false, "message": "账户已被禁用，请先启用账户: " + account.Name})
+				return
+			}
+		}
+		reboundAccountIDs = specIDs(reboundSpecs)
+		if len(reboundAccountIDs) > 0 {
+			channel.AccountId = reboundAccountIDs[0]
+		}
+		channel.Key = ""
+		channel.ChannelInfo = model.ChannelInfo{}
+		accountRebound = true
+	} else if accountIDsProvided, ok := requestData["account_ids"]; ok {
 		// N:N 绑定列表：整体覆盖（顺序即轮询顺序）。
 		if rawList, valid := accountIDsProvided.([]any); valid {
 			for _, v := range rawList {
@@ -1444,8 +1539,12 @@ func UpdateChannel(c *gin.Context) {
 	}
 	// 绑定表落库（account_ids 整体覆盖；单值 account_id 路径由 Channel.Update 双写收敛）。
 	if accountRebound && len(reboundAccountIDs) > 0 {
-		if err := model.ReplaceChannelAccountBindings(channel.Id, reboundAccountIDs); err != nil {
-			common.ApiError(c, err)
+		writeErr := model.ReplaceChannelAccountBindings(channel.Id, reboundAccountIDs)
+		if len(reboundSpecs) > 0 {
+			writeErr = model.ReplaceChannelAccountBindingsWithSpecs(channel.Id, reboundSpecs)
+		}
+		if writeErr != nil {
+			common.ApiError(c, writeErr)
 			return
 		}
 	}
