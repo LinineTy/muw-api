@@ -105,6 +105,21 @@ export const channelSchema = z.object({
       base_url: z.string().nullish(),
     })
     .nullish(),
+  // 绑定关系视图（含渠道内停用的绑定）：渠道抽屉回显与编辑用；顺序即轮询顺序。
+  account_bindings: z
+    .array(
+      z.object({
+        account_id: z.number(),
+        enabled: z.boolean(),
+        // 以下摘要字段仅响应时下发；请求提交只带 account_id + enabled
+        name: z.string().optional(),
+        type: z.number().optional(),
+        status: z.number().optional(),
+        key_masked: z.string().optional(),
+        base_url: z.string().nullish(),
+      })
+    )
+    .nullish(),
   model_settings: z
     .array(
       z.object({

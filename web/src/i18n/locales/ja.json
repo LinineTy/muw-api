@@ -3252,12 +3252,12 @@
     "Move Request Header": "リクエストヘッダーを移動",
     "Move a request header": "リクエストヘッダーを移動",
     "Move affiliate rewards to your main balance": "アフィリエイト報酬をメイン残高に移動する",
-    "Move down": "Move down",
+    "Move down": "下へ移動",
     "Move fallback to end": "フォールバックを最後へ",
     "Move route down": "ルートを下へ",
     "Move route up": "ルートを上へ",
     "Move source field to target field": "ソースフィールドをターゲットフィールドに移動",
-    "Move up": "Move up",
+    "Move up": "上へ移動",
     "Move {{group}} down": "{{group}} を下に移動",
     "Move {{group}} up": "{{group}} を上に移動",
     "Multi": "Multi",
@@ -6321,7 +6321,7 @@
     "footer.columns.related.links.oneApi": "1つのAPI",
     "footer.columns.related.title": "関連プロジェクト",
     "footer.defaultCopyright": "すべての権利を留保します。",
-    "footer.new\u0061pi.projectAttributionSuffix": "すべての権利を留保します。プロジェクトコントリビューターにより設計・開発されています。",
+    "footer.newapi.projectAttributionSuffix": "すべての権利を留保します。プロジェクトコントリビューターにより設計・開発されています。",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -7418,6 +7418,11 @@
     "No task plugins found": "タスクプラグインがありません",
     "Target vendor": "移動先のプロバイダー",
     "Login & Authentication": "ログインと認証",
-    "Not generated": "未生成"
+    "Not generated": "未生成",
+    "Bound accounts": "バインド済みアカウント",
+    "Add account": "アカウントを追加",
+    "No account available": "追加できるアカウントがありません",
+    "No bound account. Add one above, or fill the key below to keep credentials on the channel.": "アカウントが未バインドです。上の欄で追加するか、下の欄にキーを入力して認証情報をチャネル側に保持できます。",
+    "Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.": "バインドしたアカウントはリスト順にローテーションします（マルチキーと同じ扱い）。各アカウントはこのチャネル単位で無効化でき、使用できない場合は自動的にスキップされます。"
   }
 }

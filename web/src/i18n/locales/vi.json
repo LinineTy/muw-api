@@ -3252,12 +3252,12 @@
     "Move Request Header": "Di chuyển header yêu cầu",
     "Move a request header": "Di chuyển header yêu cầu",
     "Move affiliate rewards to your main balance": "Chuyển phần thưởng liên kết vào số dư chính của bạn",
-    "Move down": "Move down",
+    "Move down": "Di chuyển xuống",
     "Move fallback to end": "Đưa dự phòng xuống cuối",
     "Move route down": "Di chuyển tuyến xuống",
     "Move route up": "Di chuyển tuyến lên",
     "Move source field to target field": "Di chuyển trường nguồn sang trường đích",
-    "Move up": "Move up",
+    "Move up": "Di chuyển lên",
     "Move {{group}} down": "Di chuyển {{group}} xuống",
     "Move {{group}} up": "Di chuyển {{group}} lên",
     "Multi": "Multi",
@@ -6321,7 +6321,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "Các Dự Án Liên Quan",
     "footer.defaultCopyright": "Bản quyền được bảo lưu.",
-    "footer.new\u0061pi.projectAttributionSuffix": "Bản quyền được bảo lưu. Được thiết kế và phát triển bởi các cộng tác viên dự án.",
+    "footer.newapi.projectAttributionSuffix": "Bản quyền được bảo lưu. Được thiết kế và phát triển bởi các cộng tác viên dự án.",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -7418,6 +7418,11 @@
     "No task plugins found": "Không tìm thấy plugin tác vụ",
     "Target vendor": "Nhà cung cấp đích",
     "Login & Authentication": "Đăng nhập và xác thực",
-    "Not generated": "Chưa tạo"
+    "Not generated": "Chưa tạo",
+    "Bound accounts": "Tài khoản đã liên kết",
+    "Add account": "Thêm tài khoản",
+    "No account available": "Không có tài khoản khả dụng",
+    "No bound account. Add one above, or fill the key below to keep credentials on the channel.": "Chưa liên kết tài khoản. Thêm ở trên hoặc điền khóa bên dưới để giữ thông tin xác thực trên kênh.",
+    "Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.": "Các tài khoản đã liên kết được luân phiên theo thứ tự danh sách (giống nhiều khóa): mỗi tài khoản có thể tắt riêng cho kênh này và tài khoản lỗi sẽ được bỏ qua."
   }
 }

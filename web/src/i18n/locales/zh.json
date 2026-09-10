@@ -6321,7 +6321,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "相关项目",
     "footer.defaultCopyright": "版权所有。",
-    "footer.new\u0061pi.projectAttributionSuffix": "版权所有，由项目贡献者设计与开发。",
+    "footer.newapi.projectAttributionSuffix": "版权所有，由项目贡献者设计与开发。",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -7418,6 +7418,11 @@
     "No task plugins found": "未找到任务插件",
     "Target vendor": "目标供应商",
     "Login & Authentication": "登录与认证",
-    "Not generated": "未生成"
+    "Not generated": "未生成",
+    "Bound accounts": "已绑账户",
+    "Add account": "添加账户",
+    "No account available": "没有可添加的账户",
+    "No bound account. Add one above, or fill the key below to keep credentials on the channel.": "尚未绑定账户。可在上方添加账户，或在下方填写密钥、把凭证留在渠道上。",
+    "Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.": "绑定的账户按列表顺序轮询（用法同多 key）：每个都可在本渠道单独停用，某个账户不可用时会自动跳过。"
   }
 }

@@ -6321,7 +6321,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "Related Projects",
     "footer.defaultCopyright": "All rights reserved.",
-    "footer.new\u0061pi.projectAttributionSuffix": "All rights reserved. Designed and developed by the project contributors.",
+    "footer.newapi.projectAttributionSuffix": "All rights reserved. Designed and developed by the project contributors.",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -7418,6 +7418,11 @@
     "No task plugins found": "No task plugins found",
     "Target vendor": "Target vendor",
     "Login & Authentication": "Login & Authentication",
-    "Not generated": "Not generated"
+    "Not generated": "Not generated",
+    "Bound accounts": "Bound accounts",
+    "Add account": "Add account",
+    "No account available": "No account available",
+    "No bound account. Add one above, or fill the key below to keep credentials on the channel.": "No bound account. Add one above, or fill the key below to keep credentials on the channel.",
+    "Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.": "Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped."
   }
 }
