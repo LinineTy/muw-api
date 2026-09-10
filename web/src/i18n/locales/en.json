@@ -7423,6 +7423,7 @@
     "Add account": "Add account",
     "No account available": "No account available",
     "No bound account. Add one above, or fill the key below to keep credentials on the channel.": "No bound account. Add one above, or fill the key below to keep credentials on the channel.",
-    "Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.": "Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped."
+    "Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.": "Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.",
+    "Enabled for this channel": "Enabled for this channel"
   }
 }

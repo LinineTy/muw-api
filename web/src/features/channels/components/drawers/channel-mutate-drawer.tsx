@@ -3330,6 +3330,9 @@ export function ChannelMutateDrawer({
                                                         type='button'
                                                         variant='ghost'
                                                         size='icon-sm'
+                                                        aria-label={t(
+                                                          'Move up'
+                                                        )}
                                                         disabled={index === 0}
                                                         onClick={() =>
                                                           moveBoundAccount(
@@ -3353,6 +3356,9 @@ export function ChannelMutateDrawer({
                                                         type='button'
                                                         variant='ghost'
                                                         size='icon-sm'
+                                                        aria-label={t(
+                                                          'Move down'
+                                                        )}
                                                         disabled={
                                                           index ===
                                                           boundBindings.length -
@@ -3380,6 +3386,7 @@ export function ChannelMutateDrawer({
                                                         type='button'
                                                         variant='ghost'
                                                         size='icon-sm'
+                                                        aria-label={t('Remove')}
                                                         onClick={() =>
                                                           removeBoundAccount(
                                                             binding.account_id
@@ -3396,6 +3403,9 @@ export function ChannelMutateDrawer({
                                                 </Tooltip>
                                               </TooltipProvider>
                                               <Switch
+                                                aria-label={t(
+                                                  'Enabled for this channel'
+                                                )}
                                                 checked={binding.enabled}
                                                 onCheckedChange={(checked) =>
                                                   toggleBoundAccount(
