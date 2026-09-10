@@ -436,7 +436,10 @@ export function formatRelativeTime(
     let value: number
     let unit: Intl.RelativeTimeFormatUnit
     if (absSec < MINUTE) {
-      value = Math.round(diffSec)
+      // 刚发生的记录：diffSec 可能落在 -0.5..+N 秒（四舍五入到 -0、或前后端时钟
+      // 略有偏差变成正数），而 Intl 会把 0/正数渲染成"x 秒后"（未来）。这类时间
+      // 只用于已发生的事件，统一钳到"1 秒前"。
+      value = Math.min(Math.round(diffSec), -1)
       unit = 'second'
     } else if (absSec < HOUR) {
       value = Math.round(diffSec / MINUTE)

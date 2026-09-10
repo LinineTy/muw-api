@@ -134,12 +134,19 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     // joined with the same "·" separator as token-based models. Task-usage
     // entries carry a schema label (raw field name) instead of an i18n key, so
     // they resolve through the usage-schema description.
-    const priceItems = [
+    const allPriceItems = [
       ...dynamicSummary.primaryEntries,
       ...dynamicSummary.secondaryEntries.filter(
         (entry) => entry.variable?.group === 'cache'
       ),
     ]
+    // 价格为 0 的条目（如未配置的缓存写入）不展示；带区间的条目（任务计费，
+    // 例 "0 – 5"）即使末档为 0 也保留。万一全部为 0，退回完整列表，避免价格区空白。
+    const nonZeroPriceItems = allPriceItems.filter(
+      (entry) => Number(entry.value) > 0 || Boolean(entry.formattedRange)
+    )
+    const priceItems =
+      nonZeroPriceItems.length > 0 ? nonZeroPriceItems : allPriceItems
     priceSummary = (
       <>
         {priceItems.map((entry, index) => (
