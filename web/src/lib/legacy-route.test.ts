@@ -25,7 +25,7 @@ describe('legacy frontend route migration', () => {
     const routes = {
       '/login': '/sign-in',
       '/forbidden': '/403',
-      '/console': '/dashboard',
+      '/console': '/os-desktop',
       '/console/models': '/models',
       '/console/subscription': '/subscriptions',
       '/console/channel': '/channels',

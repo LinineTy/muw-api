@@ -101,7 +101,7 @@ export const SYSTEM_SETTINGS_VIEW: SidebarView = {
   id: 'system-settings',
   pathPattern: /^\/system-settings(\/|$)/,
   parent: {
-    to: '/dashboard/overview',
+    to: '/os-desktop',
     label: 'Back to Dashboard',
   },
   getNavGroups: getSystemSettingsNavGroups,

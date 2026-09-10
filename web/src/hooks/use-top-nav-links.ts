@@ -67,9 +67,9 @@ export function useTopNavLinks(): TopNavLink[] {
     links.push({ title: t('Home'), href: '/' })
   }
 
-  // Console -> /dashboard (new console path)
+  // Console -> /os-desktop (桌面壳才是控制台的落点;/dashboard 只是概览页)
   if (modules?.console !== false) {
-    links.push({ title: t('Console'), href: '/dashboard' })
+    links.push({ title: t('Console'), href: '/os-desktop' })
   }
 
   // Pricing
