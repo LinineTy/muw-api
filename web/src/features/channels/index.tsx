@@ -19,12 +19,10 @@ For commercial licensing, please contact support@quantumnous.com
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { Settings2 } from 'lucide-react'
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Tooltip,
   TooltipContent,
@@ -38,11 +36,9 @@ import { ChannelsDialogs } from './components/channels-dialogs'
 import { ChannelsPrimaryButtons } from './components/channels-primary-buttons'
 import { ChannelsProvider } from './components/channels-provider'
 import { ChannelsTable } from './components/channels-table'
-import { CodingPlanQuotaTab } from './components/coding-plan-quota-tab'
 
 export function Channels() {
   const { t } = useTranslation()
-  const [activeTab, setActiveTab] = useState<string>('channels')
   const isRoot = useAuthStore(
     (state) => state.auth.user?.role === ROLE.SUPER_ADMIN
   )
@@ -101,30 +97,9 @@ export function Channels() {
           <ChannelsPrimaryButtons />
         </SectionPageLayout.Actions>
         <SectionPageLayout.Content>
-          {/* fixedContent 页面高度链:Tabs 撑满内容区(flex 列),TabsContent 各自
-              min-h-0 承接——渠道 Tab 内部表格自滚,Coding Plan Tab 卡片区自己滚,
-              否则外层 overflow-hidden 会把内容裁掉无法上下滚动。 */}
-          <Tabs
-            value={activeTab}
-            onValueChange={(value) => setActiveTab(value)}
-            className='h-full min-h-0'
-          >
-            <TabsList>
-              <TabsTrigger value='channels'>{t('Channels')}</TabsTrigger>
-              <TabsTrigger value='coding-plan'>
-                {t('Coding Plan Quota')}
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value='channels' className='mt-3 min-h-0'>
-              <ChannelsTable />
-            </TabsContent>
-            <TabsContent
-              value='coding-plan'
-              className='mt-3 min-h-0 flex-1 overflow-y-auto'
-            >
-              <CodingPlanQuotaTab />
-            </TabsContent>
-          </Tabs>
+          {/* 编码套餐余量已迁到账户页（账户维度查询 + 进度条直显），原来的
+              「Coding Plan Quota」tab 2026-09-11 下线，渠道页只剩渠道表格。 */}
+          <ChannelsTable />
         </SectionPageLayout.Content>
       </SectionPageLayout>
 
