@@ -33,7 +33,7 @@ export function Activate() {
       if (res?.success && isAuthUser(res.data)) {
         setUser(res.data)
         toast.success(t('Activated successfully'))
-        navigate({ to: '/dashboard', replace: true })
+        navigate({ to: '/os-desktop', replace: true })
       } else {
         toast.error(res?.message || t('Activation failed'))
       }
