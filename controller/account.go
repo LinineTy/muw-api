@@ -28,6 +28,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -465,4 +466,38 @@ func ListAccountChannelRefs(c *gin.Context) {
 		"message": "",
 		"data":    refs,
 	})
+}
+
+// GetAccountCodingPlanQuota 查询账户的编码套餐余量。
+//
+// 余量按账户维度（凭证真相源）：多渠道共享同一账户时只查一次、共享同一张卡；同一渠道
+// 绑多账户时各账户各查各的。账户需显式开启监控（coding_plan_provider）；查询 key 用
+// 套餐专用 key，留空用账户自身 key（多 key 账户取第一把）。
+func GetAccountCodingPlanQuota(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiErrorMsg(c, "Invalid account id")
+		return
+	}
+	account, err := model.GetAccountById(id, true)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	provider, err := service.ResolveAccountCodingPlanProvider(account)
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
+	key, err := CodingPlanQueryKeyOfAccount(account)
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
+	quota, err := service.QueryCodingPlanQuota(c.Request.Context(), provider, key)
+	if err != nil {
+		common.ApiErrorMsg(c, fmt.Sprintf("Failed to query coding plan quota: %s", err.Error()))
+		return
+	}
+	common.ApiSuccess(c, quota)
 }

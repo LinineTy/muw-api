@@ -101,12 +101,18 @@ func runCodingPlanAutoControlOnce() {
 		if err != nil {
 			continue // 厂商无法解析(如显式 none 却残留开关),跳过
 		}
-		key := account.CodingPlanKey
+		key := strings.TrimSpace(account.CodingPlanKey)
 		if key == "" {
-			key = account.Key
+			// 无套餐专用 key 时用账户自己的 key；多 key 账户取第一把（2026-09-10 定，
+			// 取代此前"多 key 直接跳过"的行为）。
+			keys := account.GetKeys()
+			if len(keys) == 0 {
+				continue
+			}
+			key = strings.TrimSpace(keys[0])
 		}
-		if strings.Contains(key, "\n") {
-			continue // 多 key 账户无单一套餐账号,跳过(专用 key 未配)
+		if key == "" {
+			continue
 		}
 		quota, err := QueryCodingPlanQuota(ctx, provider, key)
 		if err != nil {

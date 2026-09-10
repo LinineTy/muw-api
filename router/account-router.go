@@ -52,6 +52,7 @@ func registerAccountRoutes(apiRouter *gin.RouterGroup) {
 		{method: http.MethodGet, path: "/", permission: authz.ChannelRead, handler: controller.GetAllAccounts},
 		{method: http.MethodGet, path: "/:id", permission: authz.ChannelRead, handler: controller.GetAccount},
 		{method: http.MethodGet, path: "/:id/channels", permission: authz.ChannelRead, handler: controller.ListAccountChannelRefs},
+		{method: http.MethodGet, path: "/:id/coding_plan/quota", permission: authz.ChannelRead, handler: controller.GetAccountCodingPlanQuota},
 		{method: http.MethodPost, path: "/", permission: authz.ChannelSensitiveWrite, handler: controller.AddAccount},
 		{method: http.MethodPut, path: "/", permission: authz.ChannelSensitiveWrite, handler: controller.UpdateAccount},
 		{method: http.MethodDelete, path: "/:id", permission: authz.ChannelSensitiveWrite, handler: controller.DeleteAccount},
