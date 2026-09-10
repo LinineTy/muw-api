@@ -1,6 +1,9 @@
 // @muw-owned
 import { useTranslation } from 'react-i18next'
 
+import { useDirection } from '@/context/direction-provider'
+import { cn } from '@/lib/utils'
+
 import { useOsShellNavigate } from './os-open'
 import { useOsNavGroups } from './use-os-nav'
 
@@ -10,52 +13,63 @@ import { useOsNavGroups } from './use-os-nav'
  * 形态与 Dock 的开始磁贴一致(分组标题 + 图标格子),区别是桌面版用**圆角方形**
  * 磁贴,更接近"桌面图标"的手感;开始磁贴面板保持不变(见 nav-tiles.tsx)。
  * 品牌不在这里——已迁到左侧细竖条顶端(见 os-side-strip.tsx)。
+ *
+ * 排布:整块**从左上角起**、列宽固定(7rem)、auto-fill 等距铺开——
+ * 早先是"每组各自居中"的 flex-wrap,边缘参差且疏密不均。
+ * 左/右留出细条的宽度,否则内容会被竖条压住。
  */
 export function OsDesktopPlaceholder() {
   const { t } = useTranslation()
   const groups = useOsNavGroups()
   const osNavigate = useOsShellNavigate()
+  const { dir } = useDirection()
+  const rtl = dir === 'rtl'
 
   return (
-    <div className='flex h-full w-full flex-col items-center justify-center gap-8 overflow-y-auto p-6'>
-      <p className='text-muted-foreground/70 max-w-xs text-center text-sm'>
+    <div
+      className={cn(
+        'flex h-full w-full flex-col items-start gap-7 overflow-y-auto py-8',
+        // 细条宽 48px 贴边 4px:内容至少让出 56px,再留一点呼吸
+        rtl ? 'pr-16 pl-8' : 'pl-16 pr-8'
+      )}
+    >
+      <p className='text-muted-foreground/60 text-xs'>
         {t('os-shell.desktop-hint')}
       </p>
-      {groups.length > 0 ? (
-        <div className='flex w-full max-w-5xl flex-wrap items-start justify-center gap-x-12 gap-y-8'>
-          {groups.map((group) => (
-            <div key={group.id} className='flex min-w-40 flex-col gap-3'>
-              <div className='text-muted-foreground/70 border-border/40 mb-1 border-b pb-1.5 text-center text-[0.68rem] font-medium tracking-wide'>
-                {group.title}
-              </div>
-              <div className='flex flex-wrap justify-center gap-1.5'>
-                {group.items.map((item) => {
-                  const Icon = item.icon
-                  return (
-                    <button
-                      key={item.url}
-                      type='button'
-                      onClick={() => osNavigate(item.url)}
-                      title={item.title}
-                      className='group hover:bg-popover/40 focus-visible:ring-ring/40 flex w-[5.25rem] flex-col items-center gap-1.5 rounded-2xl px-1 py-2 transition-colors outline-none focus-visible:ring-2'
-                    >
-                      {/* 方圆形磁贴:圆角约 20%,玻璃底,与 Dock 的圆形球体区分 */}
-                      <span className='bg-popover/55 border-border/40 group-hover:border-border/70 flex size-12 items-center justify-center rounded-[0.95rem] border backdrop-blur-[6px] transition-transform duration-200 group-hover:scale-[1.04]'>
-                        {Icon ? (
-                          <Icon className='size-5' aria-hidden='true' />
-                        ) : null}
-                      </span>
-                      <span className='line-clamp-2 w-full text-center text-xs leading-tight'>
-                        {item.title}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : null}
+      {groups.map((group) => (
+        <section key={group.id} className='flex w-full flex-col gap-3'>
+          <div className='text-muted-foreground/60 text-[0.7rem] font-medium tracking-wide'>
+            {group.title}
+          </div>
+          <div
+            className='grid w-full gap-x-1 gap-y-3'
+            style={{ gridTemplateColumns: 'repeat(auto-fill, 7rem)' }}
+          >
+            {group.items.map((item) => {
+              const Icon = item.icon
+              return (
+                <button
+                  key={item.url}
+                  type='button'
+                  onClick={() => osNavigate(item.url)}
+                  title={item.title}
+                  className='group hover:bg-popover/40 focus-visible:ring-ring/40 flex w-full flex-col items-center gap-2 rounded-xl px-1 py-2 transition-colors outline-none focus-visible:ring-2'
+                >
+                  {/* 方圆形磁贴:圆角约 20%,玻璃底,与 Dock 的圆形球体区分 */}
+                  <span className='bg-popover/55 border-border/40 group-hover:border-border/70 flex size-14 items-center justify-center rounded-[1.15rem] border backdrop-blur-[6px] transition-transform duration-200 group-hover:scale-[1.04]'>
+                    {Icon ? (
+                      <Icon className='size-6' aria-hidden='true' />
+                    ) : null}
+                  </span>
+                  <span className='line-clamp-2 w-full text-center text-xs leading-tight'>
+                    {item.title}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      ))}
     </div>
   )
 }
