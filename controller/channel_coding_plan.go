@@ -2,6 +2,7 @@ package controller
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -41,17 +42,9 @@ func ChannelCodingPlanQuota(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	provider, err := service.ResolveChannelCodingPlanProvider(channel)
+	provider, apiKey, err := codingPlanTargetOfChannel(channel)
 	if err != nil {
 		common.ApiErrorMsg(c, err.Error())
-		return
-	}
-	apiKey := channel.CodingPlanKey
-	if apiKey == "" {
-		apiKey = channel.Key
-	}
-	if strings.Contains(apiKey, "\n") {
-		common.ApiErrorMsg(c, "Multi-key channels need a dedicated coding plan key to query quota")
 		return
 	}
 	quota, err := service.QueryCodingPlanQuota(c.Request.Context(), provider, apiKey)
@@ -60,6 +53,52 @@ func ChannelCodingPlanQuota(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, quota)
+}
+
+
+// codingPlanTargetOfChannel 渠道视角的余量查询目标：优先用渠道绑定的账户（凭证真相源），
+// 账户未挂载时回退渠道 legacy 列（迁移过渡期）。
+func codingPlanTargetOfChannel(channel *model.Channel) (service.CodingPlanProvider, string, error) {
+	if channel.Account != nil {
+		provider, err := service.ResolveAccountCodingPlanProvider(channel.Account)
+		if err != nil {
+			return "", "", err
+		}
+		key, err := CodingPlanQueryKeyOfAccount(channel.Account)
+		if err != nil {
+			return "", "", err
+		}
+		return provider, key, nil
+	}
+	provider, err := service.ResolveChannelCodingPlanProvider(channel)
+	if err != nil {
+		return "", "", err
+	}
+	apiKey := strings.TrimSpace(channel.CodingPlanKey)
+	if apiKey == "" {
+		apiKey = strings.TrimSpace(channel.Key)
+	}
+	if apiKey == "" {
+		return "", "", errors.New("channel has no key to query coding plan quota")
+	}
+	return provider, apiKey, nil
+}
+
+// CodingPlanQueryKeyOfAccount 账户的余量查询 key：套餐专用 key 优先；留空用账户自身 key
+// （多 key 账户取第一把——2026-09-10 定，取代此前"多 key 拒绝查询"）。
+func CodingPlanQueryKeyOfAccount(account *model.Account) (string, error) {
+	if key := strings.TrimSpace(account.CodingPlanKey); key != "" {
+		return key, nil
+	}
+	keys := account.GetKeys()
+	if len(keys) == 0 {
+		return "", errors.New("account has no key to query coding plan quota")
+	}
+	key := strings.TrimSpace(keys[0])
+	if key == "" {
+		return "", errors.New("account has no key to query coding plan quota")
+	}
+	return key, nil
 }
 
 // codingPlanAutoControlFields 自动启停配置在渠道保存请求里的字段名。

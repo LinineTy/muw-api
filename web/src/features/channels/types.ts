@@ -93,6 +93,33 @@ export const channelSchema = z.object({
   coding_plan_enable_threshold: z.number().int().nullish(), // 恢复阈值(%) 用量 < 该值恢复
   // 编码套餐余量分组指纹("厂商:密钥指纹"):同 key 多渠道共享同一值,前端据此合并成一张余量卡。
   coding_plan_quota_group: z.string().nullish(),
+  // 凭证与渠道解耦:绑定的账户(>0 时 key/base_url 等凭证在账户上管理)
+  account_id: z.number().default(0),
+  account: z
+    .object({
+      id: z.number(),
+      name: z.string(),
+      type: z.number(),
+      key_masked: z.string().default(''),
+      status: z.number(),
+      base_url: z.string().nullish(),
+    })
+    .nullish(),
+  // 绑定关系视图（含渠道内停用的绑定）：渠道抽屉回显与编辑用；顺序即轮询顺序。
+  account_bindings: z
+    .array(
+      z.object({
+        account_id: z.number(),
+        enabled: z.boolean(),
+        // 以下摘要字段仅响应时下发；请求提交只带 account_id + enabled
+        name: z.string().optional(),
+        type: z.number().optional(),
+        status: z.number().optional(),
+        key_masked: z.string().optional(),
+        base_url: z.string().nullish(),
+      })
+    )
+    .nullish(),
   model_settings: z
     .array(
       z.object({
@@ -434,6 +461,8 @@ export interface ChannelFormData {
 
 export interface AddChannelRequest {
   mode: 'single' | 'batch' | 'multi_to_single'
+  /** 绑定共享账户(凭证与渠道解耦):>0 时凭证来自账户,仅 single 模式 */
+  account_id?: number
   multi_key_mode?: 'random' | 'polling'
   batch_add_set_key_prefix_2_name?: boolean
   channel: Partial<Channel>

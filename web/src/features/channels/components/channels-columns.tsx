@@ -25,6 +25,7 @@ import {
   ChevronRight,
   EyeOff,
   Gauge,
+  Landmark,
   ListOrdered,
   Ruler,
   Shuffle,
@@ -862,6 +863,44 @@ export function useChannelsColumns(
         },
         size: 260,
         minSize: 200,
+      },
+
+      // Account column(凭证与渠道解耦:渠道挂载的账户摘要)
+      {
+        accessorKey: 'account',
+        header: t('Account'),
+        meta: { mobileHidden: true },
+        cell: ({ row }) => {
+          if (isTagAggregateRow(row.original)) {
+            return <span className='text-muted-foreground'>-</span>
+          }
+          const account = row.original.account
+          if (!account) {
+            // 未绑定(legacy 渠道,凭证在渠道列)
+            return <span className='text-muted-foreground'>-</span>
+          }
+          return (
+            <TooltipProvider delay={100}>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className='text-muted-foreground inline-flex max-w-[160px] items-center gap-1 truncate text-xs'>
+                      <Landmark className='h-3 w-3 shrink-0' aria-hidden='true' />
+                      <span className='truncate'>{account.name}</span>
+                    </span>
+                  }
+                />
+                <TooltipContent side='bottom' className='max-w-xs'>
+                  <div className='flex flex-col gap-0.5'>
+                    <span>ID: {account.id}</span>
+                    {account.key_masked && <span>{account.key_masked}</span>}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )
+        },
+        size: 140,
       },
 
       // Type column

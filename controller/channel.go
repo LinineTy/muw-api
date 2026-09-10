@@ -185,6 +185,18 @@ func GetAllChannels(c *gin.Context) {
 	if err := model.LoadChannelsModelSettings(channelData); err != nil {
 		common.SysError("failed to load channel model settings: " + err.Error())
 	}
+	// 挂载账户：余额/多key状态等凭证侧数据以账户为准（响应侧覆盖展示）。
+	if err := model.LoadChannelsAccounts(channelData); err != nil {
+		common.SysError("failed to load channel accounts: " + err.Error())
+	} else {
+		for _, ch := range channelData {
+			if ch.Account != nil {
+				ch.Balance = ch.Account.Balance
+				ch.BalanceUpdatedTime = ch.Account.BalanceUpdatedTime
+				ch.ChannelInfo = ch.Account.ChannelInfo
+			}
+		}
+	}
 
 	for _, datum := range channelData {
 		clearChannelInfo(datum)
@@ -656,6 +668,74 @@ type AddChannelRequest struct {
 	Channel                   *model.Channel        `json:"channel"`
 	// 套餐专用密钥(可选),仅用于编码套餐余量监控,不参与转发。
 	CodingPlanKey *string `json:"coding_plan_key"`
+	// AccountID 单账户绑定(兼容保留):显式指定则凭证使用该账户(key/base_url 等忽略),
+	// 与 batch/multi_to_single 模式互斥(账户已有固定 key 列表)。
+	AccountID *int `json:"account_id"`
+	// AccountIDs 账户绑定列表(N:N):一个渠道可绑多个账户,用法与渠道多 key 一致——
+	// 按列表顺序轮询。与 AccountID 同时出现时以本字段为准。
+	AccountIDs []int `json:"account_ids"`
+	// AccountBindings 账户绑定列表(带渠道内启停):优先级最高,前端抽屉提交的形态。
+	AccountBindings []BindingInput `json:"account_bindings"`
+}
+
+// specIDs 取绑定意图里的账户 id（保序）。
+func specIDs(specs []model.BindingSpec) []int {
+	ids := make([]int, 0, len(specs))
+	for _, spec := range specs {
+		if spec.AccountID > 0 {
+			ids = append(ids, spec.AccountID)
+		}
+	}
+	return ids
+}
+
+// BindingInput 渠道绑定账户的请求形态（顺序即轮询顺序）。
+type BindingInput struct {
+	AccountID int   `json:"account_id"`
+	Enabled   *bool `json:"enabled"`
+}
+
+// normalizeBindingSpecs 归一绑定意图：account_bindings（带启停）> account_ids >
+// account_id（兼容旧客户端）。去重去零、保序。
+func normalizeBindingSpecs(bindings []BindingInput, ids []int, single *int) []model.BindingSpec {
+	specs := make([]model.BindingSpec, 0, len(bindings))
+	seen := make(map[int]bool, len(bindings))
+	for _, b := range bindings {
+		if b.AccountID <= 0 || seen[b.AccountID] {
+			continue
+		}
+		seen[b.AccountID] = true
+		enabled := true
+		if b.Enabled != nil {
+			enabled = *b.Enabled
+		}
+		specs = append(specs, model.BindingSpec{AccountID: b.AccountID, Enabled: enabled})
+	}
+	if len(specs) > 0 {
+		return specs
+	}
+	for _, id := range normalizeBoundAccountIDs(ids, single) {
+		specs = append(specs, model.BindingSpec{AccountID: id, Enabled: true})
+	}
+	return specs
+}
+
+// normalizeBoundAccountIDs 归一账户绑定列表：account_ids 优先（去重去零、保序），
+// 否则退回单值 account_id（兼容旧客户端）。
+func normalizeBoundAccountIDs(ids []int, single *int) []int {
+	res := make([]int, 0, len(ids)+1)
+	seen := make(map[int]bool, len(ids)+1)
+	for _, id := range ids {
+		if id <= 0 || seen[id] {
+			continue
+		}
+		seen[id] = true
+		res = append(res, id)
+	}
+	if len(res) == 0 && single != nil && *single > 0 {
+		res = append(res, *single)
+	}
+	return res
 }
 
 func getVertexArrayKeys(keys string) ([]string, error) {
@@ -724,6 +804,58 @@ func AddChannel(c *gin.Context) {
 	}
 
 	addChannelRequest.Channel.CreatedTime = common.GetTimestamp()
+
+	// 共享账户路径：凭证全部来自既有账户，忽略 key 输入；单渠道创建。
+	// 账户绑定列表（N:N）：account_ids 优先，account_id 兼容保留。
+	boundAccountIDs := normalizeBoundAccountIDs(addChannelRequest.AccountIDs, addChannelRequest.AccountID)
+	boundSpecs := normalizeBindingSpecs(addChannelRequest.AccountBindings, addChannelRequest.AccountIDs, addChannelRequest.AccountID)
+	if len(boundAccountIDs) == 0 && len(boundSpecs) > 0 {
+		boundAccountIDs = specIDs(boundSpecs)
+	}
+	if len(boundAccountIDs) > 0 {
+		if addChannelRequest.Mode != "" && addChannelRequest.Mode != "single" {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "绑定账户时仅支持 single 模式（账户已持有完整 key 列表）",
+			})
+			return
+		}
+		// 类型不做校验（2026-09-10 定）：OpenAI 兼容端点在多数渠道类型下通用，
+		// 拿类型卡绑定会卡死自己；能不能通由使用者判断、由渠道测试验证。
+		for _, accountId := range boundAccountIDs {
+			account, err := model.GetAccountById(accountId, true)
+			if err != nil {
+				c.JSON(http.StatusOK, gin.H{"success": false, "message": "账户不存在: " + err.Error()})
+				return
+			}
+			if account.Status != common.ChannelStatusEnabled {
+				c.JSON(http.StatusOK, gin.H{"success": false, "message": "账户已被禁用，请先启用账户: " + account.Name})
+				return
+			}
+		}
+		// 挂账户的渠道不再持有凭证；多 key 状态（IsMultiKey/Mode）以账户为准，
+		// 渠道请求携带的 ChannelInfo 凭证部分忽略。
+		addChannelRequest.Channel.AccountId = boundAccountIDs[0]
+		addChannelRequest.Channel.Key = ""
+		addChannelRequest.Channel.ChannelInfo = model.ChannelInfo{}
+		if err := addChannelRequest.Channel.Insert(); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		if err := model.ReplaceChannelAccountBindingsWithSpecs(addChannelRequest.Channel.Id, boundSpecs); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		recordManageAudit(c, "channel.create", map[string]interface{}{
+			"name":        addChannelRequest.Channel.Name,
+			"type":        addChannelRequest.Channel.Type,
+			"count":       1,
+			"account_ids": boundAccountIDs,
+		})
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": ""})
+		return
+	}
+
 	keys := make([]string, 0)
 	switch addChannelRequest.Mode {
 	case "multi_to_single":
@@ -831,6 +963,10 @@ func DeleteChannel(c *gin.Context) {
 	if err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	// 删除渠道后回收无引用的系统生成账户（用户手建账户保留）。
+	if _, err := model.CleanupOrphanPrivateAccounts(); err != nil {
+		common.SysLog(fmt.Sprintf("failed to cleanup orphan accounts after channel delete: %v", err))
 	}
 	model.InitChannelCache()
 	if channelLookupFailed {
@@ -1014,6 +1150,10 @@ func DeleteChannelBatch(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// 批量删除后回收无引用的系统生成账户。
+	if _, err := model.CleanupOrphanPrivateAccounts(); err != nil {
+		common.SysLog(fmt.Sprintf("failed to cleanup orphan accounts after batch delete: %v", err))
+	}
 	model.InitChannelCache()
 	if deletedCount > 0 {
 		service.ResetProxyClientCache()
@@ -1120,6 +1260,139 @@ func UpdateChannel(c *gin.Context) {
 	// Always copy the original ChannelInfo so that fields like IsMultiKey and MultiKeySize are retained.
 	channel.ChannelInfo = originChannel.ChannelInfo
 
+	// ── 账户换绑（凭证与渠道解耦）──────────────────────────────────
+	// 请求显式携带 account_id 且与当前不同 = 换绑：校验新账户（存在/启用/类型匹配），
+	// 更新渠道 account_id，类型同步为账户类型（反规范化副本），凭证字段全部以新账户
+	// 为准。旧账户若为系统生成的私有账户且无其他引用，换绑成功后回收。
+	accountRebound := false
+	var reboundAccountIDs []int
+	var reboundSpecs []model.BindingSpec
+	if bindingsProvided, ok := requestData["account_bindings"]; ok {
+		if rawList, valid := bindingsProvided.([]any); valid {
+			for _, item := range rawList {
+				entry, okMap := item.(map[string]any)
+				if !okMap {
+					continue
+				}
+				idValue, okID := entry["account_id"].(float64)
+				if !okID || int(idValue) <= 0 {
+					continue
+				}
+				enabled := true
+				if enabledValue, okEnabled := entry["enabled"].(bool); okEnabled {
+					enabled = enabledValue
+				}
+				reboundSpecs = append(reboundSpecs, model.BindingSpec{AccountID: int(idValue), Enabled: enabled})
+			}
+		}
+		seen := make(map[int]bool, len(reboundSpecs))
+		specs := make([]model.BindingSpec, 0, len(reboundSpecs))
+		for _, spec := range reboundSpecs {
+			if seen[spec.AccountID] {
+				continue
+			}
+			seen[spec.AccountID] = true
+			specs = append(specs, spec)
+		}
+		reboundSpecs = specs
+		for _, spec := range reboundSpecs {
+			account, accErr := model.GetAccountById(spec.AccountID, true)
+			if accErr != nil {
+				c.JSON(http.StatusOK, gin.H{"success": false, "message": "账户不存在: " + accErr.Error()})
+				return
+			}
+			if account.Status != common.ChannelStatusEnabled {
+				c.JSON(http.StatusOK, gin.H{"success": false, "message": "账户已被禁用，请先启用账户: " + account.Name})
+				return
+			}
+		}
+		reboundAccountIDs = specIDs(reboundSpecs)
+		if len(reboundAccountIDs) > 0 {
+			channel.AccountId = reboundAccountIDs[0]
+		}
+		channel.Key = ""
+		channel.ChannelInfo = model.ChannelInfo{}
+		accountRebound = true
+	} else if accountIDsProvided, ok := requestData["account_ids"]; ok {
+		// N:N 绑定列表：整体覆盖（顺序即轮询顺序）。
+		if rawList, valid := accountIDsProvided.([]any); valid {
+			for _, v := range rawList {
+				if f, okFloat := v.(float64); okFloat && int(f) > 0 {
+					reboundAccountIDs = append(reboundAccountIDs, int(f))
+				}
+			}
+		}
+		seen := make(map[int]bool, len(reboundAccountIDs))
+		unique := make([]int, 0, len(reboundAccountIDs))
+		for _, id := range reboundAccountIDs {
+			if !seen[id] {
+				seen[id] = true
+				unique = append(unique, id)
+			}
+		}
+		reboundAccountIDs = unique
+		for _, accountId := range reboundAccountIDs {
+			account, accErr := model.GetAccountById(accountId, true)
+			if accErr != nil {
+				c.JSON(http.StatusOK, gin.H{"success": false, "message": "账户不存在: " + accErr.Error()})
+				return
+			}
+			if account.Status != common.ChannelStatusEnabled {
+				c.JSON(http.StatusOK, gin.H{"success": false, "message": "账户已被禁用，请先启用账户: " + account.Name})
+				return
+			}
+		}
+		if len(reboundAccountIDs) > 0 {
+			channel.AccountId = reboundAccountIDs[0]
+		}
+		channel.Key = ""
+		channel.ChannelInfo = model.ChannelInfo{}
+		accountRebound = true
+	} else if accountIDProvided, ok := requestData["account_id"]; ok {
+		newAccountID := 0
+		if v, valid := accountIDProvided.(float64); valid {
+			newAccountID = int(v)
+		}
+		if newAccountID != originChannel.AccountId {
+			if newAccountID > 0 {
+				newAccount, accErr := model.GetAccountById(newAccountID, true)
+				if accErr != nil {
+					c.JSON(http.StatusOK, gin.H{"success": false, "message": "账户不存在: " + accErr.Error()})
+					return
+				}
+				if newAccount.Status != common.ChannelStatusEnabled {
+					c.JSON(http.StatusOK, gin.H{"success": false, "message": "账户已被禁用，请先启用账户"})
+					return
+				}
+				if newAccount.Type != channel.Type {
+					// 换绑允许类型不同：渠道类型同步为账户类型（适配器/base_url 默认值按新类型）。
+					channel.Type = newAccount.Type
+				}
+			}
+			channel.AccountId = newAccountID
+			channel.Key = ""
+			channel.ChannelInfo = model.ChannelInfo{}
+			accountRebound = true
+		}
+	}
+	// 挂账户的渠道：凭证类字段（key/base_url/setting/openai_organization/
+	// coding_plan_*）从渠道更新路径剥离——凭证编辑走账户接口，渠道侧忽略这些
+	// 字段的变更（避免渠道 legacy 列与账户双写漂移）。未挂账户的 legacy 渠道
+	// 保持原更新语义。
+	if originChannel.AccountId > 0 && !accountRebound {
+		channel.Key = ""
+		channel.BaseURL = nil
+		channel.Setting = nil
+		channel.OpenAIOrganization = nil
+		channel.CodingPlanProvider = nil
+		channel.CodingPlanKey = ""
+		channel.CodingPlanKeyInput = nil
+		channel.CodingPlanAutoControl = nil
+		channel.CodingPlanDisableThreshold = nil
+		channel.CodingPlanEnableThreshold = nil
+		channel.ChannelInfo = model.ChannelInfo{}
+	}
+
 	if channelHasSensitiveChanges(&channel, originChannel, requestData) &&
 		!authz.Can(c.GetInt("id"), c.GetInt("role"), authz.ChannelSensitiveWrite) {
 		common.ApiErrorI18n(c, i18n.MsgAuthInsufficientPrivilege)
@@ -1132,7 +1405,8 @@ func UpdateChannel(c *gin.Context) {
 	}
 
 	// 处理多key模式下的密钥追加/覆盖逻辑
-	if channel.KeyMode != nil && channel.ChannelInfo.IsMultiKey {
+	// 挂账户的渠道多 key 管理走账户接口（轮询状态在账户上），渠道侧跳过。
+	if channel.KeyMode != nil && channel.ChannelInfo.IsMultiKey && channel.AccountId == 0 {
 		switch *channel.KeyMode {
 		case "append":
 			// 追加模式：将新密钥添加到现有密钥列表
@@ -1213,7 +1487,8 @@ func UpdateChannel(c *gin.Context) {
 	}
 	// OpenCode Zen 支持空密钥（免费套餐）：请求显式携带 key 且需要清空时，
 	// GORM Updates 会跳过空值字段，需单独 Select key 置空。
-	if channel.Type == constant.ChannelTypeOpenCodeZen {
+	// 挂账户的渠道 key 归账户管理，跳过（清密钥走账户接口）。
+	if channel.Type == constant.ChannelTypeOpenCodeZen && channel.AccountId == 0 {
 		if _, keyProvided := requestData["key"]; keyProvided && channel.Key == "" && originChannel.Key != "" {
 			if err := channel.SaveKey(); err != nil {
 				common.ApiError(c, err)
@@ -1228,8 +1503,11 @@ func UpdateChannel(c *gin.Context) {
 	}
 	// 编码套餐自动启停配置是组级语义:请求携带时同步到同 key 同厂商的其余渠道
 	// (同一套餐账号),失败不阻断主流程。先于 InitChannelCache 保证重建索引含同步值。
-	if err := syncCodingPlanAutoControlToGroup(&channel.Channel, requestData); err != nil {
-		common.SysLog(fmt.Sprintf("failed to sync coding plan auto-control config: channel_id=%d, error=%v", channel.Id, err))
+	// 挂账户的渠道配置在账户上(天然组级),跳过渠道间同步。
+	if channel.AccountId == 0 {
+		if err := syncCodingPlanAutoControlToGroup(&channel.Channel, requestData); err != nil {
+			common.SysLog(fmt.Sprintf("failed to sync coding plan auto-control config: channel_id=%d, error=%v", channel.Id, err))
+		}
 	}
 	// 渠道内模型设置（禁用/上下文覆盖）：仅当请求显式携带 model_settings 时全量对齐
 	//（含空数组 = 全部恢复默认）。未携带保持现状——避免外部局部更新（如仅改名称）
@@ -1259,7 +1537,26 @@ func UpdateChannel(c *gin.Context) {
 			return
 		}
 	}
+	// 绑定表落库（account_ids 整体覆盖；单值 account_id 路径由 Channel.Update 双写收敛）。
+	if accountRebound && len(reboundAccountIDs) > 0 {
+		writeErr := model.ReplaceChannelAccountBindings(channel.Id, reboundAccountIDs)
+		if len(reboundSpecs) > 0 {
+			writeErr = model.ReplaceChannelAccountBindingsWithSpecs(channel.Id, reboundSpecs)
+		}
+		if writeErr != nil {
+			common.ApiError(c, writeErr)
+			return
+		}
+	}
 	model.InitChannelCache()
+	// 换绑成功：旧私有账户若无其他引用则回收（系统生成的账户不残留）。
+	if accountRebound && originChannel.AccountId > 0 {
+		if cleaned, err := model.CleanupOrphanPrivateAccounts(); err != nil {
+			common.SysLog(fmt.Sprintf("failed to cleanup orphan accounts after rebind: channel_id=%d, error=%v", channel.Id, err))
+		} else if cleaned > 0 {
+			common.SysLog(fmt.Sprintf("cleanup %d orphan account(s) after channel rebind: channel_id=%d", cleaned, channel.Id))
+		}
+	}
 	if proxyChanged {
 		service.InvalidateProxyClient(originProxy)
 	}
@@ -1281,6 +1578,9 @@ func UpdateChannel(c *gin.Context) {
 	}
 	if channel.Key != "" && channel.Key != originChannel.Key {
 		changedFields = append(changedFields, "key")
+	}
+	if accountRebound {
+		changedFields = append(changedFields, "account_id")
 	}
 	updateAudit := map[string]any{
 		"id":             channel.Id,
@@ -1662,6 +1962,14 @@ func CopyChannel(c *gin.Context) {
 			resetBalance = v
 		}
 	}
+	// new_account=true 时复制私有账户（凭证深拷贝,多 key 状态重置）；
+	// 默认共享 origin 账户（凭证引用同一份,余额/轮询状态共用）。
+	newAccount := false
+	if naStr := c.DefaultQuery("new_account", "false"); naStr != "" {
+		if v, err := strconv.ParseBool(naStr); err == nil {
+			newAccount = v
+		}
+	}
 
 	// fetch original channel with key
 	origin, err := model.GetChannelById(id, true)
@@ -1683,9 +1991,55 @@ func CopyChannel(c *gin.Context) {
 	clone.Name = origin.Name + suffix
 	clone.TestTime = 0
 	clone.ResponseTime = 0
+	clone.Account = nil // 重新挂载（共享账户时下方重挂；避免旧指针状态污染）
 	if resetBalance {
 		clone.Balance = 0
 		clone.UsedQuota = 0
+	}
+	// 凭证状态归零：多 key 轮询索引/启停状态不复制（共享账户时状态在账户上；
+	// 复制私有账户时新账户状态重置）。legacy 渠道（AccountId=0）同样不复制动态状态。
+	clone.ChannelInfo.MultiKeyPollingIndex = 0
+	clone.ChannelInfo.MultiKeyStatusList = nil
+	clone.ChannelInfo.MultiKeyDisabledReason = nil
+	clone.ChannelInfo.MultiKeyDisabledTime = nil
+
+	if origin.AccountId > 0 {
+		if newAccount {
+			// 复制私有账户：凭证从 origin 账户一一拷贝（真相源；渠道 legacy 列
+			// 可能已过时），多 key 状态重置。
+			if origin.Account == nil {
+				c.JSON(http.StatusOK, gin.H{"success": false, "message": "源渠道账户加载失败，请稍后重试"})
+				return
+			}
+			newAcc := &model.Account{
+				Name:                    origin.Name + suffix + "（私有）",
+				Type:                    origin.Account.Type,
+				Status:                  common.ChannelStatusEnabled,
+				Key:                     origin.Account.Key,
+				OpenAIOrganization:      origin.Account.OpenAIOrganization,
+				BaseURL:                 origin.Account.BaseURL,
+				Other:                   origin.Account.Other,
+				Setting:                 origin.Account.Setting,
+				ChannelInfo:             model.ChannelInfo{}, // 多 key 状态重置
+				CodingPlanProvider:      origin.Account.CodingPlanProvider,
+				CodingPlanKey:           origin.Account.CodingPlanKey,
+				CodingPlanAutoControl:   origin.Account.CodingPlanAutoControl,
+				CodingPlanDisableThreshold: origin.Account.CodingPlanDisableThreshold,
+				CodingPlanEnableThreshold:  origin.Account.CodingPlanEnableThreshold,
+				CreatedTime:             common.GetTimestamp(),
+				AutoGenerated:           true,
+			}
+			if err := newAcc.Insert(); err != nil {
+				common.SysError("failed to create account for cloned channel: " + err.Error())
+				c.JSON(http.StatusOK, gin.H{"success": false, "message": "复制账户失败，请稍后重试"})
+				return
+			}
+			clone.AccountId = newAcc.Id
+		}
+		// 默认：共享 origin 账户（clone.AccountId 已随浅拷贝带上）
+		// key 归账户，渠道列不带凭证。
+		clone.Key = ""
+		clone.ChannelInfo = model.ChannelInfo{}
 	}
 
 	if err := clone.ValidateSettings(); err != nil {
@@ -1759,7 +2113,47 @@ func ManageMultiKeys(c *gin.Context) {
 		return
 	}
 
-	if !channel.ChannelInfo.IsMultiKey {
+	// 多 key 管理目标解析：挂账户的渠道操作账户（轮询/启停状态跨渠道共享，
+	// 改 key 直接改账户 key），legacy 渠道操作渠道自身。后续读写统一走
+	// mkInfo/mkKeys/mkSetKeys/mkSave 闭包，一份逻辑双路径。
+	var mkAccount *model.Account
+	if channel.Account != nil {
+		mkAccount = channel.Account
+	}
+	mkInfo := func() *model.ChannelInfo {
+		if mkAccount != nil {
+			return &mkAccount.ChannelInfo
+		}
+		return &channel.ChannelInfo
+	}
+	mkKeys := func() []string {
+		if mkAccount != nil {
+			return mkAccount.GetKeys()
+		}
+		return channel.GetKeys()
+	}
+	mkSetKeys := func(remaining []string) {
+		joined := strings.Join(remaining, "\n")
+		if mkAccount != nil {
+			mkAccount.Key = joined
+			mkAccount.ChannelInfo.MultiKeySize = len(remaining)
+		} else {
+			channel.Key = joined
+			mkInfo().MultiKeySize = len(remaining)
+		}
+	}
+	mkSave := func() error {
+		if mkAccount != nil {
+			return mkAccount.Save()
+		}
+		return channel.Update()
+	}
+	lock := model.GetChannelPollingLock(channel.Id)
+	if mkAccount != nil {
+		lock = model.GetAccountPollingLock(mkAccount.Id)
+	}
+
+	if !mkInfo().IsMultiKey {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": "该渠道不是多密钥模式",
@@ -1782,13 +2176,12 @@ func ManageMultiKeys(c *gin.Context) {
 		})
 	}
 
-	lock := model.GetChannelPollingLock(channel.Id)
 	lock.Lock()
 	defer lock.Unlock()
 
 	switch request.Action {
 	case "get_key_status":
-		keys := channel.GetKeys()
+		keys := mkKeys()
 
 		// Default pagination parameters
 		page := request.Page
@@ -1810,8 +2203,8 @@ func ManageMultiKeys(c *gin.Context) {
 			var disabledTime int64
 			var reason string
 
-			if channel.ChannelInfo.MultiKeyStatusList != nil {
-				if s, exists := channel.ChannelInfo.MultiKeyStatusList[i]; exists {
+			if mkInfo().MultiKeyStatusList != nil {
+				if s, exists := mkInfo().MultiKeyStatusList[i]; exists {
 					status = s
 				}
 			}
@@ -1827,11 +2220,11 @@ func ManageMultiKeys(c *gin.Context) {
 			}
 
 			if status != 1 {
-				if channel.ChannelInfo.MultiKeyDisabledTime != nil {
-					disabledTime = channel.ChannelInfo.MultiKeyDisabledTime[i]
+				if mkInfo().MultiKeyDisabledTime != nil {
+					disabledTime = mkInfo().MultiKeyDisabledTime[i]
 				}
-				if channel.ChannelInfo.MultiKeyDisabledReason != nil {
-					reason = channel.ChannelInfo.MultiKeyDisabledReason[i]
+				if mkInfo().MultiKeyDisabledReason != nil {
+					reason = mkInfo().MultiKeyDisabledReason[i]
 				}
 			}
 
@@ -1908,7 +2301,7 @@ func ManageMultiKeys(c *gin.Context) {
 		}
 
 		keyIndex := *request.KeyIndex
-		if keyIndex < 0 || keyIndex >= channel.ChannelInfo.MultiKeySize {
+		if keyIndex < 0 || keyIndex >= mkInfo().MultiKeySize {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
 				"message": "密钥索引超出范围",
@@ -1916,19 +2309,19 @@ func ManageMultiKeys(c *gin.Context) {
 			return
 		}
 
-		if channel.ChannelInfo.MultiKeyStatusList == nil {
-			channel.ChannelInfo.MultiKeyStatusList = make(map[int]int)
+		if mkInfo().MultiKeyStatusList == nil {
+			mkInfo().MultiKeyStatusList = make(map[int]int)
 		}
-		if channel.ChannelInfo.MultiKeyDisabledTime == nil {
-			channel.ChannelInfo.MultiKeyDisabledTime = make(map[int]int64)
+		if mkInfo().MultiKeyDisabledTime == nil {
+			mkInfo().MultiKeyDisabledTime = make(map[int]int64)
 		}
-		if channel.ChannelInfo.MultiKeyDisabledReason == nil {
-			channel.ChannelInfo.MultiKeyDisabledReason = make(map[int]string)
+		if mkInfo().MultiKeyDisabledReason == nil {
+			mkInfo().MultiKeyDisabledReason = make(map[int]string)
 		}
 
-		channel.ChannelInfo.MultiKeyStatusList[keyIndex] = 2 // disabled
+		mkInfo().MultiKeyStatusList[keyIndex] = 2 // disabled
 
-		err = channel.Update()
+		err = mkSave()
 		if err != nil {
 			common.ApiError(c, err)
 			return
@@ -1951,7 +2344,7 @@ func ManageMultiKeys(c *gin.Context) {
 		}
 
 		keyIndex := *request.KeyIndex
-		if keyIndex < 0 || keyIndex >= channel.ChannelInfo.MultiKeySize {
+		if keyIndex < 0 || keyIndex >= mkInfo().MultiKeySize {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
 				"message": "密钥索引超出范围",
@@ -1960,17 +2353,17 @@ func ManageMultiKeys(c *gin.Context) {
 		}
 
 		// 从状态列表中删除该密钥的记录，使其回到默认启用状态
-		if channel.ChannelInfo.MultiKeyStatusList != nil {
-			delete(channel.ChannelInfo.MultiKeyStatusList, keyIndex)
+		if mkInfo().MultiKeyStatusList != nil {
+			delete(mkInfo().MultiKeyStatusList, keyIndex)
 		}
-		if channel.ChannelInfo.MultiKeyDisabledTime != nil {
-			delete(channel.ChannelInfo.MultiKeyDisabledTime, keyIndex)
+		if mkInfo().MultiKeyDisabledTime != nil {
+			delete(mkInfo().MultiKeyDisabledTime, keyIndex)
 		}
-		if channel.ChannelInfo.MultiKeyDisabledReason != nil {
-			delete(channel.ChannelInfo.MultiKeyDisabledReason, keyIndex)
+		if mkInfo().MultiKeyDisabledReason != nil {
+			delete(mkInfo().MultiKeyDisabledReason, keyIndex)
 		}
 
-		err = channel.Update()
+		err = mkSave()
 		if err != nil {
 			common.ApiError(c, err)
 			return
@@ -1986,15 +2379,15 @@ func ManageMultiKeys(c *gin.Context) {
 	case "enable_all_keys":
 		// 清空所有禁用状态，使所有密钥回到默认启用状态
 		var enabledCount int
-		if channel.ChannelInfo.MultiKeyStatusList != nil {
-			enabledCount = len(channel.ChannelInfo.MultiKeyStatusList)
+		if mkInfo().MultiKeyStatusList != nil {
+			enabledCount = len(mkInfo().MultiKeyStatusList)
 		}
 
-		channel.ChannelInfo.MultiKeyStatusList = make(map[int]int)
-		channel.ChannelInfo.MultiKeyDisabledTime = make(map[int]int64)
-		channel.ChannelInfo.MultiKeyDisabledReason = make(map[int]string)
+		mkInfo().MultiKeyStatusList = make(map[int]int)
+		mkInfo().MultiKeyDisabledTime = make(map[int]int64)
+		mkInfo().MultiKeyDisabledReason = make(map[int]string)
 
-		err = channel.Update()
+		err = mkSave()
 		if err != nil {
 			common.ApiError(c, err)
 			return
@@ -2009,26 +2402,26 @@ func ManageMultiKeys(c *gin.Context) {
 
 	case "disable_all_keys":
 		// 禁用所有启用的密钥
-		if channel.ChannelInfo.MultiKeyStatusList == nil {
-			channel.ChannelInfo.MultiKeyStatusList = make(map[int]int)
+		if mkInfo().MultiKeyStatusList == nil {
+			mkInfo().MultiKeyStatusList = make(map[int]int)
 		}
-		if channel.ChannelInfo.MultiKeyDisabledTime == nil {
-			channel.ChannelInfo.MultiKeyDisabledTime = make(map[int]int64)
+		if mkInfo().MultiKeyDisabledTime == nil {
+			mkInfo().MultiKeyDisabledTime = make(map[int]int64)
 		}
-		if channel.ChannelInfo.MultiKeyDisabledReason == nil {
-			channel.ChannelInfo.MultiKeyDisabledReason = make(map[int]string)
+		if mkInfo().MultiKeyDisabledReason == nil {
+			mkInfo().MultiKeyDisabledReason = make(map[int]string)
 		}
 
 		var disabledCount int
-		for i := 0; i < channel.ChannelInfo.MultiKeySize; i++ {
+		for i := 0; i < mkInfo().MultiKeySize; i++ {
 			status := 1 // default enabled
-			if s, exists := channel.ChannelInfo.MultiKeyStatusList[i]; exists {
+			if s, exists := mkInfo().MultiKeyStatusList[i]; exists {
 				status = s
 			}
 
 			// 只禁用当前启用的密钥
 			if status == 1 {
-				channel.ChannelInfo.MultiKeyStatusList[i] = 2 // disabled
+				mkInfo().MultiKeyStatusList[i] = 2 // disabled
 				disabledCount++
 			}
 		}
@@ -2041,7 +2434,7 @@ func ManageMultiKeys(c *gin.Context) {
 			return
 		}
 
-		err = channel.Update()
+		err = mkSave()
 		if err != nil {
 			common.ApiError(c, err)
 			return
@@ -2064,7 +2457,7 @@ func ManageMultiKeys(c *gin.Context) {
 		}
 
 		keyIndex := *request.KeyIndex
-		if keyIndex < 0 || keyIndex >= channel.ChannelInfo.MultiKeySize {
+		if keyIndex < 0 || keyIndex >= mkInfo().MultiKeySize {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
 				"message": "密钥索引超出范围",
@@ -2072,7 +2465,7 @@ func ManageMultiKeys(c *gin.Context) {
 			return
 		}
 
-		keys := channel.GetKeys()
+		keys := mkKeys()
 		var remainingKeys []string
 		var newStatusList = make(map[int]int)
 		var newDisabledTime = make(map[int]int64)
@@ -2088,18 +2481,18 @@ func ManageMultiKeys(c *gin.Context) {
 			remainingKeys = append(remainingKeys, key)
 
 			// 保留其他密钥的状态信息，重新索引
-			if channel.ChannelInfo.MultiKeyStatusList != nil {
-				if status, exists := channel.ChannelInfo.MultiKeyStatusList[i]; exists && status != 1 {
+			if mkInfo().MultiKeyStatusList != nil {
+				if status, exists := mkInfo().MultiKeyStatusList[i]; exists && status != 1 {
 					newStatusList[newIndex] = status
 				}
 			}
-			if channel.ChannelInfo.MultiKeyDisabledTime != nil {
-				if t, exists := channel.ChannelInfo.MultiKeyDisabledTime[i]; exists {
+			if mkInfo().MultiKeyDisabledTime != nil {
+				if t, exists := mkInfo().MultiKeyDisabledTime[i]; exists {
 					newDisabledTime[newIndex] = t
 				}
 			}
-			if channel.ChannelInfo.MultiKeyDisabledReason != nil {
-				if r, exists := channel.ChannelInfo.MultiKeyDisabledReason[i]; exists {
+			if mkInfo().MultiKeyDisabledReason != nil {
+				if r, exists := mkInfo().MultiKeyDisabledReason[i]; exists {
 					newDisabledReason[newIndex] = r
 				}
 			}
@@ -2115,13 +2508,12 @@ func ManageMultiKeys(c *gin.Context) {
 		}
 
 		// Update channel with remaining keys
-		channel.Key = strings.Join(remainingKeys, "\n")
-		channel.ChannelInfo.MultiKeySize = len(remainingKeys)
-		channel.ChannelInfo.MultiKeyStatusList = newStatusList
-		channel.ChannelInfo.MultiKeyDisabledTime = newDisabledTime
-		channel.ChannelInfo.MultiKeyDisabledReason = newDisabledReason
+		mkSetKeys(remainingKeys)
+		mkInfo().MultiKeyStatusList = newStatusList
+		mkInfo().MultiKeyDisabledTime = newDisabledTime
+		mkInfo().MultiKeyDisabledReason = newDisabledReason
 
-		err = channel.Update()
+		err = mkSave()
 		if err != nil {
 			common.ApiError(c, err)
 			return
@@ -2135,7 +2527,7 @@ func ManageMultiKeys(c *gin.Context) {
 		return
 
 	case "delete_disabled_keys":
-		keys := channel.GetKeys()
+		keys := mkKeys()
 		var remainingKeys []string
 		var deletedCount int
 		var newStatusList = make(map[int]int)
@@ -2145,8 +2537,8 @@ func ManageMultiKeys(c *gin.Context) {
 		newIndex := 0
 		for i, key := range keys {
 			status := 1 // default enabled
-			if channel.ChannelInfo.MultiKeyStatusList != nil {
-				if s, exists := channel.ChannelInfo.MultiKeyStatusList[i]; exists {
+			if mkInfo().MultiKeyStatusList != nil {
+				if s, exists := mkInfo().MultiKeyStatusList[i]; exists {
 					status = s
 				}
 			}
@@ -2159,13 +2551,13 @@ func ManageMultiKeys(c *gin.Context) {
 				// 保留非自动禁用密钥的状态信息，重新索引
 				if status != 1 {
 					newStatusList[newIndex] = status
-					if channel.ChannelInfo.MultiKeyDisabledTime != nil {
-						if t, exists := channel.ChannelInfo.MultiKeyDisabledTime[i]; exists {
+					if mkInfo().MultiKeyDisabledTime != nil {
+						if t, exists := mkInfo().MultiKeyDisabledTime[i]; exists {
 							newDisabledTime[newIndex] = t
 						}
 					}
-					if channel.ChannelInfo.MultiKeyDisabledReason != nil {
-						if r, exists := channel.ChannelInfo.MultiKeyDisabledReason[i]; exists {
+					if mkInfo().MultiKeyDisabledReason != nil {
+						if r, exists := mkInfo().MultiKeyDisabledReason[i]; exists {
 							newDisabledReason[newIndex] = r
 						}
 					}
@@ -2183,13 +2575,12 @@ func ManageMultiKeys(c *gin.Context) {
 		}
 
 		// Update channel with remaining keys
-		channel.Key = strings.Join(remainingKeys, "\n")
-		channel.ChannelInfo.MultiKeySize = len(remainingKeys)
-		channel.ChannelInfo.MultiKeyStatusList = newStatusList
-		channel.ChannelInfo.MultiKeyDisabledTime = newDisabledTime
-		channel.ChannelInfo.MultiKeyDisabledReason = newDisabledReason
+		mkSetKeys(remainingKeys)
+		mkInfo().MultiKeyStatusList = newStatusList
+		mkInfo().MultiKeyDisabledTime = newDisabledTime
+		mkInfo().MultiKeyDisabledReason = newDisabledReason
 
-		err = channel.Update()
+		err = mkSave()
 		if err != nil {
 			common.ApiError(c, err)
 			return

@@ -165,7 +165,9 @@ func GetChannel(
 	}
 	// 挂载渠道内模型设置（禁用/上下文覆盖），供渠道级 context 校验使用；
 	// 加载失败不阻断选路（禁用态已由 abilities.enabled 过滤）。
-	_ = channel.loadModelSettings()
+	_ = channel.loadModelSettings(nil)
+	// 挂载账户（凭证真相源：转发取 key/多key轮询/代理都走账户）。
+	_ = channel.loadAccount()
 	return &channel, nil
 }
 
@@ -220,7 +222,7 @@ func identityFilterRequiresKey(filters []dto.ChannelFilter) bool {
 }
 
 func (channel *Channel) AddAbilities(tx *gorm.DB) error {
-	if err := channel.ensureDisabledModelsLoaded(); err != nil {
+	if err := channel.ensureDisabledModelsLoaded(tx); err != nil {
 		return err
 	}
 	models_ := strings.Split(channel.Models, ",")
@@ -295,7 +297,7 @@ func (channel *Channel) UpdateAbilities(tx *gorm.DB) error {
 	}
 
 	// Then add new abilities
-	if err := channel.ensureDisabledModelsLoaded(); err != nil {
+	if err := channel.ensureDisabledModelsLoaded(tx); err != nil {
 		if isNewTx {
 			tx.Rollback()
 		}

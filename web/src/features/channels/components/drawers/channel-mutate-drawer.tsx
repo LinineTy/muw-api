@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import {
   ArrowRight,
   AlertCircle,
@@ -30,6 +31,10 @@ import {
   Loader2,
   Server,
   Sparkles,
+  ArrowDown,
+  ArrowUp,
+  ChevronRight,
+  ExternalLink,
   Trash2,
   X,
   Copy,
@@ -110,6 +115,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { getAccounts } from '@/features/accounts/api'
 import { SecureVerificationDialog } from '@/features/auth/secure-verification'
 import { PluginIcon } from '@/features/task-plugins/components/plugin-icon'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
@@ -657,6 +663,29 @@ export function ChannelMutateDrawer({
     enabled: isEditing && Boolean(channelId),
   })
 
+  // 绑定共享账户(凭证与渠道解耦):新建时可选;编辑已绑定渠道时可换绑/解绑,拉账户列表(启用中)。
+  // 当前已绑账户即使被禁用也保留在下拉里,否则编辑时选中值无对应选项。
+  const hasBoundAccount = isEditing && Boolean(channelData?.data?.account)
+  const originalBoundAccount = channelData?.data?.account
+  const { data: bindableAccountsData } = useQuery({
+    queryKey: ['accounts', 'bindable'],
+    queryFn: () => getAccounts({ page_size: 200 }),
+    enabled: !isEditing || hasBoundAccount,
+    staleTime: 60_000,
+  })
+  const bindableAccounts = useMemo(() => {
+    const list = (bindableAccountsData?.items ?? [])
+      .map((item) => item.account)
+      .filter((acc) => acc.status === 1)
+    if (
+      originalBoundAccount &&
+      !list.some((acc) => acc.id === originalBoundAccount.id)
+    ) {
+      return [...list, originalBoundAccount]
+    }
+    return list
+  }, [bindableAccountsData, originalBoundAccount])
+
   // Fetch available groups
   const { data: groupsData, isLoading: isLoadingGroups } = useQuery({
     queryKey: ['groups'],
@@ -695,6 +724,85 @@ export function ChannelMutateDrawer({
   const multiKeyType = form.watch('multi_key_type')
   const keyMode = form.watch('key_mode')
   const currentGroups = form.watch('group')
+  // 绑定共享账户后凭证真相源在账户:key 输入区/Add Mode 收敛(仅新建)
+  const accountIdValue = useWatch({ control: form.control, name: 'account_id' })
+  // 账户绑定列表（N:N）：顺序即轮询顺序，enabled 为渠道内启停
+  const boundBindings =
+    useWatch({
+      control: form.control,
+      name: 'account_bindings',
+    }) ?? []
+  const boundAccountId = boundBindings.length
+    ? boundBindings[0].account_id
+    : (accountIdValue ?? null)
+  const boundNewAccount = !isEditing && boundAccountId !== null
+  const accountMetaById = useMemo(
+    () => new Map(bindableAccounts.map((acc) => [acc.id, acc])),
+    [bindableAccounts]
+  )
+  // 渠道响应里的绑定视图带 key_masked 等摘要，账户列表接口拿不到时用它兜底
+  const bindingMetaById = useMemo(
+    () =>
+      new Map(
+        (channelData?.data?.account_bindings ?? []).map((b) => [
+          b.account_id,
+          b,
+        ])
+      ),
+    [channelData]
+  )
+  const addableAccounts = useMemo(
+    () =>
+      bindableAccounts.filter(
+        (acc) => !boundBindings.some((b) => b.account_id === acc.id)
+      ),
+    [bindableAccounts, boundBindings]
+  )
+  // 绑定多起来抽屉会很长：默认超过 3 个就收起，点标题展开；添加账户时自动展开
+  const [accountsExpanded, setAccountsExpanded] = useState<boolean | null>(null)
+  const accountsOpen = accountsExpanded ?? boundBindings.length <= 3
+  // 抽屉关闭时忘掉本次手动展开/收起，下次打开重新按数量判断默认态
+  useEffect(() => {
+    if (!open) setAccountsExpanded(null)
+  }, [open])
+  const boundAccountNames = boundBindings
+    .map(
+      (b) =>
+        accountMetaById.get(b.account_id)?.name ??
+        bindingMetaById.get(b.account_id)?.name ??
+        `#${b.account_id}`
+    )
+    .join(' · ')
+  const channelTypeLabelOf = (type: number) =>
+    CHANNEL_TYPE_OPTIONS.find((o) => o.value === type)?.label ?? String(type)
+  const setBoundBindings = (
+    next: { account_id: number; enabled: boolean }[]
+  ) => {
+    form.setValue('account_bindings', next, { shouldDirty: true })
+    // 兼容保留的单值字段跟随列表首项
+    form.setValue('account_id', next[0]?.account_id ?? null, {
+      shouldDirty: true,
+    })
+  }
+  const addBoundAccount = (id: number) => {
+    if (!id || boundBindings.some((b) => b.account_id === id)) return
+    setBoundBindings([...boundBindings, { account_id: id, enabled: true }])
+    setAccountsExpanded(true)
+  }
+  const removeBoundAccount = (id: number) =>
+    setBoundBindings(boundBindings.filter((b) => b.account_id !== id))
+  const toggleBoundAccount = (id: number, enabled: boolean) =>
+    setBoundBindings(
+      boundBindings.map((b) => (b.account_id === id ? { ...b, enabled } : b))
+    )
+  const moveBoundAccount = (index: number, delta: number) => {
+    const target = index + delta
+    if (target < 0 || target >= boundBindings.length) return
+    const next = [...boundBindings]
+    ;[next[index], next[target]] = [next[target], next[index]]
+    setBoundBindings(next)
+  }
+
   const currentType = form.watch('type')
   const currentStatus = form.watch('status')
   const currentBaseUrl = form.watch('base_url')
@@ -3154,411 +3262,664 @@ export function ChannelMutateDrawer({
                             )}
 
                             <ChannelAuthSection>
-                              {!isEditing && (
-                                <FormField
-                                  control={form.control}
-                                  name='multi_key_mode'
-                                  render={({ field }) => (
-                                    <FormItem className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
-                                      <FormLabel className='text-muted-foreground text-xs font-medium'>
-                                        {t('Add Mode')}
-                                      </FormLabel>
-                                      <Select
-                                        items={addModeOptions.map((option) => ({
-                                          value: option.value,
-                                          label: t(option.label),
-                                        }))}
-                                        onValueChange={field.onChange}
-                                        value={field.value}
+                              {/* 账户绑定（N:N）：一个渠道可绑多个账户，顺序即轮询顺序，
+                                每个绑定可在本渠道单独停用 */}
+                              {(!isEditing || hasBoundAccount) && (
+                                <div className='flex flex-col gap-2'>
+                                  <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+                                    <button
+                                      type='button'
+                                      onClick={() =>
+                                        setAccountsExpanded(!accountsOpen)
+                                      }
+                                      className='text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-xs font-medium'
+                                    >
+                                      <ChevronRight
+                                        className={cn(
+                                          'size-3.5 transition-transform',
+                                          accountsOpen && 'rotate-90'
+                                        )}
+                                      />
+                                      <span>{t('Bound accounts')}</span>
+                                      <Badge variant='secondary'>
+                                        {boundBindings.length}
+                                      </Badge>
+                                    </button>
+                                    <Select
+                                      items={addableAccounts.map((acc) => ({
+                                        value: String(acc.id),
+                                        label: `${acc.name} · ${channelTypeLabelOf(acc.type)}`,
+                                      }))}
+                                      value='0'
+                                      onValueChange={(v) =>
+                                        addBoundAccount(Number(v))
+                                      }
+                                    >
+                                      <SelectTrigger
+                                        size='sm'
+                                        className='w-full sm:w-64'
                                       >
-                                        <FormControl>
-                                          <SelectTrigger
-                                            size='sm'
-                                            className='w-full sm:w-56'
-                                          >
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent
-                                          alignItemWithTrigger={false}
-                                        >
-                                          <SelectGroup>
-                                            {addModeOptions.map((option) => (
+                                        <SelectValue
+                                          placeholder={t('Add account')}
+                                        />
+                                      </SelectTrigger>
+                                      <SelectContent
+                                        alignItemWithTrigger={false}
+                                      >
+                                        <SelectGroup>
+                                          {addableAccounts.length === 0 ? (
+                                            <SelectItem value='0' disabled>
+                                              {t('No account available')}
+                                            </SelectItem>
+                                          ) : (
+                                            addableAccounts.map((acc) => (
                                               <SelectItem
-                                                key={option.value}
-                                                value={option.value}
+                                                key={acc.id}
+                                                value={String(acc.id)}
                                               >
-                                                {t(option.label)}
+                                                {acc.name} ·{' '}
+                                                {channelTypeLabelOf(acc.type)}
                                               </SelectItem>
-                                            ))}
-                                          </SelectGroup>
-                                        </SelectContent>
-                                      </Select>
-                                      <FormMessage />
-                                    </FormItem>
+                                            ))
+                                          )}
+                                        </SelectGroup>
+                                      </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                  </div>
+                                  {boundBindings.length === 0 ? (
+                                    <div className='text-muted-foreground rounded-md border border-dashed px-3 py-2.5 text-sm'>
+                                      {t(
+                                        'No bound account. Add one above, or fill the key below to keep credentials on the channel.'
+                                      )}
+                                    </div>
+                                  ) : !accountsOpen ? (
+                                    <p className='text-muted-foreground truncate text-xs'>
+                                      {boundAccountNames}
+                                    </p>
+                                  ) : (
+                                    <div className='flex flex-col gap-1.5'>
+                                      {boundBindings.map((binding, index) => {
+                                        const meta =
+                                          accountMetaById.get(
+                                            binding.account_id
+                                          ) ?? null
+                                        return (
+                                          <div
+                                            key={binding.account_id}
+                                            className='border-border/60 flex items-center justify-between gap-2 rounded-md border px-3 py-2'
+                                          >
+                                            <div className='flex min-w-0 items-center gap-2'>
+                                              <Badge
+                                                variant='secondary'
+                                                className='shrink-0'
+                                              >
+                                                {index + 1}
+                                              </Badge>
+                                              <span className='truncate text-sm font-medium'>
+                                                {meta?.name ??
+                                                  `#${binding.account_id}`}
+                                              </span>
+                                              <span className='bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-xs'>
+                                                {channelTypeLabelOf(
+                                                  meta?.type ?? 0
+                                                )}
+                                              </span>
+                                              <span className='text-muted-foreground hidden truncate font-mono text-xs sm:inline'>
+                                                {meta?.key_masked ||
+                                                  bindingMetaById.get(
+                                                    binding.account_id
+                                                  )?.key_masked ||
+                                                  '-'}
+                                              </span>
+                                            </div>
+                                            <div className='flex shrink-0 items-center gap-1'>
+                                              <TooltipProvider delay={100}>
+                                                <Tooltip>
+                                                  <TooltipTrigger
+                                                    render={
+                                                      <Button
+                                                        type='button'
+                                                        variant='ghost'
+                                                        size='icon-sm'
+                                                        aria-label={t(
+                                                          'Move up'
+                                                        )}
+                                                        disabled={index === 0}
+                                                        onClick={() =>
+                                                          moveBoundAccount(
+                                                            index,
+                                                            -1
+                                                          )
+                                                        }
+                                                      >
+                                                        <ArrowUp className='size-3.5' />
+                                                      </Button>
+                                                    }
+                                                  />
+                                                  <TooltipContent>
+                                                    {t('Move up')}
+                                                  </TooltipContent>
+                                                </Tooltip>
+                                                <Tooltip>
+                                                  <TooltipTrigger
+                                                    render={
+                                                      <Button
+                                                        type='button'
+                                                        variant='ghost'
+                                                        size='icon-sm'
+                                                        aria-label={t(
+                                                          'Move down'
+                                                        )}
+                                                        disabled={
+                                                          index ===
+                                                          boundBindings.length -
+                                                            1
+                                                        }
+                                                        onClick={() =>
+                                                          moveBoundAccount(
+                                                            index,
+                                                            1
+                                                          )
+                                                        }
+                                                      >
+                                                        <ArrowDown className='size-3.5' />
+                                                      </Button>
+                                                    }
+                                                  />
+                                                  <TooltipContent>
+                                                    {t('Move down')}
+                                                  </TooltipContent>
+                                                </Tooltip>
+                                                <Tooltip>
+                                                  <TooltipTrigger
+                                                    render={
+                                                      <Button
+                                                        type='button'
+                                                        variant='ghost'
+                                                        size='icon-sm'
+                                                        aria-label={t('Remove')}
+                                                        onClick={() =>
+                                                          removeBoundAccount(
+                                                            binding.account_id
+                                                          )
+                                                        }
+                                                      >
+                                                        <Trash2 className='size-3.5' />
+                                                      </Button>
+                                                    }
+                                                  />
+                                                  <TooltipContent>
+                                                    {t('Remove')}
+                                                  </TooltipContent>
+                                                </Tooltip>
+                                              </TooltipProvider>
+                                              <Switch
+                                                aria-label={t(
+                                                  'Enabled for this channel'
+                                                )}
+                                                checked={binding.enabled}
+                                                onCheckedChange={(checked) =>
+                                                  toggleBoundAccount(
+                                                    binding.account_id,
+                                                    checked === true
+                                                  )
+                                                }
+                                              />
+                                            </div>
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
                                   )}
-                                />
+                                  {accountsOpen && (
+                                    <p className='text-muted-foreground text-xs'>
+                                      {t(
+                                        'Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.'
+                                      )}
+                                    </p>
+                                  )}
+                                </div>
                               )}
 
-                              {/* OpenCode Zen: allow clearing the saved key to switch back to the free plan */}
-                              {currentType === CHANNEL_TYPE_OPENCODE_ZEN &&
-                                isEditing && (
+                              {boundAccountId !== null ? (
+                                <div className='text-muted-foreground space-y-1 rounded-md border border-dashed px-3 py-2.5 text-sm'>
+                                  <p>
+                                    {t(
+                                      'Credentials come from the bound accounts. Edit keys on the account page.'
+                                    )}
+                                  </p>
+                                  <Link
+                                    to='/accounts'
+                                    className='text-primary inline-flex items-center gap-1 text-xs hover:underline'
+                                  >
+                                    <ExternalLink className='size-3' />
+                                    {t('Manage in Accounts')}
+                                  </Link>
+                                </div>
+                              ) : (
+                                <>
+                                  {!isEditing && !boundNewAccount && (
+                                    <FormField
+                                      control={form.control}
+                                      name='multi_key_mode'
+                                      render={({ field }) => (
+                                        <FormItem className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+                                          <FormLabel className='text-muted-foreground text-xs font-medium'>
+                                            {t('Add Mode')}
+                                          </FormLabel>
+                                          <Select
+                                            items={addModeOptions.map(
+                                              (option) => ({
+                                                value: option.value,
+                                                label: t(option.label),
+                                              })
+                                            )}
+                                            onValueChange={field.onChange}
+                                            value={field.value}
+                                          >
+                                            <FormControl>
+                                              <SelectTrigger
+                                                size='sm'
+                                                className='w-full sm:w-56'
+                                              >
+                                                <SelectValue />
+                                              </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent
+                                              alignItemWithTrigger={false}
+                                            >
+                                              <SelectGroup>
+                                                {addModeOptions.map(
+                                                  (option) => (
+                                                    <SelectItem
+                                                      key={option.value}
+                                                      value={option.value}
+                                                    >
+                                                      {t(option.label)}
+                                                    </SelectItem>
+                                                  )
+                                                )}
+                                              </SelectGroup>
+                                            </SelectContent>
+                                          </Select>
+                                          <FormMessage />
+                                        </FormItem>
+                                      )}
+                                    />
+                                  )}
+
+                                  {/* OpenCode Zen: allow clearing the saved key to switch back to the free plan */}
+                                  {currentType === CHANNEL_TYPE_OPENCODE_ZEN &&
+                                    isEditing && (
+                                      <FormField
+                                        control={form.control}
+                                        name='opencodezen_clear_key'
+                                        render={({ field }) => (
+                                          <FormItem className='flex items-center justify-between'>
+                                            <div className='space-y-0.5'>
+                                              <FormLabel>
+                                                {t(
+                                                  'Use free plan (clear API key)'
+                                                )}
+                                              </FormLabel>
+                                              <FormDescription>
+                                                {t(
+                                                  'Clears the saved API key so this channel uses the anonymous free tier. Leave off to keep the current key.'
+                                                )}
+                                              </FormDescription>
+                                            </div>
+                                            <FormControl>
+                                              <Switch
+                                                checked={field.value}
+                                                onCheckedChange={field.onChange}
+                                              />
+                                            </FormControl>
+                                          </FormItem>
+                                        )}
+                                      />
+                                    )}
+
                                   <FormField
                                     control={form.control}
-                                    name='opencodezen_clear_key'
-                                    render={({ field }) => (
-                                      <FormItem className='flex items-center justify-between'>
-                                        <div className='space-y-0.5'>
-                                          <FormLabel>
-                                            {t('Use free plan (clear API key)')}
-                                          </FormLabel>
-                                          <FormDescription>
-                                            {t(
-                                              'Clears the saved API key so this channel uses the anonymous free tier. Leave off to keep the current key.'
-                                            )}
-                                          </FormDescription>
-                                        </div>
-                                        <FormControl>
-                                          <Switch
-                                            checked={field.value}
-                                            onCheckedChange={field.onChange}
-                                          />
-                                        </FormControl>
-                                      </FormItem>
-                                    )}
-                                  />
-                                )}
-
-                              <FormField
-                                control={form.control}
-                                name='key'
-                                render={({ field }) => {
-                                  let keyPlaceholder = t(
-                                    getKeyPromptForType(currentType)
-                                  )
-                                  if (isEditing) {
-                                    keyPlaceholder = t(
-                                      'Leave empty to keep existing key'
-                                    )
-                                  } else if (
-                                    currentType === 33 &&
-                                    awsKeyType === 'api_key' &&
-                                    isBatchMode
-                                  ) {
-                                    keyPlaceholder = t(
-                                      'Enter API Key, one per line, format: APIKey|Region'
-                                    )
-                                  } else if (
-                                    currentType === 33 &&
-                                    awsKeyType === 'api_key'
-                                  ) {
-                                    keyPlaceholder = t(
-                                      'Enter API Key, format: APIKey|Region'
-                                    )
-                                  } else if (
-                                    currentType === 33 &&
-                                    isBatchMode
-                                  ) {
-                                    keyPlaceholder = t(
-                                      'Enter key, one per line, format: AccessKey|SecretAccessKey|Region'
-                                    )
-                                  } else if (currentType === 33) {
-                                    keyPlaceholder = t(
-                                      'Enter key, format: AccessKey|SecretAccessKey|Region'
-                                    )
-                                  } else if (isBatchMode) {
-                                    keyPlaceholder = t(
-                                      'Enter one key per line for batch creation'
-                                    )
-                                  }
-
-                                  let keyDescription: ReactNode = t(
-                                    FIELD_DESCRIPTIONS.KEY
-                                  )
-                                  if (isEditing) {
-                                    let keyModeDescription = t(
-                                      'Append mode: New keys will be added to the end of the existing key list'
-                                    )
-                                    if (keyMode === 'replace') {
-                                      keyModeDescription = t(
-                                        'Replace mode: Will completely replace all existing keys'
+                                    name='key'
+                                    render={({ field }) => {
+                                      let keyPlaceholder = t(
+                                        getKeyPromptForType(currentType)
                                       )
-                                    }
-                                    keyDescription = (
-                                      <>
-                                        {t(
-                                          'Enter new key to update, or leave empty to keep current key'
-                                        )}
-                                        {isMultiKeyChannel && (
-                                          <span className='text-warning mt-1 block'>
-                                            {keyModeDescription}
-                                          </span>
-                                        )}
-                                      </>
-                                    )
-                                  } else if (isBatchMode) {
-                                    keyDescription = t(
-                                      'Enter one API key per line for batch creation'
-                                    )
-                                  }
-                                  return (
-                                    <FormItem>
-                                      <FormLabel>
-                                        {currentType ===
-                                        CHANNEL_TYPE_OPENCODE_ZEN
-                                          ? t('API Key (Optional)')
-                                          : t('API Key *')}
-                                      </FormLabel>
-                                      <FormControl>
-                                        <Textarea
-                                          placeholder={keyPlaceholder}
-                                          rows={isBatchMode ? 8 : 4}
-                                          {...field}
-                                        />
-                                      </FormControl>
-                                      <FormDescription>
-                                        <div className='flex flex-col gap-2'>
-                                          <span>{keyDescription}</span>
-                                          {isBatchMode && (
+                                      if (isEditing) {
+                                        keyPlaceholder = t(
+                                          'Leave empty to keep existing key'
+                                        )
+                                      } else if (
+                                        currentType === 33 &&
+                                        awsKeyType === 'api_key' &&
+                                        isBatchMode
+                                      ) {
+                                        keyPlaceholder = t(
+                                          'Enter API Key, one per line, format: APIKey|Region'
+                                        )
+                                      } else if (
+                                        currentType === 33 &&
+                                        awsKeyType === 'api_key'
+                                      ) {
+                                        keyPlaceholder = t(
+                                          'Enter API Key, format: APIKey|Region'
+                                        )
+                                      } else if (
+                                        currentType === 33 &&
+                                        isBatchMode
+                                      ) {
+                                        keyPlaceholder = t(
+                                          'Enter key, one per line, format: AccessKey|SecretAccessKey|Region'
+                                        )
+                                      } else if (currentType === 33) {
+                                        keyPlaceholder = t(
+                                          'Enter key, format: AccessKey|SecretAccessKey|Region'
+                                        )
+                                      } else if (isBatchMode) {
+                                        keyPlaceholder = t(
+                                          'Enter one key per line for batch creation'
+                                        )
+                                      }
+
+                                      let keyDescription: ReactNode = t(
+                                        FIELD_DESCRIPTIONS.KEY
+                                      )
+                                      if (isEditing) {
+                                        let keyModeDescription = t(
+                                          'Append mode: New keys will be added to the end of the existing key list'
+                                        )
+                                        if (keyMode === 'replace') {
+                                          keyModeDescription = t(
+                                            'Replace mode: Will completely replace all existing keys'
+                                          )
+                                        }
+                                        keyDescription = (
+                                          <>
+                                            {t(
+                                              'Enter new key to update, or leave empty to keep current key'
+                                            )}
+                                            {isMultiKeyChannel && (
+                                              <span className='text-warning mt-1 block'>
+                                                {keyModeDescription}
+                                              </span>
+                                            )}
+                                          </>
+                                        )
+                                      } else if (isBatchMode) {
+                                        keyDescription = t(
+                                          'Enter one API key per line for batch creation'
+                                        )
+                                      }
+                                      return (
+                                        <FormItem>
+                                          <FormLabel>
+                                            {currentType ===
+                                            CHANNEL_TYPE_OPENCODE_ZEN
+                                              ? t('API Key (Optional)')
+                                              : t('API Key *')}
+                                          </FormLabel>
+                                          <FormControl>
+                                            <Textarea
+                                              placeholder={keyPlaceholder}
+                                              rows={isBatchMode ? 8 : 4}
+                                              {...field}
+                                            />
+                                          </FormControl>
+                                          <FormDescription block>
+                                            <div className='flex flex-col gap-2'>
+                                              <span>{keyDescription}</span>
+                                              {isBatchMode && (
+                                                <Button
+                                                  type='button'
+                                                  variant='outline'
+                                                  size='sm'
+                                                  onClick={
+                                                    handleDeduplicateKeys
+                                                  }
+                                                  className='w-fit'
+                                                >
+                                                  <Trash2 className='mr-2 h-4 w-4' />
+                                                  {t('Remove Duplicates')}
+                                                </Button>
+                                              )}
+                                            </div>
+                                          </FormDescription>
+                                          {isEditing && canRevealChannelKey && (
+                                            <div className='border-border/60 mt-4 flex flex-col gap-3 border-y border-dashed py-4'>
+                                              <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+                                                <div>
+                                                  <p className='text-sm font-medium'>
+                                                    {t('Current key')}
+                                                  </p>
+                                                  <p className='text-muted-foreground text-xs'>
+                                                    {t(
+                                                      'Verification required to reveal the saved key.'
+                                                    )}
+                                                  </p>
+                                                </div>
+                                                <div className='flex items-center gap-2'>
+                                                  <Button
+                                                    type='button'
+                                                    variant='outline'
+                                                    size='sm'
+                                                    onClick={handleRevealKey}
+                                                    disabled={
+                                                      isChannelKeyLoading ||
+                                                      verification.isActive
+                                                    }
+                                                  >
+                                                    {isChannelKeyLoading ||
+                                                    verification.isActive ? (
+                                                      <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                                                    ) : (
+                                                      <Eye className='mr-2 h-4 w-4' />
+                                                    )}
+                                                    {t('Reveal key')}
+                                                  </Button>
+                                                  <Button
+                                                    type='button'
+                                                    variant='ghost'
+                                                    size='sm'
+                                                    onClick={async () => {
+                                                      if (channelKey) {
+                                                        await copyToClipboard(
+                                                          channelKey
+                                                        )
+                                                      }
+                                                    }}
+                                                    disabled={!channelKey}
+                                                  >
+                                                    <Copy className='mr-2 h-4 w-4' />
+                                                    {t('Copy')}
+                                                  </Button>
+                                                </div>
+                                              </div>
+                                              <Input
+                                                readOnly
+                                                value={channelKey ?? ''}
+                                                placeholder={t(
+                                                  'Hidden — verify to reveal'
+                                                )}
+                                                className='font-mono'
+                                              />
+                                            </div>
+                                          )}
+                                          <FormMessage />
+                                        </FormItem>
+                                      )
+                                    }}
+                                  />
+
+                                  {currentType === 57 && (
+                                    <div className='border-border/60 flex flex-col gap-3 border-y py-4'>
+                                      <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+                                        <div className='text-muted-foreground text-xs'>
+                                          {t(
+                                            'Codex channels use an OAuth JSON credential as the key.'
+                                          )}
+                                        </div>
+                                        <div className='flex flex-wrap items-center gap-2'>
+                                          {isEditing && channelId && (
                                             <Button
                                               type='button'
                                               variant='outline'
                                               size='sm'
-                                              onClick={handleDeduplicateKeys}
-                                              className='w-fit'
+                                              onClick={
+                                                handleRefreshCodexCredential
+                                              }
+                                              disabled={
+                                                sensitiveLocked ||
+                                                isCodexCredentialRefreshing
+                                              }
                                             >
-                                              <Trash2 className='mr-2 h-4 w-4' />
-                                              {t('Remove Duplicates')}
+                                              {isCodexCredentialRefreshing ? (
+                                                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                                              ) : (
+                                                <RefreshCw className='mr-2 h-4 w-4' />
+                                              )}
+                                              {isCodexCredentialRefreshing
+                                                ? t('Refreshing...')
+                                                : t('Refresh credential')}
                                             </Button>
                                           )}
                                         </div>
-                                      </FormDescription>
-                                      {isEditing && canRevealChannelKey && (
-                                        <div className='border-border/60 mt-4 flex flex-col gap-3 border-y border-dashed py-4'>
-                                          <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
-                                            <div>
-                                              <p className='text-sm font-medium'>
-                                                {t('Current key')}
-                                              </p>
-                                              <p className='text-muted-foreground text-xs'>
-                                                {t(
-                                                  'Verification required to reveal the saved key.'
-                                                )}
-                                              </p>
-                                            </div>
-                                            <div className='flex items-center gap-2'>
-                                              <Button
-                                                type='button'
-                                                variant='outline'
-                                                size='sm'
-                                                onClick={handleRevealKey}
-                                                disabled={
-                                                  isChannelKeyLoading ||
-                                                  verification.isActive
-                                                }
-                                              >
-                                                {isChannelKeyLoading ||
-                                                verification.isActive ? (
-                                                  <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                                                ) : (
-                                                  <Eye className='mr-2 h-4 w-4' />
-                                                )}
-                                                {t('Reveal key')}
-                                              </Button>
-                                              <Button
-                                                type='button'
-                                                variant='ghost'
-                                                size='sm'
-                                                onClick={async () => {
-                                                  if (channelKey) {
-                                                    await copyToClipboard(
-                                                      channelKey
-                                                    )
-                                                  }
-                                                }}
-                                                disabled={!channelKey}
-                                              >
-                                                <Copy className='mr-2 h-4 w-4' />
-                                                {t('Copy')}
-                                              </Button>
-                                            </div>
-                                          </div>
-                                          <Input
-                                            readOnly
-                                            value={channelKey ?? ''}
-                                            placeholder={t(
-                                              'Hidden — verify to reveal'
-                                            )}
-                                            className='font-mono'
-                                          />
-                                        </div>
-                                      )}
-                                      <FormMessage />
-                                    </FormItem>
-                                  )
-                                }}
-                              />
-
-                              {currentType === 57 && (
-                                <div className='border-border/60 flex flex-col gap-3 border-y py-4'>
-                                  <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
-                                    <div className='text-muted-foreground text-xs'>
-                                      {t(
-                                        'Codex channels use an OAuth JSON credential as the key.'
-                                      )}
-                                    </div>
-                                    <div className='flex flex-wrap items-center gap-2'>
-                                      {isEditing && channelId && (
-                                        <Button
-                                          type='button'
-                                          variant='outline'
-                                          size='sm'
-                                          onClick={handleRefreshCodexCredential}
-                                          disabled={
-                                            sensitiveLocked ||
-                                            isCodexCredentialRefreshing
-                                          }
-                                        >
-                                          {isCodexCredentialRefreshing ? (
-                                            <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                                          ) : (
-                                            <RefreshCw className='mr-2 h-4 w-4' />
+                                      </div>
+                                      <Alert className='border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-50'>
+                                        <AlertDescription>
+                                          {t(
+                                            "Disclaimer: Personal use only. Do not distribute or share any credentials. This channel has prerequisites and requires prior setup; use it only if you understand the flow and risks, and comply with OpenAI's terms and policies. Credentials and configuration are for Codex CLI integration only, and are not intended for any other client, platform, or channel."
                                           )}
-                                          {isCodexCredentialRefreshing
-                                            ? t('Refreshing...')
-                                            : t('Refresh credential')}
-                                        </Button>
-                                      )}
+                                        </AlertDescription>
+                                      </Alert>
                                     </div>
-                                  </div>
-                                  <Alert className='border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-50'>
-                                    <AlertDescription>
-                                      {t(
-                                        "Disclaimer: Personal use only. Do not distribute or share any credentials. This channel has prerequisites and requires prior setup; use it only if you understand the flow and risks, and comply with OpenAI's terms and policies. Credentials and configuration are for Codex CLI integration only, and are not intended for any other client, platform, or channel."
-                                      )}
-                                    </AlertDescription>
-                                  </Alert>
-                                </div>
-                              )}
-
-                              {isEditing && isMultiKeyChannel && (
-                                <FormField
-                                  control={form.control}
-                                  name='key_mode'
-                                  render={({ field }) => (
-                                    <FormItem>
-                                      <FormLabel>
-                                        {t('Key Update Mode')}
-                                      </FormLabel>
-                                      <Select
-                                        items={[
-                                          {
-                                            value: 'append',
-                                            label: t('Append to existing keys'),
-                                          },
-                                          {
-                                            value: 'replace',
-                                            label: t(
-                                              'Replace all existing keys'
-                                            ),
-                                          },
-                                        ]}
-                                        onValueChange={field.onChange}
-                                        value={field.value}
-                                      >
-                                        <FormControl>
-                                          <SelectTrigger>
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent
-                                          alignItemWithTrigger={false}
-                                        >
-                                          <SelectGroup>
-                                            <SelectItem value='append'>
-                                              {t('Append to existing keys')}
-                                            </SelectItem>
-                                            <SelectItem value='replace'>
-                                              {t('Replace all existing keys')}
-                                            </SelectItem>
-                                          </SelectGroup>
-                                        </SelectContent>
-                                      </Select>
-                                      <FormDescription>
-                                        {field.value === 'replace'
-                                          ? t(
-                                              'Replace mode: Will completely replace all existing keys'
-                                            )
-                                          : t(
-                                              'Append mode: New keys will be added to the end of the existing key list'
-                                            )}
-                                      </FormDescription>
-                                      <FormMessage />
-                                    </FormItem>
                                   )}
-                                />
-                              )}
 
-                              {!isEditing &&
-                                multiKeyMode === 'multi_to_single' && (
-                                  <FormField
-                                    control={form.control}
-                                    name='multi_key_type'
-                                    render={({ field }) => (
-                                      <FormItem>
-                                        <FormLabel>
-                                          {t('Multi-Key Strategy')}
-                                        </FormLabel>
-                                        <Select
-                                          items={[
-                                            {
-                                              value: 'random',
-                                              label: t('Random'),
-                                            },
-                                            {
-                                              value: 'polling',
-                                              label: t('Polling'),
-                                            },
-                                          ]}
-                                          onValueChange={field.onChange}
-                                          value={field.value}
-                                        >
-                                          <FormControl>
-                                            <SelectTrigger>
-                                              <SelectValue />
-                                            </SelectTrigger>
-                                          </FormControl>
-                                          <SelectContent
-                                            alignItemWithTrigger={false}
+                                  {isEditing && isMultiKeyChannel && (
+                                    <FormField
+                                      control={form.control}
+                                      name='key_mode'
+                                      render={({ field }) => (
+                                        <FormItem>
+                                          <FormLabel>
+                                            {t('Key Update Mode')}
+                                          </FormLabel>
+                                          <Select
+                                            items={[
+                                              {
+                                                value: 'append',
+                                                label: t(
+                                                  'Append to existing keys'
+                                                ),
+                                              },
+                                              {
+                                                value: 'replace',
+                                                label: t(
+                                                  'Replace all existing keys'
+                                                ),
+                                              },
+                                            ]}
+                                            onValueChange={field.onChange}
+                                            value={field.value}
                                           >
-                                            <SelectGroup>
-                                              <SelectItem value='random'>
-                                                {t('Random')}
-                                              </SelectItem>
-                                              <SelectItem value='polling'>
-                                                {t('Polling')}
-                                              </SelectItem>
-                                            </SelectGroup>
-                                          </SelectContent>
-                                        </Select>
-                                        <FormDescription>
-                                          {multiKeyType === 'polling' ? (
-                                            <span className='text-warning'>
-                                              {t(
-                                                'Polling mode requires Redis and memory cache, otherwise performance will be significantly degraded'
+                                            <FormControl>
+                                              <SelectTrigger>
+                                                <SelectValue />
+                                              </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent
+                                              alignItemWithTrigger={false}
+                                            >
+                                              <SelectGroup>
+                                                <SelectItem value='append'>
+                                                  {t('Append to existing keys')}
+                                                </SelectItem>
+                                                <SelectItem value='replace'>
+                                                  {t(
+                                                    'Replace all existing keys'
+                                                  )}
+                                                </SelectItem>
+                                              </SelectGroup>
+                                            </SelectContent>
+                                          </Select>
+                                          <FormDescription>
+                                            {field.value === 'replace'
+                                              ? t(
+                                                  'Replace mode: Will completely replace all existing keys'
+                                                )
+                                              : t(
+                                                  'Append mode: New keys will be added to the end of the existing key list'
+                                                )}
+                                          </FormDescription>
+                                          <FormMessage />
+                                        </FormItem>
+                                      )}
+                                    />
+                                  )}
+
+                                  {!isEditing &&
+                                    multiKeyMode === 'multi_to_single' && (
+                                      <FormField
+                                        control={form.control}
+                                        name='multi_key_type'
+                                        render={({ field }) => (
+                                          <FormItem>
+                                            <FormLabel>
+                                              {t('Multi-Key Strategy')}
+                                            </FormLabel>
+                                            <Select
+                                              items={[
+                                                {
+                                                  value: 'random',
+                                                  label: t('Random'),
+                                                },
+                                                {
+                                                  value: 'polling',
+                                                  label: t('Polling'),
+                                                },
+                                              ]}
+                                              onValueChange={field.onChange}
+                                              value={field.value}
+                                            >
+                                              <FormControl>
+                                                <SelectTrigger>
+                                                  <SelectValue />
+                                                </SelectTrigger>
+                                              </FormControl>
+                                              <SelectContent
+                                                alignItemWithTrigger={false}
+                                              >
+                                                <SelectGroup>
+                                                  <SelectItem value='random'>
+                                                    {t('Random')}
+                                                  </SelectItem>
+                                                  <SelectItem value='polling'>
+                                                    {t('Polling')}
+                                                  </SelectItem>
+                                                </SelectGroup>
+                                              </SelectContent>
+                                            </Select>
+                                            <FormDescription>
+                                              {multiKeyType === 'polling' ? (
+                                                <span className='text-warning'>
+                                                  {t(
+                                                    'Polling mode requires Redis and memory cache, otherwise performance will be significantly degraded'
+                                                  )}
+                                                </span>
+                                              ) : (
+                                                t(
+                                                  'Randomly select a key from the pool for each request'
+                                                )
                                               )}
-                                            </span>
-                                          ) : (
-                                            t(
-                                              'Randomly select a key from the pool for each request'
-                                            )
-                                          )}
-                                        </FormDescription>
-                                        <FormMessage />
-                                      </FormItem>
+                                            </FormDescription>
+                                            <FormMessage />
+                                          </FormItem>
+                                        )}
+                                      />
                                     )}
-                                  />
-                                )}
+                                </>
+                              )}
                             </ChannelAuthSection>
                           </fieldset>
                         </div>
