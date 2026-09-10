@@ -13,7 +13,7 @@ export const Route = createFileRoute('/activate')({
     }
     // 已激活账号不应停留在激活页。
     if (auth.user.activated !== false) {
-      throw redirect({ to: '/dashboard', replace: true })
+      throw redirect({ to: '/os-desktop', replace: true })
     }
   },
   component: Activate,

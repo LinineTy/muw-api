@@ -51,7 +51,7 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
         navigate({ to: '/activate', replace: true })
         return
       }
-      navigate({ href: successTarget ?? '/dashboard', replace: true })
+      navigate({ href: successTarget ?? '/os-desktop', replace: true })
       return
     }
     navigate({
