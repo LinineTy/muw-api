@@ -1,9 +1,11 @@
 // @muw-owned
 /**
- * 编码套餐余量的查询节奏。与旧渠道余量页保持一致：默认 5 分钟自动刷新一次。
- * 账户页与渠道页共用同一份开关与间隔，避免两处节奏不一致。
+ * 编码套餐余量的自动刷新间隔。**与后端自动启停任务的轮询节奏对齐**
+ * （`service/coding_plan_auto_control_task.go` 的 codingPlanAutoControlTickInterval = 30s）：
+ * 余量端点是一账户一请求的轻量 GET，既然后端每分钟查两次做启停决策，界面照同一个
+ * 节奏刷新才不会出现「监控已经动手了、页面还显示旧余量」的错位。
  */
-export const QUOTA_REFRESH_MS = 5 * 60 * 1000
+export const QUOTA_REFRESH_MS = 30 * 1000
 
 /**
  * 「自动刷新」开关的本地持久化键。默认开启；关掉后只有手动刷新才更新余量。
