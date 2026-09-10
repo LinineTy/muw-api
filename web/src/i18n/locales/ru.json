@@ -7424,6 +7424,7 @@
     "No account available": "Нет доступных аккаунтов",
     "No bound account. Add one above, or fill the key below to keep credentials on the channel.": "Аккаунт не привязан. Добавьте его выше или укажите ключ ниже, чтобы хранить учётные данные в канале.",
     "Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.": "Привязанные аккаунты используются по очереди в порядке списка (как несколько ключей): каждый можно отключить для этого канала, а недоступный аккаунт пропускается.",
-    "Enabled for this channel": "Включено для этого канала"
+    "Enabled for this channel": "Включено для этого канала",
+    "Credentials come from the bound accounts. Edit keys on the account page.": "Учётные данные берутся из привязанных аккаунтов. Ключи изменяются на странице аккаунтов."
   }
 }

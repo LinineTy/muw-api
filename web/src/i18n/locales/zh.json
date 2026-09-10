@@ -7424,6 +7424,7 @@
     "No account available": "没有可添加的账户",
     "No bound account. Add one above, or fill the key below to keep credentials on the channel.": "尚未绑定账户。可在上方添加账户，或在下方填写密钥、把凭证留在渠道上。",
     "Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.": "绑定的账户按列表顺序轮询（用法同多 key）：每个都可在本渠道单独停用，某个账户不可用时会自动跳过。",
-    "Enabled for this channel": "在本渠道启用"
+    "Enabled for this channel": "在本渠道启用",
+    "Credentials come from the bound accounts. Edit keys on the account page.": "凭证来自绑定的账户，密钥请在账户页修改。"
   }
 }

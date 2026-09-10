@@ -7424,6 +7424,7 @@
     "No account available": "Không có tài khoản khả dụng",
     "No bound account. Add one above, or fill the key below to keep credentials on the channel.": "Chưa liên kết tài khoản. Thêm ở trên hoặc điền khóa bên dưới để giữ thông tin xác thực trên kênh.",
     "Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.": "Các tài khoản đã liên kết được luân phiên theo thứ tự danh sách (giống nhiều khóa): mỗi tài khoản có thể tắt riêng cho kênh này và tài khoản lỗi sẽ được bỏ qua.",
-    "Enabled for this channel": "Bật cho kênh này"
+    "Enabled for this channel": "Bật cho kênh này",
+    "Credentials come from the bound accounts. Edit keys on the account page.": "Thông tin xác thực đến từ các tài khoản đã liên kết. Sửa khóa ở trang tài khoản."
   }
 }

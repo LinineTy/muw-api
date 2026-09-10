@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import {
   ArrowRight,
   AlertCircle,
@@ -32,6 +33,7 @@ import {
   Sparkles,
   ArrowDown,
   ArrowUp,
+  ExternalLink,
   Trash2,
   X,
   Copy,
@@ -203,7 +205,6 @@ import { StatusCodeRiskDialog } from '../dialogs/status-code-risk-dialog'
 import { ModelMappingEditor } from '../model-mapping-editor'
 import { NumericSpinnerInput } from '../numeric-spinner-input'
 import {
-  AccountBoundPanel,
   ChannelAdvancedSection,
   ChannelApiAccessSection,
   ChannelAuthSection,
@@ -737,6 +738,17 @@ export function ChannelMutateDrawer({
   const accountMetaById = useMemo(
     () => new Map(bindableAccounts.map((acc) => [acc.id, acc])),
     [bindableAccounts]
+  )
+  // 渠道响应里的绑定视图带 key_masked 等摘要，账户列表接口拿不到时用它兜底
+  const bindingMetaById = useMemo(
+    () =>
+      new Map(
+        (channelData?.data?.account_bindings ?? []).map((b) => [
+          b.account_id,
+          b,
+        ])
+      ),
+    [channelData]
   )
   const addableAccounts = useMemo(
     () =>
@@ -3318,7 +3330,11 @@ export function ChannelMutateDrawer({
                                                 )}
                                               </span>
                                               <span className='text-muted-foreground hidden truncate font-mono text-xs sm:inline'>
-                                                {meta?.key_masked || '-'}
+                                                {meta?.key_masked ||
+                                                  bindingMetaById.get(
+                                                    binding.account_id
+                                                  )?.key_masked ||
+                                                  '-'}
                                               </span>
                                             </div>
                                             <div className='flex shrink-0 items-center gap-1'>
@@ -3428,17 +3444,20 @@ export function ChannelMutateDrawer({
                                 </div>
                               )}
 
-                              {isEditing &&
-                              originalBoundAccount &&
-                              boundAccountId === originalBoundAccount.id ? (
-                                <AccountBoundPanel
-                                  account={originalBoundAccount}
-                                />
-                              ) : boundAccountId !== null ? (
-                                <div className='text-muted-foreground rounded-md border border-dashed px-3 py-2.5 text-sm'>
-                                  {t(
-                                    'Credentials come from the bound account. Edit the key on the account page.'
-                                  )}
+                              {boundAccountId !== null ? (
+                                <div className='text-muted-foreground space-y-1 rounded-md border border-dashed px-3 py-2.5 text-sm'>
+                                  <p>
+                                    {t(
+                                      'Credentials come from the bound accounts. Edit keys on the account page.'
+                                    )}
+                                  </p>
+                                  <Link
+                                    to='/accounts'
+                                    className='text-primary inline-flex items-center gap-1 text-xs hover:underline'
+                                  >
+                                    <ExternalLink className='size-3' />
+                                    {t('Manage in Accounts')}
+                                  </Link>
                                 </div>
                               ) : (
                                 <>
