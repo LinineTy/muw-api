@@ -95,7 +95,15 @@ type Channel struct {
 	// AccountId 挂载的账户（凭证与渠道解耦）：>0 时凭证类字段（key/base_url/代理/
 	// 多key状态/套餐/余额）以账户为唯一真相源，本表同名列保留为 legacy 只读降级
 	// （AccountId=0 时访问器回退渠道列）。存量渠道由迁移 backfill 生成私有账户。
+	//
+	// 已废弃：绑定关系真相源是 channel_accounts（一个渠道可绑多个账户）；本列只读兼容，
+	// 迁移完成后删除。
 	AccountId int `json:"account_id" gorm:"index"`
+
+	// BoundAccounts 本渠道绑定的账户（按绑定轮询顺序，仅含渠道内启用的绑定；运行时挂载、
+	// 不入库不下发）。长度 >1 时 GetNextEnabledKey 在账户之间轮询；Account/BoundAccounts
+	// 里的对象与缓存共享同一指针（多 key 轮询状态跨渠道一致）。
+	BoundAccounts []*Account `json:"-" gorm:"-"`
 
 	// Account 运行时挂载的账户对象（缓存路径同一账户的多个渠道共享同一指针，
 	// 多 key 轮询状态跨渠道一致；非持久列，由 loadAccount/loadChannelsAccounts
@@ -232,6 +240,7 @@ func (channel *Channel) loadAccount() error {
 	if channel.AccountId <= 0 {
 		return nil
 	}
+	channel.loadBoundAccounts()
 	account, err := GetAccountById(channel.AccountId, true)
 	if err != nil {
 		common.SysLog(fmt.Sprintf("failed to load account for channel: channel_id=%d, account_id=%d, error=%v", channel.Id, channel.AccountId, err))
@@ -298,7 +307,90 @@ func loadChannelsAccounts(channels []*Channel) error {
 			ch.Account = byId[ch.AccountId]
 		}
 	}
+	// 多账户：按绑定顺序挂全部启用账户（共享同一批 *Account 指针，与上面的主账户一致）
+	bindingsByChannel := make(map[int][]int)
+	{
+		boundIds := make([]int, 0, len(channelIds))
+		for _, ch := range channels {
+			bindingsByChannel[ch.Id] = nil
+			boundIds = append(boundIds, ch.Id)
+		}
+		var bindings []*ChannelAccount
+		if len(boundIds) > 0 {
+			if err := DB.Where("channel_id IN ? AND enabled = ?", boundIds, true).
+				Order("account_order asc, id asc").Find(&bindings).Error; err == nil {
+				for _, b := range bindings {
+					bindingsByChannel[b.ChannelId] = append(bindingsByChannel[b.ChannelId], b.AccountId)
+				}
+			}
+		}
+	}
+	missing := make(map[int]bool)
+	for _, ids := range bindingsByChannel {
+		for _, id := range ids {
+			if _, ok := byId[id]; !ok {
+				missing[id] = true
+			}
+		}
+	}
+	if len(missing) > 0 {
+		extra, err := GetAccountsByIds(lo.Keys(missing))
+		if err == nil {
+			for _, acc := range extra {
+				prefillAccountMasked(acc)
+				byId[acc.Id] = acc
+			}
+		}
+	}
+	for _, ch := range channels {
+		bound := make([]*Account, 0, len(bindingsByChannel[ch.Id]))
+		for _, id := range bindingsByChannel[ch.Id] {
+			if acc := byId[id]; acc != nil {
+				bound = append(bound, acc)
+			}
+		}
+		ch.BoundAccounts = bound
+	}
 	return nil
+}
+
+// loadBoundAccounts 单渠道版：按绑定轮询顺序挂全部启用账户（渠道缓存刷新/详情路径）。
+// 查询失败不阻断（保持主账户可用，调用方仍能按单账户工作）。
+func (channel *Channel) loadBoundAccounts() {
+	if channel.Id <= 0 {
+		return
+	}
+	bindings, err := GetChannelAccountBindings(channel.Id)
+	if err != nil {
+		common.SysLog(fmt.Sprintf("load channel account bindings failed: channel_id=%d, error=%v", channel.Id, err))
+		return
+	}
+	ids := make([]int, 0, len(bindings))
+	for _, b := range bindings {
+		if b.Enabled {
+			ids = append(ids, b.AccountId)
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	accounts, err := GetAccountsByIds(ids)
+	if err != nil {
+		common.SysLog(fmt.Sprintf("load channel bound accounts failed: channel_id=%d, error=%v", channel.Id, err))
+		return
+	}
+	byId := make(map[int]*Account, len(accounts))
+	for _, acc := range accounts {
+		prefillAccountMasked(acc)
+		byId[acc.Id] = acc
+	}
+	bound := make([]*Account, 0, len(ids))
+	for _, id := range ids {
+		if acc := byId[id]; acc != nil {
+			bound = append(bound, acc)
+		}
+	}
+	channel.BoundAccounts = bound
 }
 
 // prefillAccountMasked 填充响应侧脱敏预览（key 多行时展示首个 + 计数）。
@@ -371,6 +463,13 @@ func (channel *Channel) GetKeys() []string {
 }
 
 func (channel *Channel) GetNextEnabledKey() (string, int, *types.NewAPIError) {
+	// 多账户：绑定的多个账户参与轮询，用法与渠道自身的多 key 完全一致（顺序轮询、
+	// 单个在账户侧启停、失败切走）。只绑一个账户时行为与单账户路径完全一致。
+	if len(channel.BoundAccounts) > 0 {
+		// 单账户时该路径恒选中同一个账户，与下面"委托 Account"完全等价；
+		// 零个已挂账户时才落到 legacy 渠道列。
+		return channel.getNextKeyAcrossAccounts()
+	}
 	// 挂账户时凭证与多 key 状态全部委托账户（锁按账户 id，共享账户跨渠道轮询安全）。
 	if channel.Account != nil {
 		return channel.Account.GetNextEnabledKey()
