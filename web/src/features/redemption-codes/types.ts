@@ -30,6 +30,7 @@ export const redemptionSchema = z.object({
   status: z.number(), // 1: enabled, 2: disabled, 3: used
   quota: z.number(),
   type: z.number(), // 1: topup quota, 2: registration invite
+  is_trap: z.boolean(), // 诱捕标记：仅注册邀请码可置位，命中后停用账号而非激活
   max_uses: z.number(), // 1 = single-use
   used_count: z.number(),
   created_time: z.number(),
@@ -81,6 +82,7 @@ export interface RedemptionFormData {
   count?: number // Only for create
   status?: number // Only for status update
   type?: number // Only for create: 1 = topup, 2 = invite
+  is_trap?: boolean // Only for invite codes; toggled from the admin drawer
   max_uses?: number // Only for create: 1 = single-use
 }
 

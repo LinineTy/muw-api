@@ -121,6 +121,8 @@ func AddRedemption(c *gin.Context) {
 			Type:        redemption.Type,
 			MaxUses:     redemption.MaxUses,
 			ExpiredTime: redemption.ExpiredTime,
+			// 诱捕标记只对注册邀请码有意义，充值码一律清掉。
+			IsTrap: redemption.IsTrap && redemption.Type == common.RedemptionCodeTypeInvite,
 		}
 		err = cleanRedemption.Insert()
 		if err != nil {
@@ -199,6 +201,8 @@ func UpdateRedemption(c *gin.Context) {
 		// If you add more fields, please also update redemption.Update()
 		cleanRedemption.Name = redemption.Name
 		cleanRedemption.ExpiredTime = redemption.ExpiredTime
+		// 诱捕标记：仅注册邀请码可切换（充值码强制关闭）。
+		cleanRedemption.IsTrap = cleanRedemption.Type == common.RedemptionCodeTypeInvite && redemption.IsTrap
 	}
 	if statusOnly != "" {
 		cleanRedemption.Status = redemption.Status

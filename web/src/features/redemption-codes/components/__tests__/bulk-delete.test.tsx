@@ -42,6 +42,7 @@ const codes: Redemption[] = [11, 22, 33].map((id) => ({
   status: 1,
   quota: 100,
   type: 1,
+  is_trap: false,
   max_uses: 0,
   used_count: 0,
   created_time: 1,
