@@ -2,7 +2,12 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  MATCH_EQ,
+  MATCH_GTE,
+  MATCH_LT,
   MATCH_RANGE,
+  RANGE_OP_AND,
+  RANGE_OP_OR,
   buildRequestRuleExpr,
   buildTierDnfExpr,
   combineBillingExpr,
@@ -163,6 +168,67 @@ describe('parseDnfRequestConditions', () => {
     expect(dnf?.length).toBe(1)
     expect(dnf?.[0].conditions.map((c) => c.source)).toEqual(['time', 'param'])
     expect(dnf?.[0].conditions[0].mode).toBe(MATCH_RANGE)
+  })
+
+  it('marks a same-day window (&&) as an AND range', () => {
+    const dnf = parseDnfRequestConditions(
+      'hour("Asia/Shanghai") >= 14 && hour("Asia/Shanghai") < 18 && param("a") == "x"'
+    )
+    expect(dnf?.[0].conditions).toEqual([
+      {
+        source: 'time',
+        timeFunc: 'hour',
+        timezone: 'Asia/Shanghai',
+        mode: MATCH_RANGE,
+        value: '',
+        rangeStart: '14',
+        rangeEnd: '18',
+        rangeOp: RANGE_OP_AND,
+      },
+      {
+        source: 'param',
+        path: 'a',
+        mode: 'eq',
+        value: 'x',
+        valueKind: 'string',
+      },
+    ])
+  })
+
+  it('marks an overnight window (||) as an OR range', () => {
+    expect(
+      parseDnfRequestConditions(
+        'hour("Asia/Shanghai") >= 18 || hour("Asia/Shanghai") < 6'
+      )
+    ).toEqual([
+      {
+        conditions: [
+          {
+            source: 'time',
+            timeFunc: 'hour',
+            timezone: 'Asia/Shanghai',
+            mode: MATCH_RANGE,
+            value: '',
+            rangeStart: '18',
+            rangeEnd: '6',
+            rangeOp: RANGE_OP_OR,
+          },
+        ],
+      },
+    ])
+  })
+
+  it('keeps a contradictory && pair as two comparisons instead of folding it into a range', () => {
+    // `>= 18 && < 6` can never match; folding it into a RANGE would let the
+    // serializer rewrite it as the overnight `||` window on the next save.
+    const dnf = parseDnfRequestConditions(
+      'hour("Asia/Shanghai") >= 18 && hour("Asia/Shanghai") < 6 && param("a") == "x"'
+    )
+    expect(dnf?.[0].conditions.map((c) => c.mode)).toEqual([
+      MATCH_GTE,
+      MATCH_LT,
+      MATCH_EQ,
+    ])
   })
 })
 

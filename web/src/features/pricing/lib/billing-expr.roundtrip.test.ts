@@ -29,6 +29,8 @@ import {
   MATCH_LT,
   MATCH_LTE,
   MATCH_RANGE,
+  RANGE_OP_AND,
+  RANGE_OP_OR,
   buildRequestRuleExpr,
   combineBillingExpr,
   splitBillingExprAndRequestRules,
@@ -277,6 +279,7 @@ function randRequestCondition(rng: () => number): RequestCondition {
             [21, 9],
             [23, 0],
             [2, 5],
+            [9, 12],
           ],
           values: ['8', '0', '18', '23', '7'],
         },
@@ -285,6 +288,7 @@ function randRequestCondition(rng: () => number): RequestCondition {
             [30, 10],
             [50, 15],
             [59, 0],
+            [10, 30],
           ],
           values: ['30', '0', '45', '59', '7'],
         },
@@ -292,6 +296,7 @@ function randRequestCondition(rng: () => number): RequestCondition {
           ranges: [
             [5, 1],
             [6, 0],
+            [1, 6],
           ],
           values: ['1', '0', '5', '6', '3'],
         },
@@ -299,6 +304,7 @@ function randRequestCondition(rng: () => number): RequestCondition {
           ranges: [
             [11, 3],
             [12, 1],
+            [3, 11],
           ],
           values: ['1', '6', '12', '3', '9'],
         },
@@ -306,6 +312,7 @@ function randRequestCondition(rng: () => number): RequestCondition {
           ranges: [
             [25, 5],
             [28, 2],
+            [5, 25],
           ],
           values: ['1', '15', '31', '9', '23'],
         },
@@ -320,6 +327,9 @@ function randRequestCondition(rng: () => number): RequestCondition {
           value: '',
           rangeStart: String(start),
           rangeEnd: String(end),
+          // The builder derives the operator from the bounds (upstream #6934):
+          // same-day windows serialize with `&&`, overnight windows with `||`.
+          rangeOp: start > end ? RANGE_OP_OR : RANGE_OP_AND,
         }
       }
       return {
@@ -457,6 +467,7 @@ describe('hand-picked round-trip edges', () => {
                 value: '',
                 rangeStart: '18',
                 rangeEnd: '6',
+                rangeOp: RANGE_OP_OR,
               },
             ],
           },

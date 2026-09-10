@@ -9,6 +9,8 @@ import {
   MATCH_LT,
   MATCH_LTE,
   MATCH_RANGE,
+  RANGE_OP_AND,
+  RANGE_OP_OR,
   SOURCE_TIME,
   type Dnf,
   type RequestCondition,
@@ -142,10 +144,24 @@ function hourRangeText(start: string, end: string, t: TranslateFn): string {
   return formatRangeText(start, end, 'hour')
 }
 
-// A RANGE condition compiles to `fn(tz) >= start || fn(tz) < end` (OR). When
-// `start <= end` every value satisfies one side, so the window is a tautology;
-// render the two comparisons honestly instead of implying a contiguous range.
-function tautologyRangeText(
+// A RANGE condition is a plain window only when its bounds agree with the source
+// operator: a same-day window compiles to `fn(tz) >= start && fn(tz) < end` and
+// an overnight window to `fn(tz) >= start || fn(tz) < end`. When they disagree the
+// range covers every value (`||` with start <= end) or none at all (`&&` with
+// start >= end) — render the two comparisons honestly instead of implying a
+// window that does not exist.
+function isRangeWindow(cond: TimeCondition): boolean {
+  const start = Number(cond.rangeStart)
+  const end = Number(cond.rangeEnd)
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return false
+  if (cond.rangeOp === RANGE_OP_OR) return start > end
+  if (cond.rangeOp === RANGE_OP_AND) return start < end
+  // No source operator: a range authored in the editor, whose operator the
+  // builder derives from the bounds (`||` when start > end).
+  return start !== end
+}
+
+function rawRangeComparisonsText(
   prefix: string,
   start: string,
   end: string,
@@ -162,9 +178,14 @@ function hourConditionText(cond: TimeCondition, t: TranslateFn): string {
     if (
       Number.isFinite(startVal) &&
       Number.isFinite(endVal) &&
-      startVal <= endVal
+      !isRangeWindow(cond)
     ) {
-      return tautologyRangeText(prefix, cond.rangeStart, cond.rangeEnd, ':00')
+      return rawRangeComparisonsText(
+        prefix,
+        cond.rangeStart,
+        cond.rangeEnd,
+        ':00'
+      )
     }
     return `${prefix} ${hourRangeText(cond.rangeStart, cond.rangeEnd, t)}`
   }
@@ -188,9 +209,9 @@ function weekdayConditionText(cond: TimeCondition, t: TranslateFn): string {
     if (
       Number.isFinite(startVal) &&
       Number.isFinite(endVal) &&
-      startVal <= endVal
+      !isRangeWindow(cond)
     ) {
-      return tautologyRangeText(prefix, cond.rangeStart, cond.rangeEnd, '')
+      return rawRangeComparisonsText(prefix, cond.rangeStart, cond.rangeEnd, '')
     }
     return weekdayRangeText(cond.rangeStart, cond.rangeEnd, t)
   }
@@ -210,9 +231,14 @@ function recurringTimeConditionText(
     if (
       Number.isFinite(startVal) &&
       Number.isFinite(endVal) &&
-      startVal <= endVal
+      !isRangeWindow(cond)
     ) {
-      return tautologyRangeText(prefix, cond.rangeStart, cond.rangeEnd, unit)
+      return rawRangeComparisonsText(
+        prefix,
+        cond.rangeStart,
+        cond.rangeEnd,
+        unit
+      )
     }
     return `${prefix} ${formatRangeText(
       cond.rangeStart,
@@ -355,9 +381,9 @@ const TIME_FUNC_DOMAIN_LABEL_KEYS: Record<TimeFunc, string> = {
  * semantics (`pkg/billingexpr/`). Per-atom domain checks run on every condition;
  * AND-conflict runs within each OR branch. A self-contradictory branch gets a
  * branch-level warning, and when every branch is dead the whole group is flagged.
- * Detects: out-of-domain values (weekday == 7 etc.), RANGE windows that are
- * actually tautologies (`start <= end`, because RANGE compiles to
- * `>= start || < end`), mutually exclusive conditions within the same
+ * Detects: out-of-domain values (weekday == 7 etc.), RANGE bounds that disagree
+ * with the source operator (`||` with start <= end always matches, `&&` with
+ * start >= end never matches), mutually exclusive conditions within the same
  * timeFunc+timezone, and incomplete conditions the serializer silently drops.
  */
 function checkOneRequestCondition(
@@ -400,10 +426,29 @@ function checkOneRequestCondition(
       })
       return issues
     }
-    if (startVal <= endVal) {
+    // Range semantics (upstream #6934): `fn >= s && fn < e` is a same-day
+    // window, `fn >= s || fn < e` an overnight one. Bounds that disagree with the
+    // operator are dead conditions — `||` with start <= end matches every value,
+    // `&&` with start >= end never matches.
+    const overnight = cond.rangeOp === RANGE_OP_OR
+    const isWindow = overnight ? endVal < startVal : endVal > startVal
+    // The editor-authored form carries no operator and is rebuilt from the bounds
+    // (`||` when start > end), so an overnight spelling without an op is fine.
+    const neverMatches =
+      !overnight &&
+      !isWindow &&
+      (cond.rangeOp === RANGE_OP_AND || startVal === endVal)
+    if (overnight && !isWindow) {
       issues.push({
         severity: 'error',
-        key: 'The overnight range requires start > end. For a normal window, use a ≥ and a < condition instead.',
+        key: 'This time range covers the whole day and always matches',
+        branchIndex,
+        conditionIndex,
+      })
+    } else if (neverMatches) {
+      issues.push({
+        severity: 'error',
+        key: 'This time range never matches because its start is not before its end',
         branchIndex,
         conditionIndex,
       })
@@ -583,7 +628,9 @@ export function checkRequestDnfIssues(
       return
     }
     branch.conditions.forEach((cond, conditionIndex) => {
-      issues.push(...checkOneRequestCondition(cond, t, branchIndex, conditionIndex))
+      issues.push(
+        ...checkOneRequestCondition(cond, t, branchIndex, conditionIndex)
+      )
     })
     const conflicts = checkBranchAndConflict(branch.conditions, branchIndex)
     if (conflicts.length > 0) {

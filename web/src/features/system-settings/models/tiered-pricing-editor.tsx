@@ -1191,6 +1191,11 @@ function RuleConditionRow({
           <Trash2 className='text-destructive h-4 w-4' />
         </Button>
       </div>
+      {condition.source === SOURCE_TIME && condition.mode === MATCH_RANGE && (
+        <p className='text-muted-foreground w-full text-xs'>
+          {t('Start ≤ end: within the day; start > end: across midnight')}
+        </p>
+      )}
       {issues && issues.length > 0 && (
         <div className='space-y-0.5 pl-0.5'>
           {issues.map((issue) => (
