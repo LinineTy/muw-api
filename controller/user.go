@@ -455,6 +455,9 @@ func ActivateInviteCode(c *gin.Context) {
 	if err := model.MarkInviteCodeUsed(codeId, id); err != nil {
 		common.SysError("mark invite code used failed: " + err.Error())
 	}
+	// 激活也留一条通用日志（系统类型）：此前邀请码链路一条日志都不写，运营无从按
+	// 「系统」类型回溯激活记录；与兑换码充值、订阅等路径保持一致。
+	model.RecordLog(id, model.LogTypeSystem, "使用邀请码激活成功")
 	updatedUser, err := model.GetUserById(id, false)
 	if err != nil {
 		common.ApiErrorI18n(c, i18n.MsgDatabaseError)

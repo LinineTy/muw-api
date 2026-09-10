@@ -111,10 +111,10 @@ func TestActivateInviteCodeNormalInviteStillActivates(t *testing.T) {
 	assert.Equal(t, 1, after.UsedCount)
 	assert.Equal(t, user.Id, after.UsedUserId)
 
-	var systemLogs int64
-	require.NoError(t, db.Model(&model.Log{}).
-		Where("user_id = ? AND type = ?", user.Id, model.LogTypeSystem).Count(&systemLogs).Error)
-	assert.Equal(t, int64(0), systemLogs, "普通邀请码不写钓鱼日志")
+	var systemLogs []model.Log
+	require.NoError(t, db.Where("user_id = ? AND type = ?", user.Id, model.LogTypeSystem).Find(&systemLogs).Error)
+	require.Len(t, systemLogs, 1, "普通邀请码激活应留一条系统日志")
+	assert.Equal(t, "使用邀请码激活成功", systemLogs[0].Content)
 
 	var securityAudits int64
 	require.NoError(t, db.Model(&model.AuditLog{}).
