@@ -29,6 +29,7 @@ import {
   sideDrawerFooterClassName,
   sideDrawerFormClassName,
   sideDrawerHeaderClassName,
+  sideDrawerSwitchItemClassName,
 } from '@/components/drawer-layout'
 import { Button } from '@/components/ui/button'
 import {
@@ -58,6 +59,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { Switch } from '@/components/ui/switch'
 import {
   formatQuotaWithCurrency,
   getCurrencyDisplay,
@@ -458,6 +460,35 @@ export function RedemptionsMutateDrawer({
                           </FormItem>
                         )}
                       />
+
+                      {currentType === REDEMPTION_TYPE.INVITE && (
+                        <FormField
+                          control={form.control}
+                          name='is_trap'
+                          render={({ field }) => (
+                            <FormItem
+                              className={sideDrawerSwitchItemClassName()}
+                            >
+                              <div className='space-y-0.5'>
+                                <FormLabel>{t('Trap')}</FormLabel>
+                                <FormDescription>
+                                  {t(
+                                    'Trap code: redeeming it disables the account instead of activating it, and records the reason'
+                                  )}
+                                </FormDescription>
+                              </div>
+                              <FormControl>
+                                <Switch
+                                  checked={field.value === true}
+                                  onCheckedChange={(checked) =>
+                                    field.onChange(checked === true)
+                                  }
+                                />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                      )}
 
                       <FormField
                         control={form.control}

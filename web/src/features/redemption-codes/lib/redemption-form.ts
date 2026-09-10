@@ -19,10 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import type { TFunction } from 'i18next'
 import { z } from 'zod'
 
-import {
-  parseQuotaFromDollars,
-  quotaUnitsToEditableAmount,
-} from '@/lib/format'
+import { parseQuotaFromDollars, quotaUnitsToEditableAmount } from '@/lib/format'
 
 import {
   REDEMPTION_TYPE,
@@ -62,6 +59,7 @@ export function getRedemptionFormSchema(t: TFunction) {
       .min(REDEMPTION_VALIDATION.MAX_USES_MIN, msg.MAX_USES_INVALID)
       .max(REDEMPTION_VALIDATION.MAX_USES_MAX, msg.MAX_USES_INVALID)
       .optional(),
+    is_trap: z.boolean().optional(),
   })
 }
 
@@ -72,6 +70,7 @@ export type RedemptionFormValues = {
   count?: number
   type?: number
   max_uses?: number
+  is_trap?: boolean
 }
 
 // ============================================================================
@@ -85,6 +84,7 @@ export const REDEMPTION_FORM_DEFAULT_VALUES: RedemptionFormValues = {
   count: 1,
   type: REDEMPTION_TYPE.TOPUP,
   max_uses: 1,
+  is_trap: false,
 }
 
 // ============================================================================
@@ -101,13 +101,18 @@ export function transformFormDataToPayload(
   return {
     name: data.name,
     // 注册邀请码是纯门禁，不携带额度。
-    quota: type === REDEMPTION_TYPE.INVITE ? 0 : parseQuotaFromDollars(data.quota_dollars),
+    quota:
+      type === REDEMPTION_TYPE.INVITE
+        ? 0
+        : parseQuotaFromDollars(data.quota_dollars),
     expired_time: data.expired_time
       ? Math.floor(data.expired_time.getTime() / 1000)
       : 0,
     count: data.count || 1,
     type,
     max_uses: data.max_uses ?? 1,
+    // 诱捕标记只对注册邀请码有意义。
+    is_trap: type === REDEMPTION_TYPE.INVITE ? (data.is_trap ?? false) : false,
   }
 }
 
@@ -127,5 +132,6 @@ export function transformRedemptionToFormDefaults(
     count: 1,
     type: redemption.type,
     max_uses: redemption.max_uses,
+    is_trap: redemption.is_trap,
   }
 }

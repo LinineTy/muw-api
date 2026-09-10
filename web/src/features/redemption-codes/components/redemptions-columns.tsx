@@ -156,12 +156,21 @@ export function useRedemptionsColumns({
           return null
         }
         return (
-          <StatusBadge
-            label={t(typeConfig.labelKey)}
-            variant={typeConfig.variant}
-            copyable={false}
-            className='-ml-1.5'
-          />
+          <div className='flex items-center gap-1.5'>
+            <StatusBadge
+              label={t(typeConfig.labelKey)}
+              variant={typeConfig.variant}
+              copyable={false}
+              className='-ml-1.5'
+            />
+            {row.original.is_trap && (
+              <StatusBadge
+                label={t('Trap')}
+                variant='warning'
+                copyable={false}
+              />
+            )}
+          </div>
         )
       },
       size: 110,

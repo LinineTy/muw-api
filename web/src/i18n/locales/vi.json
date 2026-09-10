@@ -7409,6 +7409,8 @@
     "© 2025 Your Company. All rights reserved.": "© 2025 Công ty của bạn. Mọi quyền được bảo lưu.",
     "、": ", ",
     "，": ", ",
-    "，and ": " và "
+    "，and ": " và ",
+    "Trap": "Mồi nhử",
+    "Trap code: redeeming it disables the account instead of activating it, and records the reason": "Mã mồi: khi sử dụng sẽ vô hiệu hóa tài khoản thay vì kích hoạt và ghi lại lý do"
   }
 }

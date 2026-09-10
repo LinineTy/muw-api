@@ -7409,6 +7409,8 @@
     "© 2025 Your Company. All rights reserved.": "© 2025 Your Company. All rights reserved.",
     "、": ", ",
     "，": ", ",
-    "，and ": ", and "
+    "，and ": ", and ",
+    "Trap": "Trap",
+    "Trap code: redeeming it disables the account instead of activating it, and records the reason": "Trap code: redeeming it disables the account instead of activating it, and records the reason"
   }
 }

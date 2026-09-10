@@ -77,6 +77,7 @@ function redemption(id: number, quota = 500001): Redemption {
     status: 1,
     quota,
     type: 1,
+    is_trap: false,
     max_uses: 1,
     used_count: 0,
     created_time: 1,

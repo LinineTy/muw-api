@@ -7409,6 +7409,8 @@
     "© 2025 Your Company. All rights reserved.": "© 2025 您的公司。保留所有權利。",
     "、": "、",
     "，": "，",
-    "，and ": "，並"
+    "，and ": "，並",
+    "Trap": "誘捕",
+    "Trap code: redeeming it disables the account instead of activating it, and records the reason": "誘捕碼：被使用時不開通帳號，改為停用帳號並把封禁原因寫進備註"
   }
 }

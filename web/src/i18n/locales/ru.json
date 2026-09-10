@@ -7409,6 +7409,8 @@
     "© 2025 Your Company. All rights reserved.": "© 2025 Ваша Компания. Все права защищены.",
     "、": ", ",
     "，": ", ",
-    "，and ": " и "
+    "，and ": " и ",
+    "Trap": "Приманка",
+    "Trap code: redeeming it disables the account instead of activating it, and records the reason": "Код-приманка: при использовании аккаунт блокируется вместо активации, причина сохраняется"
   }
 }

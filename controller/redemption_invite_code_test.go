@@ -62,6 +62,38 @@ func TestUpdateRedemptionKeepsInviteCodeQuotaZero(t *testing.T) {
 	assert.Equal(t, 0, updated.Quota)
 }
 
+// 诱捕标记可在后台创建/编辑（muw.5 起不再需要手工 SQL）。
+func TestRedemptionTrapFlagManagedFromAdmin(t *testing.T) {
+	db := setupManageUserTestDB(t)
+	require.NoError(t, db.AutoMigrate(&model.Redemption{}, &model.RedemptionUse{}))
+
+	// 建一条带诱捕标记的邀请码
+	recorder := performRedemptionRequest(t, http.MethodPost, "/api/redemption/",
+		`{"name":"invite-trap","quota":0,"count":1,"type":2,"max_uses":3,"is_trap":true}`)
+	assert.Contains(t, recorder.Body.String(), `"success":true`, recorder.Body.String())
+	var code model.Redemption
+	require.NoError(t, db.Where("name = ?", "invite-trap").First(&code).Error)
+	assert.True(t, code.IsTrap)
+	assert.Equal(t, common.RedemptionCodeTypeInvite, code.Type)
+
+	// 编辑里收竿（关掉诱捕标记），其余字段保留
+	recorder = performRedemptionRequest(t, http.MethodPut, fmt.Sprintf("/api/redemption/%d", code.Id),
+		fmt.Sprintf(`{"id":%d,"name":"invite-trap-off","quota":0,"expired_time":0,"is_trap":false}`, code.Id))
+	assert.Contains(t, recorder.Body.String(), `"success":true`, recorder.Body.String())
+	var reloaded model.Redemption
+	require.NoError(t, db.First(&reloaded, code.Id).Error)
+	assert.False(t, reloaded.IsTrap)
+	assert.Equal(t, "invite-trap-off", reloaded.Name)
+
+	// 充值码不接受诱捕标记（避免把兑换码变成钓具）
+	recorder = performRedemptionRequest(t, http.MethodPost, "/api/redemption/",
+		`{"name":"topup-not-trap","quota":100,"count":1,"type":1,"is_trap":true}`)
+	assert.Contains(t, recorder.Body.String(), `"success":true`)
+	var topup model.Redemption
+	require.NoError(t, db.Where("name = ?", "topup-not-trap").First(&topup).Error)
+	assert.False(t, topup.IsTrap)
+}
+
 func performRedemptionRequest(t *testing.T, method, path, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
