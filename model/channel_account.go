@@ -149,6 +149,47 @@ func BindChannelAccountWithDB(db *gorm.DB, channelId, accountId, order int) erro
 	}).Create(binding).Error
 }
 
+// BindingSpec 一条绑定的写入意图（顺序即轮询顺序，Enabled 为渠道内启停）。
+type BindingSpec struct {
+	AccountID int
+	Enabled   bool
+}
+
+// ReplaceChannelAccountBindingsWithSpecs 覆盖式写入（带渠道内启停状态）：列表里的绑定
+// 按其 Enabled 落库（已有绑定也会被显式更新，与 ReplaceChannelAccountBindings 的
+// "保留原状态"不同——这是 UI 显式提交的场景）。
+func ReplaceChannelAccountBindingsWithSpecs(channelId int, specs []BindingSpec) error {
+	if channelId <= 0 {
+		return nil
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := replaceChannelAccountBindingsWithDB(tx, channelId, specAccountIDs(specs)); err != nil {
+			return err
+		}
+		for _, spec := range specs {
+			if spec.AccountID <= 0 {
+				continue
+			}
+			if err := tx.Model(&ChannelAccount{}).
+				Where("channel_id = ? AND account_id = ?", channelId, spec.AccountID).
+				Update("enabled", spec.Enabled).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func specAccountIDs(specs []BindingSpec) []int {
+	ids := make([]int, 0, len(specs))
+	for _, spec := range specs {
+		if spec.AccountID > 0 {
+			ids = append(ids, spec.AccountID)
+		}
+	}
+	return ids
+}
+
 // ReplaceChannelAccountBindings 覆盖式写入渠道的绑定列表（新建/编辑渠道的写入口）：
 //   - 列表里已有的绑定：保留其 Enabled 状态，只更新轮询顺序；
 //   - 列表里新增的：Enabled=true；
