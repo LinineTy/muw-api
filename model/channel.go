@@ -103,7 +103,7 @@ type Channel struct {
 	// BoundAccounts 本渠道绑定的账户（按绑定轮询顺序，仅含渠道内启用的绑定；运行时挂载、
 	// 不入库不下发）。长度 >1 时 GetNextEnabledKey 在账户之间轮询；Account/BoundAccounts
 	// 里的对象与缓存共享同一指针（多 key 轮询状态跨渠道一致）。
-	BoundAccounts []*Account `json:"-" gorm:"-"`
+	BoundAccounts []*Account `json:"bound_accounts,omitempty" gorm:"-"`
 
 	// Account 运行时挂载的账户对象（缓存路径同一账户的多个渠道共享同一指针，
 	// 多 key 轮询状态跨渠道一致；非持久列，由 loadAccount/loadChannelsAccounts

@@ -668,9 +668,30 @@ type AddChannelRequest struct {
 	Channel                   *model.Channel        `json:"channel"`
 	// 套餐专用密钥(可选),仅用于编码套餐余量监控,不参与转发。
 	CodingPlanKey *string `json:"coding_plan_key"`
-	// AccountID 共享账户(可选):显式指定则凭证使用该账户(key/base_url 等忽略),
+	// AccountID 单账户绑定(兼容保留):显式指定则凭证使用该账户(key/base_url 等忽略),
 	// 与 batch/multi_to_single 模式互斥(账户已有固定 key 列表)。
 	AccountID *int `json:"account_id"`
+	// AccountIDs 账户绑定列表(N:N):一个渠道可绑多个账户,用法与渠道多 key 一致——
+	// 按列表顺序轮询、单个在渠道侧启停。与 AccountID 同时出现时以本字段为准。
+	AccountIDs []int `json:"account_ids"`
+}
+
+// normalizeBoundAccountIDs 归一账户绑定列表：account_ids 优先（去重去零、保序），
+// 否则退回单值 account_id（兼容旧客户端）。
+func normalizeBoundAccountIDs(ids []int, single *int) []int {
+	res := make([]int, 0, len(ids)+1)
+	seen := make(map[int]bool, len(ids)+1)
+	for _, id := range ids {
+		if id <= 0 || seen[id] {
+			continue
+		}
+		seen[id] = true
+		res = append(res, id)
+	}
+	if len(res) == 0 && single != nil && *single > 0 {
+		res = append(res, *single)
+	}
+	return res
 }
 
 func getVertexArrayKeys(keys string) ([]string, error) {
@@ -741,7 +762,9 @@ func AddChannel(c *gin.Context) {
 	addChannelRequest.Channel.CreatedTime = common.GetTimestamp()
 
 	// 共享账户路径：凭证全部来自既有账户，忽略 key 输入；单渠道创建。
-	if addChannelRequest.AccountID != nil && *addChannelRequest.AccountID > 0 {
+	// 账户绑定列表（N:N）：account_ids 优先，account_id 兼容保留。
+	boundAccountIDs := normalizeBoundAccountIDs(addChannelRequest.AccountIDs, addChannelRequest.AccountID)
+	if len(boundAccountIDs) > 0 {
 		if addChannelRequest.Mode != "" && addChannelRequest.Mode != "single" {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
@@ -749,36 +772,37 @@ func AddChannel(c *gin.Context) {
 			})
 			return
 		}
-		account, err := model.GetAccountById(*addChannelRequest.AccountID, true)
-		if err != nil {
-			c.JSON(http.StatusOK, gin.H{"success": false, "message": "账户不存在: " + err.Error()})
-			return
-		}
-		if account.Status != common.ChannelStatusEnabled {
-			c.JSON(http.StatusOK, gin.H{"success": false, "message": "账户已被禁用，请先启用账户"})
-			return
-		}
-		if account.Type != addChannelRequest.Channel.Type {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": fmt.Sprintf("账户类型(%d)与渠道类型(%d)不匹配", account.Type, addChannelRequest.Channel.Type),
-			})
-			return
+		// 类型不做校验（2026-09-10 定）：OpenAI 兼容端点在多数渠道类型下通用，
+		// 拿类型卡绑定会卡死自己；能不能通由使用者判断、由渠道测试验证。
+		for _, accountId := range boundAccountIDs {
+			account, err := model.GetAccountById(accountId, true)
+			if err != nil {
+				c.JSON(http.StatusOK, gin.H{"success": false, "message": "账户不存在: " + err.Error()})
+				return
+			}
+			if account.Status != common.ChannelStatusEnabled {
+				c.JSON(http.StatusOK, gin.H{"success": false, "message": "账户已被禁用，请先启用账户: " + account.Name})
+				return
+			}
 		}
 		// 挂账户的渠道不再持有凭证；多 key 状态（IsMultiKey/Mode）以账户为准，
 		// 渠道请求携带的 ChannelInfo 凭证部分忽略。
-		addChannelRequest.Channel.AccountId = account.Id
+		addChannelRequest.Channel.AccountId = boundAccountIDs[0]
 		addChannelRequest.Channel.Key = ""
 		addChannelRequest.Channel.ChannelInfo = model.ChannelInfo{}
 		if err := addChannelRequest.Channel.Insert(); err != nil {
 			common.ApiError(c, err)
 			return
 		}
+		if err := model.ReplaceChannelAccountBindings(addChannelRequest.Channel.Id, boundAccountIDs); err != nil {
+			common.ApiError(c, err)
+			return
+		}
 		recordManageAudit(c, "channel.create", map[string]interface{}{
-			"name":       addChannelRequest.Channel.Name,
-			"type":       addChannelRequest.Channel.Type,
-			"count":      1,
-			"account_id": account.Id,
+			"name":        addChannelRequest.Channel.Name,
+			"type":        addChannelRequest.Channel.Type,
+			"count":       1,
+			"account_ids": boundAccountIDs,
 		})
 		c.JSON(http.StatusOK, gin.H{"success": true, "message": ""})
 		return
@@ -1193,7 +1217,43 @@ func UpdateChannel(c *gin.Context) {
 	// 更新渠道 account_id，类型同步为账户类型（反规范化副本），凭证字段全部以新账户
 	// 为准。旧账户若为系统生成的私有账户且无其他引用，换绑成功后回收。
 	accountRebound := false
-	if accountIDProvided, ok := requestData["account_id"]; ok {
+	var reboundAccountIDs []int
+	if accountIDsProvided, ok := requestData["account_ids"]; ok {
+		// N:N 绑定列表：整体覆盖（顺序即轮询顺序）。
+		if rawList, valid := accountIDsProvided.([]any); valid {
+			for _, v := range rawList {
+				if f, okFloat := v.(float64); okFloat && int(f) > 0 {
+					reboundAccountIDs = append(reboundAccountIDs, int(f))
+				}
+			}
+		}
+		seen := make(map[int]bool, len(reboundAccountIDs))
+		unique := make([]int, 0, len(reboundAccountIDs))
+		for _, id := range reboundAccountIDs {
+			if !seen[id] {
+				seen[id] = true
+				unique = append(unique, id)
+			}
+		}
+		reboundAccountIDs = unique
+		for _, accountId := range reboundAccountIDs {
+			account, accErr := model.GetAccountById(accountId, true)
+			if accErr != nil {
+				c.JSON(http.StatusOK, gin.H{"success": false, "message": "账户不存在: " + accErr.Error()})
+				return
+			}
+			if account.Status != common.ChannelStatusEnabled {
+				c.JSON(http.StatusOK, gin.H{"success": false, "message": "账户已被禁用，请先启用账户: " + account.Name})
+				return
+			}
+		}
+		if len(reboundAccountIDs) > 0 {
+			channel.AccountId = reboundAccountIDs[0]
+		}
+		channel.Key = ""
+		channel.ChannelInfo = model.ChannelInfo{}
+		accountRebound = true
+	} else if accountIDProvided, ok := requestData["account_id"]; ok {
 		newAccountID := 0
 		if v, valid := accountIDProvided.(float64); valid {
 			newAccountID = int(v)
@@ -1378,6 +1438,13 @@ func UpdateChannel(c *gin.Context) {
 	// 填套餐密钥)则保留新值,避免保存一次就把刚配的套餐清掉(需二次保存)。
 	if channel.Type != originChannel.Type {
 		if err := clearCodingPlanOnTypeChange(channel.Id, &channel.Channel, originChannel, requestData); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	}
+	// 绑定表落库（account_ids 整体覆盖；单值 account_id 路径由 Channel.Update 双写收敛）。
+	if accountRebound && len(reboundAccountIDs) > 0 {
+		if err := model.ReplaceChannelAccountBindings(channel.Id, reboundAccountIDs); err != nil {
 			common.ApiError(c, err)
 			return
 		}
