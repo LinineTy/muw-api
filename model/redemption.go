@@ -398,16 +398,36 @@ func MarkInviteCodeUsed(codeId, userId int) error {
 	})
 }
 
-func (redemption *Redemption) Insert() error {
+// guardQuotaForWrite 充值码必须携带正额度；注册邀请码是纯门禁、不携带额度
+// （controller 侧已把 quota 归零），不能套用充值码的校验——否则后台既建不出
+// 邀请码（AddRedemption 归零后 Insert 报错），也改不了（Update 同样报错）。
+func (redemption *Redemption) guardQuotaForWrite() error {
+	if redemption.Type == common.RedemptionCodeTypeInvite {
+		redemption.Quota = 0
+		return nil
+	}
 	if redemption.Quota <= 0 {
 		return errors.New("redemption quota must be positive")
 	}
-	if err := common.ValidateWalletQuota(redemption.Quota); err != nil {
+	return common.ValidateWalletQuota(redemption.Quota)
+}
+
+func (redemption *Redemption) Insert() error {
+	if err := redemption.guardQuotaForWrite(); err != nil {
 		return err
 	}
-	var err error
-	err = DB.Create(redemption).Error
-	return err
+	if err := DB.Create(redemption).Error; err != nil {
+		return err
+	}
+	if redemption.Type == common.RedemptionCodeTypeInvite && redemption.Quota != 0 {
+		// quota 列带 default:100，插入零值会被数据库默认值覆盖（GORM 的 Select("*")
+		// 也绕不过 default 标签），显式回写成 0，保证邀请码"不携带额度"在库里也成立。
+		if err := DB.Model(redemption).Update("quota", 0).Error; err != nil {
+			return err
+		}
+		redemption.Quota = 0
+	}
+	return nil
 }
 
 func (redemption *Redemption) SelectUpdate() error {
@@ -417,10 +437,7 @@ func (redemption *Redemption) SelectUpdate() error {
 
 // Update Make sure your token's fields is completed, because this will update non-zero values
 func (redemption *Redemption) Update() error {
-	if redemption.Quota <= 0 {
-		return errors.New("redemption quota must be positive")
-	}
-	if err := common.ValidateWalletQuota(redemption.Quota); err != nil {
+	if err := redemption.guardQuotaForWrite(); err != nil {
 		return err
 	}
 	var err error
