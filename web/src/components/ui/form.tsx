@@ -236,11 +236,17 @@ function FormControl({
   })
 }
 
-function FormDescription({ className, ...props }: React.ComponentProps<'p'>) {
+function FormDescription({
+  className,
+  block,
+  ...props
+}: React.ComponentProps<'p'> & { block?: boolean }) {
   const { formDescriptionId } = useFormField()
 
+  // 描述内容含块级元素(如按钮)时用 block 渲染为 div,避免 <p><div> 无效嵌套。
+  const Comp = block ? 'div' : 'p'
   return (
-    <p
+    <Comp
       data-slot='form-description'
       id={formDescriptionId}
       className={cn('text-muted-foreground text-sm', className)}
