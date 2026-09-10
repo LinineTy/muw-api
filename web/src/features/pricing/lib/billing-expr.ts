@@ -177,6 +177,16 @@ export const MATCH_LTE = 'lte'
 export const MATCH_EXISTS = 'exists'
 export const MATCH_RANGE = 'range'
 
+// Source operator of a RANGE condition. The expression language has two range
+// spellings: a same-day window serializes as `fn >= s && fn < e` ('and') and an
+// overnight window as `fn >= s || fn < e` ('or'). The op is not serialized — the
+// builder re-derives it from the bounds — but the display and the validator need
+// it to tell a real window from the degenerate spellings (`||` with start <= end
+// matches every value, `&&` with start >= end can never match).
+export const RANGE_OP_AND = 'and'
+export const RANGE_OP_OR = 'or'
+export type RangeOp = typeof RANGE_OP_AND | typeof RANGE_OP_OR
+
 export const TIME_FUNCS = ['hour', 'minute', 'weekday', 'month', 'day'] as const
 export type TimeFunc = (typeof TIME_FUNCS)[number]
 
@@ -217,6 +227,10 @@ export type TimeCondition = {
   value: string
   rangeStart: string
   rangeEnd: string
+  /** Source operator of a parsed RANGE (see `RANGE_OP_AND` / `RANGE_OP_OR`);
+   * undefined for a range authored in the editor, whose operator the builder
+   * derives from the bounds. */
+  rangeOp?: RangeOp
 }
 
 export type RequestCondition = TimeCondition | ParamHeaderCondition
@@ -812,8 +826,9 @@ function parseExprLiteral(
   raw: string
 ): { value: string; kind: 'string' | 'number' | 'boolean' } | null {
   const text = raw.trim()
-  if (text === 'true' || text === 'false')
+  if (text === 'true' || text === 'false') {
     return { value: text, kind: 'boolean' }
+  }
   if (NUMERIC_LITERAL_REGEX.test(text)) return { value: text, kind: 'number' }
   try {
     const parsed = JSON.parse(text) as string
@@ -844,11 +859,11 @@ function isTimeValueInRange(timeFunc: TimeFunc, text: string): boolean {
 
 function tryParseTimeCondition(expr: string): RequestCondition | null {
   let m = expr.match(
-    /^(hour|minute|weekday|month|day)\("([^"]+)"\) >= ([\d.eE+-]+) (?:&&|\|\|) \1\("\2"\) < ([\d.eE+-]+)$/
+    /^(hour|minute|weekday|month|day)\("([^"]+)"\) >= ([\d.eE+-]+) (&&|\|\|) \1\("\2"\) < ([\d.eE+-]+)$/
   )
   if (!m) {
     m = expr.match(
-      /^\((hour|minute|weekday|month|day)\("([^"]+)"\) >= ([\d.eE+-]+) (?:&&|\|\|) \1\("\2"\) < ([\d.eE+-]+)\)$/
+      /^\((hour|minute|weekday|month|day)\("([^"]+)"\) >= ([\d.eE+-]+) (&&|\|\|) \1\("\2"\) < ([\d.eE+-]+)\)$/
     )
   }
   if (m) {
@@ -857,7 +872,7 @@ function tryParseTimeCondition(expr: string): RequestCondition | null {
     // dropped when the visual editor rebuilds the expression.
     if (
       !isTimeValueInRange(m[1] as TimeFunc, m[3]) ||
-      !isTimeValueInRange(m[1] as TimeFunc, m[4])
+      !isTimeValueInRange(m[1] as TimeFunc, m[5])
     ) {
       return null
     }
@@ -868,7 +883,8 @@ function tryParseTimeCondition(expr: string): RequestCondition | null {
       mode: MATCH_RANGE,
       value: '',
       rangeStart: m[3],
-      rangeEnd: m[4],
+      rangeEnd: m[5],
+      rangeOp: m[4] === '&&' ? RANGE_OP_AND : RANGE_OP_OR,
     }
   }
   m = expr.match(
@@ -1021,8 +1037,11 @@ export function parseDnfRequestConditions(
       const trimmedPart = unwrapOuterParens(part).trim()
       const condition = tryParseRequestCondition(trimmedPart)
       if (condition) {
-        // A within-day window serializes as `fn >= s && fn < e` (two AND parts).
-        // Fold the pair back into one RANGE so build → parse round-trips.
+        // A same-day window serializes as `fn >= s && fn < e` (two AND parts).
+        // Fold the pair back into one RANGE so build → parse round-trips. The
+        // bounds must really form a window: `>= 18 && < 6` never matches, and
+        // folding it would let the builder re-derive it as the overnight `||`
+        // window on the next save.
         const prev = clause[clause.length - 1]
         if (
           condition.source === 'time' &&
@@ -1030,7 +1049,8 @@ export function parseDnfRequestConditions(
           prev?.source === 'time' &&
           prev.mode === MATCH_GTE &&
           prev.timeFunc === condition.timeFunc &&
-          prev.timezone === condition.timezone
+          prev.timezone === condition.timezone &&
+          Number(prev.value) < Number(condition.value)
         ) {
           clause[clause.length - 1] = {
             source: 'time',
@@ -1040,6 +1060,7 @@ export function parseDnfRequestConditions(
             value: '',
             rangeStart: prev.value,
             rangeEnd: condition.value,
+            rangeOp: RANGE_OP_AND,
           }
           continue
         }
@@ -1215,7 +1236,7 @@ export function getRequestRuleMatchOptions(source: string): MatchOption[] {
       { value: MATCH_EQ, labelKey: 'Equals' },
       { value: MATCH_GTE, labelKey: 'Greater than or equal' },
       { value: MATCH_LT, labelKey: 'Less than' },
-      { value: MATCH_RANGE, labelKey: 'Overnight range' },
+      { value: MATCH_RANGE, labelKey: 'Time range' },
     ]
   }
   const base: MatchOption[] = [
@@ -1269,6 +1290,7 @@ export function normalizeCondition(
       rangeStart:
         timeCond?.rangeStart == null ? '' : String(timeCond.rangeStart),
       rangeEnd: timeCond?.rangeEnd == null ? '' : String(timeCond.rangeEnd),
+      rangeOp: timeCond?.rangeOp,
     }
   }
 

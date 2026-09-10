@@ -901,7 +901,6 @@
   "The full score has unsaved changes; save it first so the reset applies to the new value.": "The full score has unsaved changes; save it first so the reset applies to the new value.",
   "The global cap resets at the start of this period": "The global cap resets at the start of this period",
   "The most a user can buy in a single purchase.": "The most a user can buy in a single purchase.",
-  "The overnight range requires start > end. For a normal window, use a ≥ and a < condition instead.": "The overnight range requires start > end. For a normal window, use a ≥ and a < condition instead.",
   "The total remaining time cannot exceed this after renewal. Prevents stacking time indefinitely. 0 means unlimited.": "The total remaining time cannot exceed this after renewal. Prevents stacking time indefinitely. 0 means unlimited.",
   "The zip must contain a home.html file": "The zip must contain a home.html file",
   "Theme Configuration": "Theme Configuration",
