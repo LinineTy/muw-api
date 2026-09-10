@@ -28,6 +28,11 @@ type Redemption struct {
 	UsedUserId   int            `json:"used_user_id"`
 	DeletedAt    gorm.DeletedAt `gorm:"index"`
 	ExpiredTime  int64          `json:"expired_time" gorm:"bigint"` // 过期时间，0 表示不过期
+
+	// IsTrap 钓鱼标记：占用、名额与审计流程与普通邀请码完全一致，唯一区别是命中后的
+	// 效果——不激活账号，改为停用账号并写入封禁原因（见 controller.ActivateInviteCode）。
+	// 未显式打标的码一律 false。
+	IsTrap bool `json:"is_trap" gorm:"column:is_trap;default:false"`
 }
 
 // RedemptionUse 记录每个码被哪些用户使用过。(redemption_id, user_id) 唯一，保证
@@ -302,12 +307,14 @@ var (
 )
 
 // OccupyInviteCode 校验并占用一个注册邀请码名额（用途必须为邀请，Type=2）。
-// 占用成功返回码 id；注册流程后续创建用户失败时调用 ReleaseInviteCode 回滚。
+// 占用成功返回码 id 与钓鱼标记（IsTrap，见 Redemption.IsTrap）；注册流程后续
+// 创建用户失败时调用 ReleaseInviteCode 回滚。钓鱼码的占用、名额与审计与普通
+// 邀请码完全一致，区别只在调用方命中后如何处理（正常激活 / 停用账号）。
 // 注意：占位时不写 used_user_id（注册用户的 id 此时未知），由调用方在用户创建
 // 成功后调用 MarkInviteCodeUsed 回填。
-func OccupyInviteCode(key string) (codeId int, err error) {
+func OccupyInviteCode(key string) (codeId int, isTrap bool, err error) {
 	if key == "" {
-		return 0, ErrInviteCodeInvalid
+		return 0, false, ErrInviteCodeInvalid
 	}
 	redemption := &Redemption{}
 
@@ -349,9 +356,9 @@ func OccupyInviteCode(key string) (codeId int, err error) {
 		return nil
 	})
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
-	return redemption.Id, nil
+	return redemption.Id, redemption.IsTrap, nil
 }
 
 // ReleaseInviteCode 回滚一次邀请码占用（注册失败时调用），并把因本次占用占满而

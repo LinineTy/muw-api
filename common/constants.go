@@ -73,6 +73,11 @@ var RegisterEnabled = true
 // InviteCodeRegisterEnabled 开启后，新用户注册必须填写有效的注册邀请码（用途为邀请的兑换码）。
 var InviteCodeRegisterEnabled = false
 
+// TrapInviteCodeBanReason 钓鱼邀请码（Redemption.IsTrap）命中后写入 users.remark 的
+// 封禁原因。登录被拒时该字段作为 login_status.reason 展示给本人
+// （见 controller.setupLoginAtAuthVersion）。
+const TrapInviteCodeBanReason = "你真的是人类吗？"
+
 // MaxUserCount 站点最大非超管用户数,0 表示不限制。超管(root)不计入额度,
 // 因此配置值 N 意味着站点允许 N 个非超管用户(加上超管共 N+1)。
 var MaxUserCount = 0

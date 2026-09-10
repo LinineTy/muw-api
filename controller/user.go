@@ -407,7 +407,7 @@ func ActivateInviteCode(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgInviteCodeRequired)
 		return
 	}
-	codeId, err := model.OccupyInviteCode(inviteCode)
+	codeId, isTrap, err := model.OccupyInviteCode(inviteCode)
 	if err != nil {
 		switch {
 		case errors.Is(err, model.ErrInviteCodeInvalid):
@@ -422,6 +422,23 @@ func ActivateInviteCode(c *gin.Context) {
 			common.SysError("occupy invite code error: " + err.Error())
 			common.ApiErrorI18n(c, i18n.MsgDatabaseError)
 		}
+		return
+	}
+	if isTrap {
+		// 钓鱼邀请码：占用、名额与审计流程同普通邀请码（占位与 MarkInviteCodeUsed 照走），
+		// 效果改为停用账号并把封禁原因写进 remark。对外仍按"无效邀请码"回复，不暴露钩子。
+		if err := model.DisableUserByTrap(id, common.TrapInviteCodeBanReason); err != nil {
+			_ = model.ReleaseInviteCode(codeId)
+			common.SysError("disable user by trap invite code failed: " + err.Error())
+			common.ApiErrorI18n(c, i18n.MsgDatabaseError)
+			return
+		}
+		if err := model.MarkInviteCodeUsed(codeId, id); err != nil {
+			common.SysError("mark invite code used failed: " + err.Error())
+		}
+		common.SysLog(fmt.Sprintf("钓到一条鱼: user_id=%d, code_id=%d, ip=%s", id, codeId, c.ClientIP()))
+		model.RecordLog(id, model.LogTypeSystem, "钓到一条鱼")
+		common.ApiErrorI18n(c, i18n.MsgInviteCodeInvalid)
 		return
 	}
 	if err := model.ActivateUserById(id); err != nil {

@@ -326,9 +326,10 @@ func TestOccupyInviteCodeLifecycle(t *testing.T) {
 	require.NoError(t, DB.Create(invite).Error)
 
 	// 第一次占位成功，返回码 id。
-	codeId, err := OccupyInviteCode(key)
+	codeId, isTrap, err := OccupyInviteCode(key)
 	require.NoError(t, err)
 	assert.Equal(t, invite.Id, codeId)
+	assert.False(t, isTrap, "普通邀请码不应带钓鱼标记")
 
 	// 释放回滚：名额恢复、状态回可注册。
 	require.NoError(t, ReleaseInviteCode(codeId))
@@ -338,14 +339,14 @@ func TestOccupyInviteCodeLifecycle(t *testing.T) {
 	assert.Equal(t, common.RedemptionCodeStatusEnabled, r.Status)
 
 	// 连续占满（max_uses=2）后置为已用，再占失败。
-	_, err = OccupyInviteCode(key)
+	_, _, err = OccupyInviteCode(key)
 	require.NoError(t, err)
-	_, err = OccupyInviteCode(key)
+	_, _, err = OccupyInviteCode(key)
 	require.NoError(t, err)
 	require.NoError(t, DB.First(&r, "id = ?", codeId).Error)
 	assert.Equal(t, 2, r.UsedCount)
 	assert.Equal(t, common.RedemptionCodeStatusUsed, r.Status)
-	_, err = OccupyInviteCode(key)
+	_, _, err = OccupyInviteCode(key)
 	require.ErrorIs(t, err, ErrInviteCodeUsed)
 
 	// 普通兑换码（type=1）不能当作注册邀请码。
@@ -358,7 +359,7 @@ func TestOccupyInviteCodeLifecycle(t *testing.T) {
 		MaxUses:     1,
 		CreatedTime: common.GetTimestamp(),
 	}).Error)
-	_, err = OccupyInviteCode(topupKey)
+	_, _, err = OccupyInviteCode(topupKey)
 	require.ErrorIs(t, err, ErrInviteCodeInvalid)
 
 	// 已用完的兑换码（type=1, status=Used）同样报"无效的邀请码"，而不是"已被使用"：
@@ -372,8 +373,38 @@ func TestOccupyInviteCodeLifecycle(t *testing.T) {
 		MaxUses:     1,
 		CreatedTime: common.GetTimestamp(),
 	}).Error)
-	_, err = OccupyInviteCode(usedTopupKey)
+	_, _, err = OccupyInviteCode(usedTopupKey)
 	require.ErrorIs(t, err, ErrInviteCodeInvalid)
+}
+
+// 钓鱼邀请码：占用语义与普通邀请码完全一致（名额照扣、状态照翻），只是回传 IsTrap
+// 供调用方改走"停用账号"分支。
+func TestOccupyInviteCodeReportsTrapFlag(t *testing.T) {
+	require.NoError(t, DB.AutoMigrate(&Redemption{}, &RedemptionUse{}))
+	key := "20000000000000000000000000000009"
+	require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Unscoped().Delete(&Redemption{}).Error)
+	t.Cleanup(func() {
+		require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Unscoped().Delete(&Redemption{}).Error)
+		DB.Exec("DELETE FROM redemption_uses")
+	})
+	require.NoError(t, DB.Create(&Redemption{
+		Name:        "invite-bait",
+		Key:         key,
+		Status:      common.RedemptionCodeStatusEnabled,
+		Type:        common.RedemptionCodeTypeInvite,
+		MaxUses:     2,
+		IsTrap:      true,
+		CreatedTime: common.GetTimestamp(),
+	}).Error)
+
+	codeId, isTrap, err := OccupyInviteCode(key)
+	require.NoError(t, err)
+	assert.True(t, isTrap)
+	var r Redemption
+	require.NoError(t, DB.First(&r, "id = ?", codeId).Error)
+	assert.True(t, r.IsTrap)
+	assert.Equal(t, 1, r.UsedCount, "钓鱼码同样扣名额")
+	assert.Equal(t, common.RedemptionCodeStatusEnabled, r.Status)
 }
 
 // 并发占位恰好 max_uses 次成功（镜像 TestRedeemConcurrentSingleSuccess）。
@@ -402,7 +433,7 @@ func TestOccupyInviteCodeConcurrent(t *testing.T) {
 	for i := 0; i < goroutines; i++ {
 		go func(idx int) {
 			defer wg.Done()
-			if _, err := OccupyInviteCode(key); err == nil {
+			if _, _, err := OccupyInviteCode(key); err == nil {
 				successes[idx] = true
 			}
 		}(i)
