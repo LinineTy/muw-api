@@ -3370,15 +3370,18 @@ export function ChannelMutateDrawer({
                                         {boundBindings.length}
                                       </Badge>
                                     </button>
+                                    {/* 这是「选了就执行」的动作型下拉：不持有选中值，
+                                        否则触发器会显示原始 value（曾把占位符挤掉、显示成 `0`）。 */}
                                     <Select
                                       items={addableAccounts.map((acc) => ({
                                         value: String(acc.id),
                                         label: `${acc.name} · ${channelTypeLabelOf(acc.type)}`,
                                       }))}
-                                      value='0'
-                                      onValueChange={(v) =>
-                                        addBoundAccount(Number(v))
-                                      }
+                                      value={null}
+                                      disabled={addableAccounts.length === 0}
+                                      onValueChange={(v) => {
+                                        if (v !== null) addBoundAccount(Number(v))
+                                      }}
                                     >
                                       <SelectTrigger
                                         size='sm'
@@ -3392,21 +3395,15 @@ export function ChannelMutateDrawer({
                                         alignItemWithTrigger={false}
                                       >
                                         <SelectGroup>
-                                          {addableAccounts.length === 0 ? (
-                                            <SelectItem value='0' disabled>
-                                              {t('No account available')}
+                                          {addableAccounts.map((acc) => (
+                                            <SelectItem
+                                              key={acc.id}
+                                              value={String(acc.id)}
+                                            >
+                                              {acc.name} ·{' '}
+                                              {channelTypeLabelOf(acc.type)}
                                             </SelectItem>
-                                          ) : (
-                                            addableAccounts.map((acc) => (
-                                              <SelectItem
-                                                key={acc.id}
-                                                value={String(acc.id)}
-                                              >
-                                                {acc.name} ·{' '}
-                                                {channelTypeLabelOf(acc.type)}
-                                              </SelectItem>
-                                            ))
-                                          )}
+                                          ))}
                                         </SelectGroup>
                                       </SelectContent>
                                     </Select>
