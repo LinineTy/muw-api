@@ -7255,7 +7255,7 @@
     "org-...": "org-...",
     "os-shell.desktop-hint": "すべてのウィンドウが閉じられています · 下部 Dock または左のレールからページを開けます",
     "os-shell.desktop-only-title": "デスクトップ専用の機能です",
-    "os-shell.desktop-only-hint": "OS デスクトップにはより広い画面が必要です。パソコンで開いてください。",
+    "os-shell.desktop-only-hint": "OS デスクトップにはより広い画面が必要です。パソコンで開いてください（5 秒後に概要へ自動的に戻ります）。",
     "os-shell.go-to-overview": "概要を見る",
     "overall": "全体",
     "override": "上書き",

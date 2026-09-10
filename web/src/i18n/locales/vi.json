@@ -7255,7 +7255,7 @@
     "org-...": "org-...",
     "os-shell.desktop-hint": "Đã đóng tất cả cửa sổ · Mở trang từ Dock hoặc thanh bên trái",
     "os-shell.desktop-only-title": "Chỉ dùng được trên máy tính",
-    "os-shell.desktop-only-hint": "Màn hình máy tính để bàn cần rộng hơn. Vui lòng mở trên máy tính.",
+    "os-shell.desktop-only-hint": "Màn hình máy tính để bàn cần rộng hơn. Vui lòng mở trên máy tính. Tự động quay lại tổng quan sau 5 giây.",
     "os-shell.go-to-overview": "Xem tổng quan",
     "overall": "tổng",
     "override": "ghi đè",

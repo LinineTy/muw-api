@@ -7255,7 +7255,7 @@
     "org-...": "org-...",
     "os-shell.desktop-hint": "所有窗口已关闭 · 从底部 Dock 或左侧导航打开页面",
     "os-shell.desktop-only-title": "该功能仅桌面端可用",
-    "os-shell.desktop-only-hint": "OS 桌面需要更宽的屏幕，请在电脑上打开",
+    "os-shell.desktop-only-hint": "OS 桌面需要更宽的屏幕，请在电脑上打开（5 秒后自动返回概览）",
     "os-shell.go-to-overview": "去看概览",
     "overall": "总体",
     "override": "覆盖",
