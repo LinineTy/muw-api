@@ -26,3 +26,16 @@ export const FAB_BALL_SM =
 
 /** 左细条图标尺寸(与 32px 球体配套) */
 export const FAB_ICON_SM = 'size-4'
+
+/**
+ * 左侧细条占位宽度(条宽 48px + 贴边 4px,再留呼吸)。
+ * 最大化窗口要按这个值让出左/右边,否则细条图标会浮在窗口正文上。
+ */
+export const OS_RAIL_GUTTER = '4.5rem'
+
+/**
+ * 底部 Dock 占位高度(dock 距底 12px + 胶囊约 52px,再留 4px 呼吸)。
+ * 最大化窗口要按这个值让出底部,否则窗口底边会被 Dock 压住;
+ * 开始磁贴面板的 `bottom-[4.25rem]` 同源,改 Dock 高度时一起调。
+ */
+export const OS_DOCK_GUTTER = '4.25rem'

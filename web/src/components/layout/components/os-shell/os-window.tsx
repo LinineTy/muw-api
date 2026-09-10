@@ -1,18 +1,16 @@
+import { Maximize2, Minimize2, Minus, X } from 'lucide-react'
 // @muw-owned
 import { useEffect, useRef, useState } from 'react'
-import {
-  Maximize2,
-  Minimize2,
-  Minus,
-  X,
-} from 'lucide-react'
-
-import { cn } from '@/lib/utils'
 import { useTranslation } from 'react-i18next'
+
+import { useDirection } from '@/context/direction-provider'
+import { cn } from '@/lib/utils'
 import {
   useOsWindowsStore,
   type OsWindowState,
 } from '@/stores/os-windows-store'
+
+import { OS_DOCK_GUTTER, OS_RAIL_GUTTER } from './os-ball-style'
 
 /** 拖拽/缩放下限(px) */
 const MIN_W = 480
@@ -71,6 +69,8 @@ export function OsWindowFrame({
     return () => observer.disconnect()
   }, [win.maximized])
   const { t } = useTranslation()
+  const { dir } = useDirection()
+  const rtl = dir === 'rtl'
   const {
     closeWindow,
     requestCloseWindow,
@@ -100,7 +100,11 @@ export function OsWindowFrame({
     if (win.maximized) return
     if ((e.target as HTMLElement).closest('button')) return
     setInteracting(true)
-    drag.current = { mode: 'move', dx: e.clientX - win.x, dy: e.clientY - win.y }
+    drag.current = {
+      mode: 'move',
+      dx: e.clientX - win.x,
+      dy: e.clientY - win.y,
+    }
     try {
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     } catch {
@@ -141,8 +145,14 @@ export function OsWindowFrame({
   const onResizeMove = (e: React.PointerEvent<Element>) => {
     const d = drag.current
     if (d?.mode !== 'resize' || d.w == null || d.h == null) return
-    const w = Math.min(Math.max(d.w + (e.clientX - d.sx), MIN_W), window.innerWidth - 120)
-    const h = Math.min(Math.max(d.h + (e.clientY - d.sy), MIN_H), window.innerHeight - 140)
+    const w = Math.min(
+      Math.max(d.w + (e.clientX - d.sx), MIN_W),
+      window.innerWidth - 120
+    )
+    const h = Math.min(
+      Math.max(d.h + (e.clientY - d.sy), MIN_H),
+      window.innerHeight - 140
+    )
     resizeWindow(win.id, w, h)
   }
   const onResizeUp = () => {
@@ -151,8 +161,21 @@ export function OsWindowFrame({
   }
 
   const style: React.CSSProperties = win.maximized
-    ? { left: 0, top: 0, width: '100%', height: '100%', zIndex: win.zIndex }
-    : { left: win.x, top: win.y, width: win.w ?? undefined, height: win.h ?? undefined, zIndex: win.zIndex }
+    ? {
+        left: rtl ? 0 : OS_RAIL_GUTTER,
+        top: 0,
+        width: `calc(100% - ${OS_RAIL_GUTTER})`,
+        // 让开底部 Dock:否则最大化窗口底边被浮在上层的 Dock 压住
+        height: `calc(100% - ${OS_DOCK_GUTTER})`,
+        zIndex: win.zIndex,
+      }
+    : {
+        left: win.x,
+        top: win.y,
+        width: win.w ?? undefined,
+        height: win.h ?? undefined,
+        zIndex: win.zIndex,
+      }
 
   // 最小化保活:DOM 结构保持不变,仅 display:none——若走条件渲染换结构,
   // React 会卸载重建 iframe,导致每次最小化/恢复整页重载(请求风暴 429)
@@ -211,69 +234,69 @@ export function OsWindowFrame({
             : 'shadow-[0_12px_40px_rgba(0,0,0,0.12)] opacity-95'
         )}
       >
-      {/* 标题栏:三色点 + 居中页名,可拖动 */}
-      <div
-        onPointerDown={onTitleDown}
-        onPointerMove={onTitleMove}
-        onPointerUp={onTitleUp}
-        onPointerCancel={onTitleUp}
-        className={cn(
-          'border-border/40 flex h-10 shrink-0 items-center gap-2 border-b px-3',
-          !win.maximized && 'cursor-grab active:cursor-grabbing'
-        )}
-      >
-        {/* Win 风格排布:左=最大化,右=[最小化,关闭];hover 只变亮不做彩色底 */}
-        <div className='flex items-center gap-0.5'>
-          <button
-            type='button'
-            aria-label={t('Maximize window')}
-            title={t('Maximize window')}
-            onClick={() => toggleMaximize(win.id)}
-            className='text-muted-foreground hover:text-foreground hover:bg-accent flex size-6 items-center justify-center rounded-md transition-colors'
-          >
-            {win.maximized ? (
-              <Minimize2 className='size-3' aria-hidden='true' />
-            ) : (
-              <Maximize2 className='size-3' aria-hidden='true' />
-            )}
-          </button>
+        {/* 标题栏:三色点 + 居中页名,可拖动 */}
+        <div
+          onPointerDown={onTitleDown}
+          onPointerMove={onTitleMove}
+          onPointerUp={onTitleUp}
+          onPointerCancel={onTitleUp}
+          className={cn(
+            'border-border/40 flex h-10 shrink-0 items-center gap-2 border-b px-3',
+            !win.maximized && 'cursor-grab active:cursor-grabbing'
+          )}
+        >
+          {/* Win 风格排布:左=最大化,右=[最小化,关闭];hover 只变亮不做彩色底 */}
+          <div className='flex items-center gap-0.5'>
+            <button
+              type='button'
+              aria-label={t('Maximize window')}
+              title={t('Maximize window')}
+              onClick={() => toggleMaximize(win.id)}
+              className='text-muted-foreground hover:text-foreground hover:bg-accent flex size-6 items-center justify-center rounded-md transition-colors'
+            >
+              {win.maximized ? (
+                <Minimize2 className='size-3' aria-hidden='true' />
+              ) : (
+                <Maximize2 className='size-3' aria-hidden='true' />
+              )}
+            </button>
+          </div>
+          <div className='text-muted-foreground pointer-events-none flex min-w-0 flex-1 items-center justify-center gap-1.5 text-sm'>
+            {TitleIcon ? (
+              <TitleIcon className='size-4 shrink-0' aria-hidden='true' />
+            ) : null}
+            <span className='truncate'>{win.title}</span>
+          </div>
+          <div className='flex items-center gap-0.5'>
+            <button
+              type='button'
+              aria-label={t('Minimize window')}
+              title={t('Minimize window')}
+              onClick={() => requestMinimizeWindow(win.id)}
+              className='text-muted-foreground hover:text-foreground hover:bg-accent flex size-6 items-center justify-center rounded-md transition-colors'
+            >
+              <Minus className='size-3' aria-hidden='true' />
+            </button>
+            <button
+              type='button'
+              aria-label={t('Close window')}
+              title={t('Close window')}
+              onClick={() => requestCloseWindow(win.id)}
+              className='text-muted-foreground hover:text-foreground hover:bg-accent flex size-6 items-center justify-center rounded-md transition-colors'
+            >
+              <X className='size-3' aria-hidden='true' />
+            </button>
+          </div>
         </div>
-        <div className='text-muted-foreground pointer-events-none flex min-w-0 flex-1 items-center justify-center gap-1.5 text-sm'>
-          {TitleIcon ? (
-            <TitleIcon className='size-4 shrink-0' aria-hidden='true' />
-          ) : null}
-          <span className='truncate'>{win.title}</span>
-        </div>
-        <div className='flex items-center gap-0.5'>
-          <button
-            type='button'
-            aria-label={t('Minimize window')}
-            title={t('Minimize window')}
-            onClick={() => requestMinimizeWindow(win.id)}
-            className='text-muted-foreground hover:text-foreground hover:bg-accent flex size-6 items-center justify-center rounded-md transition-colors'
-          >
-            <Minus className='size-3' aria-hidden='true' />
-          </button>
-          <button
-            type='button'
-            aria-label={t('Close window')}
-            title={t('Close window')}
-            onClick={() => requestCloseWindow(win.id)}
-            className='text-muted-foreground hover:text-foreground hover:bg-accent flex size-6 items-center justify-center rounded-md transition-colors'
-          >
-            <X className='size-3' aria-hidden='true' />
-          </button>
-        </div>
-      </div>
 
-      {/* 内容:同源 iframe(self!==top 时子应用渲染纯内容)
+        {/* 内容:同源 iframe(self!==top 时子应用渲染纯内容)
           lazy=恢复后未唤起的窗,挂 about:blank 占位,唤起才真加载;
           load 完成前保持透明,内容就绪后淡入(消除窗口展开后白屏闪现) */}
-      <IframePane
-        id={win.id}
-        src={win.lazy ? 'about:blank' : win.url}
-        title={win.title}
-      />
+        <IframePane
+          id={win.id}
+          src={win.lazy ? 'about:blank' : win.url}
+          title={win.title}
+        />
       </div>
 
       {/* 右下角缩放把手:书名号弧线——与窗口圆角(--radius-2xl,随主题变)同心
@@ -282,7 +305,7 @@ export function OsWindowFrame({
           的桌面交互。挂在定位层,不被内层 overflow-hidden 裁剪 */}
       {!win.maximized ? (
         <div
-          className='group pointer-events-none absolute z-30 text-muted-foreground/70 transition-colors group-hover:text-foreground'
+          className='group text-muted-foreground/70 group-hover:text-foreground pointer-events-none absolute z-30 transition-colors'
           style={{
             right: -(ARC_PAD + CORNER_GAP),
             bottom: -(ARC_PAD + CORNER_GAP),
