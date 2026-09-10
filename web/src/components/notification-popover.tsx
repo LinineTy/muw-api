@@ -149,7 +149,14 @@ export function NotificationPopover({
   loading,
   className,
   trigger,
-}: NotificationPopoverProps & { trigger?: React.ReactElement }) {
+  contentSide = 'bottom',
+  contentAlign = 'end',
+}: NotificationPopoverProps & {
+  trigger?: React.ReactElement
+  /** 弹层方向:OS 壳左细条需要 side=right;默认保持原底部语义 */
+  contentSide?: 'top' | 'bottom' | 'left' | 'right'
+  contentAlign?: 'start' | 'center' | 'end'
+}) {
   // 叠放面板强制 display:block!important:Tailwind v4 preflight 给
   // [hidden] 挂了 display:none!important,常规层叠(含更高特异性+动态注入)
   // 实测均压不过,唯 setProperty 第三参必胜;React style 不支持 important。
@@ -194,7 +201,8 @@ export function NotificationPopover({
       </PopoverTrigger>
 
       <PopoverContent
-        align='end'
+        align={contentAlign}
+        side={contentSide}
         sideOffset={8}
         className='z-[80] w-[min(26rem,calc(100vw-1rem))] gap-3 p-3'
       >

@@ -43,10 +43,15 @@ const avatarFallbackClassName = 'font-semibold text-white'
 export function ProfileDropdown({
   trigger,
   onNavigate,
+  contentSide = 'bottom',
+  contentAlign = 'end',
 }: {
   trigger?: React.ReactElement
   /** 桌面壳开窗钩子:返回 true 表示已处理,跳过内置路由跳转 */
   onNavigate?: (path: string) => boolean
+  /** 弹层方向:OS 壳左细条需要 side=right;默认保持原底部语义 */
+  contentSide?: 'top' | 'bottom' | 'left' | 'right'
+  contentAlign?: 'start' | 'center' | 'end'
 }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -86,7 +91,8 @@ export function ProfileDropdown({
           </Avatar>
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          align='end'
+          align={contentAlign}
+          side={contentSide}
           sideOffset={8}
           className='z-[80] min-w-56'
         >

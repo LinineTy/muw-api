@@ -36,7 +36,16 @@ import { cn } from '@/lib/utils'
 import { syncOsWindowLanguages } from '@/lib/os-window-theme'
 import { useAuthStore } from '@/stores/auth-store'
 
-export function LanguageSwitcher({ trigger }: { trigger?: React.ReactElement }) {
+export function LanguageSwitcher({
+  trigger,
+  contentSide = 'bottom',
+  contentAlign = 'end',
+}: {
+  trigger?: React.ReactElement
+  /** 弹层方向:OS 壳左细条需要 side=right;默认保持原底部语义 */
+  contentSide?: 'top' | 'bottom' | 'left' | 'right'
+  contentAlign?: 'start' | 'center' | 'end'
+}) {
   const { i18n, t } = useTranslation()
   const user = useAuthStore((s) => s.auth.user)
   const currentLanguage = normalizeInterfaceLanguage(i18n.language)
@@ -66,7 +75,12 @@ export function LanguageSwitcher({ trigger }: { trigger?: React.ReactElement }) 
         <Languages className='size-[1.2rem]' />
         <span className='sr-only'>{t('Change language')}</span>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align='end' sideOffset={8} className='z-[80]'>
+      <DropdownMenuContent
+        align={contentAlign}
+        side={contentSide}
+        sideOffset={8}
+        className='z-[80]'
+      >
         {INTERFACE_LANGUAGE_OPTIONS.map((lang) => (
           <DropdownMenuItem
             key={lang.code}

@@ -12,3 +12,17 @@ export const FAB_BALL =
   // 弹层打开期间锁缩放:hover 进出/点击若带动按钮尺寸,弹层锚点会跟着位移
   ' hover:bg-accent not-data-[state=open]:hover:scale-[1.08]' +
   ' not-data-[state=open]:active:scale-95 rounded-full data-[state=open]:rounded-lg'
+
+/**
+ * 左细条里的小一号球体(32px)。
+ * 左条是"细"的次要区,尺寸必须和底部 Dock(40px)拉开层级,
+ * 否则两条并排会被读成"两个 Dock"。
+ */
+export const FAB_BALL_SM =
+  'text-muted-foreground hover:text-foreground flex size-8 items-center justify-center' +
+  ' transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]' +
+  ' hover:bg-accent not-data-[state=open]:hover:scale-[1.08]' +
+  ' not-data-[state=open]:active:scale-95 rounded-full data-[state=open]:rounded-lg'
+
+/** 左细条图标尺寸(与 32px 球体配套) */
+export const FAB_ICON_SM = 'size-4'
