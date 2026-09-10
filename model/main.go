@@ -366,6 +366,11 @@ func migrateDB() error {
 	if err := ensureModelsContextWindowColumn(DB); err != nil {
 		return err
 	}
+	// redemptions.is_trap 列(钓鱼邀请码标记):已有表上的新列,已最新版本库走"跳过
+	// AutoMigrate"路径,必须在这里幂等补齐,否则读写该列会报 no such column。
+	if err := ensureRedemptionTrapColumn(DB); err != nil {
+		return err
+	}
 	// 上游同步新增的 schema(task_plugins / login_encryption_keys 表、
 	// users.access_token_created_at 列):已到最新迁移戳的库走"跳过 AutoMigrate"
 	// 路径,必须在这里幂等补齐,否则升级库启动即报 no such table。
@@ -1135,6 +1140,19 @@ func clickHouseCreateTableHasTTL(createTableSQL string) bool {
 type sqliteColumnDef struct {
 	Name string
 	DDL  string
+}
+
+// ensureRedemptionTrapColumn 幂等加列:redemptions.is_trap 是已有表上的新列,已到最新
+// schema 版本(跳过 autoMigrateAll)的库同样需要补上。HasTable/HasColumn 守卫 + AddColumn,
+// SQLite/MySQL/PG 通用;全新安装时表尚不存在,直接返回交给 autoMigrateAll 全量建。
+func ensureRedemptionTrapColumn(db *gorm.DB) error {
+	if !db.Migrator().HasTable(&Redemption{}) {
+		return nil
+	}
+	if db.Migrator().HasColumn(&Redemption{}, "is_trap") {
+		return nil
+	}
+	return db.Migrator().AddColumn(&Redemption{}, "IsTrap")
 }
 
 // ensureChannelCodingPlanQuotaColumns 幂等加列:channels.coding_plan_provider /
