@@ -7446,6 +7446,7 @@
     "No channel references this account yet.": "Aucun canal ne référence encore ce compte.",
     "Accounts hold credentials shared by channels. Create one and bind it from a channel.": "Les comptes détiennent les identifiants partagés par les canaux. Créez-en un puis liez-le depuis un canal.",
     "Account deleted": "Compte supprimé",
-    "This will permanently delete account": "Supprimer définitivement le compte"
+    "This will permanently delete account": "Supprimer définitivement le compte",
+    "Plan provider": "Fournisseur du forfait"
   }
 }

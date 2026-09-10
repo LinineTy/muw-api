@@ -7446,6 +7446,7 @@
     "No channel references this account yet.": "還沒有渠道引用這個帳戶。",
     "Accounts hold credentials shared by channels. Create one and bind it from a channel.": "帳戶持有被渠道共享的憑證。先建帳戶，再在渠道裡綁定它。",
     "Account deleted": "帳戶已刪除",
-    "This will permanently delete account": "將永久刪除帳戶"
+    "This will permanently delete account": "將永久刪除帳戶",
+    "Plan provider": "套餐廠商"
   }
 }

@@ -7446,6 +7446,7 @@
     "No channel references this account yet.": "Chưa có kênh nào tham chiếu tài khoản này.",
     "Accounts hold credentials shared by channels. Create one and bind it from a channel.": "Tài khoản giữ thông tin xác thực dùng chung cho các kênh. Tạo một tài khoản rồi liên kết từ kênh.",
     "Account deleted": "Đã xóa tài khoản",
-    "This will permanently delete account": "Sẽ xóa vĩnh viễn tài khoản"
+    "This will permanently delete account": "Sẽ xóa vĩnh viễn tài khoản",
+    "Plan provider": "Nhà cung cấp gói"
   }
 }
