@@ -177,13 +177,20 @@ func UpdateRedemption(c *gin.Context) {
 		return
 	}
 	if statusOnly == "" {
-		if redemption.Quota <= 0 {
-			common.ApiError(c, errors.New("redemption quota must be positive"))
-			return
-		}
-		if err := common.ValidateWalletQuota(redemption.Quota); err != nil {
-			common.ApiError(c, err)
-			return
+		if cleanRedemption.Type == common.RedemptionCodeTypeInvite {
+			// 注册邀请码是纯门禁、不携带额度：既不该走充值码的额度校验，也不该被
+			// 前端传来的 quota 改写成非零（编辑时只允许改名称/有效期）。
+			cleanRedemption.Quota = 0
+		} else {
+			if redemption.Quota <= 0 {
+				common.ApiError(c, errors.New("redemption quota must be positive"))
+				return
+			}
+			if err := common.ValidateWalletQuota(redemption.Quota); err != nil {
+				common.ApiError(c, err)
+				return
+			}
+			cleanRedemption.Quota = redemption.Quota
 		}
 		if valid, msg := validateExpiredTime(c, redemption.ExpiredTime); !valid {
 			c.JSON(http.StatusOK, gin.H{"success": false, "message": msg})
@@ -191,7 +198,6 @@ func UpdateRedemption(c *gin.Context) {
 		}
 		// If you add more fields, please also update redemption.Update()
 		cleanRedemption.Name = redemption.Name
-		cleanRedemption.Quota = redemption.Quota
 		cleanRedemption.ExpiredTime = redemption.ExpiredTime
 	}
 	if statusOnly != "" {

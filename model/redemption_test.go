@@ -407,6 +407,42 @@ func TestOccupyInviteCodeReportsTrapFlag(t *testing.T) {
 	assert.Equal(t, common.RedemptionCodeStatusEnabled, r.Status)
 }
 
+// 邀请码写入不受"充值码额度必须为正"的校验阻塞，且额度恒为 0。
+func TestRedemptionInviteWriteSkipsQuotaGuard(t *testing.T) {
+	require.NoError(t, DB.AutoMigrate(&Redemption{}, &RedemptionUse{}))
+	require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Unscoped().Delete(&Redemption{}).Error)
+	t.Cleanup(func() {
+		require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Unscoped().Delete(&Redemption{}).Error)
+		DB.Exec("DELETE FROM redemption_uses")
+	})
+
+	invite := &Redemption{
+		Name: "invite-quota-guard", Key: "40000000000000000000000000000009",
+		Status: common.RedemptionCodeStatusEnabled, Type: common.RedemptionCodeTypeInvite,
+		MaxUses: 1, CreatedTime: common.GetTimestamp(),
+	}
+	require.NoError(t, invite.Insert(), "邀请码 quota=0 必须可入库")
+	var storedInvite Redemption
+	require.NoError(t, DB.First(&storedInvite, invite.Id).Error)
+	assert.Equal(t, 0, storedInvite.Quota, "邀请码入库后额度应为 0（不被 default:100 覆盖）")
+
+	topup := &Redemption{
+		Name: "topup-quota-guard", Key: "40000000000000000000000000000010",
+		Status: common.RedemptionCodeStatusEnabled, Type: common.RedemptionCodeTypeTopup,
+		MaxUses: 1, CreatedTime: common.GetTimestamp(),
+	}
+	require.Error(t, topup.Insert(), "充值码 quota=0 仍须拒绝")
+
+	invite.Name = "invite-quota-guard-renamed"
+	require.NoError(t, invite.Update(), "编辑邀请码不受额度校验阻塞")
+	invite.Quota = 100
+	require.NoError(t, invite.Update(), "邀请码额度始终归零")
+	var reloaded Redemption
+	require.NoError(t, DB.First(&reloaded, invite.Id).Error)
+	assert.Equal(t, 0, reloaded.Quota)
+	assert.Equal(t, "invite-quota-guard-renamed", reloaded.Name)
+}
+
 // 并发占位恰好 max_uses 次成功（镜像 TestRedeemConcurrentSingleSuccess）。
 func TestOccupyInviteCodeConcurrent(t *testing.T) {
 	require.NoError(t, DB.AutoMigrate(&Redemption{}, &RedemptionUse{}))
