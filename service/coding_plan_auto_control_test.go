@@ -67,30 +67,30 @@ func TestCodingPlanEffectiveUtilization(t *testing.T) {
 	}
 }
 
-func TestCodingPlanAutoControlThresholds(t *testing.T) {
+func TestCodingPlanAccountAutoControlThresholds(t *testing.T) {
 	intPtr := func(v int) *int { return &v }
 
 	cases := []struct {
-		name      string
-		channel   *model.Channel
-		wantDis   int
-		wantEn    int
+		name    string
+		account *model.Account
+		wantDis int
+		wantEn  int
 	}{
-		{"nil channel uses defaults", nil, 98, 90},
-		{"nil fields use defaults", &model.Channel{}, 98, 90},
-		{"custom thresholds honored", &model.Channel{
+		{"nil account uses defaults", nil, 98, 90},
+		{"nil fields use defaults", &model.Account{}, 98, 90},
+		{"custom thresholds honored", &model.Account{
 			CodingPlanDisableThreshold: intPtr(95),
 			CodingPlanEnableThreshold:  intPtr(85),
 		}, 95, 85},
-		{"out-of-range disable falls back", &model.Channel{CodingPlanDisableThreshold: intPtr(150)}, 98, 90},
-		{"zero disable falls back", &model.Channel{CodingPlanDisableThreshold: intPtr(0)}, 98, 90},
-		{"enable above disable falls back", &model.Channel{CodingPlanDisableThreshold: intPtr(98), CodingPlanEnableThreshold: intPtr(99)}, 98, 90},
-		{"enable clamped below disable", &model.Channel{CodingPlanDisableThreshold: intPtr(50)}, 50, 49},
-		{"zero enable allowed", &model.Channel{CodingPlanDisableThreshold: intPtr(98), CodingPlanEnableThreshold: intPtr(0)}, 98, 0},
+		{"out-of-range disable falls back", &model.Account{CodingPlanDisableThreshold: intPtr(150)}, 98, 90},
+		{"zero disable falls back", &model.Account{CodingPlanDisableThreshold: intPtr(0)}, 98, 90},
+		{"enable above disable falls back", &model.Account{CodingPlanDisableThreshold: intPtr(98), CodingPlanEnableThreshold: intPtr(99)}, 98, 90},
+		{"enable clamped below disable", &model.Account{CodingPlanDisableThreshold: intPtr(50)}, 50, 49},
+		{"zero enable allowed", &model.Account{CodingPlanDisableThreshold: intPtr(98), CodingPlanEnableThreshold: intPtr(0)}, 98, 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			dis, en := CodingPlanAutoControlThresholds(tc.channel)
+			dis, en := CodingPlanAccountAutoControlThresholds(tc.account)
 			require.Equal(t, tc.wantDis, dis)
 			require.Equal(t, tc.wantEn, en)
 			assert.Less(t, en, dis, "enable threshold must stay strictly below disable")

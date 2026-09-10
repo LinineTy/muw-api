@@ -547,8 +547,9 @@ func TestIsCodingPlanEndpoint(t *testing.T) {
 }
 
 func TestCodingPlanFieldsToClear(t *testing.T) {
-	t.Run("request carries new plan values, keep them", func(t *testing.T) {
-		// 换类型 + 同一保存里为新类型重配了套餐:厂商/密钥/套餐地址都保留,不误清。
+	t.Run("request carries new plan values, keep base url but drop account-side fields", func(t *testing.T) {
+		// 账户改造后渠道不再承载厂商/套餐密钥（配置在账户上）：请求带不带都清；
+		// 请求显式带了 base_url（换了套餐端点）则不误清地址。
 		got := codingPlanFieldsToClear(
 			map[string]any{
 				"coding_plan_provider": "zhipu",
@@ -557,7 +558,10 @@ func TestCodingPlanFieldsToClear(t *testing.T) {
 			},
 			"glm-coding-plan",
 		)
-		assert.Empty(t, got)
+		assert.Equal(t, map[string]any{
+			"coding_plan_provider": "",
+			"coding_plan_key":      "",
+		}, got)
 	})
 
 	t.Run("request omits plan fields, clear stale binding", func(t *testing.T) {
