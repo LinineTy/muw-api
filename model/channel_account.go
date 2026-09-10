@@ -484,6 +484,9 @@ type BoundAccountView struct {
 	Status    int     `json:"status"`
 	KeyMasked string  `json:"key_masked"`
 	BaseURL   *string `json:"base_url"`
+	// 编码套餐配置在账户上：渠道侧的余量卡据此判断该渠道是否在监控、自动控制开没开。
+	CodingPlanProvider    *string `json:"coding_plan_provider,omitempty"`
+	CodingPlanAutoControl bool    `json:"coding_plan_auto_control,omitempty"`
 }
 
 // buildBoundAccountViews 按绑定顺序构造视图（账户缺失时保留绑定行、摘要素空，
@@ -501,6 +504,8 @@ func buildBoundAccountViews(bindings []*ChannelAccount, accounts map[int]*Accoun
 			view.Status = acc.Status
 			view.KeyMasked = acc.KeyMasked
 			view.BaseURL = acc.BaseURL
+			view.CodingPlanProvider = acc.CodingPlanProvider
+			view.CodingPlanAutoControl = acc.CodingPlanAutoControl != nil && *acc.CodingPlanAutoControl
 		}
 		views = append(views, view)
 	}

@@ -9,17 +9,10 @@ import {
   ShieldOff,
   type LucideIcon,
 } from 'lucide-react'
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   Sheet,
@@ -48,9 +41,8 @@ import {
 import { formatCompactNumber, formatPercent } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
-import { getChannelCodingPlanQuota, getChannels, updateChannel } from '../api'
+import { getChannelCodingPlanQuota, getChannels } from '../api'
 import {
-  CHANNEL_STATUS,
   CODING_PLAN_PROVIDER_DISABLED,
   CODING_PLAN_PROVIDER_OPTIONS,
   detectCodingPlanProvider,
@@ -64,7 +56,21 @@ const AUTO_REFRESH_STORAGE_KEY = 'coding-plan-auto-refresh'
 
 // 渠道是否启用编码套餐余量监控:显式配置了厂商,或 base_url 是套餐符号键/套餐专用地址。
 // 显式关闭监控("none",手动/自定义渠道默认)一律视为不监控,即使 base_url 是套餐端点。
+// 账户化后套餐配置在账户上：渠道的监控状态看绑定账户（渠道内有启用且配了厂商的账户）。
+// 迁移过渡期：渠道还没绑任何账户时，回退看渠道自身的 legacy 列。
+function monitoredAccounts(channel: Channel) {
+  return (channel.account_bindings ?? []).filter(
+    (binding) =>
+      binding.enabled &&
+      Boolean(binding.coding_plan_provider) &&
+      binding.coding_plan_provider !== CODING_PLAN_PROVIDER_DISABLED
+  )
+}
+
 function isQuotaEnabled(channel: Channel): boolean {
+  if ((channel.account_bindings ?? []).length > 0) {
+    return monitoredAccounts(channel).length > 0
+  }
   if (channel.coding_plan_provider === CODING_PLAN_PROVIDER_DISABLED) {
     return false
   }
@@ -74,17 +80,19 @@ function isQuotaEnabled(channel: Channel): boolean {
   )
 }
 
-// 厂商展示名:显式 provider 优先,其次按 base_url 探测出的厂商。
+// 厂商展示名：以绑定账户上的配置为准（配置已迁到账户），无绑定时回退渠道 legacy 列。
 function providerLabel(
   channel: Channel,
   t: (key: string) => string
 ): string {
-  if (channel.coding_plan_provider === CODING_PLAN_PROVIDER_DISABLED) {
-    return ''
+  const accountProvider = monitoredAccounts(channel)[0]?.coding_plan_provider
+  let provider = accountProvider ?? ''
+  if (!provider && channel.coding_plan_provider !== CODING_PLAN_PROVIDER_DISABLED) {
+    provider =
+      channel.coding_plan_provider ||
+      detectCodingPlanProvider(channel.base_url) ||
+      ''
   }
-  const provider =
-    channel.coding_plan_provider ||
-    detectCodingPlanProvider(channel.base_url)
   if (provider) {
     const option = CODING_PLAN_PROVIDER_OPTIONS.find(
       (item) => item.value === provider
@@ -225,6 +233,10 @@ function ChannelQuotaCard({
       if (!res.success) {
         throw new Error(res.message || t('Quota query failed'))
       }
+      // 上游查询失败时后端仍回 200：把原因抛出来，卡片显示具体错误而不是空窗口。
+      if (res.data && res.data.success === false) {
+        throw new Error(res.data.error || t('Quota query failed'))
+      }
       return res.data
     },
     retry: false,
@@ -235,12 +247,11 @@ function ChannelQuotaCard({
   })
 
   const providerLabelText = providerLabel(channel, t)
-  const autoControl = channel.coding_plan_auto_control ?? false
-  const effectiveUtilization =
-    quotaQuery.data && quotaQuery.data.tiers.length > 0
-      ? Math.max(...quotaQuery.data.tiers.map((tier) => tier.utilization))
-      : null
-
+  // 自动控制在账户上；渠道 legacy 列只作迁移过渡的回退。
+  const autoControl =
+    monitoredAccounts(channel)[0]?.coding_plan_auto_control ??
+    channel.coding_plan_auto_control ??
+    false
   let quotaArea
   if (quotaQuery.isLoading) {
     quotaArea = (
@@ -261,9 +272,9 @@ function ChannelQuotaCard({
   } else if (quotaQuery.data) {
     const quota = quotaQuery.data
     quotaArea =
-      quota.tiers.length > 0 ? (
+      (quota.tiers?.length ?? 0) > 0 ? (
         <div className='divide-y divide-border'>
-          {quota.tiers.map((tier) => (
+          {(quota.tiers ?? []).map((tier) => (
             <QuotaTierRow key={tier.name} tier={tier} />
           ))}
         </div>
@@ -301,7 +312,7 @@ function ChannelQuotaCard({
             type='button'
             className='text-muted-foreground flex size-7 cursor-pointer items-center justify-center rounded-md transition-colors hover:text-foreground'
             onClick={() => setManageOpen(true)}
-            aria-label={t('Coding plan auto-control settings')}
+            aria-label={t('Quota Details')}
           >
             <Settings className='size-4' aria-hidden='true' />
           </button>
@@ -334,7 +345,6 @@ function ChannelQuotaCard({
       <CodingPlanAutoControlSheet
         channels={channels}
         quota={quotaQuery.data ?? null}
-        utilization={effectiveUtilization}
         open={manageOpen}
         onOpenChange={setManageOpen}
       />
@@ -343,231 +353,28 @@ function ChannelQuotaCard({
 }
 
 /**
- * 自动启停配置表单(组级语义):配置存组内每渠道并保持同步,改代表渠道 = 改整个套餐
- * 账号。放在详情抽屉里,抽屉开合期间配置变化会即时保存并同步到同 key 渠道。
- */
-function CodingPlanAutoControlForm({
-  channel,
-  utilization,
-}: {
-  channel: Channel
-  utilization: number | null // 有效用量(各窗口最大值);余量查询失败/加载中为 null
-}) {
-  const { t } = useTranslation()
-  const queryClient = useQueryClient()
-  const [enabled, setEnabled] = useState(
-    channel.coding_plan_auto_control ?? false
-  )
-  const [disableThreshold, setDisableThreshold] = useState(
-    channel.coding_plan_disable_threshold ?? 98
-  )
-  const [enableThreshold, setEnableThreshold] = useState(
-    channel.coding_plan_enable_threshold ?? 90
-  )
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-
-  // 配置变化(保存回读或其它入口改动)时同步本地态。
-  useEffect(() => {
-    setEnabled(channel.coding_plan_auto_control ?? false)
-    setDisableThreshold(channel.coding_plan_disable_threshold ?? 98)
-    setEnableThreshold(channel.coding_plan_enable_threshold ?? 90)
-  }, [
-    channel.id,
-    channel.coding_plan_auto_control,
-    channel.coding_plan_disable_threshold,
-    channel.coding_plan_enable_threshold,
-  ])
-
-  const save = useCallback(
-    async (nextEnabled: boolean, nextDisable: number, nextEnable: number) => {
-      if (nextDisable < 1 || nextDisable > 100) {
-        setError(t('Disable threshold must be between 1 and 100'))
-        return
-      }
-      if (nextEnable >= nextDisable) {
-        setError(t('Enable threshold must be lower than disable threshold'))
-        return
-      }
-      setError('')
-      setSaving(true)
-      try {
-        const res = await updateChannel(channel.id, {
-          coding_plan_auto_control: nextEnabled,
-          coding_plan_disable_threshold: nextDisable,
-          coding_plan_enable_threshold: nextEnable,
-        })
-        if (!res.success) {
-          setError(res.message || t('Save failed'))
-          // 回滚到已保存的配置,避免开关/输入显示与实际不符。
-          setEnabled(channel.coding_plan_auto_control ?? false)
-          setDisableThreshold(channel.coding_plan_disable_threshold ?? 98)
-          setEnableThreshold(channel.coding_plan_enable_threshold ?? 90)
-          return
-        }
-        // 后端已同步到同组其余渠道;刷新列表让卡片/渠道列表反映新配置。
-        void queryClient.invalidateQueries({
-          queryKey: ['channels', 'list', 'coding-plan-enabled'],
-        })
-      } catch (e) {
-        setError(e instanceof Error ? e.message : t('Save failed'))
-        setEnabled(channel.coding_plan_auto_control ?? false)
-        setDisableThreshold(channel.coding_plan_disable_threshold ?? 98)
-        setEnableThreshold(channel.coding_plan_enable_threshold ?? 90)
-      } finally {
-        setSaving(false)
-      }
-    },
-    [channel.id, channel.coding_plan_auto_control, queryClient, t]
-  )
-
-  const handleToggle = (checked: boolean) => {
-    setEnabled(checked)
-    void save(checked, disableThreshold, enableThreshold)
-  }
-
-  // 决策预览(纯前端按当前用量/阈值/状态推算,非真实状态机):让不操纵套餐余量的
-  // 验证成为可能——把禁用阈值调到当前用量以下,预览立即显示「将禁用」。
-  let preview: ReactNode = null
-  if (enabled && utilization != null) {
-    const pct = Math.round(utilization)
-    if (
-      channel.status === CHANNEL_STATUS.ENABLED &&
-      utilization >= disableThreshold
-    ) {
-      preview = (
-        <p className='text-destructive mt-1.5 text-[11px]'>
-          {t('Will disable: usage {{pct}}% reaches the disable threshold', {
-            pct,
-          })}
-        </p>
-      )
-    } else if (
-      channel.status === CHANNEL_STATUS.AUTO_DISABLED &&
-      utilization < enableThreshold
-    ) {
-      preview = (
-        <p className='text-emerald-600 dark:text-emerald-500 mt-1.5 text-[11px]'>
-          {t('Will re-enable: usage {{pct}}% drops below the enable threshold', {
-            pct,
-          })}
-        </p>
-      )
-    } else {
-      preview = (
-        <p className='text-muted-foreground mt-1.5 text-[11px]'>
-          {t('No action: usage {{pct}}% within current thresholds', { pct })}
-        </p>
-      )
-    }
-  }
-
-  return (
-    <div className='space-y-5'>
-      <div className='flex items-start justify-between gap-3'>
-        <div className='min-w-0 space-y-0.5'>
-          <Label
-            htmlFor={`coding-plan-auto-control-${channel.id}`}
-            className='font-medium'
-          >
-            {t('Auto enable/disable by quota')}
-          </Label>
-          <p className='text-muted-foreground text-xs'>
-            {t(
-              'Disable the channel when coding-plan usage reaches the disable threshold, re-enable it after usage drops below the enable threshold.'
-            )}
-          </p>
-        </div>
-        <div className='flex shrink-0 items-center gap-1.5'>
-          {saving && (
-            <Loader2
-              className='text-muted-foreground size-3.5 animate-spin'
-              aria-hidden='true'
-            />
-          )}
-          <Switch
-            id={`coding-plan-auto-control-${channel.id}`}
-            checked={enabled}
-            disabled={saving}
-            onCheckedChange={handleToggle}
-          />
-        </div>
-      </div>
-
-      {enabled && (
-        <div className='space-y-3'>
-          <div className='grid grid-cols-2 gap-3'>
-            <div className='space-y-1.5'>
-              <Label
-                htmlFor={`cp-disable-threshold-${channel.id}`}
-                className='text-xs'
-              >
-                {t('Disable threshold')} (%)
-              </Label>
-              <Input
-                id={`cp-disable-threshold-${channel.id}`}
-                type='number'
-                min={1}
-                max={100}
-                value={disableThreshold}
-                disabled={saving}
-                onChange={(e) => setDisableThreshold(Number(e.target.value))}
-                onBlur={() => void save(enabled, disableThreshold, enableThreshold)}
-              />
-            </div>
-            <div className='space-y-1.5'>
-              <Label
-                htmlFor={`cp-enable-threshold-${channel.id}`}
-                className='text-xs'
-              >
-                {t('Enable threshold')} (%)
-              </Label>
-              <Input
-                id={`cp-enable-threshold-${channel.id}`}
-                type='number'
-                min={0}
-                max={100}
-                value={enableThreshold}
-                disabled={saving}
-                onChange={(e) => setEnableThreshold(Number(e.target.value))}
-                onBlur={() => void save(enabled, disableThreshold, enableThreshold)}
-              />
-            </div>
-          </div>
-          <p className='text-muted-foreground text-xs'>
-            {t(
-              'Re-enable the channel when usage drops below the enable threshold (e.g. after the 5-hour window rolls).'
-            )}
-          </p>
-        </div>
-      )}
-
-      {preview}
-      {error && <p className='text-destructive text-xs'>{error}</p>}
-    </div>
-  )
-}
-
-/**
- * 详情/管理抽屉:从卡片右上角按钮打开。原来外显的渠道名、等级都收进来,加上
- * 用量详情与自动管理设置(开关/阈值/决策预览),改动即时保存并同步到同 key 渠道。
+ * 详情抽屉：从卡片右上角按钮打开。展示该套餐账号的用量详情、引用渠道与自动控制状态；
+ * 自动控制的配置在账户抽屉里（余量配置已随账户改造迁到账户上），这里只读。
  */
 function CodingPlanAutoControlSheet({
   channels,
   quota,
-  utilization,
   open,
   onOpenChange,
 }: {
   channels: Channel[]
   quota: CodingPlanQuota | null
-  utilization: number | null
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
   const { t } = useTranslation()
   const channel = channels[0]
   const providerLabelText = providerLabel(channel, t)
+  const monitored = monitoredAccounts(channel)
+  const autoControlOn =
+    monitored[0]?.coding_plan_auto_control ??
+    channel.coding_plan_auto_control ??
+    false
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -610,9 +417,9 @@ function CodingPlanAutoControlSheet({
               <div className='text-muted-foreground text-xs font-medium'>
                 {t('Quota Details')}
               </div>
-              {quota.tiers.length > 0 ? (
+              {(quota.tiers?.length ?? 0) > 0 ? (
                 <div className='divide-y divide-border'>
-                  {quota.tiers.map((tier) => (
+                  {(quota.tiers ?? []).map((tier) => (
                     <QuotaTierRow key={tier.name} tier={tier} />
                   ))}
                 </div>
@@ -624,15 +431,26 @@ function CodingPlanAutoControlSheet({
             </div>
           )}
 
-          {/* 自动管理 */}
+          {/* 自动管理（配置在账户上，这里只读） */}
           <div className={sideDrawerSectionClassName()}>
             <div className='text-muted-foreground text-xs font-medium'>
               {t('Auto-manage')}
             </div>
-            <CodingPlanAutoControlForm
-              channel={channel}
-              utilization={utilization}
-            />
+            <p className='text-xs'>
+              {autoControlOn ? t('Auto-manage: On') : t('Auto-manage: Off')}
+            </p>
+            {monitored.length > 0 && (
+              <p className='text-muted-foreground text-xs'>
+                {t('Quota monitoring account')}:{' '}
+                {monitored.map((binding) => binding.name).join(' / ')}
+              </p>
+            )}
+            <p className='text-muted-foreground text-xs'>
+              {t('Auto-control and thresholds are configured on the account.')}{' '}
+              <a className='text-primary underline' href='/accounts'>
+                {t('Accounts')}
+              </a>
+            </p>
           </div>
         </div>
         <SheetFooter className={sideDrawerFooterClassName()}>

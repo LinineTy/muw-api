@@ -4,7 +4,6 @@ import type { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import {
   FormControl,
   FormDescription,
@@ -23,12 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
-import {
-  CHANNEL_TYPE_CODING_PLAN_SUGGEST,
-  CODING_PLAN_BASE_URL_PRESETS,
-  CODING_PLAN_PROVIDER_DISABLED,
-  CODING_PLAN_PROVIDER_OPTIONS,
-} from '../constants'
+import { CODING_PLAN_BASE_URL_PRESETS } from '../constants'
 import type { ChannelFormValues } from '../lib'
 
 type CodingPlanBaseUrlFieldProps = {
@@ -49,7 +43,6 @@ export function CodingPlanBaseUrlField({
 }: CodingPlanBaseUrlFieldProps) {
   const { t } = useTranslation()
   const baseUrl = form.watch('base_url') ?? ''
-  const codingPlanProvider = form.watch('coding_plan_provider') ?? ''
   const presets = CODING_PLAN_BASE_URL_PRESETS[channelType] ?? []
   // 手动/自定义是独立状态,不靠 base_url 为空来区分——空字符串同时是"新渠道走内置默认"。
   // 点「手动/自定义」置 true;base_url 非空时按是否落在预设里自动同步(编辑已有自定义
@@ -72,16 +65,10 @@ export function CodingPlanBaseUrlField({
     }
     // 用户显式选过手动:保持手动,不再按 URL 是否命中预设回退。
     if (manualChosenRef.current) return
-    // 显式关闭监控("none")= 手动/自定义渠道(默认),重新打开表单也保持手动展示,
-    // 避免命中预设的套餐地址被当成预设端点回显。
-    if (codingPlanProvider === CODING_PLAN_PROVIDER_DISABLED) {
-      setManualMode(true)
-      return
-    }
     if (baseUrl === '') return
     const ps = CODING_PLAN_BASE_URL_PRESETS[channelType] ?? []
     setManualMode(!ps.some((preset) => preset.value === baseUrl))
-  }, [baseUrl, codingPlanProvider, channelType])
+  }, [baseUrl, channelType])
 
   const selected = presets.find((preset) => preset.value === baseUrl)
   // 手动模式优先;否则选中预设,或新渠道(空 base_url)按首个传统端点展示。
@@ -118,26 +105,10 @@ export function CodingPlanBaseUrlField({
                   manualChosenRef.current = true
                   setManualMode(true)
                   field.onChange('')
-                  form.setValue(
-                    'coding_plan_provider',
-                    CODING_PLAN_PROVIDER_DISABLED,
-                    {
-                      shouldDirty: true,
-                    }
-                  )
                 } else {
                   manualChosenRef.current = false
                   setManualMode(false)
                   field.onChange(value)
-                  const preset = presets.find((item) => item.value === value)
-                  // 选中预设:同步厂商,传统端点(无 provider)清空 = 不启用余量监控。
-                  form.setValue(
-                    'coding_plan_provider',
-                    preset?.provider ?? '',
-                    {
-                      shouldDirty: true,
-                    }
-                  )
                 }
               }}
               value={displayValue}
@@ -184,28 +155,16 @@ export function CodingPlanBaseUrlField({
       />
 
       {manualMode && (
-        <ManualCodingPlanConfig form={form} channelType={channelType} />
+        <ManualCodingPlanConfig form={form} />
       )}
     </>
   )
 }
 
-function ManualCodingPlanConfig({
-  form,
-  channelType,
-}: CodingPlanBaseUrlFieldProps) {
+function ManualCodingPlanConfig({ form }: { form: UseFormReturn<ChannelFormValues> }) {
   const { t } = useTranslation()
 
-  // 手动模式:provider 按渠道类型过滤相关厂商(智谱→zhipu/zhipu_en 等);
-  // 聚合代理渠道类型(如 OpenAI/Anthropic)无映射,则列出全部厂商供手动选。
-  const suggested = CHANNEL_TYPE_CODING_PLAN_SUGGEST[channelType]
-  const providerOptions = suggested
-    ? CODING_PLAN_PROVIDER_OPTIONS.filter(
-        (option) =>
-          option.value === suggested || option.value === `${suggested}_en`
-      )
-    : CODING_PLAN_PROVIDER_OPTIONS
-
+  // 手动模式:只填自定义 base_url;套餐厂商/密钥/自动控制都在账户上配置。
   return (
     <>
       <FormField
@@ -222,100 +181,10 @@ function ManualCodingPlanConfig({
         )}
       />
 
-      <FormField
-        control={form.control}
-        name='coding_plan_provider'
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>{t('Coding plan provider')}</FormLabel>
-            <FormControl>
-              <Select
-                items={[
-                  {
-                    value: CODING_PLAN_PROVIDER_DISABLED,
-                    label: t('Disable quota monitoring'),
-                  },
-                  { value: 'auto', label: t('Auto detect') },
-                  ...providerOptions.map((option) => ({
-                    value: option.value,
-                    label: t(option.label),
-                  })),
-                ]}
-                value={field.value || 'auto'}
-                onValueChange={(value) =>
-                  field.onChange(value === 'auto' ? '' : value)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent alignItemWithTrigger={false}>
-                  <SelectItem value={CODING_PLAN_PROVIDER_DISABLED}>
-                    {t('Disable quota monitoring')}
-                  </SelectItem>
-                  <SelectItem value='auto'>{t('Auto detect')}</SelectItem>
-                  {providerOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {t(option.label)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FormControl>
-            <FormDescription>
-              {t(
-                'Manual channels are not monitored by default. Pick a provider to monitor its coding-plan quota, or keep it disabled.'
-              )}
-            </FormDescription>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-
-      <FormField
-        control={form.control}
-        name='coding_plan_key'
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>{t('Coding plan key')}</FormLabel>
-            <div className='grid gap-2 sm:grid-cols-[1fr_auto]'>
-              <FormControl>
-                <Input
-                  type='password'
-                  autoComplete='off'
-                  placeholder={t('Leave empty to use the channel key')}
-                  {...field}
-                />
-              </FormControl>
-              {(form.watch('coding_plan_key_masked') ||
-                form.watch('coding_plan_key')) && (
-                <Button
-                  type='button'
-                  variant='ghost'
-                  size='sm'
-                  className='self-end'
-                  onClick={() => {
-                    form.setValue('coding_plan_key', '')
-                    form.setValue('coding_plan_key_clear', true)
-                  }}
-                >
-                  {t('Clear stored key')}
-                </Button>
-              )}
-            </div>
-            <FormDescription>
-              {form.watch('coding_plan_key_masked')
-                ? t(
-                    'A coding-plan key is stored. Leave empty to keep it, or clear it to fall back to the channel key.'
-                  )
-                : t(
-                    'Only needed when the channel key is not the coding-plan key (e.g. behind an aggregator proxy).'
-                  )}
-            </FormDescription>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
+      {/* 编码套餐监控（厂商 / 套餐密钥 / 自动控制）已迁到账户，渠道侧不再配置 */}
+      <p className='text-muted-foreground text-xs'>
+        {t('Coding-plan quota monitoring is configured on the account.')}
+      </p>
     </>
   )
 }

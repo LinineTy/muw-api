@@ -243,11 +243,6 @@ export const channelFormSchema = z
       .string()
       .max(255, 'Remark must be less than 255 characters')
       .optional(),
-    // 编码套餐余量监控(仅查询,不影响转发)
-    coding_plan_provider: z.string().optional(), // 厂商标识,空 = 关闭监控
-    coding_plan_key: z.string().optional(), // 套餐专用密钥,仅用于余量查询
-    coding_plan_key_clear: z.boolean().optional(), // 表单态:清除已存套餐密钥
-    coding_plan_key_masked: z.string().optional(), // 已存密钥的脱敏预览(仅表单展示)
     setting: z
       .string()
       .optional()
@@ -458,10 +453,6 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   status_code_mapping: '',
   tag: '',
   remark: '',
-  coding_plan_provider: '',
-  coding_plan_key: '',
-  coding_plan_key_clear: false,
-  coding_plan_key_masked: '',
   setting: '',
   param_override: '',
   header_override: '',
@@ -622,10 +613,6 @@ export function transformChannelToFormDefaults(
     status_code_mapping: channel.status_code_mapping || '',
     tag: channel.tag || '',
     remark: channel.remark || '',
-    coding_plan_provider: channel.coding_plan_provider ?? '',
-    coding_plan_key: '',
-    coding_plan_key_clear: false,
-    coding_plan_key_masked: channel.coding_plan_key_masked || '',
     setting: channel.setting || '',
     param_override: channel.param_override || '',
     header_override: channel.header_override || '',
@@ -910,7 +897,6 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
   account_bindings?: { account_id: number; enabled: boolean }[]
   multi_key_mode?: 'random' | 'polling'
   batch_add_set_key_prefix_2_name?: boolean
-  coding_plan_key?: string
   channel: Partial<Channel>
 } {
   const mode = formData.multi_key_mode || 'single'
@@ -941,7 +927,6 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
     status_code_mapping: formData.status_code_mapping || null,
     tag: formData.tag || null,
     remark: formData.remark || '',
-    coding_plan_provider: formData.coding_plan_provider || null,
     setting: buildSettingJSON(formData),
     param_override: formData.param_override || null,
     header_override: formData.header_override || null,
@@ -970,9 +955,6 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
       !boundAccountId && mode === 'batch'
         ? formData.batch_add_set_key_prefix_2_name
         : undefined,
-    coding_plan_key: formData.coding_plan_key?.trim()
-      ? formData.coding_plan_key.trim()
-      : undefined,
     channel,
   }
 }
@@ -1007,7 +989,6 @@ export function transformFormDataToUpdatePayload(
     status_code_mapping: formData.status_code_mapping || null,
     tag: formData.tag || null,
     remark: formData.remark || '',
-    coding_plan_provider: formData.coding_plan_provider || null,
     setting: buildSettingJSON(formData),
     param_override: formData.param_override || null,
     header_override: formData.header_override || null,
@@ -1046,14 +1027,6 @@ export function transformFormDataToUpdatePayload(
   payload.param_override = formData.param_override || ''
   payload.header_override = formData.header_override || ''
 
-  // 套餐专用密钥:填了新值=设置;勾选清除=置空;否则不携带(保持原值)。
-  // coding_plan_key 不在 Channel 类型里,后端 PatchChannel 单独接收。
-  if (formData.coding_plan_key?.trim()) {
-    ;(payload as Record<string, unknown>).coding_plan_key =
-      formData.coding_plan_key.trim()
-  } else if (formData.coding_plan_key_clear) {
-    ;(payload as Record<string, unknown>).coding_plan_key = ''
-  }
 
   return payload
 }

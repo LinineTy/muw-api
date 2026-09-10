@@ -204,30 +204,6 @@ func CodingPlanEffectiveUtilization(quota *dto.CodingPlanQuota) float64 {
 	return max
 }
 
-// CodingPlanAutoControlThresholds 读渠道的自动启停阈值,nil/越界回退默认值,恢复阈值
-// 始终夹到严格小于禁用阈值(保证滞回、避免边界抖动)。
-func CodingPlanAutoControlThresholds(ch *model.Channel) (disable, enable int) {
-	disable = codingPlanAutoControlDefaultDisableThreshold
-	if ch != nil && ch.CodingPlanDisableThreshold != nil {
-		if v := *ch.CodingPlanDisableThreshold; v >= 1 && v <= 100 {
-			disable = v
-		}
-	}
-	enable = codingPlanAutoControlDefaultEnableThreshold
-	if ch != nil && ch.CodingPlanEnableThreshold != nil {
-		if v := *ch.CodingPlanEnableThreshold; v >= 0 && v < disable {
-			enable = v
-		}
-	}
-	if enable >= disable {
-		enable = disable - 1
-		if enable < 0 {
-			enable = 0
-		}
-	}
-	return disable, enable
-}
-
 // CodingPlanAccountAutoControlThresholds 账户版阈值读取（凭证与渠道解耦后配置在
 // 账户上），默认值与钳制规则与渠道版一致。
 func CodingPlanAccountAutoControlThresholds(account *model.Account) (disable, enable int) {

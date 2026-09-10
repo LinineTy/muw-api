@@ -117,6 +117,9 @@ export const channelSchema = z.object({
         status: z.number().optional(),
         key_masked: z.string().optional(),
         base_url: z.string().nullish(),
+        // 编码套餐配置在账户上：渠道余量卡据此判断监控与显示自动控制状态
+        coding_plan_provider: z.string().nullish(),
+        coding_plan_auto_control: z.boolean().nullish(),
       })
     )
     .nullish(),
@@ -250,7 +253,8 @@ export interface CodingPlanQuota {
   success: boolean
   error?: string
   level?: string
-  tiers: CodingPlanTier[]
+  // 上游查询失败时后端会回 tiers: null（此时 success=false，error 带原因）
+  tiers: CodingPlanTier[] | null
   queried_at: number
 }
 

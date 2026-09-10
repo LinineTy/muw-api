@@ -292,7 +292,6 @@ const SENSITIVE_FORM_FIELDS = [
   'type',
   'base_url',
   'key',
-  'coding_plan_key',
   'openai_organization',
   'other',
   'key_mode',
@@ -2168,13 +2167,11 @@ export function ChannelMutateDrawer({
                                             nextType > 0
                                           ) {
                                             if (nextType !== field.value) {
-                                              // 用户主动换类型:清掉旧类型的编码套餐残留绑定。
+                                              // 用户主动换类型:清掉旧类型的套餐端点 base_url。
                                               // 套餐符号键或套餐专用地址(如 /api/anthropic 完整端点)
-                                              // 只对特定类型有意义,换类型后既无法转发也导致渠道仍显示
-                                              // 在余量卡里;随之清除自动带出的厂商与刚填的套餐密钥。
-                                              // 手动填的聚合代理地址(非套餐端点)不动,避免误伤
-                                              // 用户精心配的自定义路径。后端在保存时(type 改变)同样
-                                              // 强制清 coding_plan_provider/key/套餐 base_url,双保险。
+                                              // 只对特定类型有意义,换类型后既无法转发也导致渠道仍
+                                              // 出现在余量卡里。手动填的聚合代理地址(非套餐端点)不动,
+                                              // 避免误伤用户精心配的自定义路径。
                                               const prevBaseUrl =
                                                 form.getValues('base_url') ?? ''
                                               if (
@@ -2189,16 +2186,6 @@ export function ChannelMutateDrawer({
                                                   shouldDirty: true,
                                                   shouldValidate: true,
                                                 })
-                                                form.setValue(
-                                                  'coding_plan_provider',
-                                                  '',
-                                                  { shouldDirty: true }
-                                                )
-                                                form.setValue(
-                                                  'coding_plan_key',
-                                                  '',
-                                                  { shouldDirty: true }
-                                                )
                                               }
                                             }
                                             field.onChange(nextType)

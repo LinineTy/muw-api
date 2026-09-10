@@ -226,6 +226,12 @@ func GetAllChannels(c *gin.Context) {
 			}
 			for i := range channelData {
 				ch := channelData[i]
+				// 余量是账户级数据：挂了账户的渠道按账户分组（同一账户被多渠道引用时合并成
+				// 一张余量卡）；未挂账户的渠道回退旧的「同厂商 + 同 key」指纹（迁移过渡期）。
+				if len(ch.BoundAccounts) > 0 {
+					ch.CodingPlanQuotaGroup = fmt.Sprintf("a:%d", ch.BoundAccounts[0].Id)
+					continue
+				}
 				effective := ch.CodingPlanKey
 				if effective == "" {
 					effective = mainKeyByID[ch.Id]
@@ -798,10 +804,9 @@ func AddChannel(c *gin.Context) {
 		})
 		return
 	}
-	// 套餐专用密钥:显式携带则随渠道一并写入(用于编码套餐余量监控)。
-	if addChannelRequest.CodingPlanKey != nil {
-		addChannelRequest.Channel.CodingPlanKey = *addChannelRequest.CodingPlanKey
-	}
+	// 编码套餐配置（provider / 套餐专用密钥 / 自动启停阈值）在账户改造后由账户承载，
+	// 渠道创建同样忽略这些 legacy 字段。
+	stripLegacyCodingPlanFields(addChannelRequest.Channel)
 
 	addChannelRequest.Channel.CreatedTime = common.GetTimestamp()
 
@@ -1209,17 +1214,9 @@ func UpdateChannel(c *gin.Context) {
 	}
 	clearChannelReadOnlyFields(&channel, requestData)
 
-	// 套餐专用密钥:显式携带则设置/清除,不携带保持原值。
-	// 清除时 GORM Updates(struct) 会跳过空串,需在主更新后单独列更新。
-	clearCodingPlanKey := false
-	if channel.CodingPlanKeyInput != nil {
-		if *channel.CodingPlanKeyInput == "" {
-			clearCodingPlanKey = true
-			channel.Channel.CodingPlanKey = ""
-		} else {
-			channel.Channel.CodingPlanKey = *channel.CodingPlanKeyInput
-		}
-	}
+	// 编码套餐配置（provider / 套餐专用密钥 / 自动启停阈值）在账户改造后由账户承载，
+	// 渠道保存一律忽略这些 legacy 字段。
+	stripLegacyCodingPlanFields(&channel.Channel)
 
 	if channel.Type == constant.ChannelTypeTaskPlugin &&
 		!authz.Can(c.GetInt("id"), c.GetInt("role"), authz.TaskPluginBind) {
@@ -1501,28 +1498,11 @@ func UpdateChannel(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	// 编码套餐自动启停配置是组级语义:请求携带时同步到同 key 同厂商的其余渠道
-	// (同一套餐账号),失败不阻断主流程。先于 InitChannelCache 保证重建索引含同步值。
-	// 挂账户的渠道配置在账户上(天然组级),跳过渠道间同步。
-	if channel.AccountId == 0 {
-		if err := syncCodingPlanAutoControlToGroup(&channel.Channel, requestData); err != nil {
-			common.SysLog(fmt.Sprintf("failed to sync coding plan auto-control config: channel_id=%d, error=%v", channel.Id, err))
-		}
-	}
 	// 渠道内模型设置（禁用/上下文覆盖）：仅当请求显式携带 model_settings 时全量对齐
 	//（含空数组 = 全部恢复默认）。未携带保持现状——避免外部局部更新（如仅改名称）
 	// 意外清空模型级禁用/覆盖。对齐先于 InitChannelCache，保证重建索引包含新设置。
 	if _, ok := requestData["model_settings"]; ok {
 		if err := model.ReplaceChannelModelSettings(channel.Id, channel.ModelSettings); err != nil {
-			common.ApiError(c, err)
-			return
-		}
-	}
-	// 清除套餐专用密钥:Updates(struct) 跳过空值字段,需显式置空。
-	if clearCodingPlanKey {
-		if err := model.DB.Model(&model.Channel{}).
-			Where("id = ?", channel.Id).
-			Update("coding_plan_key", "").Error; err != nil {
 			common.ApiError(c, err)
 			return
 		}
@@ -1693,13 +1673,12 @@ func isCodingPlanEndpoint(baseURL string) bool {
 // codingPlanFieldsToClear 决定换类型时哪些编码套餐字段需要清掉:只清请求未显式携带的
 // 字段。请求带了新值(含显式清空)就尊重表单;完全没带才清旧类型的残留绑定
 // (套餐厂商、专用密钥,以及仍是套餐端点的旧 base_url)。
+// codingPlanFieldsToClear 渠道换类型时要清掉的 legacy 编码套餐列。厂商与套餐专用密钥已由
+// 账户承载，这里无条件清空渠道侧的过渡副本；套餐端点 base_url 只清请求未显式重设的那次。
 func codingPlanFieldsToClear(requestData map[string]any, originBaseURL string) map[string]any {
-	updates := make(map[string]any)
-	if _, ok := requestData["coding_plan_provider"]; !ok {
-		updates["coding_plan_provider"] = ""
-	}
-	if _, ok := requestData["coding_plan_key"]; !ok {
-		updates["coding_plan_key"] = ""
+	updates := map[string]any{
+		"coding_plan_provider": "",
+		"coding_plan_key":      "",
 	}
 	if _, ok := requestData["base_url"]; !ok && isCodingPlanEndpoint(originBaseURL) {
 		updates["base_url"] = ""
@@ -1710,7 +1689,22 @@ func codingPlanFieldsToClear(requestData map[string]any, originBaseURL string) m
 // clearCodingPlanOnTypeChange 渠道换类型后清除编码套餐绑定(独立渠道适配):
 // 套餐厂商、套餐专用密钥、套餐端点 base_url 一起清。GORM Updates(struct) 会跳过空值
 // 字段,这里显式按列更新;成功后同步内存对象,保证响应返回一致状态。
-// 只清请求未显式携带的字段:用户在同一保存里为新类型重新配了套餐则保留新值。
+// 套餐端点 base_url 只清请求未显式携带的那次(用户为新类型选了新端点则保留)。
+// stripLegacyCodingPlanFields 渠道保存时忽略编码套餐配置（厂商 / 套餐专用密钥 / 自动启停
+// 阈值）。账户改造后这些配置由账户承载（见 model.Account.CodingPlan*），渠道侧列只作迁移
+// 过渡；继续接受写入会让渠道上留一份不生效的副本，浏览器缓存里的旧前端也会发这些字段，
+// 因此统一静默忽略。
+func stripLegacyCodingPlanFields(ch *model.Channel) {
+	if ch == nil {
+		return
+	}
+	ch.CodingPlanProvider = nil
+	ch.CodingPlanKey = ""
+	ch.CodingPlanAutoControl = nil
+	ch.CodingPlanDisableThreshold = nil
+	ch.CodingPlanEnableThreshold = nil
+}
+
 func clearCodingPlanOnTypeChange(id int, channel *model.Channel, origin *model.Channel, requestData map[string]any) error {
 	var originBaseURL string
 	if origin.BaseURL != nil {
@@ -1726,12 +1720,8 @@ func clearCodingPlanOnTypeChange(id int, channel *model.Channel, origin *model.C
 		return err
 	}
 	// 同步内存对象
-	if _, ok := requestData["coding_plan_provider"]; !ok {
-		channel.CodingPlanProvider = common.GetPointer[string]("")
-	}
-	if _, ok := requestData["coding_plan_key"]; !ok {
-		channel.CodingPlanKey = ""
-	}
+	channel.CodingPlanProvider = common.GetPointer[string]("")
+	channel.CodingPlanKey = ""
 	if _, ok := requestData["base_url"]; !ok && isCodingPlanEndpoint(originBaseURL) {
 		empty := ""
 		channel.BaseURL = &empty
