@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	//"os"
 	//"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,6 +13,14 @@ import (
 
 var StartTime = time.Now().Unix() // unit: second
 var Version = "v0.0.0"            // this hard coding will be replaced automatically when building, no need to manually change
+
+// 构建期注入的版本号可能带空白：VERSION 文件在 Windows 检出是 CRLF，`$(cat VERSION)`
+// 只去尾换行不去 \r，于是 ldflags 会把 `v26.09.11.muw.9\r` 注进来（生产实测过）。
+// 在包初始化时统一去掉两侧空白，任何拿 Version 做比较/展示的地方都不用再自己 trim。
+func init() {
+	Version = strings.TrimSpace(Version)
+}
+
 var SystemName = "New API"
 var Footer = ""
 var Logo = ""
