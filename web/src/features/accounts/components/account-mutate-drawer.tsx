@@ -237,8 +237,12 @@ export function AccountMutateDrawer({
               <Input value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div className='space-y-1.5'>
-              <Label>{t('Provider')}</Label>
+              <Label>{t('Type')}</Label>
               <Select
+                items={CHANNEL_TYPE_OPTIONS.map((option) => ({
+                  value: String(option.value),
+                  label: option.label,
+                }))}
                 value={String(type)}
                 onValueChange={(v) => setType(Number(v))}
                 disabled={isEdit}
@@ -289,6 +293,10 @@ export function AccountMutateDrawer({
               <div className='flex items-center gap-2'>
                 {isMultiKey && (
                   <Select
+                    items={[
+                      { value: 'polling', label: t('Polling') },
+                      { value: 'random', label: t('Random') },
+                    ]}
                     value={multiKeyMode}
                     onValueChange={(v) => v && setMultiKeyMode(v)}
                   >
@@ -343,8 +351,12 @@ export function AccountMutateDrawer({
               {planEnabled && (
                 <div className='space-y-3'>
                   <div className='space-y-1.5'>
-                    <Label className='text-xs'>{t('Provider')}</Label>
+                    <Label className='text-xs'>{t('Plan provider')}</Label>
                     <Select
+                      items={CODING_PLAN_PROVIDER_OPTIONS.map((option) => ({
+                        value: option.value,
+                        label: option.label,
+                      }))}
                       value={planProvider}
                       onValueChange={(v) => v && setPlanProvider(v)}
                     >
@@ -424,6 +436,10 @@ export function AccountMutateDrawer({
                   </p>
                 </div>
                 <Select
+                  items={[
+                    { value: '1', label: t('Enabled') },
+                    { value: '2', label: t('Manually Disabled') },
+                  ]}
                   value={String(status)}
                   onValueChange={(v) => setStatus(Number(v))}
                 >
