@@ -40,27 +40,24 @@ tiktoken_cache
 electron/node_modules
 electron/dist
 /data/
-.gomodcache/
 .gocache-temp
 .gopath
 .test
 token_estimator_test.go
 skills-lock.json
 .playwright-mcp
-
 # Local-only live probes and scratch test workspaces.
 .local-tests/
-
 # 本地玻璃主题调试工作区(mock 页面 + 服务日志),不提交
 .glass-mock/
 relaykit/relayconvert/chat_responses_live_local_test.go
 service/openaicompat/chat_responses_live_local_test.go
 go.work
 go.work.sum
-
 # i18n sync 生成的孤儿键归档(无运行时作用,不跟踪)
 web/src/i18n/locales/_extras/
 HEALTH_COLOR_TODO.md
 STATUS_DOT_TODO.md
 TRAP_CODE_TODO.md
 ACCOUNT_MULTIBIND_TODO.md
+PRODFIX_TODO.md
