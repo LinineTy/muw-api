@@ -203,7 +203,7 @@ export function AccountsTable({
       renderCard={(row, { isSelected }) => (
         <AccountCard row={row} isSelected={isSelected} />
       )}
-      cardGridClassName='grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3'
+      cardGridClassName='grid grid-cols-1 items-start gap-3 sm:gap-4 lg:grid-cols-3'
       applyHeaderSize
       toolbarProps={{
         searchPlaceholder: t('Search accounts...'),

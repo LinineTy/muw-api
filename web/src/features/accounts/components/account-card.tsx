@@ -8,9 +8,11 @@ import { cn } from '@/lib/utils'
 import type { AccountListItem } from '../types'
 
 /**
- * 账户卡片：表格视图的列 cell 全部复用（flexRender），信息与交互保持一致——
- * 类型、名称（含「自动生成」标记）、脱敏密钥、状态、余额、被哪些渠道引用、
- * 编码套餐余量、行操作。
+ * 账户卡片：表格视图的列 cell 全部复用（flexRender），信息与交互保持一致。
+ *
+ * 2026-09-11 重排（此前卡片上半部分大片空白：名称/密钥/被引用渠道都挤在左侧，右侧全空）：
+ * 名称行（名称 + 自动徽标 + 行操作）→ 属性行（类型 · 状态 · 余额 一行平铺）→
+ * 密钥 / 被引用渠道左右两列 → 余量块整宽。
  */
 function AccountCardComponent({
   row,
@@ -43,53 +45,60 @@ function AccountCardComponent({
   const actionsCell = renderCell('actions')
   const monitored = Boolean(account.coding_plan_provider)
 
+  const dot = (
+    <span className='text-muted-foreground/40' aria-hidden='true'>
+      ·
+    </span>
+  )
+
   return (
     <div
       data-state={isSelected ? 'selected' : undefined}
-      className='flex flex-col gap-3'
+      className='flex flex-col gap-2.5'
     >
-      {/* 第一行：类型（厂商） + 状态 + 行操作 */}
-      <div className='flex items-center justify-between gap-2'>
-        <div className='min-w-0 flex-1 overflow-hidden'>{typeCell}</div>
-        <div className='flex shrink-0 items-center gap-1.5'>
-          {statusCell}
-          {actionsCell}
+      {/* 名称行：名称（含「自动」徽标）在左，行操作贴右上 */}
+      <div className='flex items-start justify-between gap-2'>
+        <div className='flex min-w-0 items-center gap-2'>
+          <span className={cn('shrink-0', labelClass)}>#{account.id}</span>
+          <div className='min-w-0 truncate text-sm'>{nameCell}</div>
         </div>
+        <div className='flex shrink-0 items-center'>{actionsCell}</div>
       </div>
 
-      {/* 主体：左侧账户名/密钥，右侧余额 */}
-      <div className='flex items-start justify-between gap-3'>
-        <div className='flex min-w-0 flex-1 flex-col gap-2 overflow-hidden'>
-          <div className='min-w-0 text-sm'>
-            <div className={labelClass}>#{account.id}</div>
-            {nameCell}
-          </div>
-          <div className='min-w-0'>
-            <div className={cn('mb-1', labelClass)}>{t('Key')}</div>
-            <div className='min-w-0 overflow-hidden text-sm'>{keyCell}</div>
-          </div>
-        </div>
-        <div className='flex shrink-0 flex-col items-end gap-1'>
+      {/* 属性行：类型 · 状态 · 余额 一行平铺，填掉原来右侧的空白 */}
+      <div className='flex flex-wrap items-center gap-x-2 gap-y-1 text-xs'>
+        <span className='inline-flex items-center gap-1.5'>
+          <span className={labelClass}>{t('Type')}</span>
+          {typeCell}
+        </span>
+        {dot}
+        {statusCell}
+        {dot}
+        <span className='inline-flex items-center gap-1.5'>
           <span className={labelClass}>{t('Balance')}</span>
-          <span className='text-sm'>{balanceCell}</span>
+          {balanceCell}
+        </span>
+      </div>
+
+      {/* 密钥 / 被引用渠道：卡片宽，两列并排 */}
+      <div className='grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2'>
+        <div className='min-w-0'>
+          <div className={cn('mb-1', labelClass)}>{t('Key')}</div>
+          <div className='min-w-0 truncate text-sm'>{keyCell}</div>
+        </div>
+        <div className='min-w-0'>
+          <div className={cn('mb-1', labelClass)}>{t('Referenced by')}</div>
+          <div className='min-w-0 truncate text-sm'>{channelsCell}</div>
         </div>
       </div>
 
-      {/* 被哪些渠道引用 */}
-      <div className='min-w-0'>
-        <div className={cn('mb-1', labelClass)}>{t('Referenced by')}</div>
-        <div className='min-w-0 overflow-hidden text-sm'>{channelsCell}</div>
-      </div>
-
-      {/* 编码套餐余量：只在开了监控的账户上占位，其余账户卡片少一块 */}
+      {/* 编码套餐余量：只在开了监控的账户上出现，整宽，与上面内容用分隔线隔开 */}
       {monitored && (
-        <div className='min-w-0'>
+        <div className='min-w-0 border-t pt-2'>
           <div className={cn('mb-1', labelClass)}>
             {t('Coding plan quota')}
           </div>
-          <div className='min-w-0 overflow-hidden text-sm'>
-            {codingPlanCell}
-          </div>
+          <div className='min-w-0'>{codingPlanCell}</div>
         </div>
       )}
     </div>
