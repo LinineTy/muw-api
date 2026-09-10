@@ -16,17 +16,22 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
-import { useMemo } from 'react'
+import { RefreshCw } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { DataTablePage, useDataTable } from '@/components/data-table'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { ChannelTypeLogo } from '@/features/channels/components/channel-type-badge'
 import { getChannelTypeLabel } from '@/features/channels/lib'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 
 import { getAccounts } from '../api'
+import { readQuotaAutoRefresh, writeQuotaAutoRefresh } from '../constants'
 import { ACCOUNT_STATUS, type AccountListItem } from '../types'
 import { AccountCard } from './account-card'
 import { useAccountsColumns } from './accounts-columns'
@@ -55,6 +60,13 @@ export function AccountsTable({
   onDelete: (item: AccountListItem) => void
 }) {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  // 余量自动刷新开关：默认开，与旧渠道余量页共用同一个 localStorage 键。
+  const [autoRefreshQuota, setAutoRefreshQuota] = useState(readQuotaAutoRefresh)
+  const handleAutoRefreshToggle = (checked: boolean) => {
+    writeQuotaAutoRefresh(checked)
+    setAutoRefreshQuota(checked)
+  }
   const {
     globalFilter,
     onGlobalFilterChange,
@@ -121,6 +133,7 @@ export function AccountsTable({
       const target = items.find((item) => item.account.id === id)
       if (target) onDelete(target)
     },
+    autoRefreshQuota,
   })
 
   const { table } = useDataTable({
@@ -195,6 +208,44 @@ export function AccountsTable({
       toolbarProps={{
         searchPlaceholder: t('Search accounts...'),
         searchDebounceMs: KEYWORD_DEBOUNCE_MS,
+        // 余量自动刷新节奏由这里统一控制（单元格只管渲染与轮询）；没有开监控的账户
+        // 就不显示这组控件，避免空占位。
+        preActions:
+          monitoringCount > 0 ? (
+            <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
+              <div className='flex items-center gap-1.5'>
+                <Label
+                  htmlFor='account-quota-auto-refresh'
+                  className='text-muted-foreground cursor-pointer text-xs'
+                >
+                  {t('Auto refresh')}
+                </Label>
+                <Switch
+                  id='account-quota-auto-refresh'
+                  size='sm'
+                  checked={autoRefreshQuota}
+                  onCheckedChange={handleAutoRefreshToggle}
+                />
+              </div>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                onClick={() =>
+                  void queryClient.invalidateQueries({
+                    queryKey: ['account-coding-plan-quota'],
+                  })
+                }
+              >
+                <RefreshCw
+                  data-icon='inline-start'
+                  className='size-3.5'
+                  aria-hidden='true'
+                />
+                {t('Refresh All')}
+              </Button>
+            </div>
+          ) : null,
         filters: [
           {
             columnId: 'status',

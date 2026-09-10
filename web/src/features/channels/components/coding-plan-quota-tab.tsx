@@ -38,6 +38,11 @@ import {
   sideDrawerHeaderClassName,
   sideDrawerSectionClassName,
 } from '@/components/drawer-layout'
+import {
+  QUOTA_REFRESH_MS,
+  readQuotaAutoRefresh,
+  writeQuotaAutoRefresh,
+} from '@/features/accounts/constants'
 import { formatCompactNumber, formatPercent } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -49,10 +54,7 @@ import {
 } from '../constants'
 import type { Channel, CodingPlanQuota, CodingPlanTier } from '../types'
 
-const QUOTA_REFRESH_MS = 5 * 60 * 1000
-
-// 自动刷新开关的本地持久化键:默认开启,关闭后余量仅在手动刷新时更新。
-const AUTO_REFRESH_STORAGE_KEY = 'coding-plan-auto-refresh'
+// 自动刷新开关的本地持久化键与间隔统一放在账户页常量里（两处共用一个开关）。
 
 // 渠道是否启用编码套餐余量监控:显式配置了厂商,或 base_url 是套餐符号键/套餐专用地址。
 // 显式关闭监控("none",手动/自定义渠道默认)一律视为不监控,即使 base_url 是套餐端点。
@@ -472,12 +474,10 @@ export function CodingPlanQuotaTab() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
-  const [autoRefresh, setAutoRefresh] = useState(() => {
-    return localStorage.getItem(AUTO_REFRESH_STORAGE_KEY) !== 'false'
-  })
+  const [autoRefresh, setAutoRefresh] = useState(readQuotaAutoRefresh)
 
   const handleAutoRefreshToggle = (checked: boolean) => {
-    localStorage.setItem(AUTO_REFRESH_STORAGE_KEY, String(checked))
+    writeQuotaAutoRefresh(checked)
     setAutoRefresh(checked)
   }
 

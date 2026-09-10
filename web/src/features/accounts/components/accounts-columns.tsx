@@ -97,9 +97,11 @@ function ReferencedChannelsCell({ item }: { item: AccountListItem }) {
 export function useAccountsColumns(options: {
   onEdit: (id: number) => void
   onDelete: (id: number) => void
+  /** 余量自动刷新开关（账户页工具栏控制），透传给余量单元格。 */
+  autoRefreshQuota?: boolean
 }): ColumnDef<AccountListItem>[] {
   const { t } = useTranslation()
-  const { onEdit, onDelete } = options
+  const { onEdit, onDelete, autoRefreshQuota = true } = options
   return useMemo(
     () => [
       {
@@ -167,7 +169,12 @@ export function useAccountsColumns(options: {
       {
         id: 'coding_plan',
         header: () => t('Coding plan quota'),
-        cell: ({ row }) => <CodingPlanQuotaCell account={row.original.account} />,
+        cell: ({ row }) => (
+          <CodingPlanQuotaCell
+            account={row.original.account}
+            autoRefresh={autoRefreshQuota}
+          />
+        ),
       },
       {
         // 隐藏列：仅用于工具栏的「是否被引用 / 是否开启监控」筛选（toolbar 只在列存在时
@@ -231,6 +238,6 @@ export function useAccountsColumns(options: {
         },
       },
     ],
-    [t, onEdit, onDelete]
+    [t, onEdit, onDelete, autoRefreshQuota]
   )
 }
