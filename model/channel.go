@@ -224,6 +224,11 @@ func (c *ChannelInfo) Scan(value any) error {
 // loadAccount 挂载渠道引用的账户（凭证真相源）。AccountId>0 时查账户并挂到
 // channel.Account；查询失败不阻断（回退 legacy 渠道列降级）但记日志。
 func (channel *Channel) loadAccount() error {
+	// 凭证真相源：先按绑定表取"主账户"（Phase A = 轮询顺序第一个可用绑定），取不到再
+	// 回落 channels.account_id（迁移未跑到的库，保证不断流）。
+	if accountId, err := GetPrimaryBoundAccountId(channel.Id); err == nil && accountId > 0 {
+		channel.AccountId = accountId
+	}
 	if channel.AccountId <= 0 {
 		return nil
 	}
@@ -241,8 +246,37 @@ func (channel *Channel) loadAccount() error {
 // 多个渠道共享同一 *Account 指针，内存缓存下多 key 轮询状态/启停跨渠道一致。
 // 供 InitChannelCache / 管理端列表路径调用。
 func loadChannelsAccounts(channels []*Channel) error {
+	// 主账户解析：一次查全部绑定，按 (account_order, id) 取每渠道第一条启用的绑定；
+	// 没有绑定的渠道回落 channels.account_id（迁移过渡期）。
+	channelIds := make([]int, 0, len(channels))
+	for _, ch := range channels {
+		if ch.Id > 0 {
+			channelIds = append(channelIds, ch.Id)
+		}
+	}
+	primary := make(map[int]int, len(channelIds))
+	if len(channelIds) > 0 {
+		var bindings []*ChannelAccount
+		if err := DB.Where("channel_id IN ?", channelIds).
+			Order("account_order asc, id asc").Find(&bindings).Error; err != nil {
+			return err
+		}
+		for _, b := range bindings {
+			if !b.Enabled {
+				continue
+			}
+			if _, ok := primary[b.ChannelId]; !ok {
+				primary[b.ChannelId] = b.AccountId
+			}
+		}
+	}
 	ids := make(map[int]bool)
 	for _, ch := range channels {
+		if accountId, ok := primary[ch.Id]; ok && accountId > 0 {
+			ch.AccountId = accountId
+			ids[accountId] = true
+			continue
+		}
 		if ch.AccountId > 0 {
 			ids[ch.AccountId] = true
 		}
@@ -747,6 +781,9 @@ func BatchInsertChannels(channels []Channel) error {
 			return err
 		}
 		for i := range chunk {
+			if err := BindChannelAccountWithDB(tx, chunk[i].Id, chunk[i].AccountId, 0); err != nil {
+				common.SysLog(fmt.Sprintf("bind channel account failed: channel_id=%d, account_id=%d, error=%v", chunk[i].Id, chunk[i].AccountId, err))
+			}
 			if err := chunk[i].AddAbilities(tx); err != nil {
 				tx.Rollback()
 				return err
@@ -808,6 +845,9 @@ func BatchDeleteChannels(ids []int) (int64, error) {
 		if err := tx.Where("channel_id in (?)", chunk).Delete(&Ability{}).Error; err != nil {
 			tx.Rollback()
 			return 0, err
+		}
+		if err := DeleteChannelAccountBindingsForChannels(tx, chunk); err != nil {
+			common.SysLog(fmt.Sprintf("delete channel account bindings failed: %v", err))
 		}
 	}
 	if err := tx.Commit().Error; err != nil {
@@ -873,6 +913,10 @@ func (channel *Channel) Insert() error {
 	if err != nil {
 		return err
 	}
+	// 绑定表双写：channels.account_id 仍是 controller 的写入口，这里收敛出绑定行。
+	if err := syncPrimaryBindingFromChannelColumn(channel.Id, channel.AccountId); err != nil {
+		common.SysLog(fmt.Sprintf("sync channel account binding failed: channel_id=%d, error=%v", channel.Id, err))
+	}
 	err = channel.AddAbilities(nil)
 	return err
 }
@@ -926,6 +970,10 @@ func (channel *Channel) Update() error {
 	// ModelSettings 为准，任何未显式携带 model_settings 的局部更新（改名称、MultiKey
 	// 操作等）都会把 settings 表清空。写入口收敛到 controller.UpdateChannel（请求显式
 	// 携带 model_settings 时调用 ReplaceChannelModelSettings），其余路径保持不动。
+	// 绑定表双写（换绑/解绑后收敛绑定行）。
+	if err := syncPrimaryBindingFromChannelColumn(channel.Id, channel.AccountId); err != nil {
+		common.SysLog(fmt.Sprintf("sync channel account binding failed: channel_id=%d, error=%v", channel.Id, err))
+	}
 	err = channel.UpdateAbilities(nil)
 	return err
 }
@@ -960,6 +1008,9 @@ func (channel *Channel) Delete() error {
 	err = DB.Delete(channel).Error
 	if err != nil {
 		return err
+	}
+	if err := DeleteChannelAccountBindings(DB, channel.Id); err != nil {
+		common.SysLog(fmt.Sprintf("delete channel account bindings failed: channel_id=%d, error=%v", channel.Id, err))
 	}
 	err = channel.DeleteAbilities()
 	return err
@@ -1014,8 +1065,7 @@ func resolveChannelStateLock(channelId int) *sync.Mutex {
 			return GetChannelPollingLock(channelId)
 		}
 	}
-	var accountId int
-	if err := DB.Model(&Channel{}).Select("account_id").Where("id = ?", channelId).Scan(&accountId).Error; err == nil && accountId > 0 {
+	if accountId, err := GetPrimaryBoundAccountId(channelId); err == nil && accountId > 0 {
 		return GetAccountPollingLock(accountId)
 	}
 	return GetChannelPollingLock(channelId)

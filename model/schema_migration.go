@@ -187,6 +187,11 @@ var migrations = []Migration{
 	// kind / pin_product_id 列由 AutoMigrate 或 ensureSubscriptionOrderPinColumns 补齐。
 	// 均为纯建表/加列，无数据转换，只打名称戳。
 	{Name: "260909-group-pin", Up: func(db *gorm.DB) error { return nil }},
+	// channel_accounts 表（渠道↔账户 N:N 绑定：一个渠道绑多账户、一个账户被多渠道绑）
+	// 由 AutoMigrate（升日期路径）或 ensureChannelAccountsTable（已最新库的跳过路径）
+	// 创建；存量绑定（channels.account_id → 一条 order=0 绑定）由 ensureChannelAccountBindings
+	// 幂等回填。均为纯建表 + 幂等回填，无破坏性转换，只打名称戳。
+	{Name: "260910-account-multibind", Up: func(db *gorm.DB) error { return nil }},
 }
 
 // ensureSchemaMigrationsTable 用纯 SQL 建 schema_migrations（主键 name，自带日期前缀），

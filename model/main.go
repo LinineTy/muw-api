@@ -382,6 +382,14 @@ func migrateDB() error {
 	if err := ensureChannelAccountBackfill(DB); err != nil {
 		return err
 	}
+	// channel_accounts 表（渠道↔账户 N:N 绑定）+ 存量绑定回填:幂等，每次启动执行。
+	// 顺序固定——先建表、再回填，最后才允许读路径依赖绑定表。
+	if err := ensureChannelAccountsTable(DB); err != nil {
+		return err
+	}
+	if err := ensureChannelAccountBindings(DB); err != nil {
+		return err
+	}
 	applied, err := readAppliedMigrationNames(DB)
 	if err != nil {
 		return err
