@@ -7255,7 +7255,7 @@
     "org-...": "org-...",
     "os-shell.desktop-hint": "Toutes les fenêtres sont fermées · Ouvrez des pages depuis le Dock ou le rail de gauche",
     "os-shell.desktop-only-title": "Réservé au bureau",
-    "os-shell.desktop-only-hint": "Le bureau OS nécessite un écran plus large. Ouvrez-le sur un ordinateur.",
+    "os-shell.desktop-only-hint": "Le bureau OS nécessite un écran plus large. Ouvrez-le sur un ordinateur. Retour à la vue d'ensemble dans 5 secondes.",
     "os-shell.go-to-overview": "Voir la vue d'ensemble",
     "overall": "global",
     "override": "remplacer",

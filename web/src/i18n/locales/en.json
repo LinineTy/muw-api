@@ -7255,7 +7255,7 @@
     "org-...": "org-...",
     "os-shell.desktop-hint": "All windows closed · Open pages from the Dock or the left rail",
     "os-shell.desktop-only-title": "Desktop only",
-    "os-shell.desktop-only-hint": "The OS desktop needs a wider screen. Please open it on a computer.",
+    "os-shell.desktop-only-hint": "The OS desktop needs a wider screen. Please open it on a computer. Taking you back to the overview in 5 seconds.",
     "os-shell.go-to-overview": "Go to overview",
     "overall": "overall",
     "override": "override",
