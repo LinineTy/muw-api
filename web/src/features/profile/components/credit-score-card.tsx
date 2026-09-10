@@ -229,7 +229,7 @@ export function CreditScoreCard() {
   }
 
   return (
-    <Card>
+    <Card data-card-hover='false'>
       <CardHeader className='flex flex-row items-start justify-between space-y-0'>
         <div>
           <CardTitle className='text-sm font-semibold'>
