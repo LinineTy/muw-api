@@ -170,28 +170,20 @@ describe('administrator update entry', () => {
     const buttons = await screen.findAllByRole('button', {
       name: /New version available: v1\.0\.0-rc\.36/,
     })
-    expect(buttons).toHaveLength(2)
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    // fork：更新入口经 SettingsPageActionsPortal 渲染到设置页右上角，
-    // portal 目标容器在 children 之前，DOM 顺序与上游相反——按特征取而不是按索引。
-    const brandButton = buttons.find((b) =>
-      within(b).queryByText('v1.0.0-rc.35')
-    )
-    const sectionButton = buttons.find((b) => b !== brandButton)
-    expect(brandButton).toBeDefined()
-    expect(sectionButton).toBeDefined()
-    expect(within(brandButton!).getByText('v1.0.0-rc.35')).toHaveClass(
+    // fork：维护页不再复用上游的 GitHub releases 入口，只用自建更新源
+    // （/api/status/update-check），所以这里只剩版本角标这一个入口按钮。
+    expect(buttons).toHaveLength(1)
+    const brandButton = buttons[0]
+    expect(within(brandButton).getByText('v1.0.0-rc.35')).toHaveClass(
       'truncate'
     )
-    expect(within(brandButton!).getByText('Update available')).toHaveClass(
+    expect(within(brandButton).getByText('Update available')).toHaveClass(
       'hidden',
       '@min-[22rem]/system-brand:inline-flex'
     )
-    expect(within(sectionButton!).getByText('Update available')).not.toHaveClass(
-      'hidden'
-    )
 
-    buttons[0].focus()
+    brandButton.focus()
     await user.keyboard('{Enter}')
     const dialog = await screen.findByRole('dialog', { name: 'System updates' })
     expect(await within(dialog).findByText(release.body)).toBeInTheDocument()
