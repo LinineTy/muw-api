@@ -444,6 +444,7 @@ export function ChannelBoundAccounts(props: ChannelBoundAccountsProps) {
               </>
             )}
 
+            {(isEditing ? hasBoundAccount : credentialMode === 'account') && (
             <div className='text-muted-foreground space-y-1 rounded-md border border-dashed px-3 py-2.5 text-sm'>
               <p>
                 {boundAccountId !== null
@@ -464,6 +465,7 @@ export function ChannelBoundAccounts(props: ChannelBoundAccountsProps) {
                 </Link>
               )}
             </div>
+            )}
           </div>
         )}
     </div>
