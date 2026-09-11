@@ -1306,12 +1306,21 @@ export function ChannelMutateDrawer({
         !isEditing &&
         !data.key?.trim() &&
         data.type !== CHANNEL_TYPE_OPENCODE_ZEN &&
-        !data.account_bindings?.length
+        !data.account_bindings?.length &&
+        !data.account_id
       ) {
+        // 账户模式下密钥输入不渲染：错误信息要指向「选账户」，否则用户看不到任何可改的地方
+        const missingCredentialMessage =
+          credentialMode === 'account'
+            ? t(
+                'Pick at least one account, or switch to manual entry to create one on save.'
+              )
+            : t(ERROR_MESSAGES.REQUIRED_KEY)
         form.setError('key', {
           type: 'manual',
-          message: ERROR_MESSAGES.REQUIRED_KEY,
+          message: missingCredentialMessage,
         })
+        toast.error(missingCredentialMessage)
         setConfigurationSection('connection')
         setPendingErrorFocus('key')
         return
@@ -1434,6 +1443,7 @@ export function ChannelMutateDrawer({
       confirmMissingModelMappings,
       confirmStatusCodeRisk,
       channelMutation,
+      credentialMode,
       t,
     ]
   )

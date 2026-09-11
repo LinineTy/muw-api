@@ -526,6 +526,10 @@ func GetChannelKey(c *gin.Context) {
 	})
 }
 
+// errChannelKeyRequired 新建渠道缺少密钥（调用方负责按语言返回给用户）。
+// 绑定共享账户时不适用：凭证真相源在账户，渠道自身不带 key。
+var errChannelKeyRequired = errors.New("channel key is required")
+
 // validateChannel 通用的渠道校验函数
 func validateChannel(channel *model.Channel, isAdd bool, boundToAccounts bool) error {
 	if channel == nil {
@@ -572,7 +576,7 @@ func validateChannel(channel *model.Channel, isAdd bool, boundToAccounts bool) e
 		if channel.Key == "" &&
 			!constant.ChannelTypeAllowsEmptyKey(channel.Type) &&
 			!boundToAccounts {
-			return fmt.Errorf("channel cannot be empty")
+			return errChannelKeyRequired
 		}
 
 		// 检查模型名称长度是否超过 255
@@ -809,6 +813,10 @@ func AddChannel(c *gin.Context) {
 	}
 	// 使用统一的校验函数（绑定了共享账户时渠道自身密钥可为空）
 	if err := validateChannel(addChannelRequest.Channel, true, len(boundAccountIDs) > 0); err != nil {
+		if errors.Is(err, errChannelKeyRequired) {
+			common.ApiErrorI18n(c, i18n.MsgChannelKeyRequired)
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": err.Error(),

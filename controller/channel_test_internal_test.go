@@ -153,7 +153,7 @@ func TestValidateChannelRejectsEmptyKeyForOtherTypes(t *testing.T) {
 
 	err := validateChannel(channel, true, false)
 
-	require.ErrorContains(t, err, "channel cannot be empty")
+	require.ErrorIs(t, err, errChannelKeyRequired)
 }
 
 func TestResponsesCompactAPITypeSupport(t *testing.T) {

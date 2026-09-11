@@ -9,7 +9,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { useWatch, type UseFormReturn } from 'react-hook-form'
+import { useFormState, useWatch, type UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
@@ -133,6 +133,11 @@ export function ChannelBoundAccounts(props: ChannelBoundAccountsProps) {
       ),
     [channelData]
   )
+
+  // 抽屉的提交守卫会把「缺凭证」的错误打到 key 上；账户模式下密钥输入不渲染，
+  // 所以这里要把那个错误显性化到「已绑账户」空态上，否则用户无从下手
+  const { errors: formErrors } = useFormState({ control: form.control })
+  const missingCredentialError = Boolean(formErrors.key)
 
   const boundBindings: { account_id: number; enabled: boolean }[] =
     useWatch({ control: form.control, name: 'account_bindings' }) ?? []
@@ -321,8 +326,21 @@ export function ChannelBoundAccounts(props: ChannelBoundAccountsProps) {
             {accountsOpen && (
               <>
                 {boundBindings.length === 0 && (
-                  <div className='text-muted-foreground rounded-md border border-dashed px-3 py-2.5 text-sm'>
-                    {t('No account bound yet.')}
+                  <div
+                    className={cn(
+                      'text-muted-foreground rounded-md border border-dashed px-3 py-2.5 text-sm',
+                      missingCredentialError &&
+                        'border-destructive/60 text-destructive'
+                    )}
+                  >
+                    <p>{t('No account bound yet.')}</p>
+                    {missingCredentialError && (
+                      <p className='mt-1'>
+                        {t(
+                          'Pick at least one account, or switch to manual entry to create one on save.'
+                        )}
+                      </p>
+                    )}
                   </div>
                 )}
                 {boundBindings.map((binding, index) => {

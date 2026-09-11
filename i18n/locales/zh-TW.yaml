@@ -170,6 +170,7 @@ topup.invalid_quota: "無效的充值額度"
 
 # Channel messages
 channel.not_exists: "管道不存在"
+channel.key_required: "請填寫管道密鑰，或綁定一個共享帳戶（憑證從帳戶讀取）"
 channel.id_format_error: "管道ID格式錯誤"
 channel.no_available_key: "沒有可用的管道密鑰"
 channel.get_list_failed: "獲取管道列表失敗，請稍後重試"
