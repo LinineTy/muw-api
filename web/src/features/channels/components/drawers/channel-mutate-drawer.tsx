@@ -139,6 +139,7 @@ import {
   CLAUDE_FIELD_PASSTHROUGH_TYPES,
   CHANNEL_STATUS_LABELS,
   CHANNEL_TYPE_OPTIONS,
+  CHANNEL_TYPE_OPENCODE_ZEN,
   CHANNEL_TYPE_TASK_PLUGIN,
   CHANNEL_TYPE_WARNINGS,
   ERROR_MESSAGES,
@@ -1298,8 +1299,15 @@ export function ChannelMutateDrawer({
     async (data: ChannelFormValues) => {
       if (isEditing && !channelData?.data) return
       if (!isEditing && (!providerTarget || !canEditSensitive)) return
-      // Validate key is required when creating
-      if (!isEditing && !data.key?.trim()) {
+      // Validate key is required when creating —— 两种「凭证不在渠道上」的情况放行：
+      // ① OpenCode Zen（空 key = 免费套餐，上游 d35b86b20 之后由 payload 层处理）
+      // ② 新建时已选定账户（凭证真相源在账户，渠道侧不渲染密钥输入）
+      if (
+        !isEditing &&
+        !data.key?.trim() &&
+        data.type !== CHANNEL_TYPE_OPENCODE_ZEN &&
+        !data.account_bindings?.length
+      ) {
         form.setError('key', {
           type: 'manual',
           message: ERROR_MESSAGES.REQUIRED_KEY,
