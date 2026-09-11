@@ -73,6 +73,11 @@ type ModelRatioFormProps = {
   isSaving: boolean
   isResetting: boolean
   variant?: 'default' | 'unset'
+  /**
+   * 「暴露倍率接口」开关的即时回调：该开关是独立设置项，点一下就该生效，
+   * 不跟价格改动一起等保存（价格类改动仍然走保存按钮）。
+   */
+  onExposeRatioChange?: (enabled: boolean) => void
 }
 
 type ModelJsonFieldName =
@@ -176,6 +181,7 @@ export const ModelRatioForm = memo(function ModelRatioForm({
   isSaving,
   isResetting,
   variant = 'default',
+  onExposeRatioChange,
 }: ModelRatioFormProps) {
   const { t } = useTranslation()
   const isUnsetVariant = variant === 'unset'
@@ -254,7 +260,10 @@ export const ModelRatioForm = memo(function ModelRatioForm({
                     <FormControl>
                       <Switch
                         checked={field.value}
-                        onCheckedChange={field.onChange}
+                        onCheckedChange={(next) => {
+                          field.onChange(next)
+                          onExposeRatioChange?.(next)
+                        }}
                       />
                     </FormControl>
                     <LearnMore contentProps={{ side: 'bottom', align: 'end' }}>

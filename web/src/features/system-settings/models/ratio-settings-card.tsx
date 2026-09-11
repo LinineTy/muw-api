@@ -411,6 +411,43 @@ export function RatioSettingsCard({
     [t, updateOption, pricingBaseline, savePricing, pricingQuery]
   )
 
+  /**
+   * 「暴露倍率接口」开关：点一下就落库生效，不用再点保存。
+   * 它和价格类改动不同——后者要一起提交成一次 model_pricing 变更，
+   * 而这个只是一个独立设置项；所以这里单独调 updateOption，并把基线与
+   * 表单已保存值同步过去，免得后续保存时又把它当成"未保存的改动"重复提交。
+   */
+  const handleExposeRatioChange = useCallback(
+    async (enabled: boolean) => {
+      const previous = modelNormalizedDefaults.current.ExposeRatioEnabled
+      if (enabled === previous) {
+        return
+      }
+      try {
+        await updateOption.mutateAsync({
+          key: 'ExposeRatioEnabled',
+          value: enabled,
+        })
+        modelNormalizedDefaults.current = {
+          ...modelNormalizedDefaults.current,
+          ExposeRatioEnabled: enabled,
+        }
+        setSavedModelValues((prev) => ({
+          ...prev,
+          ExposeRatioEnabled: enabled,
+        }))
+        toast.success(t('Model pricing saved'))
+      } catch (error) {
+        // 失败就把开关拨回去，不留下"看着开了实际没开"的假象
+        modelForm.setValue('ExposeRatioEnabled', previous, {
+          shouldDirty: false,
+        })
+        handleServerError(error)
+      }
+    },
+    [modelForm, t, updateOption]
+  )
+
   const saveGroupRatios = useCallback(
     async (values: GroupFormValues) => {
       const normalized = {
@@ -508,6 +545,7 @@ export function RatioSettingsCard({
             isSaving={updateOption.isPending || savePricing.isPending}
             isResetting={resetMutation.isPending}
             variant={tab === 'unset-models' ? 'unset' : 'default'}
+            onExposeRatioChange={handleExposeRatioChange}
           />
         </>
       )
