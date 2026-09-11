@@ -169,6 +169,7 @@ topup.invalid_quota: "Invalid top-up quota"
 
 # Channel messages
 channel.not_exists: "Channel does not exist"
+channel.key_required: "API key is required — or bind a shared account (credentials come from the account)"
 channel.id_format_error: "Channel ID format error"
 channel.no_available_key: "No available channel keys"
 channel.get_list_failed: "Failed to get channel list, please try again later"

@@ -188,6 +188,7 @@ const (
 const (
 	MsgChannelNotExists          = "channel.not_exists"
 	MsgChannelIdFormatError      = "channel.id_format_error"
+	MsgChannelKeyRequired        = "channel.key_required"
 	MsgChannelNoAvailableKey     = "channel.no_available_key"
 	MsgChannelGetListFailed      = "channel.get_list_failed"
 	MsgChannelGetTagsFailed      = "channel.get_tags_failed"
