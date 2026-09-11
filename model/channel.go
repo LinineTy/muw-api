@@ -620,6 +620,12 @@ func (channel *Channel) loadModelSettings(db *gorm.DB) error {
 	if err := db.Where("channel_id = ?", channel.Id).Find(&settings).Error; err != nil {
 		return err
 	}
+	if len(settings) == 0 {
+		// 无设置行时保持 nil（而非空集合）：内存对象与从 DB 直接读回的对象
+		// 必须逐字段相等，否则「读回来再比较」的断言会看到空 map vs nil 的差异。
+		channel.DisabledModels, channel.ModelContextWindows, channel.ModelSettings = nil, nil, nil
+		return nil
+	}
 	channel.DisabledModels, channel.ModelContextWindows, channel.ModelSettings = splitModelSettings(settings)
 	return nil
 }
