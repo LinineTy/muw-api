@@ -798,7 +798,12 @@ body[data-theme-radius='xl'] {
   --accent: oklch(1 0 0 / 0.12);
   --accent-foreground: oklch(0.3 0 0);
 
-  --primary: oklch(0.56 0.17 250 / 0.85);
+  /* 按钮色随壁纸走(2026-09-11):色相抽成变量 --glass-primary-hue,由
+   * use-app-background 从后台配的壁纸图里取"主色相"后写到 body 内联样式;
+   * 取不到(没配图/灰图/加载失败)就回落到原来的 250(蓝)。只换色相、亮度彩度
+   * 保持预设原值,所以按钮上的白字对比度不受影响。
+   * 注意 --info 是语义色(信息=蓝),不参与跟随;--sidebar-ring 也保持原样。 */
+  --primary: oklch(0.56 0.17 var(--glass-primary-hue, 250) / 0.85);
   --primary-foreground: oklch(1 0 0);
   --destructive: oklch(0.6 0.2 25 / 0.7);
   --destructive-foreground: oklch(1 0 0);
@@ -813,7 +818,7 @@ body[data-theme-radius='xl'] {
 
   --border: oklch(0.9 0 0 / 0.5);
   --input: oklch(1 0 0 / 0.2);
-  --ring: oklch(0.62 0.16 250);
+  --ring: oklch(0.62 0.16 var(--glass-primary-hue, 250));
 
   /* 玻璃色板:蓝/青/紫/teal/品红 */
   --chart-1: oklch(0.65 0.17 255);
@@ -904,7 +909,7 @@ body[data-theme-radius='xl'] {
   --accent: oklch(0.13 0 0 / 0.2);
   --accent-foreground: oklch(0.93 0 0);
 
-  --primary: oklch(0.68 0.15 250 / 0.6);
+  --primary: oklch(0.68 0.15 var(--glass-primary-hue, 250) / 0.6);
   --primary-foreground: oklch(0.98 0 0);
   --destructive: oklch(0.72 0.18 25 / 0.7);
   --destructive-foreground: oklch(0.98 0 0);
@@ -919,7 +924,7 @@ body[data-theme-radius='xl'] {
 
   --border: oklch(1 0 0 / 0.2);
   --input: oklch(0.13 0 0 / 0.3);
-  --ring: oklch(0.68 0.15 250);
+  --ring: oklch(0.68 0.15 var(--glass-primary-hue, 250));
 
   --chart-1: oklch(0.72 0.15 255);
   --chart-2: oklch(0.7 0.13 200);
