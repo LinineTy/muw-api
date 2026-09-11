@@ -32,6 +32,7 @@ import {
 import { CHANNEL_TYPE_OPTIONS } from '@/features/channels/constants'
 import { formatCurrencyUSD } from '@/lib/format'
 
+import { isCodingPlanMonitored } from '../constants'
 import { ACCOUNT_STATUS, type AccountListItem } from '../types'
 import { CodingPlanQuotaCell } from './coding-plan-quota-cell'
 
@@ -47,7 +48,9 @@ function AccountStatusCell({ status }: { status: number }) {
     <span className='inline-flex items-center gap-1.5 text-xs'>
       <span
         className={
-          enabled ? 'size-1.5 rounded-full bg-emerald-500' : 'bg-destructive size-1.5 rounded-full'
+          enabled
+            ? 'size-1.5 rounded-full bg-emerald-500'
+            : 'bg-destructive size-1.5 rounded-full'
         }
       />
       {enabled
@@ -67,16 +70,18 @@ function ReferencedChannelsCell({ item }: { item: AccountListItem }) {
   const { t } = useTranslation()
   const channels = item.channels ?? []
   if (channels.length === 0) {
-    return <span className='text-muted-foreground text-xs'>{t('Not referenced')}</span>
+    return (
+      <span className='text-muted-foreground text-xs'>
+        {t('Not referenced')}
+      </span>
+    )
   }
   const shown = channels.slice(0, 2)
   const rest = channels.length - shown.length
   return (
     <TooltipProvider delay={100}>
       <Tooltip>
-        <TooltipTrigger
-          render={<span className='cursor-default text-xs' />}
-        >
+        <TooltipTrigger render={<span className='cursor-default text-xs' />}>
           {shown.map((ch) => ch.name).join('、')}
           {rest > 0 ? ` +${rest}` : ''}
         </TooltipTrigger>
@@ -124,7 +129,9 @@ export function useAccountsColumns(options: {
         accessorFn: (item) => item.account.type,
         header: () => t('Provider'),
         cell: ({ row }) => (
-          <span className='text-xs'>{typeLabel(row.original.account.type)}</span>
+          <span className='text-xs'>
+            {typeLabel(row.original.account.type)}
+          </span>
         ),
       },
       {
@@ -156,7 +163,7 @@ export function useAccountsColumns(options: {
         id: 'balance',
         header: () => t('Balance'),
         cell: ({ row }) => (
-          <span className='tabular-nums text-xs'>
+          <span className='text-xs tabular-nums'>
             {formatCurrencyUSD(row.original.account.balance)}
           </span>
         ),
@@ -187,7 +194,8 @@ export function useAccountsColumns(options: {
       {
         // 隐藏列：供「套餐余量监控」筛选使用。
         id: 'monitoring',
-        accessorFn: (item) => (item.account.coding_plan_provider ? 1 : 0),
+        accessorFn: (item) =>
+          isCodingPlanMonitored(item.account.coding_plan_provider) ? 1 : 0,
         header: () => t('Quota monitoring'),
         cell: () => null,
       },
@@ -229,7 +237,9 @@ export function useAccountsColumns(options: {
                     <Trash2 className='size-3.5' />
                   </TooltipTrigger>
                   <TooltipContent>
-                    {referenced ? t('Account is referenced by channels') : t('Delete')}
+                    {referenced
+                      ? t('Account is referenced by channels')
+                      : t('Delete')}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>

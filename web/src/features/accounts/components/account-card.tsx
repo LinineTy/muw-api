@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
 
+import { isCodingPlanMonitored } from '../constants'
 import type { AccountListItem } from '../types'
 
 /**
@@ -33,8 +34,7 @@ function AccountCardComponent({
     return flexRender(cell.column.columnDef.cell, cell.getContext())
   }
 
-  const labelClass =
-    'text-muted-foreground text-[11px] font-medium select-none'
+  const labelClass = 'text-muted-foreground text-[11px] font-medium select-none'
   const typeCell = renderCell('type')
   const nameCell = renderCell('name')
   const keyCell = renderCell('key')
@@ -43,7 +43,7 @@ function AccountCardComponent({
   const channelsCell = renderCell('channels')
   const codingPlanCell = renderCell('coding_plan')
   const actionsCell = renderCell('actions')
-  const monitored = Boolean(account.coding_plan_provider)
+  const monitored = isCodingPlanMonitored(account.coding_plan_provider)
 
   const dot = (
     <span className='text-muted-foreground/40' aria-hidden='true'>
@@ -95,9 +95,7 @@ function AccountCardComponent({
       {/* 编码套餐余量：只在开了监控的账户上出现，整宽，与上面内容用分隔线隔开 */}
       {monitored && (
         <div className='min-w-0 border-t pt-2'>
-          <div className={cn('mb-1', labelClass)}>
-            {t('Coding plan quota')}
-          </div>
+          <div className={cn('mb-1', labelClass)}>{t('Coding plan quota')}</div>
           <div className='min-w-0'>{codingPlanCell}</div>
         </div>
       )}

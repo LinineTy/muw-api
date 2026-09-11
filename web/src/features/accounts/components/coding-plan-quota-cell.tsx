@@ -22,13 +22,18 @@ import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { CODING_PLAN_PROVIDER_OPTIONS } from '@/features/channels/constants'
 import { formatPercent } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 import { getAccountCodingPlanQuota } from '../api'
-import { QUOTA_REFRESH_MS } from '../constants'
+import { isCodingPlanMonitored, QUOTA_REFRESH_MS } from '../constants'
 import type { Account, AccountCodingPlanTier } from '../types'
 
 // 进度条宽度：表格单元格（窄）里靠外层的最小轨道撑住，卡片里随列宽拉伸成左右多列。
@@ -50,9 +55,7 @@ function tierLabel(name: string, t: (key: string) => string): string {
   if (name === 'weekly_limit') return t('Weekly')
   if (name === 'monthly_limit') return t('Monthly')
   if (name === 'daily_limit') return t('Daily')
-  return name
-    .replaceAll('_', ' ')
-    .replaceAll(/\b\w/g, (ch) => ch.toUpperCase())
+  return name.replaceAll('_', ' ').replaceAll(/\b\w/g, (ch) => ch.toUpperCase())
 }
 
 /** 余量越低越红：≤10% 红、≤30% 琥珀，其余绿。 */
@@ -128,7 +131,7 @@ export function CodingPlanQuotaCell({
   autoRefresh?: boolean
 }) {
   const { t } = useTranslation()
-  const monitored = Boolean(account.coding_plan_provider)
+  const monitored = isCodingPlanMonitored(account.coding_plan_provider)
 
   const { data, error, isError, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['account-coding-plan-quota', account.id],
@@ -142,7 +145,9 @@ export function CodingPlanQuotaCell({
 
   if (!monitored) {
     return (
-      <span className='text-muted-foreground text-xs'>{t('Not monitored')}</span>
+      <span className='text-muted-foreground text-xs'>
+        {t('Not monitored')}
+      </span>
     )
   }
 

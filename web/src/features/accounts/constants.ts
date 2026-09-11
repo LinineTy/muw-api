@@ -1,4 +1,6 @@
 // @muw-owned
+import { CODING_PLAN_PROVIDER_DISABLED } from '@/features/channels/constants'
+
 /**
  * 编码套餐余量的自动刷新间隔。**与后端自动启停任务的轮询节奏对齐**
  * （`service/coding_plan_auto_control_task.go` 的 codingPlanAutoControlTickInterval = 30s）：
@@ -29,4 +31,20 @@ export function writeQuotaAutoRefresh(enabled: boolean): void {
   } catch {
     // 隐私模式下 localStorage 可能不可用，忽略即可（仅影响持久化）。
   }
+}
+
+/**
+ * 账户是否开启了编码套餐余量监控。
+ *
+ * ⚠️ 后端用**字面量 `"none"`** 表示「显式关闭监控」（`service.CodingPlanProviderDisabled`），
+ * 抽屉保存时也会把关闭状态写成 `"none"`。所以**不能用真值判断**：
+ * `Boolean('none') === true`，会把关闭的账户误判成开启 —— 卡片照样渲染「编码套餐余量」块，
+ * 还会真去发余量查询，后端回 `coding plan monitoring is disabled for this account`，
+ * 界面就成了「查询失败」+ 英文报错 toast（2026-09-11 maintainer反馈）。
+ *
+ * 与抽屉表单（account-mutate-drawer.tsx）里的判定保持同一口径：空串与 `"none"` 都算关闭。
+ */
+export function isCodingPlanMonitored(provider?: string | null): boolean {
+  const value = (provider ?? '').trim()
+  return value !== '' && value !== CODING_PLAN_PROVIDER_DISABLED
 }
