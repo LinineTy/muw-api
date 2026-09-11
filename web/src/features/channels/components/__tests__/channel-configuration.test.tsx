@@ -1766,8 +1766,10 @@ test('closing an edited channel retains its left exit direction after the parent
     await waitFor(() => expect(drawer).toHaveAttribute('data-ending-style'))
     expect(drawer).toBeInTheDocument()
     expect(drawer).toHaveAttribute('data-side', 'left')
-    expect(drawer).toHaveClass('left-0')
-    expect(drawer).not.toHaveClass('right-0')
+    // fork 的抽屉是浮动卡片式（左右各留 0.75rem 间距 + 圆角），
+    // 上游贴边写法是 left-0/right-0；这里校验方向仍然正确即可。
+    expect(drawer).toHaveClass('left-3')
+    expect(drawer).not.toHaveClass('right-3')
     await act(async () => {
       animation.resolve()
     })
