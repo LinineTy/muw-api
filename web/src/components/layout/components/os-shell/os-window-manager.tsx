@@ -119,10 +119,13 @@ export function OsWindowManager() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const visible = windows.filter((w) => !w.minimized)
-
   return (
     <>
+      {/* 桌面导航磁贴**常显**（2026-09-11 maintainer要求）：不再只在「没有可见窗口」时出现 ——
+          它是普通流内元素，而窗口是 absolute 定位，按 CSS 绘制顺序窗口天然盖在它上面，
+          所以常显不会挡住窗口；窗口没覆盖到的区域照样能点磁贴。
+          仍保留原来的最小化语义：窗口最小化后磁贴自然露出来。 */}
+      <OsDesktopPlaceholder />
       {windows.map((w) => {
         const nav = matchOsNavItem(items, w.url)
         return (
@@ -134,7 +137,6 @@ export function OsWindowManager() {
           />
         )
       })}
-      {visible.length === 0 ? <OsDesktopPlaceholder /> : null}
     </>
   )
 }

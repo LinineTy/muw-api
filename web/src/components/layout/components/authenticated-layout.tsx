@@ -1,3 +1,4 @@
+import { useLocation } from '@tanstack/react-router'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -17,37 +18,33 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect } from 'react'
-import { useLocation } from '@tanstack/react-router'
+
 import { AnimatedOutlet } from '@/components/page-transition'
 import { SkipToMain } from '@/components/skip-to-main'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { LayoutProvider } from '@/context/layout-provider'
 import { SearchProvider } from '@/context/search-provider'
-import { getCookie } from '@/lib/cookies'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { installParentAuthBridge } from '@/lib/auth-session'
+import { getCookie } from '@/lib/cookies'
 import { cn } from '@/lib/utils'
+import { useOsWindowsStore } from '@/stores/os-windows-store'
 
 import { AppHeader } from './app-header'
 import { AppSidebar } from './app-sidebar'
 import { MobileNavFab } from './mobile-nav-fab'
-import {
-  isSettingsUrl,
-  type OsShellOpenWindow,
-} from './os-shell/os-open'
-import { matchOsNavItem, useOsNavItems } from './os-shell/use-os-nav'
-import { useOsWindowsStore } from '@/stores/os-windows-store'
 import { OsDock } from './os-shell/os-dock'
+import { isSettingsUrl, type OsShellOpenWindow } from './os-shell/os-open'
 import { OsSideStrip } from './os-shell/os-side-strip'
 import { OsWindowManager } from './os-shell/os-window-manager'
+import { matchOsNavItem, useOsNavItems } from './os-shell/use-os-nav'
 
 type AuthenticatedLayoutProps = {
   children?: React.ReactNode
 }
 
 /** OS 壳多窗口的 iframe 内容检测:子应用退化为纯内容模式(无壳) */
-const IN_OS_WINDOW =
-  typeof window !== 'undefined' && window.self !== window.top
+const IN_OS_WINDOW = typeof window !== 'undefined' && window.self !== window.top
 
 /** iframe 内容模式:文档背景+壁纸层透明化(class 驱动,规则在 index.css),
  * 让窗口标题栏与主体统一透出主层玻璃底(避免分体感) */
@@ -86,7 +83,9 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
       <LayoutProvider>
         <SearchProvider>
           <SidebarProvider defaultOpen={defaultOpen} className='flex-col'>
-            <OsWindowContent>{props.children ?? <AnimatedOutlet />}</OsWindowContent>
+            <OsWindowContent>
+              {props.children ?? <AnimatedOutlet />}
+            </OsWindowContent>
           </SidebarProvider>
         </SearchProvider>
       </LayoutProvider>
@@ -148,9 +147,8 @@ function OsShellDesktopHost() {
       return true
     }
     return () => {
-      delete (
-        window as unknown as { __osShellOpenWindow?: unknown }
-      ).__osShellOpenWindow
+      delete (window as unknown as { __osShellOpenWindow?: unknown })
+        .__osShellOpenWindow
     }
   }, [items, openWindow])
 
@@ -159,7 +157,7 @@ function OsShellDesktopHost() {
       <OsWindowManager />
       {/* 左侧细竖条:[ 品牌 … 语言·主题·头像 ─── 快速导航·公告·第三方接入 ] */}
       <OsSideStrip />
-      {/* 底部 Dock(只剩中段):[ 搜索 | 开始磁贴 | 已打开窗口 ] */}
+      {/* 底部 Dock(整体居中、视觉分两节):[ 搜索 | 开始磁贴 ] [ 已打开窗口 ] */}
       <OsDock />
     </div>
   )

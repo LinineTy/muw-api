@@ -10,7 +10,6 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
-import { useDirection } from '@/context/direction-provider'
 import { useSearch } from '@/context/search-provider'
 import { MOTION_TRANSITION, MOTION_VARIANTS } from '@/lib/motion'
 import { cn } from '@/lib/utils'
@@ -59,8 +58,6 @@ function SearchBall() {
 export function OsDock() {
   const items = useOsNavItems()
   const [hovered, setHovered] = useState<string | null>(null)
-  const { dir } = useDirection()
-  const rtl = dir === 'rtl'
   const {
     windows,
     activeId,
@@ -102,9 +99,10 @@ export function OsDock() {
   }
 
   return (
-    // 外层只负责"把固定区钉在视口中心":窗口区是它的绝对定位子元素,
-    // 所以窗口增减时**固定区不会跟着漂**(合并成一颗时会有这个问题)
-    <div className='fixed bottom-3 left-1/2 z-[70] -translate-x-1/2'>
+    // 两块胶囊是**同一个 Dock 的两节**：外层整体居中，窗口区是普通 flex 子项，
+    // 不再贴边生长(旧做法把固定区钉死在视口中心、窗口区往外长,开窗后整体就偏了)。
+    // RTL 下 flex 行方向自动翻转,窗口区落到另一侧,无需再写 rtl 分支。
+    <div className='fixed bottom-3 left-1/2 z-[70] flex -translate-x-1/2 items-end gap-1.5'>
       <nav
         aria-label='Dock'
         className='bg-popover/70 border-border/60 flex items-end gap-1 rounded-2xl border px-2 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.16)] saturate-150 backdrop-blur-[8px]'
@@ -118,10 +116,7 @@ export function OsDock() {
       {windows.length > 0 ? (
         <nav
           aria-label='Dock Windows'
-          className={cn(
-            'bg-popover/70 border-border/60 absolute bottom-0 flex items-end gap-1 rounded-2xl border px-2 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.16)] saturate-150 backdrop-blur-[8px]',
-            rtl ? 'right-full mr-1.5' : 'left-full ml-1.5'
-          )}
+          className='bg-popover/70 border-border/60 flex items-end gap-1 rounded-2xl border px-2 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.16)] saturate-150 backdrop-blur-[8px]'
         >
           {windows.map((win) => {
             const nav = matchOsNavItem(items, win.url)
