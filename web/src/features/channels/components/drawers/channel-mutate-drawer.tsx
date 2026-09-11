@@ -16,10 +16,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ChannelBoundAccounts } from './channel-bound-accounts'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Link } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import {
   ArrowRight,
   ArrowLeft,
@@ -206,6 +205,7 @@ import { ParamOverrideEditorDialog } from '../dialogs/param-override-editor-dial
 import { StatusCodeRiskDialog } from '../dialogs/status-code-risk-dialog'
 import { ModelMappingEditor } from '../model-mapping-editor'
 import { UpstreamModelSelection } from '../upstream-model-selection'
+import { ChannelBoundAccounts } from './channel-bound-accounts'
 import {
   ChannelConfiguration,
   ChannelConfigurationStatusIndicator,
@@ -3049,16 +3049,13 @@ export function ChannelMutateDrawer({
         )}
 
         {/* General base_url for other types */}
-        {![3, 8, 22, 36, 45].includes(currentType) &&
-          !addressFromAccount && (
+        {![3, 8, 22, 36, 45].includes(currentType) && !addressFromAccount && (
           <FormField
             control={form.control}
             name='base_url'
             render={({ field }) => (
               <FormItem>
-                <FormLabel
-                  required={currentType === CHANNEL_TYPE_TASK_PLUGIN}
-                >
+                <FormLabel required={currentType === CHANNEL_TYPE_TASK_PLUGIN}>
                   {t('Base URL')}
                 </FormLabel>
                 <FormControl>
@@ -3161,336 +3158,176 @@ export function ChannelMutateDrawer({
           </Alert>
         )}
 
-            {/* 类型特定凭证输入 + 身份验证区：凭证真相源在账户时整体不渲染（否则会剩空卡片） */}
-            {!addressFromAccount && (
-        <div className='border-border/60 bg-muted/10 rounded-lg border p-4'>
-          <fieldset
-            disabled={sensitiveLocked}
-            className='space-y-4 disabled:opacity-60'
-          >
-            {/* Azure (type 3) */}
-            {currentType === 3 && (
-              <>
+        {/* 类型特定凭证输入 + 身份验证区：凭证真相源在账户时整体不渲染（否则会剩空卡片） */}
+        {!addressFromAccount && (
+          <div className='border-border/60 bg-muted/10 rounded-lg border p-4'>
+            <fieldset
+              disabled={sensitiveLocked}
+              className='space-y-4 disabled:opacity-60'
+            >
+              {/* Azure (type 3) */}
+              {currentType === 3 && (
+                <>
+                  <FormField
+                    control={form.control}
+                    name='base_url'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel required>
+                          {t('AZURE_OPENAI_ENDPOINT')}
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder={t(
+                              'e.g., https://docs-test-001.openai.azure.com'
+                            )}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t('Your Azure OpenAI endpoint URL')}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name='other'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel required>
+                          {t('Default API Version')}
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder={t('e.g., 2025-04-01-preview')}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t('Default API version for this channel')}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name='azure_responses_version'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Responses API Version')}</FormLabel>
+                        <FormControl>
+                          <Input placeholder={t('e.g., preview')} {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'Default Responses API version, if empty, will use the API version above'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </>
+              )}
+
+              {/* Custom (type 8) */}
+              {currentType === 8 && (
                 <FormField
                   control={form.control}
                   name='base_url'
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel required>
-                        {t('AZURE_OPENAI_ENDPOINT')}
+                        {t('Full Base URL (supports')} {'{'}
+                        {t('model')}
+                        {'}'} {t('variable)')}
                       </FormLabel>
                       <FormControl>
                         <Input
                           placeholder={t(
-                            'e.g., https://docs-test-001.openai.azure.com'
+                            'e.g., https://api.openai.com/v1/chat/completions'
                           )}
                           {...field}
                         />
                       </FormControl>
                       <FormDescription>
-                        {t('Your Azure OpenAI endpoint URL')}
+                        {t('Enter the complete URL, supports')} {'{'}
+                        {t('model')}
+                        {'}'} {t('variable')}
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+              )}
+
+              {/* Xunfei/Spark (type 18) */}
+              {currentType === 18 && (
                 <FormField
                   control={form.control}
                   name='other'
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel required>{t('Default API Version')}</FormLabel>
+                      <FormLabel required>{t('Model Version')}</FormLabel>
                       <FormControl>
-                        <Input
-                          placeholder={t('e.g., 2025-04-01-preview')}
-                          {...field}
+                        <Input placeholder={t('e.g., v2.1')} {...field} />
+                      </FormControl>
+                      <FormDescription>
+                        {t(
+                          'Spark model version, e.g., v2.1 (version number in API URL)'
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {/* OpenRouter (type 20) */}
+              {currentType === 20 && (
+                <FormField
+                  control={form.control}
+                  name='is_enterprise_account'
+                  render={({ field }) => (
+                    <FormItem className='flex items-center justify-between'>
+                      <div className='space-y-0.5'>
+                        <FormLabel>{t('Enterprise Account')}</FormLabel>
+                        <FormDescription>
+                          {t(
+                            'Enable if this is an OpenRouter enterprise account with special response format'
+                          )}
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          disabled={sensitiveLocked}
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
                         />
                       </FormControl>
-                      <FormDescription>
-                        {t('Default API version for this channel')}
-                      </FormDescription>
-                      <FormMessage />
                     </FormItem>
                   )}
                 />
+              )}
+
+              {/* AWS (type 33) */}
+              {currentType === 33 && (
                 <FormField
                   control={form.control}
-                  name='azure_responses_version'
+                  name='aws_key_type'
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('Responses API Version')}</FormLabel>
-                      <FormControl>
-                        <Input placeholder={t('e.g., preview')} {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        {t(
-                          'Default Responses API version, if empty, will use the API version above'
-                        )}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </>
-            )}
-
-            {/* Custom (type 8) */}
-            {currentType === 8 && (
-              <FormField
-                control={form.control}
-                name='base_url'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel required>
-                      {t('Full Base URL (supports')} {'{'}
-                      {t('model')}
-                      {'}'} {t('variable)')}
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder={t(
-                          'e.g., https://api.openai.com/v1/chat/completions'
-                        )}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {t('Enter the complete URL, supports')} {'{'}
-                      {t('model')}
-                      {'}'} {t('variable')}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-
-            {/* Xunfei/Spark (type 18) */}
-            {currentType === 18 && (
-              <FormField
-                control={form.control}
-                name='other'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel required>{t('Model Version')}</FormLabel>
-                    <FormControl>
-                      <Input placeholder={t('e.g., v2.1')} {...field} />
-                    </FormControl>
-                    <FormDescription>
-                      {t(
-                        'Spark model version, e.g., v2.1 (version number in API URL)'
-                      )}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-
-            {/* OpenRouter (type 20) */}
-            {currentType === 20 && (
-              <FormField
-                control={form.control}
-                name='is_enterprise_account'
-                render={({ field }) => (
-                  <FormItem className='flex items-center justify-between'>
-                    <div className='space-y-0.5'>
-                      <FormLabel>{t('Enterprise Account')}</FormLabel>
-                      <FormDescription>
-                        {t(
-                          'Enable if this is an OpenRouter enterprise account with special response format'
-                        )}
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        disabled={sensitiveLocked}
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-            )}
-
-            {/* AWS (type 33) */}
-            {currentType === 33 && (
-              <FormField
-                control={form.control}
-                name='aws_key_type'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('AWS Key Format')}</FormLabel>
-                    <Select
-                      disabled={sensitiveLocked}
-                      items={[
-                        {
-                          value: 'ak_sk',
-                          label: t('AccessKey / SecretAccessKey'),
-                        },
-                        {
-                          value: 'api_key',
-                          label: t('API Key'),
-                        },
-                      ]}
-                      onValueChange={field.onChange}
-                      value={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={t('Select key format')} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent alignItemWithTrigger={false}>
-                        <SelectGroup>
-                          <SelectItem value='ak_sk'>
-                            {t('AccessKey / SecretAccessKey')}
-                          </SelectItem>
-                          <SelectItem value='api_key'>
-                            {t('API Key')}
-                          </SelectItem>
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      {field.value === 'api_key'
-                        ? t('API Key mode: use APIKey|Region')
-                        : t('AK/SK mode: use AccessKey|SecretAccessKey|Region')}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-
-            {/* AI Proxy Library (type 21) */}
-            {currentType === 21 && (
-              <FormField
-                control={form.control}
-                name='other'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel required>{t('Knowledge Base ID')}</FormLabel>
-                    <FormControl>
-                      <Input placeholder={t('e.g., 123456')} {...field} />
-                    </FormControl>
-                    <FormDescription>
-                      {t('Enter the knowledge base ID')}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-
-            {/* FastGPT (type 22) */}
-            {currentType === 22 && (
-              <FormField
-                control={form.control}
-                name='base_url'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Private Deployment URL')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder={t('e.g., https://fastgpt.run/api/openapi')}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {t(
-                        'For private deployments, format: https://fastgpt.run/api/openapi'
-                      )}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-
-            {/* SunoAPI (type 36) */}
-            {currentType === 36 && (
-              <FormField
-                control={form.control}
-                name='base_url'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel required>
-                      {t('API Base URL (Important: Not Chat API)')}
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder={t(
-                          'e.g., https://api.example.com (path before /suno)'
-                        )}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {t(
-                        'Enter the path before /suno, usually just the domain'
-                      )}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-
-            {/* Cloudflare Workers AI (type 39) */}
-            {currentType === 39 && (
-              <FormField
-                control={form.control}
-                name='other'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel required>{t('Account ID')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder={t('e.g., d6b5da8hk1awo8nap34ube6gh')}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {t('Your Cloudflare Account ID')}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-
-            {/* SiliconFlow (type 40) */}
-            {currentType === 40 && (
-              <Alert>
-                <AlertDescription>
-                  {t('Referral link:')}{' '}
-                  <a
-                    href='https://cloud.siliconflow.cn/i/hij0YNTZ'
-                    target='_blank'
-                    rel='noopener noreferrer'
-                    className='text-primary underline'
-                  >
-                    {t('https://cloud.siliconflow.cn/i/hij0YNTZ')}
-                  </a>
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {/* Vertex AI (type 41) */}
-            {currentType === 41 && (
-              <>
-                <FormField
-                  control={form.control}
-                  name='vertex_key_type'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('Vertex AI Key Format')}</FormLabel>
+                      <FormLabel>{t('AWS Key Format')}</FormLabel>
                       <Select
                         disabled={sensitiveLocked}
                         items={[
-                          { value: 'json', label: t('JSON') },
+                          {
+                            value: 'ak_sk',
+                            label: t('AccessKey / SecretAccessKey'),
+                          },
                           {
                             value: 'api_key',
                             label: t('API Key'),
@@ -3501,12 +3338,14 @@ export function ChannelMutateDrawer({
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue />
+                            <SelectValue placeholder={t('Select key format')} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent alignItemWithTrigger={false}>
                           <SelectGroup>
-                            <SelectItem value='json'>{t('JSON')}</SelectItem>
+                            <SelectItem value='ak_sk'>
+                              {t('AccessKey / SecretAccessKey')}
+                            </SelectItem>
                             <SelectItem value='api_key'>
                               {t('API Key')}
                             </SelectItem>
@@ -3514,618 +3353,794 @@ export function ChannelMutateDrawer({
                         </SelectContent>
                       </Select>
                       <FormDescription>
-                        {field.value === 'json'
-                          ? t('JSON format supports service account JSON files')
-                          : t('API Key mode (does not support batch creation)')}
+                        {field.value === 'api_key'
+                          ? t('API Key mode: use APIKey|Region')
+                          : t(
+                              'AK/SK mode: use AccessKey|SecretAccessKey|Region'
+                            )}
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                {vertexKeyType === 'json' && (
-                  <FormItem>
-                    <FormLabel>{t('Service account JSON file(s)')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        type='file'
-                        accept='.json,application/json'
-                        multiple={isBatchMode}
-                        onChange={async (e) => {
-                          const fileList = e.target.files
-                          const files = fileList ? [...fileList] : []
-                          // allow re-selecting the same file
-                          e.target.value = ''
+              )}
 
-                          if (files.length === 0) {
-                            toast.info(t('Please upload key file(s)'))
-                            return
-                          }
-
-                          const keys: unknown[] = []
-                          for (const file of files) {
-                            try {
-                              const txt = await file.text()
-                              keys.push(JSON.parse(txt))
-                            } catch {
-                              toast.error(
-                                t('Failed to parse JSON file: {{name}}', {
-                                  name: file.name,
-                                })
-                              )
-                              return
-                            }
-                          }
-
-                          if (keys.length === 0) {
-                            toast.info(t('Please upload key file(s)'))
-                            return
-                          }
-
-                          const keyValue = isBatchMode
-                            ? JSON.stringify(keys)
-                            : JSON.stringify(keys[0])
-
-                          form.setValue('key', keyValue, {
-                            shouldDirty: true,
-                            shouldValidate: true,
-                          })
-
-                          toast.success(
-                            t('Parsed {{count}} service account file(s)', {
-                              count: keys.length,
-                            })
-                          )
-                        }}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {isBatchMode
-                        ? t('Upload multiple JSON files in batch modes')
-                        : t('Upload a single service account JSON file')}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
+              {/* AI Proxy Library (type 21) */}
+              {currentType === 21 && (
                 <FormField
                   control={form.control}
                   name='other'
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel required>{t('Deployment Region')}</FormLabel>
+                      <FormLabel required>{t('Knowledge Base ID')}</FormLabel>
                       <FormControl>
-                        <Textarea
-                          placeholder={t(
-                            'e.g., us-central1 or JSON format for model-specific regions'
-                          )}
-                          rows={3}
-                          {...field}
-                        />
+                        <Input placeholder={t('e.g., 123456')} {...field} />
                       </FormControl>
                       <FormDescription>
-                        {t('Enter deployment region or JSON mapping:')} {'{'}
-                        {t(
-                          '"default": "us-central1", "claude-3-5-sonnet-20240620": "europe-west1"'
-                        )}
-                        {'}'}
+                        {t('Enter the knowledge base ID')}
                       </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </>
-            )}
-
-            {/* VolcEngine (type 45) */}
-            {currentType === 45 && !doubaoApiEditUnlocked && (
-              <FormField
-                control={form.control}
-                name='base_url'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel
-                      required
-                      className='cursor-pointer select-none'
-                      onClick={handleApiConfigSecretClick}
-                    >
-                      {t('API Base URL')}
-                    </FormLabel>
-                    <Select
-                      disabled={sensitiveLocked}
-                      items={[
-                        {
-                          value: 'https://ark.cn-beijing.volces.com',
-                          label: t('https://ark.cn-beijing.volces.com'),
-                        },
-                        {
-                          value: 'https://ark.ap-southeast.bytepluses.com',
-                          label: t('https://ark.ap-southeast.bytepluses.com'),
-                        },
-                      ]}
-                      onValueChange={field.onChange}
-                      value={
-                        field.value === 'doubao-coding-plan'
-                          ? 'https://ark.cn-beijing.volces.com'
-                          : field.value || 'https://ark.cn-beijing.volces.com'
-                      }
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent alignItemWithTrigger={false}>
-                        <SelectGroup>
-                          <SelectItem value='https://ark.cn-beijing.volces.com'>
-                            {t('https://ark.cn-beijing.volces.com')}
-                          </SelectItem>
-                          <SelectItem value='https://ark.ap-southeast.bytepluses.com'>
-                            {t('https://ark.ap-southeast.bytepluses.com')}
-                          </SelectItem>
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      {t('Select the API endpoint region')}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-
-            {/* VolcEngine (type 45) - Custom API URL (unlocked) */}
-            {currentType === 45 && doubaoApiEditUnlocked && (
-              <FormField
-                control={form.control}
-                name='base_url'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel required>{t('API Base URL')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder={t(
-                          'e.g., https://ark.cn-beijing.volces.com'
-                        )}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {t('Enter custom API endpoint URL')}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-
-            {/* Coze (type 49) */}
-            {currentType === 49 && (
-              <FormField
-                control={form.control}
-                name='other'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel required>{t('Agent ID')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder={t('e.g., 7342866812345')}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {t('Enter the Coze agent ID')}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-
-
-            {currentType === CHANNEL_TYPE_ADVANCED_CUSTOM && (
-              <FormField
-                control={form.control}
-                name='advanced_custom'
-                render={({ field }) => (
-                  <FormItem className='space-y-3 border-y py-4'>
-                    <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
-                      <div className='space-y-2'>
-                        <FormLabel>{t('Advanced Custom Routes')}</FormLabel>
-                        <div className='flex flex-wrap gap-2'>
-                          <Badge variant='secondary'>
-                            {t('Routes')}: {advancedCustomStats.routeCount}
-                          </Badge>
-                          {advancedCustomRouteTypeLabels.map((label) => (
-                            <Badge
-                              key={label}
-                              variant='outline'
-                              className='max-w-[12rem]'
-                              title={label}
-                            >
-                              <span className='truncate'>{label}</span>
-                            </Badge>
-                          ))}
-                          {hiddenAdvancedCustomRouteTypeCount > 0 && (
-                            <Badge
-                              variant='outline'
-                              title={advancedCustomRouteTypeTitle}
-                            >
-                              +{hiddenAdvancedCustomRouteTypeCount}
-                            </Badge>
-                          )}
-                          {!advancedCustomStats.valid && (
-                            <Badge variant='destructive'>
-                              {t('Incomplete')}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      <Button
-                        type='button'
-                        variant='outline'
-                        size='sm'
-                        onClick={() => setAdvancedCustomEditorOpen(true)}
-                      >
-                        <Route className='mr-2 h-4 w-4' />
-                        {t('Configure routes')}
-                      </Button>
-                    </div>
-                    <FormControl>
-                      <input type='hidden' {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-
-            {/* 凭证真相源在账户时，密钥输入区/Add Mode 整体收敛（对齐 main 的三元互斥） */}
-            {!addressFromAccount && (
-            <ChannelAuthSection>
-              {!isEditing && (
-                <FormField
-                  control={form.control}
-                  name='multi_key_mode'
-                  render={({ field }) => (
-                    <FormItem className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
-                      <FormLabel className='text-muted-foreground text-xs font-medium'>
-                        {t('Add Mode')}
-                      </FormLabel>
-                      <Select
-                        disabled={sensitiveLocked}
-                        items={addModeOptions.map((option) => ({
-                          value: option.value,
-                          label: t(option.label),
-                        }))}
-                        onValueChange={field.onChange}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger size='sm' className='w-full sm:w-56'>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent alignItemWithTrigger={false}>
-                          <SelectGroup>
-                            {addModeOptions.map((option) => (
-                              <SelectItem
-                                key={option.value}
-                                value={option.value}
-                              >
-                                {t(option.label)}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               )}
 
-              <FormField
-                control={form.control}
-                name='key'
-                render={({ field }) => {
-                  let keyPlaceholder = t(getKeyPromptForType(currentType))
-                  if (isEditing) {
-                    keyPlaceholder = t('Leave empty to keep existing key')
-                  } else if (
-                    currentType === 33 &&
-                    awsKeyType === 'api_key' &&
-                    isBatchMode
-                  ) {
-                    keyPlaceholder = t(
-                      'Enter API Key, one per line, format: APIKey|Region'
-                    )
-                  } else if (currentType === 33 && awsKeyType === 'api_key') {
-                    keyPlaceholder = t('Enter API Key, format: APIKey|Region')
-                  } else if (currentType === 33 && isBatchMode) {
-                    keyPlaceholder = t(
-                      'Enter key, one per line, format: AccessKey|SecretAccessKey|Region'
-                    )
-                  } else if (currentType === 33) {
-                    keyPlaceholder = t(
-                      'Enter key, format: AccessKey|SecretAccessKey|Region'
-                    )
-                  } else if (isBatchMode) {
-                    keyPlaceholder = t(
-                      'Enter one key per line for batch creation'
-                    )
-                  }
-
-                  let keyDescription: ReactNode = t(FIELD_DESCRIPTIONS.KEY)
-                  if (isEditing) {
-                    let keyModeDescription = t(
-                      'Append mode: New keys will be added to the end of the existing key list'
-                    )
-                    if (keyMode === 'replace') {
-                      keyModeDescription = t(
-                        'Replace mode: Will completely replace all existing keys'
-                      )
-                    }
-                    keyDescription = (
-                      <>
-                        {t(
-                          'Enter new key to update, or leave empty to keep current key'
-                        )}
-                        {isMultiKeyChannel && (
-                          <span className='text-warning mt-1 block'>
-                            {keyModeDescription}
-                          </span>
-                        )}
-                      </>
-                    )
-                  } else if (isBatchMode) {
-                    keyDescription = t(
-                      'Enter one API key per line for batch creation'
-                    )
-                  }
-                  return (
+              {/* FastGPT (type 22) */}
+              {currentType === 22 && (
+                <FormField
+                  control={form.control}
+                  name='base_url'
+                  render={({ field }) => (
                     <FormItem>
-                      <FormLabel required>{t('API Key')}</FormLabel>
+                      <FormLabel>{t('Private Deployment URL')}</FormLabel>
                       <FormControl>
-                        <Textarea
-                          placeholder={keyPlaceholder}
-                          rows={isBatchMode ? 8 : 4}
+                        <Input
+                          placeholder={t(
+                            'e.g., https://fastgpt.run/api/openapi'
+                          )}
                           {...field}
                         />
                       </FormControl>
                       <FormDescription>
-                        <span className='flex flex-col gap-2'>
-                          <span>{keyDescription}</span>
-                          {!isEditing && isBatchMode && (
-                            <Button
-                              type='button'
-                              variant='outline'
-                              size='sm'
-                              onClick={handleDeduplicateKeys}
-                              className='w-fit'
-                            >
-                              <Trash2 className='mr-2 h-4 w-4' />
-                              {t('Remove Duplicates')}
-                            </Button>
-                          )}
-                        </span>
+                        {t(
+                          'For private deployments, format: https://fastgpt.run/api/openapi'
+                        )}
                       </FormDescription>
-                      {isEditing && canRevealChannelKey && (
-                        <div className='border-border/60 mt-4 flex flex-col gap-3 border-y border-dashed py-4'>
-                          <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
-                            <div>
-                              <p className='text-sm font-medium'>
-                                {t('Current key')}
-                              </p>
-                              <p className='text-muted-foreground text-xs'>
-                                {t(
-                                  'Verification required to reveal the saved key.'
-                                )}
-                              </p>
-                            </div>
-                            <div className='flex items-center gap-2'>
-                              <Button
-                                type='button'
-                                variant='outline'
-                                size='sm'
-                                onClick={handleRevealKey}
-                                disabled={
-                                  isChannelKeyLoading || verification.isActive
-                                }
-                              >
-                                {isChannelKeyLoading ||
-                                verification.isActive ? (
-                                  <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                                ) : (
-                                  <Eye className='mr-2 h-4 w-4' />
-                                )}
-                                {t('Reveal key')}
-                              </Button>
-                              <Button
-                                type='button'
-                                variant='ghost'
-                                size='sm'
-                                onClick={async () => {
-                                  if (channelKey) {
-                                    await copyToClipboard(channelKey)
-                                  }
-                                }}
-                                disabled={!channelKey}
-                              >
-                                <Copy className='mr-2 h-4 w-4' />
-                                {t('Copy')}
-                              </Button>
-                            </div>
-                          </div>
-                          <Input
-                            readOnly
-                            value={channelKey ?? ''}
-                            placeholder={t('Hidden — verify to reveal')}
-                            className='font-mono'
-                          />
-                        </div>
-                      )}
                       <FormMessage />
                     </FormItem>
-                  )
-                }}
-              />
+                  )}
+                />
+              )}
 
-              {currentType === 57 && (
-                <div className='border-border/60 flex flex-col gap-3 border-y py-4'>
-                  <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
-                    <div className='text-muted-foreground text-xs'>
-                      {t(
-                        'Codex channels use an OAuth JSON credential as the key.'
-                      )}
-                    </div>
-                    <div className='flex flex-wrap items-center gap-2'>
-                      {isEditing && channelId && (
+              {/* SunoAPI (type 36) */}
+              {currentType === 36 && (
+                <FormField
+                  control={form.control}
+                  name='base_url'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel required>
+                        {t('API Base URL (Important: Not Chat API)')}
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder={t(
+                            'e.g., https://api.example.com (path before /suno)'
+                          )}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t(
+                          'Enter the path before /suno, usually just the domain'
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {/* Cloudflare Workers AI (type 39) */}
+              {currentType === 39 && (
+                <FormField
+                  control={form.control}
+                  name='other'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel required>{t('Account ID')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder={t('e.g., d6b5da8hk1awo8nap34ube6gh')}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t('Your Cloudflare Account ID')}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {/* SiliconFlow (type 40) */}
+              {currentType === 40 && (
+                <Alert>
+                  <AlertDescription>
+                    {t('Referral link:')}{' '}
+                    <a
+                      href='https://cloud.siliconflow.cn/i/hij0YNTZ'
+                      target='_blank'
+                      rel='noopener noreferrer'
+                      className='text-primary underline'
+                    >
+                      {t('https://cloud.siliconflow.cn/i/hij0YNTZ')}
+                    </a>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Vertex AI (type 41) */}
+              {currentType === 41 && (
+                <>
+                  <FormField
+                    control={form.control}
+                    name='vertex_key_type'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Vertex AI Key Format')}</FormLabel>
+                        <Select
+                          disabled={sensitiveLocked}
+                          items={[
+                            { value: 'json', label: t('JSON') },
+                            {
+                              value: 'api_key',
+                              label: t('API Key'),
+                            },
+                          ]}
+                          onValueChange={field.onChange}
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent alignItemWithTrigger={false}>
+                            <SelectGroup>
+                              <SelectItem value='json'>{t('JSON')}</SelectItem>
+                              <SelectItem value='api_key'>
+                                {t('API Key')}
+                              </SelectItem>
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          {field.value === 'json'
+                            ? t(
+                                'JSON format supports service account JSON files'
+                              )
+                            : t(
+                                'API Key mode (does not support batch creation)'
+                              )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {vertexKeyType === 'json' && (
+                    <FormItem>
+                      <FormLabel>{t('Service account JSON file(s)')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          type='file'
+                          accept='.json,application/json'
+                          multiple={isBatchMode}
+                          onChange={async (e) => {
+                            const fileList = e.target.files
+                            const files = fileList ? [...fileList] : []
+                            // allow re-selecting the same file
+                            e.target.value = ''
+
+                            if (files.length === 0) {
+                              toast.info(t('Please upload key file(s)'))
+                              return
+                            }
+
+                            const keys: unknown[] = []
+                            for (const file of files) {
+                              try {
+                                const txt = await file.text()
+                                keys.push(JSON.parse(txt))
+                              } catch {
+                                toast.error(
+                                  t('Failed to parse JSON file: {{name}}', {
+                                    name: file.name,
+                                  })
+                                )
+                                return
+                              }
+                            }
+
+                            if (keys.length === 0) {
+                              toast.info(t('Please upload key file(s)'))
+                              return
+                            }
+
+                            const keyValue = isBatchMode
+                              ? JSON.stringify(keys)
+                              : JSON.stringify(keys[0])
+
+                            form.setValue('key', keyValue, {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            })
+
+                            toast.success(
+                              t('Parsed {{count}} service account file(s)', {
+                                count: keys.length,
+                              })
+                            )
+                          }}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {isBatchMode
+                          ? t('Upload multiple JSON files in batch modes')
+                          : t('Upload a single service account JSON file')}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                  <FormField
+                    control={form.control}
+                    name='other'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel required>{t('Deployment Region')}</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder={t(
+                              'e.g., us-central1 or JSON format for model-specific regions'
+                            )}
+                            rows={3}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t('Enter deployment region or JSON mapping:')} {'{'}
+                          {t(
+                            '"default": "us-central1", "claude-3-5-sonnet-20240620": "europe-west1"'
+                          )}
+                          {'}'}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </>
+              )}
+
+              {/* VolcEngine (type 45) */}
+              {currentType === 45 && !doubaoApiEditUnlocked && (
+                <FormField
+                  control={form.control}
+                  name='base_url'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel
+                        required
+                        className='cursor-pointer select-none'
+                        onClick={handleApiConfigSecretClick}
+                      >
+                        {t('API Base URL')}
+                      </FormLabel>
+                      <Select
+                        disabled={sensitiveLocked}
+                        items={[
+                          {
+                            value: 'https://ark.cn-beijing.volces.com',
+                            label: t('https://ark.cn-beijing.volces.com'),
+                          },
+                          {
+                            value: 'https://ark.ap-southeast.bytepluses.com',
+                            label: t('https://ark.ap-southeast.bytepluses.com'),
+                          },
+                        ]}
+                        onValueChange={field.onChange}
+                        value={
+                          field.value === 'doubao-coding-plan'
+                            ? 'https://ark.cn-beijing.volces.com'
+                            : field.value || 'https://ark.cn-beijing.volces.com'
+                        }
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent alignItemWithTrigger={false}>
+                          <SelectGroup>
+                            <SelectItem value='https://ark.cn-beijing.volces.com'>
+                              {t('https://ark.cn-beijing.volces.com')}
+                            </SelectItem>
+                            <SelectItem value='https://ark.ap-southeast.bytepluses.com'>
+                              {t('https://ark.ap-southeast.bytepluses.com')}
+                            </SelectItem>
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        {t('Select the API endpoint region')}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {/* VolcEngine (type 45) - Custom API URL (unlocked) */}
+              {currentType === 45 && doubaoApiEditUnlocked && (
+                <FormField
+                  control={form.control}
+                  name='base_url'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel required>{t('API Base URL')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder={t(
+                            'e.g., https://ark.cn-beijing.volces.com'
+                          )}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t('Enter custom API endpoint URL')}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {/* Coze (type 49) */}
+              {currentType === 49 && (
+                <FormField
+                  control={form.control}
+                  name='other'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel required>{t('Agent ID')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder={t('e.g., 7342866812345')}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t('Enter the Coze agent ID')}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {currentType === CHANNEL_TYPE_ADVANCED_CUSTOM && (
+                <FormField
+                  control={form.control}
+                  name='advanced_custom'
+                  render={({ field }) => (
+                    <FormItem className='space-y-3 border-y py-4'>
+                      <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
+                        <div className='space-y-2'>
+                          <FormLabel>{t('Advanced Custom Routes')}</FormLabel>
+                          <div className='flex flex-wrap gap-2'>
+                            <Badge variant='secondary'>
+                              {t('Routes')}: {advancedCustomStats.routeCount}
+                            </Badge>
+                            {advancedCustomRouteTypeLabels.map((label) => (
+                              <Badge
+                                key={label}
+                                variant='outline'
+                                className='max-w-[12rem]'
+                                title={label}
+                              >
+                                <span className='truncate'>{label}</span>
+                              </Badge>
+                            ))}
+                            {hiddenAdvancedCustomRouteTypeCount > 0 && (
+                              <Badge
+                                variant='outline'
+                                title={advancedCustomRouteTypeTitle}
+                              >
+                                +{hiddenAdvancedCustomRouteTypeCount}
+                              </Badge>
+                            )}
+                            {!advancedCustomStats.valid && (
+                              <Badge variant='destructive'>
+                                {t('Incomplete')}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
                         <Button
                           type='button'
                           variant='outline'
                           size='sm'
-                          onClick={handleRefreshCodexCredential}
-                          disabled={
-                            sensitiveLocked || isCodexCredentialRefreshing
-                          }
+                          onClick={() => setAdvancedCustomEditorOpen(true)}
                         >
-                          {isCodexCredentialRefreshing ? (
-                            <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                          ) : (
-                            <RefreshCw className='mr-2 h-4 w-4' />
-                          )}
-                          {isCodexCredentialRefreshing
-                            ? t('Refreshing...')
-                            : t('Refresh credential')}
+                          <Route className='mr-2 h-4 w-4' />
+                          {t('Configure routes')}
                         </Button>
-                      )}
-                    </div>
-                  </div>
-                  <Alert className='border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-50'>
-                    <AlertDescription>
-                      {t(
-                        "Disclaimer: Personal use only. Do not distribute or share any credentials. This channel has prerequisites and requires prior setup; use it only if you understand the flow and risks, and comply with OpenAI's terms and policies. Credentials and configuration are for Codex CLI integration only, and are not intended for any other client, platform, or channel."
-                      )}
-                    </AlertDescription>
-                  </Alert>
-                </div>
-              )}
-
-              {isEditing && isMultiKeyChannel && (
-                <FormField
-                  control={form.control}
-                  name='key_mode'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('Key Update Mode')}</FormLabel>
-                      <Select
-                        disabled={sensitiveLocked}
-                        items={[
-                          {
-                            value: 'append',
-                            label: t('Append to existing keys'),
-                          },
-                          {
-                            value: 'replace',
-                            label: t('Replace all existing keys'),
-                          },
-                        ]}
-                        onValueChange={field.onChange}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent alignItemWithTrigger={false}>
-                          <SelectGroup>
-                            <SelectItem value='append'>
-                              {t('Append to existing keys')}
-                            </SelectItem>
-                            <SelectItem value='replace'>
-                              {t('Replace all existing keys')}
-                            </SelectItem>
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>
-                        {field.value === 'replace'
-                          ? t(
-                              'Replace mode: Will completely replace all existing keys'
-                            )
-                          : t(
-                              'Append mode: New keys will be added to the end of the existing key list'
-                            )}
-                      </FormDescription>
+                      </div>
+                      <FormControl>
+                        <input type='hidden' {...field} />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               )}
 
-              {(isMultiKeyChannel ||
-                (!isEditing && multiKeyMode === 'multi_to_single')) && (
-                <FormField
-                  control={form.control}
-                  name='multi_key_type'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('Multi-Key Strategy')}</FormLabel>
-                      <Select
-                        disabled={sensitiveLocked}
-                        items={[
-                          {
-                            value: 'random',
-                            label: t('Random'),
-                          },
-                          {
-                            value: 'polling',
-                            label: t('Polling'),
-                          },
-                        ]}
-                        onValueChange={field.onChange}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent alignItemWithTrigger={false}>
-                          <SelectGroup>
-                            <SelectItem value='random'>
-                              {t('Random')}
-                            </SelectItem>
-                            <SelectItem value='polling'>
-                              {t('Polling')}
-                            </SelectItem>
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>
-                        {multiKeyType === 'polling' ? (
-                          <span className='text-warning'>
-                            {t(
-                              'Polling mode requires Redis and memory cache, otherwise performance will be significantly degraded'
-                            )}
-                          </span>
-                        ) : (
-                          t(
-                            'Randomly select a key from the pool for each request'
+              {/* 凭证真相源在账户时，密钥输入区/Add Mode 整体收敛（对齐 main 的三元互斥） */}
+              {!addressFromAccount && (
+                <ChannelAuthSection>
+                  {!isEditing && (
+                    <FormField
+                      control={form.control}
+                      name='multi_key_mode'
+                      render={({ field }) => (
+                        <FormItem className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+                          <FormLabel className='text-muted-foreground text-xs font-medium'>
+                            {t('Add Mode')}
+                          </FormLabel>
+                          <Select
+                            disabled={sensitiveLocked}
+                            items={addModeOptions.map((option) => ({
+                              value: option.value,
+                              label: t(option.label),
+                            }))}
+                            onValueChange={field.onChange}
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger
+                                size='sm'
+                                className='w-full sm:w-56'
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent alignItemWithTrigger={false}>
+                              <SelectGroup>
+                                {addModeOptions.map((option) => (
+                                  <SelectItem
+                                    key={option.value}
+                                    value={option.value}
+                                  >
+                                    {t(option.label)}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
+                  <FormField
+                    control={form.control}
+                    name='key'
+                    render={({ field }) => {
+                      let keyPlaceholder = t(getKeyPromptForType(currentType))
+                      if (isEditing) {
+                        keyPlaceholder = t('Leave empty to keep existing key')
+                      } else if (
+                        currentType === 33 &&
+                        awsKeyType === 'api_key' &&
+                        isBatchMode
+                      ) {
+                        keyPlaceholder = t(
+                          'Enter API Key, one per line, format: APIKey|Region'
+                        )
+                      } else if (
+                        currentType === 33 &&
+                        awsKeyType === 'api_key'
+                      ) {
+                        keyPlaceholder = t(
+                          'Enter API Key, format: APIKey|Region'
+                        )
+                      } else if (currentType === 33 && isBatchMode) {
+                        keyPlaceholder = t(
+                          'Enter key, one per line, format: AccessKey|SecretAccessKey|Region'
+                        )
+                      } else if (currentType === 33) {
+                        keyPlaceholder = t(
+                          'Enter key, format: AccessKey|SecretAccessKey|Region'
+                        )
+                      } else if (isBatchMode) {
+                        keyPlaceholder = t(
+                          'Enter one key per line for batch creation'
+                        )
+                      }
+
+                      let keyDescription: ReactNode = t(FIELD_DESCRIPTIONS.KEY)
+                      if (isEditing) {
+                        let keyModeDescription = t(
+                          'Append mode: New keys will be added to the end of the existing key list'
+                        )
+                        if (keyMode === 'replace') {
+                          keyModeDescription = t(
+                            'Replace mode: Will completely replace all existing keys'
                           )
-                        )}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
+                        }
+                        keyDescription = (
+                          <>
+                            {t(
+                              'Enter new key to update, or leave empty to keep current key'
+                            )}
+                            {isMultiKeyChannel && (
+                              <span className='text-warning mt-1 block'>
+                                {keyModeDescription}
+                              </span>
+                            )}
+                          </>
+                        )
+                      } else if (isBatchMode) {
+                        keyDescription = t(
+                          'Enter one API key per line for batch creation'
+                        )
+                      }
+                      return (
+                        <FormItem>
+                          <FormLabel required>{t('API Key')}</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              placeholder={keyPlaceholder}
+                              rows={isBatchMode ? 8 : 4}
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            <span className='flex flex-col gap-2'>
+                              <span>{keyDescription}</span>
+                              {!isEditing && isBatchMode && (
+                                <Button
+                                  type='button'
+                                  variant='outline'
+                                  size='sm'
+                                  onClick={handleDeduplicateKeys}
+                                  className='w-fit'
+                                >
+                                  <Trash2 className='mr-2 h-4 w-4' />
+                                  {t('Remove Duplicates')}
+                                </Button>
+                              )}
+                            </span>
+                          </FormDescription>
+                          {isEditing && canRevealChannelKey && (
+                            <div className='border-border/60 mt-4 flex flex-col gap-3 border-y border-dashed py-4'>
+                              <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+                                <div>
+                                  <p className='text-sm font-medium'>
+                                    {t('Current key')}
+                                  </p>
+                                  <p className='text-muted-foreground text-xs'>
+                                    {t(
+                                      'Verification required to reveal the saved key.'
+                                    )}
+                                  </p>
+                                </div>
+                                <div className='flex items-center gap-2'>
+                                  <Button
+                                    type='button'
+                                    variant='outline'
+                                    size='sm'
+                                    onClick={handleRevealKey}
+                                    disabled={
+                                      isChannelKeyLoading ||
+                                      verification.isActive
+                                    }
+                                  >
+                                    {isChannelKeyLoading ||
+                                    verification.isActive ? (
+                                      <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                                    ) : (
+                                      <Eye className='mr-2 h-4 w-4' />
+                                    )}
+                                    {t('Reveal key')}
+                                  </Button>
+                                  <Button
+                                    type='button'
+                                    variant='ghost'
+                                    size='sm'
+                                    onClick={async () => {
+                                      if (channelKey) {
+                                        await copyToClipboard(channelKey)
+                                      }
+                                    }}
+                                    disabled={!channelKey}
+                                  >
+                                    <Copy className='mr-2 h-4 w-4' />
+                                    {t('Copy')}
+                                  </Button>
+                                </div>
+                              </div>
+                              <Input
+                                readOnly
+                                value={channelKey ?? ''}
+                                placeholder={t('Hidden — verify to reveal')}
+                                className='font-mono'
+                              />
+                            </div>
+                          )}
+                          <FormMessage />
+                        </FormItem>
+                      )
+                    }}
+                  />
+
+                  {currentType === 57 && (
+                    <div className='border-border/60 flex flex-col gap-3 border-y py-4'>
+                      <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+                        <div className='text-muted-foreground text-xs'>
+                          {t(
+                            'Codex channels use an OAuth JSON credential as the key.'
+                          )}
+                        </div>
+                        <div className='flex flex-wrap items-center gap-2'>
+                          {isEditing && channelId && (
+                            <Button
+                              type='button'
+                              variant='outline'
+                              size='sm'
+                              onClick={handleRefreshCodexCredential}
+                              disabled={
+                                sensitiveLocked || isCodexCredentialRefreshing
+                              }
+                            >
+                              {isCodexCredentialRefreshing ? (
+                                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                              ) : (
+                                <RefreshCw className='mr-2 h-4 w-4' />
+                              )}
+                              {isCodexCredentialRefreshing
+                                ? t('Refreshing...')
+                                : t('Refresh credential')}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      <Alert className='border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-50'>
+                        <AlertDescription>
+                          {t(
+                            "Disclaimer: Personal use only. Do not distribute or share any credentials. This channel has prerequisites and requires prior setup; use it only if you understand the flow and risks, and comply with OpenAI's terms and policies. Credentials and configuration are for Codex CLI integration only, and are not intended for any other client, platform, or channel."
+                          )}
+                        </AlertDescription>
+                      </Alert>
+                    </div>
                   )}
-                />
+
+                  {isEditing && isMultiKeyChannel && (
+                    <FormField
+                      control={form.control}
+                      name='key_mode'
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('Key Update Mode')}</FormLabel>
+                          <Select
+                            disabled={sensitiveLocked}
+                            items={[
+                              {
+                                value: 'append',
+                                label: t('Append to existing keys'),
+                              },
+                              {
+                                value: 'replace',
+                                label: t('Replace all existing keys'),
+                              },
+                            ]}
+                            onValueChange={field.onChange}
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent alignItemWithTrigger={false}>
+                              <SelectGroup>
+                                <SelectItem value='append'>
+                                  {t('Append to existing keys')}
+                                </SelectItem>
+                                <SelectItem value='replace'>
+                                  {t('Replace all existing keys')}
+                                </SelectItem>
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                          <FormDescription>
+                            {field.value === 'replace'
+                              ? t(
+                                  'Replace mode: Will completely replace all existing keys'
+                                )
+                              : t(
+                                  'Append mode: New keys will be added to the end of the existing key list'
+                                )}
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
+                  {(isMultiKeyChannel ||
+                    (!isEditing && multiKeyMode === 'multi_to_single')) && (
+                    <FormField
+                      control={form.control}
+                      name='multi_key_type'
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('Multi-Key Strategy')}</FormLabel>
+                          <Select
+                            disabled={sensitiveLocked}
+                            items={[
+                              {
+                                value: 'random',
+                                label: t('Random'),
+                              },
+                              {
+                                value: 'polling',
+                                label: t('Polling'),
+                              },
+                            ]}
+                            onValueChange={field.onChange}
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent alignItemWithTrigger={false}>
+                              <SelectGroup>
+                                <SelectItem value='random'>
+                                  {t('Random')}
+                                </SelectItem>
+                                <SelectItem value='polling'>
+                                  {t('Polling')}
+                                </SelectItem>
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                          <FormDescription>
+                            {multiKeyType === 'polling' ? (
+                              <span className='text-warning'>
+                                {t(
+                                  'Polling mode requires Redis and memory cache, otherwise performance will be significantly degraded'
+                                )}
+                              </span>
+                            ) : (
+                              t(
+                                'Randomly select a key from the pool for each request'
+                              )
+                            )}
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </ChannelAuthSection>
               )}
-            </ChannelAuthSection>
-            )}
-          </fieldset>
-        </div>
-            )}
+            </fieldset>
+          </div>
+        )}
       </ChannelApiAccessSection>
     </div>
   )

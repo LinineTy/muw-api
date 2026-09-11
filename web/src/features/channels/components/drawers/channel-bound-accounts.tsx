@@ -1,27 +1,10 @@
-/*
-Copyright (C) 2023-2026 QuantumNous
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-For commercial licensing, please contact support@quantumnous.com
-*/
-import { ArrowDown, ArrowUp, ExternalLink, Trash2 } from 'lucide-react'
-import { Link } from '@tanstack/react-router'
+// @muw-owned
 import { useQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
+import { ArrowDown, ArrowUp, ExternalLink, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useWatch, type UseFormReturn } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -84,7 +67,14 @@ type ChannelBoundAccountsProps = {
  */
 export function ChannelBoundAccounts(props: ChannelBoundAccountsProps) {
   const { t } = useTranslation()
-  const { form, isEditing, channelData, open, onCredentialModeChange, onAddressResolved } = props
+  const {
+    form,
+    isEditing,
+    channelData,
+    open,
+    onCredentialModeChange,
+    onAddressResolved,
+  } = props
 
   const originalBoundAccount = channelData?.data?.account
   const hasBoundAccount = isEditing && Boolean(originalBoundAccount)
@@ -288,137 +278,99 @@ export function ChannelBoundAccounts(props: ChannelBoundAccountsProps) {
                     {t('No account bound yet.')}
                   </p>
                 )}
-                            {boundBindings.map((binding, index) => {
-                                                    const meta =
-                                                      accountMetaById.get(
-                                                        binding.account_id
-                                                      ) ?? null
-                                                    return (
-                                                      <div
-                                                        key={binding.account_id}
-                                                        className='border-border/60 flex items-center justify-between gap-2 rounded-md border px-3 py-2'
-                                                      >
-                                                        <div className='flex min-w-0 items-center gap-2'>
-                                                          <Badge
-                                                            variant='secondary'
-                                                            className='shrink-0'
-                                                          >
-                                                            {index + 1}
-                                                          </Badge>
-                                                          <span className='truncate text-sm font-medium'>
-                                                            {meta?.name ??
-                                                              `#${binding.account_id}`}
-                                                          </span>
-                                                          <span className='bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-xs'>
-                                                            {channelTypeLabelOf(
-                                                              meta?.type ?? 0
-                                                            )}
-                                                          </span>
-                                                          <span className='text-muted-foreground hidden truncate font-mono text-xs sm:inline'>
-                                                            {meta?.key_masked ||
-                                                              bindingMetaById.get(
-                                                                binding.account_id
-                                                              )?.key_masked ||
-                                                              '-'}
-                                                          </span>
-                                                        </div>
-                                                        <div className='flex shrink-0 items-center gap-1'>
-                                                          <TooltipProvider delay={100}>
-                                                            <Tooltip>
-                                                              <TooltipTrigger
-                                                                render={
-                                                                  <Button
-                                                                    type='button'
-                                                                    variant='ghost'
-                                                                    size='icon-sm'
-                                                                    aria-label={t(
-                                                                      'Move up'
-                                                                    )}
-                                                                    disabled={index === 0}
-                                                                    onClick={() =>
-                                                                      moveBoundAccount(
-                                                                        index,
-                                                                        -1
-                                                                      )
-                                                                    }
-                                                                  >
-                                                                    <ArrowUp className='size-3.5' />
-                                                                  </Button>
-                                                                }
-                                                              />
-                                                              <TooltipContent>
-                                                                {t('Move up')}
-                                                              </TooltipContent>
-                                                            </Tooltip>
-                                                            <Tooltip>
-                                                              <TooltipTrigger
-                                                                render={
-                                                                  <Button
-                                                                    type='button'
-                                                                    variant='ghost'
-                                                                    size='icon-sm'
-                                                                    aria-label={t(
-                                                                      'Move down'
-                                                                    )}
-                                                                    disabled={
-                                                                      index ===
-                                                                      boundBindings.length -
-                                                                        1
-                                                                    }
-                                                                    onClick={() =>
-                                                                      moveBoundAccount(
-                                                                        index,
-                                                                        1
-                                                                      )
-                                                                    }
-                                                                  >
-                                                                    <ArrowDown className='size-3.5' />
-                                                                  </Button>
-                                                                }
-                                                              />
-                                                              <TooltipContent>
-                                                                {t('Move down')}
-                                                              </TooltipContent>
-                                                            </Tooltip>
-                                                            <Tooltip>
-                                                              <TooltipTrigger
-                                                                render={
-                                                                  <Button
-                                                                    type='button'
-                                                                    variant='ghost'
-                                                                    size='icon-sm'
-                                                                    aria-label={t('Remove')}
-                                                                    onClick={() =>
-                                                                      removeBoundAccount(
-                                                                        binding.account_id
-                                                                      )
-                                                                    }
-                                                                  >
-                                                                    <Trash2 className='size-3.5' />
-                                                                  </Button>
-                                                                }
-                                                              />
-                                                              <TooltipContent>
-                                                                {t('Remove')}
-                                                              </TooltipContent>
-                                                            </Tooltip>
-                                                          </TooltipProvider>
-                                                          <Switch
-                                                            aria-label={t(
-                                                              'Enabled for this channel'
-                                                            )}
-                                                            checked={binding.enabled}
-                                                            onCheckedChange={(checked) =>
-                                                              toggleBoundAccount(
-                                                                binding.account_id,
-                                                                checked === true
-                                                              )
-                                                            }
-                                                          />
-                                                        </div>
-                                                      </div>
-                                                    )
-                                                  })}
+                {boundBindings.map((binding, index) => {
+                  const meta = accountMetaById.get(binding.account_id) ?? null
+                  return (
+                    <div
+                      key={binding.account_id}
+                      className='border-border/60 flex items-center justify-between gap-2 rounded-md border px-3 py-2'
+                    >
+                      <div className='flex min-w-0 items-center gap-2'>
+                        <Badge variant='secondary' className='shrink-0'>
+                          {index + 1}
+                        </Badge>
+                        <span className='truncate text-sm font-medium'>
+                          {meta?.name ?? `#${binding.account_id}`}
+                        </span>
+                        <span className='bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-xs'>
+                          {channelTypeLabelOf(meta?.type ?? 0)}
+                        </span>
+                        <span className='text-muted-foreground hidden truncate font-mono text-xs sm:inline'>
+                          {meta?.key_masked ||
+                            bindingMetaById.get(binding.account_id)
+                              ?.key_masked ||
+                            '-'}
+                        </span>
+                      </div>
+                      <div className='flex shrink-0 items-center gap-1'>
+                        <TooltipProvider delay={100}>
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <Button
+                                  type='button'
+                                  variant='ghost'
+                                  size='icon-sm'
+                                  aria-label={t('Move up')}
+                                  disabled={index === 0}
+                                  onClick={() => moveBoundAccount(index, -1)}
+                                >
+                                  <ArrowUp className='size-3.5' />
+                                </Button>
+                              }
+                            />
+                            <TooltipContent>{t('Move up')}</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <Button
+                                  type='button'
+                                  variant='ghost'
+                                  size='icon-sm'
+                                  aria-label={t('Move down')}
+                                  disabled={index === boundBindings.length - 1}
+                                  onClick={() => moveBoundAccount(index, 1)}
+                                >
+                                  <ArrowDown className='size-3.5' />
+                                </Button>
+                              }
+                            />
+                            <TooltipContent>{t('Move down')}</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <Button
+                                  type='button'
+                                  variant='ghost'
+                                  size='icon-sm'
+                                  aria-label={t('Remove')}
+                                  onClick={() =>
+                                    removeBoundAccount(binding.account_id)
+                                  }
+                                >
+                                  <Trash2 className='size-3.5' />
+                                </Button>
+                              }
+                            />
+                            <TooltipContent>{t('Remove')}</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <Switch
+                          aria-label={t('Enabled for this channel')}
+                          checked={binding.enabled}
+                          onCheckedChange={(checked) =>
+                            toggleBoundAccount(
+                              binding.account_id,
+                              checked === true
+                            )
+                          }
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
                 {addableAccounts.length > 0 && (
                   <Combobox
                     options={addableAccounts.map((acc) => ({
@@ -427,7 +379,7 @@ export function ChannelBoundAccounts(props: ChannelBoundAccountsProps) {
                         acc.type ?? 0
                       )}）`,
                     }))}
-                    value={''}
+                    value={null}
                     onValueChange={(value: string | null) => {
                       if (value) addBoundAccount(Number(value))
                     }}
@@ -445,26 +397,26 @@ export function ChannelBoundAccounts(props: ChannelBoundAccountsProps) {
             )}
 
             {(isEditing ? hasBoundAccount : credentialMode === 'account') && (
-            <div className='text-muted-foreground space-y-1 rounded-md border border-dashed px-3 py-2.5 text-sm'>
-              <p>
-                {boundAccountId !== null
-                  ? t(
-                      'Credentials come from the bound accounts. Edit keys on the account page.'
-                    )
-                  : t(
-                      'Pick at least one account, or switch to manual entry to create one on save.'
-                    )}
-              </p>
-              {boundAccountId !== null && (
-                <Link
-                  to='/accounts'
-                  className='text-primary inline-flex items-center gap-1 text-xs hover:underline'
-                >
-                  <ExternalLink className='size-3' />
-                  {t('Manage in Accounts')}
-                </Link>
-              )}
-            </div>
+              <div className='text-muted-foreground space-y-1 rounded-md border border-dashed px-3 py-2.5 text-sm'>
+                <p>
+                  {boundAccountId !== null
+                    ? t(
+                        'Credentials come from the bound accounts. Edit keys on the account page.'
+                      )
+                    : t(
+                        'Pick at least one account, or switch to manual entry to create one on save.'
+                      )}
+                </p>
+                {boundAccountId !== null && (
+                  <Link
+                    to='/accounts'
+                    className='text-primary inline-flex items-center gap-1 text-xs hover:underline'
+                  >
+                    <ExternalLink className='size-3' />
+                    {t('Manage in Accounts')}
+                  </Link>
+                )}
+              </div>
             )}
           </div>
         )}
