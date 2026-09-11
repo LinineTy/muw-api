@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { ChannelBoundAccounts } from './channel-bound-accounts'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Link } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowRight,
@@ -39,6 +40,7 @@ import {
   Settings,
   SlidersHorizontal,
   Wand2,
+  ExternalLink,
 } from 'lucide-react'
 import {
   type ComponentProps,
@@ -505,6 +507,15 @@ export function ChannelMutateDrawer({
   const keyMode = formValues.key_mode
   const currentGroups = formValues.group
   const currentType = formValues.type
+  // 凭证来源与账户地址由 ChannelBoundAccounts 上报：决定「API 地址」区是只读行还是可编辑框
+  const [credentialMode, setCredentialMode] = useState<'account' | 'manual'>(
+    'account'
+  )
+  const [boundAccountAddr, setBoundAccountAddr] = useState('')
+  const hasBoundAccount = isEditing && Boolean(channelData?.data?.account)
+  const addressFromAccount = isEditing
+    ? hasBoundAccount
+    : credentialMode === 'account'
   const currentStatus = formValues.status
   const currentBaseUrl = formValues.base_url
   const currentTaskPluginKey = formValues.task_plugin_key
@@ -3016,11 +3027,122 @@ export function ChannelMutateDrawer({
   const connectionSection = (
     <div className='scroll-mt-4'>
       <ChannelApiAccessSection>
+        {/* 上游地址以账户为准（Channel.GetBaseURL）：绑了账户就没有输入框，只读展示 */}
+        {addressFromAccount && (
+          <div className='border-border/60 bg-muted/10 flex items-start justify-between gap-3 rounded-lg border p-3'>
+            <div className='min-w-0'>
+              <div className='text-muted-foreground text-xs font-medium'>
+                {t('Upstream address')}
+              </div>
+              <div className='truncate font-mono text-sm'>
+                {boundAccountAddr || t('Provider default address')}
+              </div>
+            </div>
+            <Link
+              to='/accounts'
+              className='text-primary inline-flex shrink-0 items-center gap-1 text-xs hover:underline'
+            >
+              <ExternalLink className='size-3' />
+              {t('Manage in Accounts')}
+            </Link>
+          </div>
+        )}
+
+        {/* General base_url for other types */}
+        {![3, 8, 22, 36, 45].includes(currentType) &&
+          !addressFromAccount && (
+          <FormField
+            control={form.control}
+            name='base_url'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel
+                  required={currentType === CHANNEL_TYPE_TASK_PLUGIN}
+                >
+                  {t('Base URL')}
+                </FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder={t(FIELD_PLACEHOLDERS.BASE_URL)}
+                    {...field}
+                  />
+                </FormControl>
+                {currentType !== CHANNEL_TYPE_TASK_PLUGIN && (
+                  <FormDescription>
+                    {t(
+                      'Custom API base URL. For official channels, New API has built-in addresses. Only fill this for third-party proxy sites or special endpoints. Do not add /v1 or trailing slash.'
+                    )}
+                  </FormDescription>
+                )}
+                {currentType === CHANNEL_TYPE_TASK_PLUGIN &&
+                  !boundTaskPlugin?.baseUrl && (
+                    <FormDescription>
+                      {t(
+                        'The upstream address this plugin sends requests to. The plugin declares no default, so it must be filled in.'
+                      )}
+                    </FormDescription>
+                  )}
+                {currentType === CHANNEL_TYPE_TASK_PLUGIN &&
+                  boundTaskPlugin?.baseUrl && (
+                    <FormDescription className='flex flex-wrap items-center gap-x-1'>
+                      <span>{t('Plugin default')}:</span>
+                      <span className='font-mono break-all'>
+                        {boundTaskPlugin.baseUrl}
+                      </span>
+                      {(field.value ?? '').trim().replace(/\/+$/, '') !==
+                        boundTaskPlugin.baseUrl && (
+                        <Button
+                          type='button'
+                          variant='link'
+                          size='xs'
+                          className='h-auto p-0'
+                          onClick={() =>
+                            form.setValue(
+                              'base_url',
+                              boundTaskPlugin.baseUrl ?? '',
+                              {
+                                shouldDirty: true,
+                                shouldValidate: true,
+                              }
+                            )
+                          }
+                        >
+                          {t('Use default')}
+                        </Button>
+                      )}
+                    </FormDescription>
+                  )}
+                <FormMessage />
+                {(taskPluginBaseUrlTrust?.plainHttp ||
+                  taskPluginBaseUrlTrust?.privateHost) && (
+                  <Alert>
+                    <AlertCircle />
+                    <AlertDescription>
+                      {taskPluginBaseUrlTrust?.plainHttp &&
+                        t(
+                          'This base URL uses plain HTTP, so the channel key is sent unencrypted.'
+                        )}
+                      {taskPluginBaseUrlTrust?.plainHttp &&
+                        taskPluginBaseUrlTrust?.privateHost &&
+                        ' '}
+                      {taskPluginBaseUrlTrust?.privateHost &&
+                        t(
+                          'This base URL points at a private or local network host. Make sure it is an upstream you control.'
+                        )}
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </FormItem>
+            )}
+          />
+        )}
         <ChannelBoundAccounts
           form={form}
           isEditing={isEditing}
           channelData={channelData}
           open={open}
+          onCredentialModeChange={setCredentialMode}
+          onAddressResolved={setBoundAccountAddr}
         />
 
         {CHANNEL_TYPE_WARNINGS[currentType] && (
@@ -3597,93 +3719,6 @@ export function ChannelMutateDrawer({
               />
             )}
 
-            {/* General base_url for other types */}
-            {![3, 8, 22, 36, 45].includes(currentType) && (
-              <FormField
-                control={form.control}
-                name='base_url'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel
-                      required={currentType === CHANNEL_TYPE_TASK_PLUGIN}
-                    >
-                      {t('Base URL')}
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder={t(FIELD_PLACEHOLDERS.BASE_URL)}
-                        {...field}
-                      />
-                    </FormControl>
-                    {currentType !== CHANNEL_TYPE_TASK_PLUGIN && (
-                      <FormDescription>
-                        {t(
-                          'Custom API base URL. For official channels, New API has built-in addresses. Only fill this for third-party proxy sites or special endpoints. Do not add /v1 or trailing slash.'
-                        )}
-                      </FormDescription>
-                    )}
-                    {currentType === CHANNEL_TYPE_TASK_PLUGIN &&
-                      !boundTaskPlugin?.baseUrl && (
-                        <FormDescription>
-                          {t(
-                            'The upstream address this plugin sends requests to. The plugin declares no default, so it must be filled in.'
-                          )}
-                        </FormDescription>
-                      )}
-                    {currentType === CHANNEL_TYPE_TASK_PLUGIN &&
-                      boundTaskPlugin?.baseUrl && (
-                        <FormDescription className='flex flex-wrap items-center gap-x-1'>
-                          <span>{t('Plugin default')}:</span>
-                          <span className='font-mono break-all'>
-                            {boundTaskPlugin.baseUrl}
-                          </span>
-                          {(field.value ?? '').trim().replace(/\/+$/, '') !==
-                            boundTaskPlugin.baseUrl && (
-                            <Button
-                              type='button'
-                              variant='link'
-                              size='xs'
-                              className='h-auto p-0'
-                              onClick={() =>
-                                form.setValue(
-                                  'base_url',
-                                  boundTaskPlugin.baseUrl ?? '',
-                                  {
-                                    shouldDirty: true,
-                                    shouldValidate: true,
-                                  }
-                                )
-                              }
-                            >
-                              {t('Use default')}
-                            </Button>
-                          )}
-                        </FormDescription>
-                      )}
-                    <FormMessage />
-                    {(taskPluginBaseUrlTrust?.plainHttp ||
-                      taskPluginBaseUrlTrust?.privateHost) && (
-                      <Alert>
-                        <AlertCircle />
-                        <AlertDescription>
-                          {taskPluginBaseUrlTrust?.plainHttp &&
-                            t(
-                              'This base URL uses plain HTTP, so the channel key is sent unencrypted.'
-                            )}
-                          {taskPluginBaseUrlTrust?.plainHttp &&
-                            taskPluginBaseUrlTrust?.privateHost &&
-                            ' '}
-                          {taskPluginBaseUrlTrust?.privateHost &&
-                            t(
-                              'This base URL points at a private or local network host. Make sure it is an upstream you control.'
-                            )}
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                  </FormItem>
-                )}
-              />
-            )}
 
             {currentType === CHANNEL_TYPE_ADVANCED_CUSTOM && (
               <FormField
