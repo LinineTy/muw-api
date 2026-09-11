@@ -116,6 +116,16 @@ function ConfigurationHarness(props: {
   )
 }
 
+// muw-api fork：新建渠道的凭证来源默认是「使用账户」，渠道侧的 API Key / Base URL /
+// Add Mode 按设计不渲染。下面这些用例守的是上游的表单、插件与批量请求契约（我们仍然在用），
+// 所以统一切到「手动填写」再填表；账户模式自己的契约由 fork 自有用例覆盖。
+async function switchToManualEntry() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Manual entry' }))
+  await waitFor(() =>
+    expect(screen.getByLabelText('API Key *')).toBeInTheDocument()
+  )
+}
+
 beforeEach(() => {
   pluginOptions = plugins
   editingChannel = channelSchema.parse({
@@ -159,6 +169,15 @@ beforeEach(() => {
     }
     if (url === '/api/prefill_group') {
       return { data: { success: true, data: [] } }
+    }
+    if (url === '/api/account/') {
+      // fork 自研账户体系：抽屉会拉可绑定账户列表
+      return {
+        data: {
+          success: true,
+          data: { items: [], total: 0, page: 1, page_size: 200 },
+        },
+      }
     }
     throw new Error(`Unexpected GET ${url}`)
   })
@@ -259,6 +278,7 @@ test('selecting a plugin opens a prefilled channel and creates its explicit bind
   expect(screen.getByRole('textbox', { name: /^Name\s*\*$/ })).toHaveValue(
     'Video A'
   )
+  await switchToManualEntry()
   expect(screen.getByDisplayValue('https://a.example')).toBeVisible()
   expect(screen.queryByLabelText('Task plugin *')).not.toBeInTheDocument()
   fireEvent.change(screen.getByLabelText('API Key *'), {
@@ -288,6 +308,7 @@ test('selecting a plugin opens a prefilled channel and creates its explicit bind
   )
   await user.click(screen.getByRole('button', { name: 'Open channel' }))
   await user.click(await screen.findByRole('option', { name: /Video A/ }))
+  await switchToManualEntry()
   expect(screen.getByLabelText('API Key *')).toHaveValue('')
 })
 
@@ -295,6 +316,7 @@ test('changing plugins preserves credentials and custom settings while applying 
   const user = userEvent.setup()
   render(<ConfigurationHarness />)
   await user.click(await screen.findByRole('option', { name: /Video A/ }))
+  await switchToManualEntry()
   fireEvent.change(screen.getByLabelText('API Key *'), {
     target: { value: 'keep-secret' },
   })
@@ -387,6 +409,7 @@ test('submitting a missing plugin address focuses its field without leaving crea
   const user = userEvent.setup()
   render(<ConfigurationHarness />)
   await user.click(await screen.findByRole('option', { name: /No Address/ }))
+  await switchToManualEntry()
   fireEvent.change(screen.getByLabelText('API Key *'), {
     target: { value: 'test-key' },
   })
@@ -470,6 +493,7 @@ test('creating a migrated provider uses its plugin binding instead of the legacy
     screen.queryByRole('option', { name: 'Sora Built-in #55' })
   ).not.toBeInTheDocument()
   await user.click(plugin)
+  await switchToManualEntry()
   fireEvent.change(screen.getByLabelText('API Key *'), {
     target: { value: 'test-key' },
   })
@@ -528,6 +552,7 @@ test.each(['create', 'edit'])(
       await user.click(
         screen.getByRole('option', { name: 'OpenAI Built-in #1' })
       )
+      await switchToManualEntry()
       fireEvent.change(screen.getByLabelText('Name *'), {
         target: { value: 'Combined channel' },
       })
@@ -760,6 +785,7 @@ test('loading a replacement plugin preserves an already selected legacy creation
   fireEvent.change(screen.getByLabelText('Name *'), {
     target: { value: 'Legacy draft' },
   })
+  await switchToManualEntry()
   fireEvent.change(screen.getByLabelText('API Key *'), {
     target: { value: 'draft-key' },
   })
@@ -806,6 +832,7 @@ test('an invalid setting in another category is revealed and focused on submissi
   const user = userEvent.setup()
   render(<ConfigurationHarness />)
   await user.click(await screen.findByRole('option', { name: /Video A/ }))
+  await switchToManualEntry()
   fireEvent.change(screen.getByLabelText('API Key *'), {
     target: { value: 'secret' },
   })
@@ -838,6 +865,7 @@ test.each([
   const user = userEvent.setup()
   render(<ConfigurationHarness />)
   await user.click(await screen.findByRole('option', { name: /Video A/ }))
+  await switchToManualEntry()
   await user.click(screen.getByRole('combobox', { name: 'Add Mode' }))
   await user.click(screen.getByRole('option', { name: label }))
   fireEvent.change(screen.getByLabelText('API Key *'), {
@@ -867,6 +895,7 @@ test('a failed creation keeps its draft and prevents duplicate submission while 
   const user = userEvent.setup()
   render(<ConfigurationHarness />)
   await user.click(await screen.findByRole('option', { name: /Video A/ }))
+  await switchToManualEntry()
   fireEvent.change(screen.getByLabelText('API Key *'), {
     target: { value: 'keep-secret' },
   })
@@ -899,6 +928,7 @@ test('model discovery discards a response for old credentials and retains manual
   const user = userEvent.setup()
   render(<ConfigurationHarness />)
   await user.click(screen.getByRole('option', { name: /^OpenAI / }))
+  await switchToManualEntry()
   fireEvent.change(screen.getByLabelText('API Key *'), {
     target: { value: 'first-key' },
   })
@@ -936,6 +966,7 @@ test('model discovery reports failures inline and allows an empty result to fall
   const user = userEvent.setup()
   render(<ConfigurationHarness />)
   await user.click(screen.getByRole('option', { name: /^OpenAI / }))
+  await switchToManualEntry()
   fireEvent.change(screen.getByLabelText('API Key *'), {
     target: { value: 'test-key' },
   })
