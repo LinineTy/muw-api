@@ -32,6 +32,7 @@ import {
 import { api } from '@/lib/api'
 import { formatTimestamp } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { SystemUpdateAction } from '@/features/system-update/system-update-action'
 
 import { SettingsSection } from '../components/settings-section'
 
@@ -187,6 +188,8 @@ export function UpdateCheckerSection({
               <div className='text-lg font-semibold'>{uptime}</div>
             </div>
           </div>
+
+          <SystemUpdateAction compact={false} />
 
           <Button onClick={handleCheckUpdates} disabled={checking}>
             {checking ? (
