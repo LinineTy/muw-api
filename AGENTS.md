@@ -184,6 +184,20 @@ A release is **ONE commit** that changes **exactly two files**: `CHANGELOG.md` (
 
 ### Frontend Rules
 
+**Fork-owned feature isolation (mandatory for upstream sync, added 2026-09-12):**
+
+muw-api is a fork of new-api and syncs from upstream long-term. Self-built features inlined into upstream files collide on every sync — measured: the channel drawer's account block produced 8 conflict hunks while inlined, and **0** once extracted.
+
+1. **Build self-owned features as standalone components/modules.** Do not inline them into upstream files.
+2. **Leave only a single mount line in the upstream file** (plus the needed imports). The conflict surface is then exactly that line.
+3. **Couple to upstream only through explicit props.** When upstream state is needed, pass it in — e.g. `<ChannelBoundAccounts form={form} isEditing={isEditing} channelData={channelData} open={open} />` receives the drawer's react-hook-form instance. Do not edit upstream internals or import upstream private modules.
+4. **Bring your own styling** (Tailwind classes); never patch upstream style files for a feature.
+5. ⚠️ **"Standalone" means the code boundary, not the data interface.** Such components still read upstream form/context/query keys (`use-form-context`, `StatusContext`, `STATUS_QUERY_KEY`, …) and must follow those changes. Do not assume the feature can ignore upstream entirely.
+6. Acceptance check: in `git diff upstream..HEAD`, a self-owned feature should appear as **one mount line + standalone files**, nothing else.
+
+Reference implementation: `web/src/features/channels/components/drawers/channel-bound-accounts.tsx` (extracted out of the ~5.8k-line drawer; survived the 2026-09 upstream sync with zero conflicts).
+
+
 **Field-tested UI pitfalls (OS shell + settings, 2026-09-08):** Every rule below came from a real user-reported defect that survived code review and screenshot passes. Re-check these when building anything similar.
 
 - **Reuse existing UI components first (mandatory):** Before implementing or changing frontend UI, read `web/AGENTS.md` and the project `shadcn-ui` skill, search `web/src/components/` and the relevant feature for existing components, and read matching implementations and call sites. Do not start from custom markup or registry installation without checking the repository first.
