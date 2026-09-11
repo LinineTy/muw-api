@@ -140,6 +140,20 @@ func GetChannelBaseURL(channelType int) string {
 	return ChannelBaseURLs[channelType]
 }
 
+// ChannelTypeAllowsEmptyKey 该渠道类型是否允许空密钥——空密钥是**合法凭证**，不是"没填"。
+// 目前只有 OpenCode Zen：未填密钥时用匿名哨兵 key 访问免费套餐（中继层由
+// relay/channel/opencodezen.resolveApiKey 兜底成 PublicApiKey = "public"）。
+// ⚠️ 创建/更新校验、账户选路（空 key 不能被当成"没可用 key"跳过）都必须走这个函数，
+// 不要在各处再写 channelType == ChannelTypeOpenCodeZen 的硬编码。
+func ChannelTypeAllowsEmptyKey(channelType int) bool {
+	switch channelType {
+	case ChannelTypeOpenCodeZen:
+		return true
+	default:
+		return false
+	}
+}
+
 var ChannelTypeNames = map[int]string{
 	ChannelTypeUnknown:        "Unknown",
 	ChannelTypeOpenAI:         "OpenAI",
