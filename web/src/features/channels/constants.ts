@@ -43,6 +43,7 @@ export const CHANNEL_TYPES = {
   // 13: 'AIGC2D',
   14: 'Anthropic',
   15: 'Baidu',
+  16: 'Zhipu', // legacy Zhipu（仅编辑既有渠道时保留，创建时被 picker 过滤）
   17: 'Ali',
   18: 'Xunfei',
   19: '360',
@@ -52,7 +53,7 @@ export const CHANNEL_TYPES = {
   23: 'Tencent',
   24: 'Gemini',
   25: 'Moonshot',
-  26: 'Zhipu V4',
+  26: 'Zhipu GLM',
   27: 'Perplexity',
   31: 'LingYiWanWu',
   33: 'AWS',
@@ -720,5 +721,14 @@ export const CHANNEL_PROVIDER_PRESENTATION: Partial<
   59: { descriptionKey: 'Connect to model services through a Sub2API gateway' },
   60: {
     descriptionKey: 'Connect to model services from another New API instance',
+  },
+  61: {
+    descriptionKey: 'Connect to SenseNova models',
+  },
+  62: {
+    descriptionKey: 'Connect to OpenCode Zen free and paid models',
+  },
+  63: {
+    descriptionKey: 'Route tasks through the sandboxed JavaScript plugin system',
   },
 }
