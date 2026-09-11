@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ChevronDownIcon, RefreshCcwIcon } from 'lucide-react'
+import { ChevronDownIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -198,14 +198,12 @@ export function UpdateCheckerSection({
             <SystemUpdateAction compact={false} />
             <Button
               type='button'
-              size='icon-sm'
+              size='sm'
               variant='outline'
               onClick={handleCheckUpdates}
               disabled={checking}
-              aria-label={t('Check for updates')}
-              title={t('Check for updates')}
             >
-              <RefreshCcwIcon className={cn('size-4', checking && 'animate-spin')} />
+              {checking ? t('Checking updates...') : t('Check now')}
             </Button>
           </SettingsPageActionsPortal>
 
