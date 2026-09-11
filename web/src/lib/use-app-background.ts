@@ -1,6 +1,7 @@
 // @muw-owned
 import { useEffect } from 'react'
 
+import { extractWallpaperHue } from '@/lib/glass-accent-hue'
 import {
   DEFAULT_GLASS_BLUR,
   DEFAULT_GLASS_BRIGHTNESS,
@@ -96,4 +97,33 @@ export function useAppBackground() {
       body.removeAttribute('data-has-bg-photo')
     }
   }, [backgroundImage, glassMaskOpacity, glassBrightness, glassBlur])
+
+  /**
+   * 琉璃主题的按钮色随壁纸色相走：把 --glass-primary-hue 写到 body 内联样式，
+   * 预设里的 --primary/--ring 用 var(--glass-primary-hue, 250) 消费它。
+   * 取不到颜色（没配图 / 灰图 / 加载失败 / 跨域污染）就把变量摘掉，回落到默认蓝。
+   * 壁纸换了（backgroundImage 变）自然重算；同一张图有缓存，不会重复解码。
+   */
+  useEffect(() => {
+    const body = document.body
+    const url = backgroundImage?.trim()
+    if (!url) {
+      body.style.removeProperty('--glass-primary-hue')
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      const hue = await extractWallpaperHue(url)
+      if (cancelled) return
+      if (hue == null) {
+        body.style.removeProperty('--glass-primary-hue')
+        return
+      }
+      body.style.setProperty('--glass-primary-hue', String(Math.round(hue)))
+    })()
+    return () => {
+      cancelled = true
+      body.style.removeProperty('--glass-primary-hue')
+    }
+  }, [backgroundImage])
 }
