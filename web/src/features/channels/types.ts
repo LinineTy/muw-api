@@ -86,7 +86,7 @@ export const channelSchema = z.object({
     multi_key_mode: 'random',
   }),
   settings: z.string().default('{}'), // other_settings JSON
-  coding_plan_provider: z.string().nullish(), // 编码套餐厂商,空/未设置 = 未启用余量监控
+  coding_plan_provider: z.string().nullish(), // 编码套餐厂商;空/未设置/"none" 都表示未启用余量监控
   coding_plan_key_masked: z.string().nullish(), // 套餐专用密钥的脱敏预览
   coding_plan_auto_control: z.boolean().nullish(), // 编码套餐自动启停开关
   coding_plan_disable_threshold: z.number().int().nullish(), // 禁用阈值(%) 用量 ≥ 该值禁用
