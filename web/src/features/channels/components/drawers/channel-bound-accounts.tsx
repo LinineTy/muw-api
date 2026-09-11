@@ -66,6 +66,10 @@ type ChannelBoundAccountsProps = {
     } | null
   } | null
   open: boolean
+  /** 上报当前凭证来源，抽屉据此决定「API 地址」区是只读行还是可编辑框。 */
+  onCredentialModeChange?: (mode: 'account' | 'manual') => void
+  /** 上报账户侧上游地址，供抽屉渲染只读「上游地址」行。 */
+  onAddressResolved?: (address: string) => void
 }
 
 /**
@@ -80,7 +84,7 @@ type ChannelBoundAccountsProps = {
  */
 export function ChannelBoundAccounts(props: ChannelBoundAccountsProps) {
   const { t } = useTranslation()
-  const { form, isEditing, channelData, open } = props
+  const { form, isEditing, channelData, open, onCredentialModeChange, onAddressResolved } = props
 
   const originalBoundAccount = channelData?.data?.account
   const hasBoundAccount = isEditing && Boolean(originalBoundAccount)
@@ -154,10 +158,7 @@ export function ChannelBoundAccounts(props: ChannelBoundAccountsProps) {
     ? boundBindings[0].account_id
     : ((accountIdValue as number | null) ?? null)
 
-  // 上游地址归账户：绑了账户的渠道，渠道侧地址控件不再生效
-  const addressFromAccount = isEditing
-    ? hasBoundAccount
-    : credentialMode === 'account'
+  // 上游地址归账户：绑了账户的渠道，渠道侧地址控件不再生效（由抽屉渲染只读行）
   const boundAccountAddress =
     (boundAccountId !== null
       ? (accountMetaById.get(boundAccountId)?.base_url ??
@@ -165,6 +166,13 @@ export function ChannelBoundAccounts(props: ChannelBoundAccountsProps) {
       : undefined) ??
     (isEditing ? channelData?.data?.account?.base_url : undefined) ??
     ''
+  useEffect(() => {
+    onCredentialModeChange?.(credentialMode)
+  }, [credentialMode, onCredentialModeChange])
+  useEffect(() => {
+    onAddressResolved?.(boundAccountAddress)
+  }, [boundAccountAddress, onAddressResolved])
+
   const boundAccountNames = boundBindings
     .map(
       (b) =>
@@ -436,25 +444,6 @@ export function ChannelBoundAccounts(props: ChannelBoundAccountsProps) {
               </>
             )}
 
-            {addressFromAccount && (
-              <div className='border-border/60 bg-muted/10 flex items-start justify-between gap-3 rounded-lg border p-3'>
-                <div className='min-w-0'>
-                  <div className='text-muted-foreground text-xs font-medium'>
-                    {t('Upstream address')}
-                  </div>
-                  <div className='truncate font-mono text-sm'>
-                    {boundAccountAddress || t('Provider default address')}
-                  </div>
-                </div>
-                <Link
-                  to='/accounts'
-                  className='text-primary inline-flex shrink-0 items-center gap-1 text-xs hover:underline'
-                >
-                  <ExternalLink className='size-3' />
-                  {t('Manage in Accounts')}
-                </Link>
-              </div>
-            )}
             <div className='text-muted-foreground space-y-1 rounded-md border border-dashed px-3 py-2.5 text-sm'>
               <p>
                 {boundAccountId !== null
