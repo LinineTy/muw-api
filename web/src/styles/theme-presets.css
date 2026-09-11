@@ -802,7 +802,8 @@ body[data-theme-radius='xl'] {
    * use-app-background 从后台配的壁纸图里取"主色相"后写到 body 内联样式;
    * 取不到(没配图/灰图/加载失败)就回落到原来的 250(蓝)。只换色相、亮度彩度
    * 保持预设原值,所以按钮上的白字对比度不受影响。
-   * 注意 --info 是语义色(信息=蓝),不参与跟随;--sidebar-ring 也保持原样。 */
+   * 注意 --info 是语义色(信息=蓝),不参与跟随。侧栏聚焦圈 --sidebar-ring 一并跟随
+   * (它和 --ring 是同一件事的两种场景,只留一个蓝的会显得做了一半)。 */
   --primary: oklch(0.56 0.17 var(--glass-primary-hue, 250) / 0.85);
   --primary-foreground: oklch(1 0 0);
   --destructive: oklch(0.6 0.2 25 / 0.7);
@@ -834,7 +835,7 @@ body[data-theme-radius='xl'] {
   --sidebar-accent: oklch(1 0 0 / 0.25);
   --sidebar-accent-foreground: oklch(0.3 0 0);
   --sidebar-border: oklch(1 0 0 / 0.5);
-  --sidebar-ring: oklch(0.62 0.16 250);
+  --sidebar-ring: oklch(0.62 0.16 var(--glass-primary-hue, 250));
 
   --skeleton-base: oklch(0.9 0 0 / 0.6);
   --skeleton-highlight: oklch(0.96 0 0 / 0.6);
@@ -939,7 +940,7 @@ body[data-theme-radius='xl'] {
   --sidebar-accent: oklch(1 0 0 / 0.12);
   --sidebar-accent-foreground: oklch(0.93 0 0);
   --sidebar-border: oklch(1 0 0 / 0.12);
-  --sidebar-ring: oklch(0.68 0.15 250);
+  --sidebar-ring: oklch(0.68 0.15 var(--glass-primary-hue, 250));
 
   --skeleton-base: oklch(0.33 0 0 / 0.6);
   --skeleton-highlight: oklch(0.42 0 0 / 0.6);
