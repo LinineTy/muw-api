@@ -527,7 +527,7 @@ func GetChannelKey(c *gin.Context) {
 }
 
 // validateChannel 通用的渠道校验函数
-func validateChannel(channel *model.Channel, isAdd bool) error {
+func validateChannel(channel *model.Channel, isAdd bool, boundToAccounts bool) error {
 	if channel == nil {
 		return fmt.Errorf("channel cannot be empty")
 	}
@@ -566,8 +566,12 @@ func validateChannel(channel *model.Channel, isAdd bool) error {
 
 	// 如果是添加操作，检查 channel 和 key 是否为空
 	if isAdd {
-		// OpenCode Zen 不填密钥时走免费套餐，key 可留空；其余渠道必须填密钥
-		if channel.Key == "" && !constant.ChannelTypeAllowsEmptyKey(channel.Type) {
+		// 两种「凭证不在渠道上」的情况允许空 key：
+		// ① OpenCode Zen 不填密钥时走免费套餐
+		// ② 绑定了共享账户（凭证真相源在账户，渠道侧不持有 key）
+		if channel.Key == "" &&
+			!constant.ChannelTypeAllowsEmptyKey(channel.Type) &&
+			!boundToAccounts {
 			return fmt.Errorf("channel cannot be empty")
 		}
 
@@ -796,8 +800,15 @@ func AddChannel(c *gin.Context) {
 	baseURLFromPluginDefault := addChannelRequest.Channel != nil &&
 		addChannelRequest.Channel.Type == constant.ChannelTypeTaskPlugin &&
 		(addChannelRequest.Channel.BaseURL == nil || strings.TrimSpace(*addChannelRequest.Channel.BaseURL) == "")
-	// 使用统一的校验函数
-	if err := validateChannel(addChannelRequest.Channel, true); err != nil {
+	// 共享账户路径：凭证全部来自既有账户，忽略 key 输入；单渠道创建。
+	// 账户绑定列表（N:N）：account_ids 优先，account_id 兼容保留。
+	boundAccountIDs := normalizeBoundAccountIDs(addChannelRequest.AccountIDs, addChannelRequest.AccountID)
+	boundSpecs := normalizeBindingSpecs(addChannelRequest.AccountBindings, addChannelRequest.AccountIDs, addChannelRequest.AccountID)
+	if len(boundAccountIDs) == 0 && len(boundSpecs) > 0 {
+		boundAccountIDs = specIDs(boundSpecs)
+	}
+	// 使用统一的校验函数（绑定了共享账户时渠道自身密钥可为空）
+	if err := validateChannel(addChannelRequest.Channel, true, len(boundAccountIDs) > 0); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": err.Error(),
@@ -810,13 +821,6 @@ func AddChannel(c *gin.Context) {
 
 	addChannelRequest.Channel.CreatedTime = common.GetTimestamp()
 
-	// 共享账户路径：凭证全部来自既有账户，忽略 key 输入；单渠道创建。
-	// 账户绑定列表（N:N）：account_ids 优先，account_id 兼容保留。
-	boundAccountIDs := normalizeBoundAccountIDs(addChannelRequest.AccountIDs, addChannelRequest.AccountID)
-	boundSpecs := normalizeBindingSpecs(addChannelRequest.AccountBindings, addChannelRequest.AccountIDs, addChannelRequest.AccountID)
-	if len(boundAccountIDs) == 0 && len(boundSpecs) > 0 {
-		boundAccountIDs = specIDs(boundSpecs)
-	}
 	if len(boundAccountIDs) > 0 {
 		if addChannelRequest.Mode != "" && addChannelRequest.Mode != "single" {
 			c.JSON(http.StatusOK, gin.H{
@@ -1230,7 +1234,7 @@ func UpdateChannel(c *gin.Context) {
 	baseURLFromPluginDefault := channel.Type == constant.ChannelTypeTaskPlugin &&
 		(channel.BaseURL == nil || strings.TrimSpace(*channel.BaseURL) == "")
 	// 使用统一的校验函数
-	if err := validateChannel(&channel.Channel, false); err != nil {
+	if err := validateChannel(&channel.Channel, false, false); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": err.Error(),
@@ -1801,7 +1805,7 @@ func buildAdvancedCustomModelPreviewChannel(req fetchModelsRequest) (*model.Chan
 		channel.SetSetting(channelSettings)
 	}
 
-	if err := validateChannel(channel, false); err != nil {
+	if err := validateChannel(channel, false, false); err != nil {
 		return nil, err
 	}
 	return channel, nil
