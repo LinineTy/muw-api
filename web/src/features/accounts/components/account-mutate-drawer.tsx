@@ -439,6 +439,8 @@ export function AccountMutateDrawer({
                   items={[
                     { value: '1', label: t('Enabled') },
                     { value: '2', label: t('Manually Disabled') },
+                    // 账户可能被套餐自动停用（status=3）：选项缺失时触发器会裸渲染原始值
+                    { value: '3', label: t('Auto Disabled') },
                   ]}
                   value={String(status)}
                   onValueChange={(v) => setStatus(Number(v))}
@@ -449,6 +451,7 @@ export function AccountMutateDrawer({
                   <SelectContent alignItemWithTrigger={false}>
                     <SelectItem value='1'>{t('Enabled')}</SelectItem>
                     <SelectItem value='2'>{t('Manually Disabled')}</SelectItem>
+                    <SelectItem value='3'>{t('Auto Disabled')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
