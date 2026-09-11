@@ -76,6 +76,11 @@ var channelSensitiveFields = map[string]struct{}{
 	"settings":            {},
 	"key_mode":            {},
 	"coding_plan_key":     {},
+	// fork 自研：账户体系——账户是凭证的来源，改绑定/换账户等同换凭证，
+	// 需要 ChannelSensitiveWrite 权限。
+	"account_id":       {},
+	"account_bindings": {},
+	"account":          {},
 }
 
 // channelOperationalFields lists fields managed by operation endpoints instead
