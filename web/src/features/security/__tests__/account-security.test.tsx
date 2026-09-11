@@ -16,6 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import {
+  QueryClient,
+  QueryClientProvider,
+} from '@tanstack/react-query'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -28,6 +32,20 @@ import { DeleteAccountDialog } from '../components/dialogs/delete-account-dialog
 import { EmailBindDialog } from '../components/dialogs/email-bind-dialog'
 import { TwoFABackupDialog } from '../components/dialogs/two-fa-backup-dialog'
 import { TwoFADisableDialog } from '../components/dialogs/two-fa-disable-dialog'
+
+// 对话框内的 PasskeyDomainSelector 会走 useQuery，生产由根部 Provider 提供；
+// 测试里用 configure 统一包一层，避免每个 render 手工重复。
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+})
+
+// 对话框内部的 PasskeyDomainSelector 会调用 useQuery；生产环境由根部 Provider
+// 提供，测试里显式包一层（portal 渲染路径不会继承 configure({ wrapper })）。
+function renderWithProviders(ui: Parameters<typeof render>[0]) {
+  return render(
+    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+  )
+}
 
 const { navigate } = vi.hoisted(() => ({ navigate: vi.fn() }))
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
@@ -58,7 +76,7 @@ it('requires verification after username confirmation and cancels without deleti
     data: { success: true, data: {} },
   })
   const user = userEvent.setup()
-  render(<DeleteAccountDialog open username='user' onOpenChange={vi.fn()} />)
+  renderWithProviders(<DeleteAccountDialog open username='user' onOpenChange={vi.fn()} />)
   expect(screen.getByRole('button', { name: 'Delete Account' })).toBeDisabled()
   await user.type(screen.getByRole('textbox'), 'user')
   await user.click(screen.getByRole('button', { name: 'Delete Account' }))
@@ -140,7 +158,7 @@ it.each(['2fa', 'passkey'])(
       .mockResolvedValue({ data: { success: true, data: {} } })
     const close = vi.fn()
     const user = userEvent.setup()
-    render(<DeleteAccountDialog open username='user' onOpenChange={close} />)
+    renderWithProviders(<DeleteAccountDialog open username='user' onOpenChange={close} />)
     await user.type(screen.getByRole('textbox'), 'user')
     await user.click(screen.getByRole('button', { name: 'Delete Account' }))
     expect(await screen.findByRole('tab', { name: 'Passkey' })).toHaveAttribute(
@@ -211,7 +229,7 @@ it.each(['unmount', 'account change'])(
       })
     )
     const user = userEvent.setup()
-    const view = render(
+    const view = renderWithProviders(
       <DeleteAccountDialog open username='user' onOpenChange={vi.fn()} />
     )
     await user.type(screen.getByRole('textbox'), 'user')
@@ -306,7 +324,7 @@ it('disables 2FA through a Passkey proof without asking for an authenticator cod
   const close = vi.fn()
   const success = vi.fn()
   const user = userEvent.setup()
-  render(<TwoFADisableDialog open onOpenChange={close} onSuccess={success} />)
+  renderWithProviders(<TwoFADisableDialog open onOpenChange={close} onSuccess={success} />)
   await user.click(screen.getByRole('checkbox'))
   await user.click(screen.getByRole('button', { name: 'Disable 2FA' }))
   expect(await screen.findByRole('tab', { name: 'Passkey' })).toHaveAttribute(
@@ -366,7 +384,7 @@ it('regenerates backup codes through scoped verification and keeps the result vi
   const close = vi.fn()
   const success = vi.fn()
   const user = userEvent.setup()
-  render(<TwoFABackupDialog open onOpenChange={close} onSuccess={success} />)
+  renderWithProviders(<TwoFABackupDialog open onOpenChange={close} onSuccess={success} />)
   await user.click(screen.getByRole('button', { name: 'Generate New Codes' }))
   const input = await screen.findByRole('textbox', {
     name: 'Authenticator code',
@@ -423,7 +441,7 @@ it('allows a common new password after verifying the current password once', asy
   })
   const user = userEvent.setup()
   const onOpenChange = vi.fn()
-  render(
+  renderWithProviders(
     <ChangePasswordDialog open username='user' onOpenChange={onOpenChange} />
   )
   expect(screen.getByText('Use 8–128 characters.')).toBeVisible()
@@ -476,7 +494,7 @@ it.each(['button', 'escape'])(
       .spyOn(api, 'put')
       .mockResolvedValue({ data: { success: true } })
     const user = userEvent.setup()
-    render(<ChangePasswordDialog open username='user' onOpenChange={vi.fn()} />)
+    renderWithProviders(<ChangePasswordDialog open username='user' onOpenChange={vi.fn()} />)
     await user.type(
       screen.getByLabelText('Current Password'),
       'current-password'
@@ -547,7 +565,7 @@ it.each(['unmount', 'account change'])(
       .spyOn(api, 'put')
       .mockResolvedValue({ data: { success: true, data: {} } })
     const user = userEvent.setup()
-    const view = render(
+    const view = renderWithProviders(
       <ChangePasswordDialog open username='user' onOpenChange={vi.fn()} />
     )
     await user.type(
@@ -614,7 +632,7 @@ it('sets a first password after verifying an existing factor without asking for 
     data: { success: true, data: { has_password: true } },
   })
   const user = userEvent.setup()
-  render(
+  renderWithProviders(
     <ChangePasswordDialog
       open
       username='user'
@@ -691,7 +709,7 @@ it('confirms both email addresses after identity verification and freezes the su
   })
   const onSuccess = vi.fn()
   const user = userEvent.setup()
-  render(
+  renderWithProviders(
     <EmailBindDialog
       open
       currentEmail='old@example.com'

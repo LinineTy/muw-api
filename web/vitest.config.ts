@@ -43,6 +43,10 @@ export default defineConfig({
     // NODE_ENV=production cannot resurrect the production React build.
     env: { NODE_ENV: 'test' },
     environment: 'jsdom',
+    // 全量跑时默认并发会把容器 CPU 抢满，导致大量 5s 超时的**假失败**
+    // （单文件跑同一批用例全绿）。限制 worker 数并放宽单测超时，让全量结果可信。
+    maxWorkers: 4,
+    testTimeout: 20000,
     server: {
       deps: { inline: [/@lobehub\//, /antd-style/] },
     },

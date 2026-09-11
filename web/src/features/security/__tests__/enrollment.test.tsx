@@ -341,7 +341,14 @@ it('consumes Passkey authorization at setup and activates using only the dedicat
   })
   const success = vi.spyOn(toast, 'success')
   const user = userEvent.setup()
-  render(<TwoFACard loading={false} />)
+  // 该流程会渲染 PasskeyDomainSelector（内部 useQuery），生产由根部 Provider 提供
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <TwoFACard loading={false} />
+    </QueryClientProvider>
+  )
   await user.click(await screen.findByRole('button', { name: 'Enable' }))
   await screen.findByText(
     'We will prompt your device to confirm using biometrics or your hardware key.'
