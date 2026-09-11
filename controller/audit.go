@@ -59,8 +59,23 @@ func recordManageAuditFor(c *gin.Context, targetUserId int, action string, param
 // recordUserSecurityAudit 记录普通用户自己的安全敏感操作（如 passkey 绑定/解绑）。
 // 这类日志没有管理员操作者，不写 admin_info；同时不依赖 AdminAuth/RootAuth 的兜底。
 func recordUserSecurityAudit(c *gin.Context, userId int, action string, params map[string]interface{}) {
+	// 上游增强：把 params 里的 success / security_error_code 落到 AuditRequestInfo，
+	// 否则被拒的安全操作会被记成成功。
+	if code := c.GetString("security_error_code"); code != "" {
+		if params == nil {
+			params = map[string]any{}
+		}
+		params["code"] = code
+	}
+	var auditInfo *model.AuditRequestInfo
+	if success, ok := params["success"].(bool); ok {
+		auditInfo = &model.AuditRequestInfo{
+			Method: c.Request.Method, Route: c.FullPath(), Path: c.FullPath(),
+			Status: c.Writer.Status(), Success: success,
+		}
+	}
 	content, _ := common.AuditContentEN(action, params)
-	model.RecordOperationAuditLog(userId, c.GetInt("role"), content, c.ClientIP(), action, params, nil, nil, c)
+	model.RecordOperationAuditLog(userId, c.GetInt("role"), content, c.ClientIP(), action, params, nil, auditInfo, c)
 }
 
 // tokenAuditParams 返回当前请求的 API token 审计参数（中间件 TokenOperationAudit 已
