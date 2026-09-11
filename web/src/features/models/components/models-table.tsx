@@ -168,9 +168,7 @@ export function ModelsTable({ batchMode }: { batchMode: boolean }) {
   else if (pricingQuery.isLoading) pricingState = 'loading'
 
   // Columns configuration
-  const columns = useModelsColumns(vendors, pricingQuery.data, pricingState, {
-    enableSelection: batchMode,
-  })
+  const columns = useModelsColumns(vendors, pricingQuery.data, pricingState)
 
   // React Table instance
   const { table } = useDataTable({

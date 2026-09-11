@@ -16,26 +16,29 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import {
-  BILLING_CACHE_VAR_MAP,
-  BILLING_PRICING_VARS,
-  buildTierDnfExpr,
-  parseTierChain,
-  type AndClause,
-  type ParsedTier,
-  type TierCondition,
-  type TierConditionDnf,
-} from './billing-expr'
+import { BILLING_CACHE_VAR_MAP } from './billing-expr'
+import { compileBillingExpression } from './billing-expression/parser'
+import { evaluateBillingExpression } from './billing-expression/runtime'
+import type {
+  BillingSimulationContext,
+  TokenVariable,
+} from './billing-expression/types'
 
 export const CACHE_MODE_TIMED = 'timed'
 export const CACHE_MODE_GENERIC = 'generic'
 export type CacheMode = typeof CACHE_MODE_TIMED | typeof CACHE_MODE_GENERIC
 
+export type TierConditionInput = {
+  var: 'p' | 'c' | 'len'
+  op: '<' | '<=' | '>' | '>='
+  value: number | string
+}
+
 export type VisualTier = {
+  billing_unit?: 'token' | 'request'
+  fixed_price?: string
   label: string
-  conditions: TierConditionDnf
-  /** The tier emitted last (bare) as the else-branch of the chain. */
-  isFallback: boolean
+  conditions: TierConditionInput[]
   input_unit_cost: number
   output_unit_cost: number
   cache_mode: CacheMode
@@ -53,7 +56,7 @@ export type VisualConfig = {
   tiers: VisualTier[]
 }
 
-export function getTierCacheMode(
+function getTierCacheMode(
   tier: Partial<VisualTier> | null | undefined
 ): CacheMode {
   if (tier?.cache_mode === CACHE_MODE_TIMED) return CACHE_MODE_TIMED
@@ -63,36 +66,14 @@ export function getTierCacheMode(
     : CACHE_MODE_GENERIC
 }
 
-// Legacy visual configs stored `conditions` as a flat atom array; the DNF model
-// wraps them in a single AND-clause.
-function isDnfConditions(value: unknown): value is TierConditionDnf {
-  return (
-    Array.isArray(value) &&
-    value.length > 0 &&
-    Array.isArray((value[0] as AndClause<TierCondition> | undefined)?.conditions)
-  )
-}
-
-export function normalizeVisualTier(
-  tier: Partial<VisualTier> = {}
-): VisualTier {
-  const rawConditions = Array.isArray(tier.conditions) ? tier.conditions : []
-  let conditions: TierConditionDnf
-  if (isDnfConditions(rawConditions)) {
-    conditions = rawConditions
-  } else if ((rawConditions as TierCondition[]).length > 0) {
-    conditions = [{ conditions: rawConditions as TierCondition[] }]
-  } else {
-    conditions = []
-  }
+function normalizeVisualTier(tier: Partial<VisualTier> = {}): VisualTier {
   return {
-    ...tier,
     label: tier.label ?? '',
-    conditions,
-    isFallback: tier.isFallback === true,
     input_unit_cost: Number(tier.input_unit_cost) || 0,
     output_unit_cost: Number(tier.output_unit_cost) || 0,
     cache_mode: getTierCacheMode(tier),
+    conditions: Array.isArray(tier.conditions) ? tier.conditions : [],
+    ...tier,
     cache_read_unit_cost: Number(tier.cache_read_unit_cost) || 0,
     cache_create_unit_cost: Number(tier.cache_create_unit_cost) || 0,
     cache_create_1h_unit_cost: Number(tier.cache_create_1h_unit_cost) || 0,
@@ -112,43 +93,33 @@ export function createDefaultVisualConfig(): VisualConfig {
         output_unit_cost: 0,
         label: 'base',
         cache_mode: CACHE_MODE_GENERIC,
-        isFallback: true,
       }),
     ],
   }
 }
 
-export function normalizeVisualConfig(
+function normalizeVisualConfig(
   config: VisualConfig | null | undefined
 ): VisualConfig {
   if (!config || !Array.isArray(config.tiers) || config.tiers.length === 0) {
     return createDefaultVisualConfig()
   }
-  const tiers = config.tiers.map((tier) => normalizeVisualTier(tier))
-  // Exactly one fallback: honor an explicit marker, else the last tier. Duplicate
-  // markers keep the last one.
-  const markedIndexes = tiers
-    .map((tier, index) => (tier.isFallback ? index : -1))
-    .filter((index) => index >= 0)
-  if (markedIndexes.length === 1) return { ...config, tiers }
-  if (markedIndexes.length > 1) {
-    const last = markedIndexes[markedIndexes.length - 1]
-    return {
-      ...config,
-      tiers: tiers.map((tier, index) =>
-        index === last ? tier : { ...tier, isFallback: false }
-      ),
-    }
-  }
   return {
     ...config,
-    tiers: tiers.map((tier, index) =>
-      index === tiers.length - 1 ? { ...tier, isFallback: true } : tier
-    ),
+    tiers: config.tiers.map((tier) => normalizeVisualTier(tier)),
   }
 }
 
+function buildConditionStr(conditions: TierConditionInput[]): string {
+  if (!conditions || conditions.length === 0) return ''
+  return conditions
+    .filter((c) => c.var && c.op && c.value != null && c.value !== '')
+    .map((c) => `${c.var} ${c.op} ${c.value}`)
+    .join(' && ')
+}
+
 function buildTierBodyExpr(tier: VisualTier): string {
+  if (tier.billing_unit === 'request') return `fixed(${tier.fixed_price ?? ''})`
   const parts: string[] = []
   const ic = Number(tier.input_unit_cost) || 0
   const oc = Number(tier.output_unit_cost) || 0
@@ -161,52 +132,38 @@ function buildTierBodyExpr(tier: VisualTier): string {
   return parts.join(' + ')
 }
 
-function buildTierCall(tier: VisualTier): string {
-  const label = tier.label || 'default'
-  return `tier("${label}", ${buildTierBodyExpr(tier)})`
-}
-
-// A fallback tier with no label and every price at zero round-trips as the
-// implicit `p * 0 + c * 0` leaf emitted for a lone conditional tier.
-function isZeroFallbackTier(tier: VisualTier): boolean {
-  if (tier.label) return false
-  return BILLING_PRICING_VARS.every((v) => {
-    if (!v.tierField) return true
-    return Number(tier[v.tierField as keyof VisualTier] || 0) === 0
-  })
-}
-
 export function generateExprFromVisualConfig(
   config: VisualConfig | null | undefined
 ): string {
   if (!config || !config.tiers || config.tiers.length === 0) {
     return 'p * 0 + c * 0'
   }
-  const tiers = normalizeVisualConfig(config).tiers
-  const fallbackIndex = tiers.findIndex((tier) => tier.isFallback)
+  const tiers = config.tiers
 
   if (tiers.length === 1) {
     const tier = tiers[0]
-    const cond = buildTierDnfExpr(tier.conditions)
-    if (!cond) return buildTierCall(tier)
-    return `${cond} ? ${buildTierCall(tier)} : p * 0 + c * 0`
+    const label = tier.label || 'default'
+    const body = `tier("${label}", ${buildTierBodyExpr(tier)})`
+    const cond = buildConditionStr(tier.conditions)
+    if (cond) {
+      return `${cond} ? ${body} : p * 0 + c * 0`
+    }
+    return body
   }
 
-  // Non-fallback tiers emit in array order (`cond ? tier(...)`); the fallback
-  // tier is always emitted last, bare. A non-fallback tier without conditions
-  // degrades to a bare tier that shadows everything below — the editor validator
-  // flags it explicitly instead of letting it drop silently.
   const parts: string[] = []
-  for (let i = 0; i < tiers.length; i += 1) {
-    if (i === fallbackIndex) continue
+  for (let i = 0; i < tiers.length; i++) {
     const tier = tiers[i]
-    const cond = buildTierDnfExpr(tier.conditions)
-    parts.push(cond ? `${cond} ? ${buildTierCall(tier)}` : buildTierCall(tier))
+    const label = tier.label || `tier_${i + 1}`
+    const body = `tier("${label}", ${buildTierBodyExpr(tier)})`
+    const cond = buildConditionStr(tier.conditions)
+
+    if (i < tiers.length - 1 && cond) {
+      parts.push(`${cond} ? ${body}`)
+    } else {
+      parts.push(body)
+    }
   }
-  const fallback = tiers[fallbackIndex]
-  parts.push(
-    isZeroFallbackTier(fallback) ? 'p * 0 + c * 0' : buildTierCall(fallback)
-  )
   return parts.join(' : ')
 }
 
@@ -218,33 +175,76 @@ export function tryParseVisualConfig(
     let body = exprStr
     const versionMatch = body.match(/^v\d+:([\s\S]*)$/)
     if (versionMatch) body = versionMatch[1]
+    const cacheVarNames = BILLING_CACHE_VAR_MAP.map((cv) => cv.exprVar)
+    const optCacheStr = cacheVarNames
+      .map((v) => `(?:\\s*\\+\\s*${v}\\s*\\*\\s*([\\d.eE+-]+))?`)
+      .join('')
 
-    const chain = parseTierChain(body)
-    if (!chain || chain.length === 0) return null
+    const bodyPat = `p\\s*\\*\\s*([\\d.eE+-]+)\\s*\\+\\s*c\\s*\\*\\s*([\\d.eE+-]+)${optCacheStr}`
 
-    const tiers = chain.map((tier) => {
-      const visual: Record<string, unknown> = {
-        label: tier.label,
-        conditions: tier.conditions,
-        isFallback: tier.isFallback,
+    const singleRe = new RegExp(`^tier\\("([^"]*)",\\s*${bodyPat}\\)$`)
+    const simple = body.match(singleRe)
+    if (simple) {
+      const tier: Record<string, unknown> = {
+        conditions: [],
+        input_unit_cost: Number(simple[2]),
+        output_unit_cost: Number(simple[3]),
+        label: simple[1],
       }
-      for (const v of BILLING_PRICING_VARS) {
-        if (v.field && v.tierField) {
-          visual[v.tierField] = Number(tier[v.field as keyof ParsedTier] || 0)
+      BILLING_CACHE_VAR_MAP.forEach((cv, i) => {
+        const val = simple[4 + i]
+        if (val != null) tier[cv.field] = Number(val)
+      })
+      return normalizeVisualConfig({
+        tiers: [normalizeVisualTier(tier as Partial<VisualTier>)],
+      })
+    }
+
+    const condGroup =
+      `((?:(?:p|c|len)\\s*(?:<|<=|>|>=)\\s*[\\d.eE+]+)` +
+      `(?:\\s*&&\\s*(?:p|c|len)\\s*(?:<|<=|>|>=)\\s*[\\d.eE+]+)*)`
+    const tierRe = new RegExp(
+      `(?:${condGroup}\\s*\\?\\s*)?tier\\("([^"]*)",\\s*${bodyPat}\\)`,
+      'g'
+    )
+    const tiers: VisualTier[] = []
+    let match: RegExpExecArray | null
+    while ((match = tierRe.exec(body)) !== null) {
+      const condStr = match[1] || ''
+      const conditions: TierConditionInput[] = []
+      if (condStr) {
+        for (const cp of condStr.split(/\s*&&\s*/)) {
+          const cm = cp.trim().match(/^(p|c|len)\s*(<|<=|>|>=)\s*([\d.eE+]+)$/)
+          if (cm) {
+            conditions.push({
+              var: cm[1] as TierConditionInput['var'],
+              op: cm[2] as TierConditionInput['op'],
+              value: Number(cm[3]),
+            })
+          }
         }
       }
-      return normalizeVisualTier(visual)
-    })
-    const config = normalizeVisualConfig({ tiers })
+      const tier: Record<string, unknown> = {
+        conditions,
+        input_unit_cost: Number(match[3]),
+        output_unit_cost: Number(match[4]),
+        label: match[2],
+      }
+      const m = match
+      BILLING_CACHE_VAR_MAP.forEach((cv, i) => {
+        const val = m[5 + i]
+        if (val != null) tier[cv.field] = Number(val)
+      })
+      tiers.push(normalizeVisualTier(tier as Partial<VisualTier>))
+    }
+    if (tiers.length === 0) return null
 
-    // Strict round-trip: only accept expressions the visual model reproduces
-    // byte-for-byte (modulo whitespace). Anything else stays in raw mode — never
-    // a silent reset to a default config.
-    const regenerated = generateExprFromVisualConfig(config)
-    if (regenerated.replace(/\s+/g, '') !== body.replace(/\s+/g, '')) {
+    const cfg = normalizeVisualConfig({ tiers })
+    const regenerated = generateExprFromVisualConfig(cfg)
+    if (regenerated.replaceAll(/\s+/g, '') !== body.replaceAll(/\s+/g, '')) {
       return null
     }
-    return config
+    return cfg
   } catch {
     return null
   }
@@ -259,6 +259,7 @@ const ESTIMATOR_VARS = [
   { var: 'cc', stateKey: 'cacheCreateTokens' },
   { var: 'cc1h', stateKey: 'cacheCreate1hTokens' },
   { var: 'img', stateKey: 'imageTokens' },
+  { var: 'img_cr', stateKey: 'imageCacheTokens' },
   { var: 'img_o', stateKey: 'imageOutputTokens' },
   { var: 'ai', stateKey: 'audioInputTokens' },
   { var: 'ao', stateKey: 'audioOutputTokens' },
@@ -273,58 +274,65 @@ export type EvalResult = {
   cost: number
   matchedTier: string
   error: string | null
+  billingUnit?: 'token' | 'request'
 }
 
 export function evalExprLocally(
   exprStr: string,
   promptTokens: number,
   completionTokens: number,
-  extraTokenValues: ExtraTokenValues
+  extraTokenValues: ExtraTokenValues,
+  context?: BillingSimulationContext
 ): EvalResult {
-  try {
-    if (!exprStr || !exprStr.trim()) {
-      return { cost: 0, matchedTier: '', error: null }
-    }
-    let matchedTier = ''
-    const tierFn = (name: string, value: number) => {
-      matchedTier = name
-      return value
-    }
-    const cacheReadTokens = extraTokenValues.cacheReadTokens || 0
-    const cacheCreateTokens = extraTokenValues.cacheCreateTokens || 0
-    const cacheCreate1hTokens = extraTokenValues.cacheCreate1hTokens || 0
-    const len =
-      promptTokens + cacheReadTokens + cacheCreateTokens + cacheCreate1hTokens
-    const env: Record<string, unknown> = {
-      p: promptTokens,
-      c: completionTokens,
-      len,
-      tier: tierFn,
-      max: Math.max,
-      min: Math.min,
-      abs: Math.abs,
-      ceil: Math.ceil,
-      floor: Math.floor,
-    }
-    for (const field of ESTIMATOR_VARS) {
-      env[field.var] = extraTokenValues[field.stateKey] || 0
-    }
-    const fn = new Function(
-      ...Object.keys(env),
-      `"use strict"; return (${exprStr});`
-    )
-    const cost = Number(fn(...Object.values(env))) || 0
-    return { cost, matchedTier, error: null }
-  } catch (e) {
-    const message = e instanceof Error ? e.message : String(e)
-    return { cost: 0, matchedTier: '', error: message }
+  if (!exprStr.trim()) return { cost: 0, matchedTier: '', error: null }
+  const result = evaluateBillingExpression(exprStr, {
+    ...context,
+    tokens: {
+      ...buildEstimatorTokens(promptTokens, completionTokens, extraTokenValues),
+      ...context?.tokens,
+    },
+  })
+  if (result.status !== 'success') {
+    return { cost: 0, matchedTier: '', error: result.diagnostic.detail }
+  }
+  return {
+    cost: result.cost,
+    matchedTier: result.matchedTier,
+    error: null,
+    ...(result.billingUnit === 'request'
+      ? { billingUnit: result.billingUnit }
+      : {}),
+  }
+}
+
+export function buildEstimatorTokens(
+  promptTokens: number,
+  completionTokens: number,
+  extraTokenValues: ExtraTokenValues
+): Partial<Record<TokenVariable, number>> {
+  return {
+    p: promptTokens,
+    c: completionTokens,
+    len:
+      promptTokens +
+      extraTokenValues.cacheReadTokens +
+      extraTokenValues.imageCacheTokens +
+      extraTokenValues.imageTokens +
+      extraTokenValues.audioInputTokens +
+      extraTokenValues.cacheCreateTokens +
+      extraTokenValues.cacheCreate1hTokens,
+    ...Object.fromEntries(
+      ESTIMATOR_VARS.map((field) => [
+        field.var,
+        extraTokenValues[field.stateKey],
+      ])
+    ),
   }
 }
 
 export function exprUsesExtraVars(exprStr: string): boolean {
   if (!exprStr) return false
-  const varNames = ESTIMATOR_VARS.map((f) => f.var).join('|')
-  return new RegExp(`\\b(${varNames})\\b`).test(exprStr)
+  const compiled = compileBillingExpression(exprStr)
+  if (compiled.status !== 'ready') return false
+  return ESTIMATOR_VARS.some((field) => compiled.variables.has(field.var))
 }
-
-export const ESTIMATOR_EXTRA_FIELDS = ESTIMATOR_VARS

@@ -28,8 +28,13 @@ var auditContentTemplates = map[string]string{
 	"user.topup_complete":   "Completed top-up order for the user",
 	"user.oauth_unbind":     "Removed an OAuth binding for the user",
 	"option.update":         "Updated system setting ${key}",
-	"option.reset_ratio":    "Reset model ratios",
-	"option.clear_affinity_cache": "Cleared channel affinity cache",
+
+	"option.passkey_domains":           "Updated Passkey domains: removed ${domains}; affected ${known}; unknown ${unknown}",
+	"option.passkey_domains_confirmed": "Confirmed removal of Passkey domains: ${domains}; affected ${known}; unknown ${unknown}",
+	"option.passkey_domains_blocked":   "Passkey domain change blocked: ${domains}; affected ${known}; unknown ${unknown}",
+	"option.passkey_domains_failed":    "Passkey domain update failed",
+	"option.reset_ratio":               "Reset model ratios",
+	"option.clear_affinity_cache":      "Cleared channel affinity cache",
 
 	"channel.create":              "Created channel ${name} (type ${type}, count ${count})",
 	"channel.update":              "Updated channel ${name} (ID: ${id})",
@@ -57,9 +62,9 @@ var auditContentTemplates = map[string]string{
 	"channel.ollama_delete":       "Deleted Ollama model",
 	"channel.upstream_detect":     "Detected upstream model updates",
 
-	"redemption.create": "Created ${count} redemption codes named ${name} (${quota} each)",
-	"redemption.update":        "Updated a redemption code",
-	"redemption.delete":        "Deleted a redemption code",
+	"redemption.create":         "Created ${count} redemption codes named ${name} (${quota} each)",
+	"redemption.update":         "Updated a redemption code",
+	"redemption.delete":         "Deleted a redemption code",
 	"redemption.delete_invalid": "Deleted invalid redemption codes",
 
 	"subscription.plan_reset":                   "Reset active subscriptions for plan ${plan_id}",
