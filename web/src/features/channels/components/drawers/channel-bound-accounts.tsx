@@ -47,6 +47,8 @@ type BoundAccountMeta = {
 type BindingMeta = {
   account_id: number
   name?: string | null
+  type?: number | null
+  status?: number | null
   base_url?: string | null
   key_masked?: string | null
 }
@@ -324,7 +326,14 @@ export function ChannelBoundAccounts(props: ChannelBoundAccountsProps) {
                   </div>
                 )}
                 {boundBindings.map((binding, index) => {
+                  // 账户可能不在可绑定列表里（例如已停用），此时用渠道响应里的绑定摘要兜底，
+                  // 否则行上只剩 `#id / 0`，用户看不出是哪个账户
                   const meta = accountMetaById.get(binding.account_id) ?? null
+                  const bindingMeta = bindingMetaById.get(binding.account_id)
+                  const displayName =
+                    meta?.name ?? bindingMeta?.name ?? `#${binding.account_id}`
+                  const displayType = meta?.type ?? bindingMeta?.type ?? 0
+                  const displayStatus = meta?.status ?? bindingMeta?.status
                   return (
                     <div
                       key={binding.account_id}
@@ -335,11 +344,16 @@ export function ChannelBoundAccounts(props: ChannelBoundAccountsProps) {
                           {index + 1}
                         </Badge>
                         <span className='truncate text-sm font-medium'>
-                          {meta?.name ?? `#${binding.account_id}`}
+                          {displayName}
                         </span>
                         <span className='bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-xs'>
-                          {channelTypeLabelOf(meta?.type ?? 0)}
+                          {channelTypeLabelOf(displayType)}
                         </span>
+                        {displayStatus !== undefined && displayStatus !== 1 && (
+                          <span className='shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-900 dark:bg-amber-500/20 dark:text-amber-200'>
+                            {t('Disabled')}
+                          </span>
+                        )}
                         <span className='text-muted-foreground hidden truncate font-mono text-xs sm:inline'>
                           {meta?.key_masked ||
                             bindingMetaById.get(binding.account_id)
