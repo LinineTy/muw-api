@@ -311,10 +311,25 @@ func GetAccountById(id int, selectAll bool) (*Account, error) {
 	return account, nil
 }
 
+// maskAccountSecrets 用已加载的明文算出脱敏预览（列表这类只读路径用）。
+// 注意：不要在这里清掉 Key 本身——controller 的 fillAccountView 还会用同一份
+// 明文再算一次预览，清早了会把 key_masked 覆盖成空串。明文不会下发：
+// Account.Key / CodingPlanKey 的 json 标签都是 "-"。
+func maskAccountSecrets(accounts []*Account) {
+	for _, account := range accounts {
+		account.KeyMasked = maskAccountKeyPreview(account.Key)
+		if account.CodingPlanKey != "" {
+			account.CodingPlanKeyMasked = maskAccountKeyPreview(account.CodingPlanKey)
+		}
+	}
+}
+
 // GetAllAccounts 分页列表（脱敏），按 id 倒序。
+
 func GetAllAccounts(startIdx int, num int) ([]*Account, error) {
 	var accounts []*Account
-	err := DB.Omit("key", "coding_plan_key").Order("id desc").Limit(num).Offset(startIdx).Find(&accounts).Error
+	err := DB.Order("id desc").Limit(num).Offset(startIdx).Find(&accounts).Error
+	maskAccountSecrets(accounts)
 	return accounts, err
 }
 
@@ -325,10 +340,11 @@ func SearchAccounts(keyword string) ([]*Account, error) {
 	if common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
 		baseURLCol = `"base_url"`
 	}
-	err := DB.Omit("key", "coding_plan_key").
+	err := DB.
 		Where("id = ? OR name LIKE ? OR "+baseURLCol+" LIKE ?",
 			common.String2Int(keyword), "%"+keyword+"%", "%"+keyword+"%").
 		Order("id desc").Find(&accounts).Error
+	maskAccountSecrets(accounts)
 	return accounts, err
 }
 
@@ -380,8 +396,8 @@ func applyAccountListFilter(q *gorm.DB, f AccountListFilter) *gorm.DB {
 func GetAccountsFiltered(startIdx int, num int, f AccountListFilter) ([]*Account, error) {
 	var accounts []*Account
 	err := applyAccountListFilter(DB.Model(&Account{}), f).
-		Omit("key", "coding_plan_key").
 		Order("id desc").Limit(num).Offset(startIdx).Find(&accounts).Error
+	maskAccountSecrets(accounts)
 	return accounts, err
 }
 

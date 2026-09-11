@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 package model
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -44,15 +45,15 @@ func TestChannelAccountBackfillIdempotentAndComplete(t *testing.T) {
 	provider := "zhipu"
 	autoControl := true
 	ch := &Channel{
-		Type:          1,
-		Name:          "backfill-source",
-		Key:           "sk-legacy-key",
-		Models:        "gpt-4o",
-		Group:         "default",
-		Status:        common.ChannelStatusEnabled,
-		Balance:       12.5,
-		CodingPlanProvider:   &provider,
-		CodingPlanKey:        "cp-key",
+		Type:                  1,
+		Name:                  "backfill-source",
+		Key:                   "sk-legacy-key",
+		Models:                "gpt-4o",
+		Group:                 "default",
+		Status:                common.ChannelStatusEnabled,
+		Balance:               12.5,
+		CodingPlanProvider:    &provider,
+		CodingPlanKey:         "cp-key",
 		CodingPlanAutoControl: &autoControl,
 	}
 	ch.ChannelInfo.IsMultiKey = true
@@ -125,7 +126,7 @@ func TestChannelDelegationToAccount(t *testing.T) {
 
 // TestSharedAccountPollingIndexCrossChannel 保护共享账户多 key 轮询契约：
 // 轮询索引在账户上，共享账户的多渠道拿到的是连续且不重复的 key 序列
-//（单渠道内轮询语义不变，跨渠道接力轮询）。
+// （单渠道内轮询语义不变，跨渠道接力轮询）。
 func TestSharedAccountPollingIndexCrossChannel(t *testing.T) {
 	setupAccountTestDB(t)
 
@@ -212,4 +213,21 @@ func TestBatchInsertChannelsCreatesPrivateAccount(t *testing.T) {
 	for _, ch := range bound {
 		assert.NotZero(t, ch.AccountId, "渠道应绑定自动生成的账户")
 	}
+}
+
+// 账户列表必须给出脱敏预览（前端 Key 列显示打码值），且不能把明文带出来。
+func TestGetAllAccountsMasksKeyForList(t *testing.T) {
+	setupChannelAccountTestDB(t)
+	acc := &Account{Name: "masked", Type: 1, Status: common.ChannelStatusEnabled, Key: "sk-1234567890abcdef", CreatedTime: common.GetTimestamp()}
+	require.NoError(t, DB.Create(acc).Error)
+
+	list, err := GetAllAccounts(0, 10)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, "sk-123****cdef", list[0].KeyMasked, "前端 Key 列要显示打码值")
+	// 明文本身不能下发（Account.Key 的 json 标签是 "-"；这里直接盯住序列化结果）
+	raw, err := json.Marshal(list[0])
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), `"key"`, "响应里不能出现明文字段")
+	assert.NotContains(t, string(raw), "sk-1234567890abcdef", "响应里不能出现明文 key")
 }
