@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ChevronDownIcon } from 'lucide-react'
+import { ChevronDownIcon, RefreshCcwIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -32,7 +32,6 @@ import {
 import { api } from '@/lib/api'
 import { formatTimestamp } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { SystemUpdateAction } from '@/features/system-update/system-update-action'
 
 import { SettingsPageActionsPortal } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
@@ -191,19 +190,19 @@ export function UpdateCheckerSection({
           </div>
 
           {/* 与其它设置页一致：更新入口作为页面级操作放到右上角，避免与下方「检查更新」按钮文案相撞 */}
-          {/* 与其它设置页一致：更新相关操作统一放右上角。
-              左侧是更新状态入口（SystemUpdateAction），右侧是我们自建的检查按钮——
-              文案收进 aria-label/title，避免与状态入口的文案撞车。 */}
+          {/* 与其它设置页一致：更新操作统一放右上角。
+              只用我们自己的更新源（/api/status/update-check，带内置 changelog），
+              不引入上游走 GitHub releases 的入口。 */}
           <SettingsPageActionsPortal>
-            <SystemUpdateAction compact={false} />
             <Button
               type='button'
               size='sm'
-              variant='outline'
+              variant='default'
               onClick={handleCheckUpdates}
               disabled={checking}
             >
-              {checking ? t('Checking updates...') : t('Check now')}
+              <RefreshCcwIcon className={cn('me-2 size-4', checking && 'animate-spin')} />
+              {checking ? t('Checking updates...') : t('Check for updates')}
             </Button>
           </SettingsPageActionsPortal>
 
