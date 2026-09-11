@@ -27,12 +27,23 @@ import {
   within,
 } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
+
+// muw-api fork：渠道抽屉的账户绑定区（自研）带一个「Manage in Accounts」链接，
+// 用的是 @tanstack/react-router 的 Link。本测试不提供 RouterProvider，Link 会在
+// useLinkProps 里因缺少路由上下文直接抛错（整棵抽屉渲染失败）。这里把 Link 降级成
+// 普通 <a>，其余导出保持上游原样。
+vi.mock('@tanstack/react-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tanstack/react-router')>()),
+  Link: ({ children, to }: { children?: ReactNode; to?: string }) => (
+    <a href={typeof to === 'string' ? to : '#'}>{children}</a>
+  ),
+}))
 
 import type { TaskPluginOption } from '../../api'
 import { channelSchema, type Channel } from '../../types'
