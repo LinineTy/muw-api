@@ -3161,6 +3161,8 @@ export function ChannelMutateDrawer({
           </Alert>
         )}
 
+            {/* 类型特定凭证输入 + 身份验证区：凭证真相源在账户时整体不渲染（否则会剩空卡片） */}
+            {!addressFromAccount && (
         <div className='border-border/60 bg-muted/10 rounded-lg border p-4'>
           <fieldset
             disabled={sensitiveLocked}
@@ -3777,6 +3779,8 @@ export function ChannelMutateDrawer({
               />
             )}
 
+            {/* 凭证真相源在账户时，密钥输入区/Add Mode 整体收敛（对齐 main 的三元互斥） */}
+            {!addressFromAccount && (
             <ChannelAuthSection>
               {!isEditing && (
                 <FormField
@@ -4118,8 +4122,10 @@ export function ChannelMutateDrawer({
                 />
               )}
             </ChannelAuthSection>
+            )}
           </fieldset>
         </div>
+            )}
       </ChannelApiAccessSection>
     </div>
   )
