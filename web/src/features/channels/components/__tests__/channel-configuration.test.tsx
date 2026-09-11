@@ -261,7 +261,7 @@ test('selecting a plugin opens a prefilled channel and creates its explicit bind
     mode: 'single',
     channel: {
       name: 'Video A',
-      type: 61,
+      type: 63,
       key: 'channel-secret',
       models: 'video-a-1',
       base_url: 'https://a.example',
@@ -467,7 +467,7 @@ test('creating a migrated provider uses its plugin binding instead of the legacy
     expect(post).toHaveBeenCalledWith(
       '/api/channel',
       expect.objectContaining({
-        channel: expect.objectContaining({ type: 61 }),
+        channel: expect.objectContaining({ type: 63 }),
       }),
       expect.anything()
     )
@@ -840,7 +840,7 @@ test.each([
         mode,
         channel: expect.objectContaining({
           key: 'first-key\nsecond-key',
-          type: 61,
+          type: 63,
         }),
       }),
       expect.anything()
@@ -1040,7 +1040,7 @@ test('editing legacy channels retains the full provider list and saves the origi
 test('opening and reselecting an existing plugin preserves its saved configuration', async () => {
   editingChannel = {
     ...editingChannel,
-    type: 61,
+    type: 63,
     setting: '{"task_plugin_key":"video-a"}',
     priority: 7,
   }
@@ -1074,7 +1074,7 @@ test('opening and reselecting an existing plugin preserves its saved configurati
 test('an unavailable plugin keeps its identifier and binding when other fields are updated', async () => {
   editingChannel = {
     ...editingChannel,
-    type: 61,
+    type: 63,
     setting: '{"task_plugin_key":"removed-plugin"}',
   }
   const put = vi
@@ -1180,7 +1180,7 @@ test('request processing configuration does not mark the network category as con
 test('configuration from fields unsupported by the selected provider stays unmarked', async () => {
   editingChannel = {
     ...editingChannel,
-    type: 61,
+    type: 63,
     setting: '{"task_plugin_key":"video-a","force_format":true}',
     settings:
       '{"allow_speed":true,"allow_service_tier":true,"upstream_model_update_check_enabled":true}',

@@ -23,6 +23,15 @@ import { defineConfig } from 'vitest/config'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+// Bun defaults NODE_ENV to `production` when it runs a script, and Vite only
+// fills NODE_ENV in when it is unset. That makes Vitest resolve React to its
+// production build, which intentionally drops `act`; every @testing-library
+// render then dies with "React.act is not a function". Pin it to `test` before
+// the config (and therefore the module graph) is resolved.
+if (process.env.NODE_ENV !== 'test') {
+  process.env.NODE_ENV = 'test'
+}
+
 export default defineConfig({
   resolve: {
     alias: {
@@ -30,6 +39,9 @@ export default defineConfig({
     },
   },
   test: {
+    // Belt and braces: keep workers on `test` too, so a caller that exports
+    // NODE_ENV=production cannot resurrect the production React build.
+    env: { NODE_ENV: 'test' },
     environment: 'jsdom',
     server: {
       deps: { inline: [/@lobehub\//, /antd-style/] },
