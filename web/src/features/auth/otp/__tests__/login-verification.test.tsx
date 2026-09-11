@@ -171,7 +171,10 @@ it('accepts a completed Passkey login without opening another verification dialo
     })
   )
   await waitFor(() =>
-    expect(router.state.location.href).toBe('/pricing?view=grid')
+    // fork 在登录成功后先落到中转页 /login-result，并把原目的地编码进 redirect
+    expect(router.state.location.href).toBe(
+      `/login-result?redirect=${encodeURIComponent('/pricing?view=grid')}`
+    )
   )
   expect(useAuthStore.getState().auth.user?.id).toBe(42)
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
@@ -197,7 +200,10 @@ it('writes authentication only after verification and preserves the original des
     await pending.promise
   })
   await waitFor(() =>
-    expect(router.state.location.href).toBe('/pricing?view=grid')
+    // fork 在登录成功后先落到中转页 /login-result，并把原目的地编码进 redirect
+    expect(router.state.location.href).toBe(
+      `/login-result?redirect=${encodeURIComponent('/pricing?view=grid')}`
+    )
   )
   expect(useAuthStore.getState().auth.user?.id).toBe(42)
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
