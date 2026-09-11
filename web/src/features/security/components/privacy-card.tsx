@@ -34,6 +34,8 @@ import {
 } from '@/features/profile/components/preference-policy'
 import { parseUserSettings } from '@/features/profile/lib/format'
 import type { UserProfile } from '@/features/profile/types'
+import { handleServerError } from '@/lib/handle-server-error'
+import { createServerError } from '@/lib/server-error-message'
 
 type PrivacyCardProps = {
   profile: UserProfile
@@ -61,14 +63,15 @@ export function PrivacyCard(props: PrivacyCardProps) {
     mutationFn: async () => {
       const response = await updateUserSettings({ record_ip_log: recordIpLog })
       if (!response.success) {
-        throw new Error(response.message || t('Failed to update settings'))
+        throw createServerError(response, t('Failed to update settings'))
       }
     },
     onSuccess: () => {
       toast.success(t('Settings updated successfully'))
       props.onUpdate()
     },
-    onError: () => toast.error(t('Failed to update settings')),
+    onError: (error) =>
+      handleServerError(error, t('Failed to update settings')),
   })
 
   return (

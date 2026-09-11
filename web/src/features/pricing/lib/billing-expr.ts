@@ -22,13 +22,23 @@ For commercial licensing, please contact support@quantumnous.com
  * Parses the dynamic billing expression format so that the pricing breakdown
  * UI can be rendered from the same backend expressions.
  *
- * The grammar is intentionally narrow: we only support the shapes that the
- * server emits (tiered pricing + request-rule conditional multipliers), so
- * the regular expressions are exact rather than tolerant of arbitrary
- * expression syntax.
+ * Display adapters intentionally accept fewer shapes than the shared
+ * simulator. Existing ordered-tier, task-unit and request-rule contracts
+ * stay intact; executable custom expressions do not imply fixed unit prices.
  */
 
 import type { BillingUsageSchema } from '../types'
+import {
+  readTokenTierChain,
+  readTaskTierChain,
+  readTimeTokenPricing,
+  type TokenTier,
+} from './billing-expression/display'
+import { compileBillingExpression } from './billing-expression/parser'
+import {
+  splitExpressionAtTopLevel,
+  unwrapExpressionParens,
+} from './billing-expression/structure'
 
 // ---------------------------------------------------------------------------
 // Variable registry
@@ -93,6 +103,15 @@ export const BILLING_VARS: BillingVar[] = [
     group: 'cache',
   },
   {
+    key: 'img_cr',
+    field: 'imageCachePrice',
+    tierField: 'image_cache_unit_cost',
+    label: 'Image cache input price',
+    shortLabel: 'Image Cache',
+    side: 'input',
+    group: 'cache',
+  },
+  {
     key: 'cc1h',
     field: 'cacheCreate1hPrice',
     tierField: 'cache_create_1h_unit_cost',
@@ -144,8 +163,10 @@ export const BILLING_PRICING_VARS: BillingVar[] = BILLING_VARS.filter(
   (v) => !v.isConditionOnly
 )
 
-/** Vars valid in tier conditions (all billing variables). */
-export const BILLING_CONDITION_VARS: string[] = BILLING_VARS.map((v) => v.key)
+/** Vars valid in tier conditions (`p`, `c`, `len`) */
+export const BILLING_CONDITION_VARS: string[] = BILLING_VARS.filter(
+  (v) => v.isBase || v.isConditionOnly
+).map((v) => v.key)
 
 const BILLING_VAR_KEY_TO_FIELD = Object.fromEntries(
   BILLING_PRICING_VARS.map((v) => [v.key, v.field as string])
@@ -177,16 +198,6 @@ export const MATCH_LTE = 'lte'
 export const MATCH_EXISTS = 'exists'
 export const MATCH_RANGE = 'range'
 
-// Source operator of a RANGE condition. The expression language has two range
-// spellings: a same-day window serializes as `fn >= s && fn < e` ('and') and an
-// overnight window as `fn >= s || fn < e` ('or'). The op is not serialized — the
-// builder re-derives it from the bounds — but the display and the validator need
-// it to tell a real window from the degenerate spellings (`||` with start <= end
-// matches every value, `&&` with start >= end can never match).
-export const RANGE_OP_AND = 'and'
-export const RANGE_OP_OR = 'or'
-export type RangeOp = typeof RANGE_OP_AND | typeof RANGE_OP_OR
-
 export const TIME_FUNCS = ['hour', 'minute', 'weekday', 'month', 'day'] as const
 export type TimeFunc = (typeof TIME_FUNCS)[number]
 
@@ -214,9 +225,6 @@ export type ParamHeaderCondition = {
   path: string
   mode: string
   value: string
-  /** Literal kind of an EQ value, so `param("x") == "true"` (string) round-trips
-   * as a string instead of collapsing into the boolean `== true`. */
-  valueKind?: 'string' | 'number' | 'boolean'
 }
 
 export type TimeCondition = {
@@ -227,27 +235,16 @@ export type TimeCondition = {
   value: string
   rangeStart: string
   rangeEnd: string
-  /** Source operator of a parsed RANGE (see `RANGE_OP_AND` / `RANGE_OP_OR`);
-   * undefined for a range authored in the editor, whose operator the builder
-   * derives from the bounds. */
-  rangeOp?: RangeOp
 }
 
 export type RequestCondition = TimeCondition | ParamHeaderCondition
 
-// A condition set is a DNF: an OR of AND-clauses ("branches"). `[]` means the
-// empty DNF (always true) — only valid on the fallback tier.
-export type AndClause<T> = { conditions: T[] }
-export type Dnf<T> = AndClause<T>[]
-
 export type RequestRuleGroup = {
-  conditions: Dnf<RequestCondition>
+  conditions: RequestCondition[]
   multiplier: string
   conditionText?: string
   matched?: boolean
 }
-
-export type RequestDnf = Dnf<RequestCondition>
 
 export type RequestRuleTrace = {
   cond: string
@@ -255,30 +252,18 @@ export type RequestRuleTrace = {
   matched: boolean
 }
 
-export type TierConditionVar =
-  | 'p'
-  | 'c'
-  | 'len'
-  | 'cr'
-  | 'cc'
-  | 'cc1h'
-  | 'img'
-  | 'img_o'
-  | 'ai'
-  | 'ao'
-export type TierCompareOp = '<' | '<=' | '>' | '>='
 export type TierCondition = {
-  var: TierConditionVar
-  op: TierCompareOp
+  var: 'p' | 'c' | 'len'
+  op: '<' | '<=' | '>' | '>='
   value: number
 }
-export type TierConditionDnf = Dnf<TierCondition>
 
 export type ParsedTier = {
+  billingUnit?: 'token' | 'request'
+  fixedPrice?: number
+  conditionText?: string
   label: string
-  conditions: TierConditionDnf
-  /** The last bare tier in the chain; every other tier is conditional. */
-  isFallback: boolean
+  conditions: TierCondition[]
   [field: string]: unknown
 }
 
@@ -298,401 +283,43 @@ export type ParsedTaskTier = {
 // Tier parser
 // ---------------------------------------------------------------------------
 
-function stripExprVersion(exprStr: string): { version: number; body: string } {
-  if (!exprStr) return { version: 1, body: '' }
-  const m = exprStr.match(/^v(\d+):([\s\S]*)$/)
-  if (m) return { version: Number(m[1]), body: m[2] }
-  return { version: 1, body: exprStr }
-}
-
-function parseTierBody(bodyStr: string): Record<string, number> {
-  const coeffs: Record<string, number> = {}
-  // Split on top-level ` + ` and accept only clean `var * number` terms, so a
-  // hand-written body with e.g. `max(p * 1, c * 2)` ignores the non-linear term
-  // instead of letting its first occurrence win.
-  for (const term of splitTopLevelToken(bodyStr, ' + ')) {
-    const m = term.match(
-      /^(p|c|len|cr|cc|cc1h|img|img_o|ai|ao)\s*\*\s*([\d.eE+-]+)$/
-    )
-    if (m && !(m[1] in coeffs)) coeffs[m[1]] = Number(m[2])
-  }
-  const tier: Record<string, number> = {}
-  for (const [varName, field] of Object.entries(BILLING_VAR_KEY_TO_FIELD)) {
-    tier[field] = coeffs[varName] || 0
-  }
-  return tier
-}
-
-// Match `tier("label", body)` with balanced parens so a body containing a
-// function call (e.g. `max(p * 1, c * 2)`) is captured whole instead of being
-// cut at the first `)`. Returns null when the string is not exactly one tier
-// call (including trailing content).
-function matchTierCall(expr: string): { label: string; body: string } | null {
-  const m = expr.match(/^tier\("([^"]*)",\s*/)
-  if (!m) return null
-  const rest = expr.slice(m[0].length)
-  let depth = 0
-  let inString = false
-  for (let i = 0; i < rest.length; i += 1) {
-    const c = rest[i]
-    if (c === '"' && !isEscaped(rest, i)) inString = !inString
-    if (!inString) {
-      if (c === '(') depth += 1
-      else if (c === ')') {
-        if (depth === 0) {
-          if (rest.slice(i + 1).trim() !== '') return null
-          return { label: m[1], body: rest.slice(0, i).trim() }
-        }
-        depth -= 1
-      }
-    }
-  }
-  return null
-}
-
-// The implicit zero-cost fallback `p * 0 + c * 0` emitted for a lone
-// conditional tier (`cond ? tier(...) : p * 0 + c * 0`).
-function isZeroFallbackExpr(seg: string): boolean {
-  return /^p\s*\*\s*0\s*\+\s*c\s*\*\s*0(?:\s*\+\s*[a-z0-9_]+\s*\*\s*0)*$/.test(
-    seg.trim()
-  )
-}
-
-function tryParseTierConditionAtom(str: string): TierCondition | null {
-  const m = str
-    .trim()
-    .match(
-      /^(p|c|len|cr|cc|cc1h|img|img_o|ai|ao)\s*(<|<=|>|>=)\s*([\d.eE+-]+)$/
-    )
-  if (!m) return null
+function mapTokenTier(
+  tier: TokenTier & { conditionText?: string }
+): ParsedTier {
   return {
-    var: m[1] as TierConditionVar,
-    op: m[2] as TierCompareOp,
-    value: Number(m[3]),
+    label: tier.label,
+    ...(tier.imageCount ? { imageCount: true } : {}),
+    conditions: tier.conditions,
+    ...(tier.billingUnit === 'request'
+      ? { billingUnit: tier.billingUnit, fixedPrice: tier.fixedPrice }
+      : {}),
+    ...(tier.conditionText ? { conditionText: tier.conditionText } : {}),
+    ...Object.fromEntries(
+      Object.entries(tier.prices).map(([key, price]) => [
+        BILLING_VAR_KEY_TO_FIELD[key],
+        price,
+      ])
+    ),
   }
-}
-
-/**
- * Parse a tier-condition string into a DNF of AND-clauses. `''`/empty parses to
- * `[]` (always true) — valid only on the fallback tier.
- */
-export function parseDnfTierConditions(
-  conditionStr: string
-): TierConditionDnf | null {
-  const trimmed = (conditionStr || '').trim()
-  if (!trimmed) return []
-  const branches = splitTopLevelOr(trimmed)
-  const dnf: TierConditionDnf = []
-  for (const branch of branches) {
-    const atoms = splitTopLevelAnd(unwrapOuterParens(branch))
-    if (atoms.length === 0) return null
-    const clause: TierCondition[] = []
-    for (const atom of atoms) {
-      const parsed = tryParseTierConditionAtom(atom)
-      if (!parsed) return null
-      clause.push(parsed)
-    }
-    dnf.push({ conditions: clause })
-  }
-  return dnf
-}
-
-/**
- * Parse a flat tier chain `cond0 ? tier(...) : cond1 ? tier(...) : tier(...)`.
- * The last bare segment (a tier call or the implicit `p * 0 + c * 0`) is the
- * fallback. Returns null for nested ternaries or segments that don't fit the
- * flat shape, so the caller can keep such expressions in raw mode instead of
- * dropping content.
- */
-export function parseTierChain(body: string): ParsedTier[] | null {
-  const segments = splitTopLevelColon(body)
-  if (segments.length === 0) return null
-  const tiers: ParsedTier[] = []
-  for (const segment of segments) {
-    const seg = unwrapOuterParens(segment)
-    // A remaining top-level ` : ` means a nested ternary — outside the flat
-    // visual model. Refuse the whole chain rather than drop content.
-    if (splitTopLevelColon(seg).length > 1) return null
-    const questionParts = splitTopLevelQuestion(seg)
-    let condStr: string
-    let bodyStr: string
-    if (questionParts.length === 1) {
-      condStr = ''
-      bodyStr = questionParts[0]
-    } else if (questionParts.length === 2) {
-      condStr = questionParts[0]
-      bodyStr = questionParts[1]
-    } else {
-      return null
-    }
-    const conditions = parseDnfTierConditions(condStr)
-    if (!conditions) return null
-    let tier: ParsedTier
-    if (questionParts.length === 1 && isZeroFallbackExpr(bodyStr)) {
-      tier = parseTierBody('') as ParsedTier
-      tier.label = ''
-    } else {
-      const call = matchTierCall(bodyStr)
-      if (!call) return null
-      tier = parseTierBody(call.body) as ParsedTier
-      tier.label = call.label
-    }
-    tier.conditions = conditions
-    tier.isFallback = false
-    tiers.push(tier)
-  }
-  if (tiers.length > 0) tiers[tiers.length - 1].isFallback = true
-  return tiers
 }
 
 export function parseTiersFromExpr(exprStr: string): ParsedTier[] {
   if (!exprStr) return []
-  try {
-    const { body } = stripExprVersion(exprStr)
-    return parseTierChain(body) || []
-  } catch {
-    return []
-  }
+  const compiled = compileBillingExpression(exprStr)
+  if (compiled.status !== 'ready') return []
+  const canonical = readTokenTierChain(compiled.ast)
+  if (canonical) return canonical.map(mapTokenTier)
+  return readTimeTokenPricing(exprStr)?.tiers.map(mapTokenTier) ?? []
 }
 
-// ---------------------------------------------------------------------------
-// Task (usage-schema) tier parser
-// ---------------------------------------------------------------------------
-
-function findTaskTopLevelCharacter(
-  expression: string,
-  target: string,
-  start = 0
-): number {
-  let depth = 0
-  let quoted = false
-  let escaped = false
-  for (let index = start; index < expression.length; index += 1) {
-    const character = expression[index]
-    if (quoted) {
-      if (escaped) {
-        escaped = false
-      } else if (character === '\\') {
-        escaped = true
-      } else if (character === '"') {
-        quoted = false
-      }
-      continue
-    }
-    if (character === '"') {
-      quoted = true
-      continue
-    }
-    if (character === '(') {
-      depth += 1
-      continue
-    }
-    if (character === ')') {
-      depth -= 1
-      if (depth < 0) return -1
-      continue
-    }
-    if (depth === 0 && character === target) return index
-  }
-  return -1
-}
-
-function findTaskTernaryColon(
-  expression: string,
-  questionIndex: number
-): number {
-  let depth = 0
-  let ternaryDepth = 0
-  let quoted = false
-  let escaped = false
-  for (let index = questionIndex + 1; index < expression.length; index += 1) {
-    const character = expression[index]
-    if (quoted) {
-      if (escaped) {
-        escaped = false
-      } else if (character === '\\') {
-        escaped = true
-      } else if (character === '"') {
-        quoted = false
-      }
-      continue
-    }
-    if (character === '"') {
-      quoted = true
-      continue
-    }
-    if (character === '(') {
-      depth += 1
-      continue
-    }
-    if (character === ')') {
-      depth -= 1
-      if (depth < 0) return -1
-      continue
-    }
-    if (depth !== 0) continue
-    if (character === '?') {
-      ternaryDepth += 1
-      continue
-    }
-    if (character !== ':') continue
-    if (ternaryDepth === 0) return index
-    ternaryDepth -= 1
-  }
-  return -1
-}
-
-function splitTaskTopLevel(expression: string, operator: '&&' | '+'): string[] {
-  const parts: string[] = []
-  let start = 0
-  let depth = 0
-  let quoted = false
-  let escaped = false
-  for (let index = 0; index < expression.length; index += 1) {
-    const character = expression[index]
-    if (quoted) {
-      if (escaped) {
-        escaped = false
-      } else if (character === '\\') {
-        escaped = true
-      } else if (character === '"') {
-        quoted = false
-      }
-      continue
-    }
-    if (character === '"') {
-      quoted = true
-      continue
-    }
-    if (character === '(') {
-      depth += 1
-      continue
-    }
-    if (character === ')') {
-      depth -= 1
-      continue
-    }
-    if (depth !== 0) continue
-    if (operator === '&&' && expression.slice(index, index + 2) === '&&') {
-      parts.push(expression.slice(start, index).trim())
-      start = index + 2
-      index += 1
-      continue
-    }
-    if (
-      operator === '+' &&
-      character === '+' &&
-      expression[index - 1] !== 'e' &&
-      expression[index - 1] !== 'E'
-    ) {
-      parts.push(expression.slice(start, index).trim())
-      start = index + 1
-    }
-  }
-  parts.push(expression.slice(start).trim())
-  return parts.filter(Boolean)
-}
-
-function parseTaskConditions(
-  expression: string,
-  schema: BillingUsageSchema,
-  includeBooleanConditions: boolean
-): TaskTierCondition[] | null {
-  const conditions: TaskTierCondition[] = []
-  for (const part of splitTaskTopLevel(expression, '&&')) {
-    const match = part.match(
-      /^u\(\s*("(?:[^"\\]|\\.)*")\s*\)\s*==\s*("(?:[^"\\]|\\.)*"|true|false)$/
-    )
-    if (!match) return null
-    let field: string
-    let value: string
-    try {
-      field = JSON.parse(match[1]) as string
-      value = String(JSON.parse(match[2]))
-    } catch {
-      return null
-    }
-    const definition = schema[field]
-    if (definition?.type === 'boolean') {
-      if (!includeBooleanConditions || !['true', 'false'].includes(match[2])) {
-        return null
-      }
-    } else if (
-      !definition?.enum?.includes(value) ||
-      !match[2].startsWith('"')
-    ) {
-      return null
-    }
-    conditions.push({ field, value })
-  }
-  return conditions.length > 0 ? conditions : null
-}
-
-function parseTaskTierCall(
-  expression: string,
-  conditions: TaskTierCondition[],
-  schema: BillingUsageSchema
-): ParsedTaskTier | null {
-  const trimmed = expression.trim()
-  if (!trimmed.startsWith('tier(') || !trimmed.endsWith(')')) return null
-  const inner = trimmed.slice(5, -1)
-  const commaIndex = findTaskTopLevelCharacter(inner, ',')
-  if (commaIndex < 0) return null
-
-  let label: string
-  try {
-    label = JSON.parse(inner.slice(0, commaIndex).trim()) as string
-  } catch {
-    return null
-  }
-  if (typeof label !== 'string') return null
-
-  const terms = splitTaskTopLevel(inner.slice(commaIndex + 1), '+')
-  const unitPrices: Record<string, number> = {}
-  let constant = 0
-  let hasConstant = false
-  for (const term of terms) {
-    if (NUMERIC_LITERAL_REGEX.test(term)) {
-      const value = Number(term)
-      if (hasConstant || !Number.isFinite(value) || value < 0) return null
-      constant = value
-      hasConstant = true
-      continue
-    }
-    const scaledMatch = term.match(
-      /^u\(\s*("(?:[^"\\]|\\.)*")\s*\)\s*\*\s*(-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)\s*\/\s*1000000$/
-    )
-    const bareMatch = term.match(
-      /^u\(\s*("(?:[^"\\]|\\.)*")\s*\)\s*\*\s*(-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)$/
-    )
-    const match = scaledMatch ?? bareMatch
-    if (!match) return null
-    let field: string
-    try {
-      field = JSON.parse(match[1]) as string
-    } catch {
-      return null
-    }
-    const fieldSchema = schema[field]
-    const value = Number(match[2])
-    if (
-      fieldSchema?.type !== 'number' ||
-      !fieldSchema.unit ||
-      field in unitPrices ||
-      !Number.isFinite(value) ||
-      value < 0
-    ) {
-      return null
-    }
-    if (fieldSchema.unit === 'token') {
-      if (!scaledMatch) return null
-    } else if (scaledMatch) {
-      return null
-    }
-    unitPrices[field] = value
-  }
-  if (Object.keys(unitPrices).length === 0) return null
-  return { label, conditions, constant, unitPrices }
+/** Current-time selection is exclusively for summaries; detail and log callers retain all rows. */
+export function getCurrentTimePricingTiers(
+  exprStr: string,
+  now: Date
+): ParsedTier[] | null {
+  return (
+    readTimeTokenPricing(exprStr, now)?.currentTiers.map(mapTokenTier) ?? null
+  )
 }
 
 export function parseTaskTiersFromExpr(
@@ -701,42 +328,10 @@ export function parseTaskTiersFromExpr(
   includeBooleanConditions = false
 ): ParsedTaskTier[] {
   if (!exprStr || !schema || Object.keys(schema).length === 0) return []
-  try {
-    const split = splitBillingExprAndRequestRules(exprStr)
-    const versioned = stripExprVersion(split.billingExpr).body.trim()
-    if (!versioned) return []
-
-    const tiers: ParsedTaskTier[] = []
-    let remaining = versioned
-    while (remaining) {
-      const questionIndex = findTaskTopLevelCharacter(remaining, '?')
-      if (questionIndex < 0) {
-        const tier = parseTaskTierCall(remaining, [], schema)
-        if (!tier) return []
-        tiers.push(tier)
-        break
-      }
-      const colonIndex = findTaskTernaryColon(remaining, questionIndex)
-      if (colonIndex < 0) return []
-      const conditions = parseTaskConditions(
-        remaining.slice(0, questionIndex).trim(),
-        schema,
-        includeBooleanConditions
-      )
-      if (!conditions) return []
-      const tier = parseTaskTierCall(
-        remaining.slice(questionIndex + 1, colonIndex).trim(),
-        conditions,
-        schema
-      )
-      if (!tier) return []
-      tiers.push(tier)
-      remaining = remaining.slice(colonIndex + 1).trim()
-    }
-    return tiers
-  } catch {
-    return []
-  }
+  const { billingExpr } = splitBillingExprAndRequestRules(exprStr)
+  const compiled = compileBillingExpression(billingExpr)
+  if (compiled.status !== 'ready') return []
+  return readTaskTierChain(compiled.ast, schema, includeBooleanConditions) ?? []
 }
 
 export function normalizeTierLabel(label: string | undefined): string {
@@ -753,86 +348,19 @@ export function normalizeTierLabel(label: string | undefined): string {
 // ---------------------------------------------------------------------------
 
 function splitTopLevelMultiply(expr: string): string[] {
-  const parts: string[] = []
-  let start = 0
-  let depth = 0
-  let inString = false
-  for (let index = 0; index < expr.length; index += 1) {
-    const char = expr[index]
-    if (char === '"' && !isEscaped(expr, index)) inString = !inString
-    if (!inString) {
-      if (char === '(') depth += 1
-      if (char === ')') depth -= 1
-      if (depth === 0 && expr.slice(index, index + 3) === ' * ') {
-        parts.push(expr.slice(start, index).trim())
-        start = index + 3
-        index += 2
-      }
-    }
-  }
-  parts.push(expr.slice(start).trim())
-  return parts.filter(Boolean)
-}
-
-// Split `expr` on `token` (e.g. `' && '`, `' || '`, `' : '`, `' ? '`) at depth 0,
-// ignoring content inside parentheses and quoted string literals.
-function splitTopLevelToken(expr: string, token: string): string[] {
-  const parts: string[] = []
-  let start = 0
-  let depth = 0
-  let inString = false
-  for (let i = 0; i < expr.length; i += 1) {
-    const c = expr[i]
-    if (c === '"' && !isEscaped(expr, i)) inString = !inString
-    if (!inString) {
-      if (c === '(') depth += 1
-      if (c === ')') depth -= 1
-      if (depth === 0 && expr.startsWith(token, i)) {
-        parts.push(expr.slice(start, i).trim())
-        start = i + token.length
-        i += token.length - 1
-      }
-    }
-  }
-  parts.push(expr.slice(start).trim())
-  return parts.filter(Boolean)
+  return splitExpressionAtTopLevel(expr, '*')
 }
 
 function splitTopLevelAnd(expr: string): string[] {
-  return splitTopLevelToken(expr, ' && ')
+  return splitExpressionAtTopLevel(expr, '&&')
 }
 
-function splitTopLevelOr(expr: string): string[] {
-  return splitTopLevelToken(expr, ' || ')
-}
-
-function splitTopLevelColon(expr: string): string[] {
-  return splitTopLevelToken(expr, ' : ')
-}
-
-function splitTopLevelQuestion(expr: string): string[] {
-  return splitTopLevelToken(expr, ' ? ')
-}
-
-// A `"` delimits a string only when preceded by an even number of backslashes
-// (odd count means the quote is escaped, e.g. `"a\"b"`).
-function isEscaped(text: string, index: number): boolean {
-  let backslashes = 0
-  for (let i = index - 1; i >= 0 && text[i] === '\\'; i -= 1) backslashes += 1
-  return backslashes % 2 === 1
-}
-
-function parseExprLiteral(
-  raw: string
-): { value: string; kind: 'string' | 'number' | 'boolean' } | null {
+function parseExprLiteral(raw: string): string | null {
   const text = raw.trim()
-  if (text === 'true' || text === 'false') {
-    return { value: text, kind: 'boolean' }
-  }
-  if (NUMERIC_LITERAL_REGEX.test(text)) return { value: text, kind: 'number' }
+  if (text === 'true' || text === 'false') return text
+  if (NUMERIC_LITERAL_REGEX.test(text)) return text
   try {
-    const parsed = JSON.parse(text) as string
-    return { value: String(parsed), kind: 'string' }
+    return JSON.parse(text) as string
   } catch {
     return null
   }
@@ -859,11 +387,11 @@ function isTimeValueInRange(timeFunc: TimeFunc, text: string): boolean {
 
 function tryParseTimeCondition(expr: string): RequestCondition | null {
   let m = expr.match(
-    /^(hour|minute|weekday|month|day)\("([^"]+)"\) >= ([\d.eE+-]+) (&&|\|\|) \1\("\2"\) < ([\d.eE+-]+)$/
+    /^(hour|minute|weekday|month|day)\("([^"]+)"\) >= ([\d.eE+-]+) (?:&&|\|\|) \1\("\2"\) < ([\d.eE+-]+)$/
   )
   if (!m) {
     m = expr.match(
-      /^\((hour|minute|weekday|month|day)\("([^"]+)"\) >= ([\d.eE+-]+) (&&|\|\|) \1\("\2"\) < ([\d.eE+-]+)\)$/
+      /^\((hour|minute|weekday|month|day)\("([^"]+)"\) >= ([\d.eE+-]+) (?:&&|\|\|) \1\("\2"\) < ([\d.eE+-]+)\)$/
     )
   }
   if (m) {
@@ -872,7 +400,7 @@ function tryParseTimeCondition(expr: string): RequestCondition | null {
     // dropped when the visual editor rebuilds the expression.
     if (
       !isTimeValueInRange(m[1] as TimeFunc, m[3]) ||
-      !isTimeValueInRange(m[1] as TimeFunc, m[5])
+      !isTimeValueInRange(m[1] as TimeFunc, m[4])
     ) {
       return null
     }
@@ -883,8 +411,7 @@ function tryParseTimeCondition(expr: string): RequestCondition | null {
       mode: MATCH_RANGE,
       value: '',
       rangeStart: m[3],
-      rangeEnd: m[5],
-      rangeOp: m[4] === '&&' ? RANGE_OP_AND : RANGE_OP_OR,
+      rangeEnd: m[4],
     }
   }
   m = expr.match(
@@ -963,125 +490,69 @@ function tryParseRequestCondition(expr: string): RequestCondition | null {
       source: m[1] as 'param' | 'header',
       path: m[2],
       mode: MATCH_EQ,
-      value: parsedValue.value,
-      valueKind: parsedValue.kind,
+      value: String(parsedValue),
     }
   }
 
   return null
 }
 
-// The editor emits a param numeric comparison or substring check as one
-// condition guarded by a nil check: `param("X") != nil && param("X") >= 5` and
-// `param("X") != nil && has(param("X"), "v")`. After `splitTopLevelAnd` the
-// guard and the assertion land in separate `&&` parts; stitch them back into a
-// single condition when the unparseable part asserts on the same path as the
-// preceding exists guard.
-function tryMergeParamAssertion(
-  conditions: RequestCondition[],
-  part: string
-): ParamHeaderCondition | null {
-  const prev = conditions[conditions.length - 1]
-  if (!prev || prev.source !== 'param' || prev.mode !== MATCH_EXISTS) {
-    return null
+function tryParseTimeRangePair(
+  lower: string,
+  upper: string
+): RequestCondition | null {
+  const a = tryParseTimeCondition(lower)
+  const b = tryParseTimeCondition(upper)
+  if (!a || !b || a.source !== 'time' || b.source !== 'time') return null
+  const ta = a as TimeCondition
+  const tb = b as TimeCondition
+  if (ta.timeFunc !== tb.timeFunc || ta.timezone !== tb.timezone) return null
+  if (ta.mode !== MATCH_GTE || tb.mode !== MATCH_LT) return null
+  return {
+    source: 'time',
+    timeFunc: ta.timeFunc,
+    timezone: ta.timezone,
+    mode: MATCH_RANGE,
+    value: '',
+    rangeStart: ta.value,
+    rangeEnd: tb.value,
   }
-  let m = part.match(/^has\(param\("([^"]+)"\), ((?:"(?:[^"\\]|\\.)*"))\)$/)
-  if (m && m[1] === prev.path) {
-    return {
-      source: 'param',
-      path: m[1],
-      mode: MATCH_CONTAINS,
-      value: JSON.parse(m[2]) as string,
-    }
-  }
-  m = part.match(/^param\("([^"]+)"\) (>|>=|<|<=) ([\d.eE+-]+)$/)
-  if (m && m[1] === prev.path) {
-    const opMap: Record<string, string> = {
-      '>': MATCH_GT,
-      '>=': MATCH_GTE,
-      '<': MATCH_LT,
-      '<=': MATCH_LTE,
-    }
-    return { source: 'param', path: m[1], mode: opMap[m[2]], value: m[3] }
-  }
-  return null
 }
 
-/**
- * Parse a request-condition string into a DNF of AND-clauses. A whole-string
- * single condition (including an overnight RANGE, which contains `||` but is one
- * window, not an OR) is tried first; otherwise top-level `||` splits into OR
- * branches. Any unparseable atom fails the whole group (all-or-nothing) so
- * nothing is silently dropped.
- */
-export function parseDnfRequestConditions(
+function tryParseRequestConditions(
   conditionStr: string
-): RequestDnf | null {
-  const trimmed = (conditionStr || '').trim()
-  if (!trimmed) return null
+): RequestCondition[] | null {
+  // A single time range like hour(tz) >= 9 && hour(tz) < 12 must stay one
+  // MATCH_RANGE condition instead of being split into two scalar conditions.
+  const wholeTimeCond = tryParseTimeCondition(conditionStr.trim())
+  if (wholeTimeCond) return [wholeTimeCond]
 
-  // RANGE-first: the RANGE regexes are tried before any DNF `||` split.
-  const whole = tryParseRequestCondition(trimmed)
-  if (whole) return [{ conditions: [whole] }]
-
-  const branches = splitTopLevelOr(trimmed)
-  const dnf: RequestDnf = []
-  for (const branch of branches) {
-    const andParts = splitTopLevelAnd(unwrapOuterParens(branch))
-    if (andParts.length === 0) return null
-    const clause: RequestCondition[] = []
-    for (const part of andParts) {
-      // The serializer wraps any atom whose value contains `||` in parens when
-      // ANDing it with others (e.g. `(has(param("a"), "x || y"))`); unwrap the
-      // atom before matching so the parens are grouping, not part of the token.
-      const trimmedPart = unwrapOuterParens(part).trim()
-      const condition = tryParseRequestCondition(trimmedPart)
-      if (condition) {
-        // A same-day window serializes as `fn >= s && fn < e` (two AND parts).
-        // Fold the pair back into one RANGE so build → parse round-trips. The
-        // bounds must really form a window: `>= 18 && < 6` never matches, and
-        // folding it would let the builder re-derive it as the overnight `||`
-        // window on the next save.
-        const prev = clause[clause.length - 1]
-        if (
-          condition.source === 'time' &&
-          condition.mode === MATCH_LT &&
-          prev?.source === 'time' &&
-          prev.mode === MATCH_GTE &&
-          prev.timeFunc === condition.timeFunc &&
-          prev.timezone === condition.timezone &&
-          Number(prev.value) < Number(condition.value)
-        ) {
-          clause[clause.length - 1] = {
-            source: 'time',
-            timeFunc: prev.timeFunc,
-            timezone: prev.timezone,
-            mode: MATCH_RANGE,
-            value: '',
-            rangeStart: prev.value,
-            rangeEnd: condition.value,
-            rangeOp: RANGE_OP_AND,
-          }
-          continue
-        }
-        clause.push(condition)
-        continue
-      }
-      const merged = tryMergeParamAssertion(clause, trimmedPart)
-      if (!merged) return null
-      // Replace the exists guard with the folded single condition.
-      clause[clause.length - 1] = merged
+  const andParts = splitTopLevelAnd(conditionStr)
+  const conditions: RequestCondition[] = []
+  for (let i = 0; i < andParts.length; i += 1) {
+    const part = andParts[i].trim()
+    // Adjacent matching time bounds (fn >= X && fn < Y) form one range; merge
+    // them so the visual editor keeps a single MATCH_RANGE row even when
+    // other conditions follow in the same group.
+    const next = i + 1 < andParts.length ? andParts[i + 1].trim() : ''
+    const merged = next ? tryParseTimeRangePair(part, next) : null
+    if (merged) {
+      conditions.push(merged)
+      i += 1
+      continue
     }
-    dnf.push({ conditions: clause })
+    const condition = tryParseRequestCondition(part)
+    if (!condition) return null
+    conditions.push(condition)
   }
-  return dnf
+  return conditions.length > 0 ? conditions : null
 }
 
 function tryParseRuleGroupFactor(part: string): RequestRuleGroup | null {
   const m = part.match(/^\((.+) \? ([\d.eE+-]+) : 1\)$/s)
   if (!m) return null
 
-  const conditions = parseDnfRequestConditions(m[1])
+  const conditions = tryParseRequestConditions(m[1])
   if (!conditions) return null
   return { conditions, multiplier: m[2] }
 }
@@ -1092,7 +563,7 @@ export function requestRuleGroupsFromTrace(
   return requestRules.map((rule) => {
     const conditionText = rule.cond.trim()
     return {
-      conditions: parseDnfRequestConditions(conditionText) || [],
+      conditions: tryParseRequestConditions(conditionText) || [],
       multiplier: String(rule.multiplier),
       conditionText,
       matched: rule.matched,
@@ -1120,31 +591,8 @@ export function tryParseRequestRuleExpr(
 // Combine / split billing expr and request rules
 // ---------------------------------------------------------------------------
 
-// Full-wrap detection must be quote-aware: a `)` inside a string literal (e.g.
-// a param value `"foo ? 2 : 1)"`) would otherwise close the outer paren early,
-// so unwrapOuterParens would refuse to unwrap a branch that IS fully wrapped.
-function hasFullOuterParens(expr: string): boolean {
-  if (!expr.startsWith('(') || !expr.endsWith(')')) return false
-  let depth = 0
-  let inString = false
-  for (let i = 0; i < expr.length; i += 1) {
-    const c = expr[i]
-    if (c === '"' && !isEscaped(expr, i)) inString = !inString
-    if (!inString) {
-      if (c === '(') depth += 1
-      if (c === ')') depth -= 1
-      if (depth === 0 && i < expr.length - 1) return false
-    }
-  }
-  return depth === 0
-}
-
 function unwrapOuterParens(expr: string): string {
-  let current = (expr || '').trim()
-  while (hasFullOuterParens(current)) {
-    current = current.slice(1, -1).trim()
-  }
-  return current
+  return unwrapExpressionParens(expr)
 }
 
 export function splitBillingExprAndRequestRules(expr: string): {
@@ -1162,19 +610,26 @@ export function splitBillingExprAndRequestRules(expr: string): {
 
   parts.forEach((part) => {
     const parsed = tryParseRequestRuleExpr(part)
-    if (parsed && parsed.length > 0) {
+    const compiled = compileBillingExpression(part)
+    const traced =
+      compiled.status === 'ready' &&
+      compiled.requestRules.some((rule) => rule.node === compiled.ast)
+    if ((parsed && parsed.length > 0) || traced) {
       ruleParts.push(part)
     } else {
       baseParts.push(part)
     }
   })
 
-  if (ruleParts.length === 0 || baseParts.length !== 1) {
+  const quantityParts = baseParts.filter(
+    (part) => unwrapOuterParens(part) === 'image_count'
+  )
+  if (ruleParts.length === 0 || baseParts.length - quantityParts.length !== 1) {
     return { billingExpr: trimmed, requestRuleExpr: '' }
   }
 
   return {
-    billingExpr: unwrapOuterParens(baseParts[0]),
+    billingExpr: baseParts.map(unwrapOuterParens).join(' * '),
     requestRuleExpr: ruleParts.join(' * '),
   }
 }
@@ -1211,17 +666,11 @@ export function createEmptyTimeCondition(): TimeCondition {
 }
 
 export function createEmptyRuleGroup(): RequestRuleGroup {
-  return {
-    conditions: [{ conditions: [createEmptyCondition()] }],
-    multiplier: '',
-  }
+  return { conditions: [createEmptyCondition()], multiplier: '' }
 }
 
 export function createEmptyTimeRuleGroup(): RequestRuleGroup {
-  return {
-    conditions: [{ conditions: [createEmptyTimeCondition()] }],
-    multiplier: '',
-  }
+  return { conditions: [createEmptyTimeCondition()], multiplier: '' }
 }
 
 // ---------------------------------------------------------------------------
@@ -1236,7 +685,7 @@ export function getRequestRuleMatchOptions(source: string): MatchOption[] {
       { value: MATCH_EQ, labelKey: 'Equals' },
       { value: MATCH_GTE, labelKey: 'Greater than or equal' },
       { value: MATCH_LT, labelKey: 'Less than' },
-      { value: MATCH_RANGE, labelKey: 'Time range' },
+      { value: MATCH_RANGE, labelKey: 'Overnight range' },
     ]
   }
   const base: MatchOption[] = [
@@ -1290,7 +739,6 @@ export function normalizeCondition(
       rangeStart:
         timeCond?.rangeStart == null ? '' : String(timeCond.rangeStart),
       rangeEnd: timeCond?.rangeEnd == null ? '' : String(timeCond.rangeEnd),
-      rangeOp: timeCond?.rangeOp,
     }
   }
 
@@ -1304,7 +752,6 @@ export function normalizeCondition(
     path: phCond?.path || '',
     mode,
     value: phCond?.value == null ? '' : String(phCond.value),
-    valueKind: phCond?.valueKind,
   }
 }
 
@@ -1312,26 +759,12 @@ export function normalizeCondition(
 // Editor: build expression strings
 // ---------------------------------------------------------------------------
 
-function buildExprLiteral(
-  mode: string,
-  value: string,
-  valueKind?: 'string' | 'number' | 'boolean'
-): string {
-  const raw = String(value ?? '')
-  // String-kind values are exact: preserve leading/trailing whitespace (a value
-  // of `" foo "` must round-trip, not silently become `"foo"`). Numeric/boolean
-  // kinds may trim.
-  if (mode === MATCH_CONTAINS) return JSON.stringify(raw)
-  if (valueKind === 'string') return JSON.stringify(raw)
-  if (valueKind === 'boolean') {
-    // A user-edited value that is no longer a boolean literal falls back to a
-    // string comparison rather than silently serializing as `false`.
-    const text = raw.trim()
-    return text === 'true' || text === 'false' ? text : JSON.stringify(raw)
-  }
-  const text = raw.trim()
+function buildExprLiteral(mode: string, value: string): string {
+  const text = String(value || '').trim()
+  if (mode === MATCH_CONTAINS) return JSON.stringify(text)
+  if (text === 'true' || text === 'false') return text
   if (NUMERIC_LITERAL_REGEX.test(text)) return text
-  return JSON.stringify(raw)
+  return JSON.stringify(text)
 }
 
 function buildTimeConditionExpr(cond: TimeCondition): string {
@@ -1402,63 +835,23 @@ function buildRequestConditionExpr(cond: RequestCondition): string {
     }
     case MATCH_EQ:
     default:
-      return `${sourceExpr} == ${buildExprLiteral(
-        normalized.mode,
-        normalized.value,
-        normalized.valueKind
-      )}`
+      return `${sourceExpr} == ${buildExprLiteral(normalized.mode, normalized.value)}`
   }
-}
-
-/**
- * Serialize a tier-condition DNF. `[]` → `''`; one AND-clause emits its atoms
- * without parens (byte-identical to the legacy flat form, so no-OR tiers
- * round-trip unchanged); 2+ clauses emit `(c1 && c2) || (c3)`.
- */
-export function buildTierDnfExpr(
-  dnf: TierConditionDnf | null | undefined
-): string {
-  const clauses = (dnf || [])
-    .map((clause) =>
-      (clause.conditions || [])
-        .map((c) => `${c.var} ${c.op} ${c.value}`)
-        .join(' && ')
-    )
-    .filter(Boolean)
-  if (clauses.length === 0) return ''
-  if (clauses.length === 1) return clauses[0]
-  return clauses.map((c) => `(${c})`).join(' || ')
-}
-
-/**
- * Serialize a request-condition DNF. Within a clause a RANGE atom (`||` inside)
- * keeps its parens when ANDed with others; 2+ clauses emit `(A) || (B)`.
- */
-export function buildRequestDnfExpr(
-  dnf: RequestDnf | null | undefined
-): string {
-  const clauses = (dnf || [])
-    .map((clause) => {
-      const condExprs = (clause.conditions || [])
-        .map(buildRequestConditionExpr)
-        .filter(Boolean)
-      if (condExprs.length === 0) return ''
-      return condExprs.length === 1
-        ? condExprs[0]
-        : condExprs.map((e) => (e.includes(' || ') ? `(${e})` : e)).join(' && ')
-    })
-    .filter(Boolean)
-  if (clauses.length === 0) return ''
-  if (clauses.length === 1) return clauses[0]
-  return clauses.map((c) => `(${c})`).join(' || ')
 }
 
 function buildRuleGroupFactor(group: RequestRuleGroup): string {
   const multiplier = (group.multiplier || '').trim()
   if (!NUMERIC_LITERAL_REGEX.test(multiplier)) return ''
-  const condExpr = buildRequestDnfExpr(group.conditions)
-  if (!condExpr) return ''
-  return `(${condExpr} ? ${multiplier} : 1)`
+  const condExprs = (group.conditions || [])
+    .map(buildRequestConditionExpr)
+    .filter(Boolean)
+  if (condExprs.length === 0) return ''
+
+  const combined =
+    condExprs.length === 1
+      ? condExprs[0]
+      : condExprs.map((e) => (e.includes(' || ') ? `(${e})` : e)).join(' && ')
+  return `(${combined} ? ${multiplier} : 1)`
 }
 
 export function buildRequestRuleExpr(groups: RequestRuleGroup[]): string {

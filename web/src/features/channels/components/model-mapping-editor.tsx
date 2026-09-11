@@ -16,12 +16,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Code, Loader2, Plus, Search, Table, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Code, Plus, Table, Trash2 } from 'lucide-react'
+import {
+  useEffect,
+  useEffectEvent,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 
-import { Dialog } from '@/components/dialog'
 import { JsonCodeEditor } from '@/components/json-code-editor'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -32,14 +37,8 @@ type ModelMappingEditorProps = {
   value: string
   onChange: (value: string) => void
   disabled?: boolean
-  // Returns the models available from the upstream channel (fetched on demand)
-  // for the model picker. When omitted, the picker button is hidden.
-  fetchChannelModels?: () => Promise<string[]>
-}
-
-type PickerTarget = {
-  rowId: string
-  field: 'from' | 'to'
+  sourceModelOptions?: string[]
+  targetModelOptions?: string[]
 }
 
 type MappingRow = {
@@ -64,36 +63,19 @@ function getDuplicateSources(rows: MappingRow[]): string[] {
     }
   }
 
-  return Array.from(duplicates)
+  return [...duplicates]
 }
 
 export function ModelMappingEditor(props: ModelMappingEditorProps) {
   const { t } = useTranslation()
+  const sourceListId = useId()
+  const targetListId = useId()
   const [mode, setMode] = useState<'visual' | 'json'>('visual')
   const [rows, setRows] = useState<MappingRow[]>([])
   const [jsonValue, setJsonValue] = useState(props.value)
   const [jsonError, setJsonError] = useState<string | null>(null)
   const nextRowIdRef = useRef(0)
-  // Tracks the last value this editor emitted via onChange. External edits to
-  // the field (e.g. loading a channel) change props.value to something else;
-  // values we emitted ourselves should not be re-parsed back into `rows`,
-  // otherwise a row whose "from" was cleared (which serializes to `{}`) is
-  // dropped and the whole rule disappears.
-  const lastEmittedRef = useRef<string | null>(null)
   const duplicateSources = useMemo(() => getDuplicateSources(rows), [rows])
-  const [pickerOpen, setPickerOpen] = useState(false)
-  const [pickerLoading, setPickerLoading] = useState(false)
-  const [pickerModels, setPickerModels] = useState<string[]>([])
-  const [pickerKeyword, setPickerKeyword] = useState('')
-  const [pickerTarget, setPickerTarget] = useState<PickerTarget | null>(null)
-
-  const filteredPickerModels = useMemo(() => {
-    const keyword = pickerKeyword.trim().toLowerCase()
-    if (!keyword) return pickerModels
-    return pickerModels.filter((model) =>
-      model.toLowerCase().includes(keyword)
-    )
-  }, [pickerModels, pickerKeyword])
 
   const createRowId = () => {
     nextRowIdRef.current += 1
@@ -145,20 +127,20 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
       })
       setJsonError(null)
       return true
-    } catch (_error) {
+    } catch {
       setJsonError(t('Model mapping must be valid JSON format'))
       return false
     }
   }
 
-  // Parse JSON to rows when value changes externally
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+  const syncExternalValue = useEffectEvent(() => {
     setJsonValue(props.value)
-    if (props.value === lastEmittedRef.current) {
-      return
-    }
     parseJsonToRows(props.value)
+  })
+
+  // Only replace the draft when the external value changes, not on language changes.
+  useEffect(() => {
+    syncExternalValue()
   }, [props.value])
 
   const convertRowsToJson = (updatedRows: MappingRow[]): string => {
@@ -180,7 +162,6 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
     if (duplicates.length > 0) {
       setJsonError(t('Duplicate source model mappings are not allowed'))
       setJsonValue(DUPLICATE_MAPPING_SENTINEL)
-      lastEmittedRef.current = DUPLICATE_MAPPING_SENTINEL
       props.onChange(DUPLICATE_MAPPING_SENTINEL)
       return
     }
@@ -188,7 +169,6 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
     const json = convertRowsToJson(updatedRows)
     setJsonError(null)
     setJsonValue(json)
-    lastEmittedRef.current = json
     props.onChange(json)
   }
 
@@ -218,7 +198,6 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
 
   const handleJsonChange = (newJson: string) => {
     setJsonValue(newJson)
-    lastEmittedRef.current = newJson
     props.onChange(newJson)
     parseJsonToRows(newJson)
   }
@@ -230,7 +209,6 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
       2
     )
     setJsonValue(template)
-    lastEmittedRef.current = template
     props.onChange(template)
     parseJsonToRows(template)
   }
@@ -242,7 +220,6 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
       if (duplicates.length === 0) {
         const json = convertRowsToJson(rows)
         setJsonValue(json)
-        lastEmittedRef.current = json
         props.onChange(json)
       }
       setMode('json')
@@ -250,39 +227,6 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
     }
     parseJsonToRows(jsonValue)
     setMode('visual')
-  }
-
-  const closePicker = () => {
-    setPickerOpen(false)
-    setPickerTarget(null)
-    setPickerKeyword('')
-    setPickerModels([])
-  }
-
-  const openPicker = async (rowId: string, field: 'from' | 'to') => {
-    if (!props.fetchChannelModels) return
-    setPickerTarget({ rowId, field })
-    setPickerKeyword('')
-    setPickerModels([])
-    setPickerOpen(true)
-    setPickerLoading(true)
-    try {
-      const models = await props.fetchChannelModels()
-      setPickerModels(Array.isArray(models) ? models : [])
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : t('Failed to fetch models')
-      )
-      setPickerModels([])
-    } finally {
-      setPickerLoading(false)
-    }
-  }
-
-  const pickModel = (model: string) => {
-    if (!pickerTarget) return
-    handleRowChange(pickerTarget.rowId, pickerTarget.field, model)
-    closePicker()
   }
 
   return (
@@ -331,14 +275,14 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
           {rows.length > 0 ? (
             <div className='space-y-2'>
               <div className='grid grid-cols-[1fr_1fr_auto] gap-2 text-sm font-medium'>
-                <div>{t('Request Model')}</div>
-                <div>{t('Upstream Model')}</div>
-                <div className='w-10'></div>
+                <div>{t('Request Model Name')}</div>
+                <div>{t('Upstream Model Name')}</div>
+                <div className='w-10' />
               </div>
               {rows.map((row) => (
                 <div
                   key={row.id}
-                  className='grid grid-cols-[1fr_1fr_auto] items-center gap-2'
+                  className='grid grid-cols-[1fr_1fr_auto] gap-2'
                 >
                   <Input
                     value={row.from}
@@ -347,31 +291,17 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
                     }
                     placeholder='gpt-3.5-turbo'
                     disabled={props.disabled}
+                    list={sourceListId}
                   />
-                  <div className='relative'>
-                    <Input
-                      value={row.to}
-                      onChange={(e) =>
-                        handleRowChange(row.id, 'to', e.target.value)
-                      }
-                      placeholder='gpt-3.5-turbo-0125'
-                      disabled={props.disabled}
-                      className={props.fetchChannelModels ? 'pr-9' : undefined}
-                    />
-                    {props.fetchChannelModels && (
-                      <Button
-                        type='button'
-                        variant='ghost'
-                        size='icon-xs'
-                        onClick={() => openPicker(row.id, 'to')}
-                        disabled={props.disabled}
-                        aria-label={t('Select Model')}
-                        className='text-muted-foreground absolute right-1 inset-y-0 my-auto'
-                      >
-                        <Search className='size-3.5' aria-hidden='true' />
-                      </Button>
-                    )}
-                  </div>
+                  <Input
+                    value={row.to}
+                    onChange={(e) =>
+                      handleRowChange(row.id, 'to', e.target.value)
+                    }
+                    placeholder='gpt-3.5-turbo-0125'
+                    disabled={props.disabled}
+                    list={targetListId}
+                  />
                   <Button
                     type='button'
                     variant='ghost'
@@ -405,11 +335,16 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
             {t('Add Mapping')}
           </Button>
         </TabsContent>
-        <TabsContent value='json'>
+        <TabsContent value='json' className='space-y-2'>
+          <p className='text-muted-foreground text-sm'>
+            {t(
+              'JSON keys are request model names; values are upstream model names.'
+            )}
+          </p>
           <JsonCodeEditor
             value={jsonValue}
             onChange={handleJsonChange}
-            placeholder={t('{"original-model": "replacement-model"}')}
+            placeholder='{"request-model": "upstream-model"}'
             disabled={props.disabled}
             className={jsonError ? 'border-destructive' : undefined}
             aria-invalid={Boolean(jsonError)}
@@ -418,54 +353,20 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
         </TabsContent>
       </Tabs>
 
-      <Dialog
-        open={pickerOpen}
-        onOpenChange={(open) => {
-          if (!open) closePicker()
-        }}
-        title={t('Select Model')}
-        description={t('Choose a model available from the channel')}
-        contentClassName='sm:max-w-md'
-        contentHeight='auto'
-        bodyClassName='space-y-3'
-        footer={
-          <Button type='button' variant='outline' onClick={closePicker}>
-            {t('Cancel')}
-          </Button>
-        }
-      >
-        <Input
-          value={pickerKeyword}
-          onChange={(e) => setPickerKeyword(e.target.value)}
-          placeholder={t('Search models...')}
-        />
-        {pickerLoading && (
-          <div className='flex items-center justify-center py-10'>
-            <Loader2 className='text-muted-foreground h-6 w-6 animate-spin' />
-          </div>
-        )}
-        {!pickerLoading && pickerModels.length === 0 && (
-          <div className='text-muted-foreground py-8 text-center text-sm'>
-            {t('No models available')}
-          </div>
-        )}
-        {!pickerLoading && pickerModels.length > 0 && (
-          <div className='max-h-72 space-y-1 overflow-y-auto pr-1'>
-            {filteredPickerModels.map((model) => (
-              <Button
-                key={model}
-                type='button'
-                variant='ghost'
-                size='sm'
-                className='w-full justify-start font-mono'
-                onClick={() => pickModel(model)}
-              >
-                {model}
-              </Button>
-            ))}
-          </div>
-        )}
-      </Dialog>
+      {props.sourceModelOptions && props.sourceModelOptions.length > 0 && (
+        <datalist id={sourceListId}>
+          {props.sourceModelOptions.map((model) => (
+            <option key={model} value={model} />
+          ))}
+        </datalist>
+      )}
+      {props.targetModelOptions && props.targetModelOptions.length > 0 && (
+        <datalist id={targetListId}>
+          {props.targetModelOptions.map((model) => (
+            <option key={model} value={model} />
+          ))}
+        </datalist>
+      )}
     </div>
   )
 }

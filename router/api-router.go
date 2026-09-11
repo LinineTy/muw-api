@@ -237,8 +237,11 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			optionRoute.GET("/", controller.GetOptions)
 			optionRoute.PUT("/", controller.UpdateOption)
+			optionRoute.PUT("/passkey/domains", controller.UpdatePasskeyDomains)
 			optionRoute.GET("/model_pricing", controller.GetModelPricingConfig)
 			optionRoute.PATCH("/model_pricing", controller.UpdateModelPricingConfig)
+			optionRoute.POST("/model_pricing/convert", controller.PreviewModelPricingConversion)
+			optionRoute.POST("/model_pricing/preview", controller.PreviewModelPricing)
 			// MERGE-DECISION: upstream 的 POST /option/payment_compliance 未保留——
 			// fork 已删除 controller/payment_compliance.go 及其依赖的 Stripe/Creem/Waffo
 			// 支付合规子系统(本合并按 fork 的删除解决),注册该路由会引用不存在的 handler。
