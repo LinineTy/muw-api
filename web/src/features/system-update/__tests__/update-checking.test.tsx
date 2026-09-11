@@ -32,10 +32,11 @@ import {
   within,
 } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
+import { SettingsPageProvider } from '@/features/system-settings/components/settings-page-context'
 import { UpdateCheckerSection } from '@/features/system-settings/maintenance/update-checker-section'
 import { api } from '@/lib/api'
 import { createAppQueryClient } from '@/lib/query-client'
@@ -58,8 +59,16 @@ const fetchMock = vi.fn<typeof fetch>()
 let client: QueryClient
 
 function Wrapper(props: { children: ReactNode }) {
+  // 更新入口经 SettingsPageActionsPortal 渲染到设置页右上角，
+  // 这里按 settings-page 的做法提供 actionsContainer 挂载点。
+  const [container, setContainer] = useState<HTMLDivElement | null>(null)
   return (
-    <QueryClientProvider client={client}>{props.children}</QueryClientProvider>
+    <QueryClientProvider client={client}>
+      <div ref={setContainer} />
+      <SettingsPageProvider actionsContainer={container}>
+        {props.children}
+      </SettingsPageProvider>
+    </QueryClientProvider>
   )
 }
 
@@ -163,12 +172,22 @@ describe('administrator update entry', () => {
     })
     expect(buttons).toHaveLength(2)
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(within(buttons[0]).getByText('v1.0.0-rc.35')).toHaveClass('truncate')
-    expect(within(buttons[0]).getByText('Update available')).toHaveClass(
+    // fork：更新入口经 SettingsPageActionsPortal 渲染到设置页右上角，
+    // portal 目标容器在 children 之前，DOM 顺序与上游相反——按特征取而不是按索引。
+    const brandButton = buttons.find((b) =>
+      within(b).queryByText('v1.0.0-rc.35')
+    )
+    const sectionButton = buttons.find((b) => b !== brandButton)
+    expect(brandButton).toBeDefined()
+    expect(sectionButton).toBeDefined()
+    expect(within(brandButton!).getByText('v1.0.0-rc.35')).toHaveClass(
+      'truncate'
+    )
+    expect(within(brandButton!).getByText('Update available')).toHaveClass(
       'hidden',
       '@min-[22rem]/system-brand:inline-flex'
     )
-    expect(within(buttons[1]).getByText('Update available')).not.toHaveClass(
+    expect(within(sectionButton!).getByText('Update available')).not.toHaveClass(
       'hidden'
     )
 
