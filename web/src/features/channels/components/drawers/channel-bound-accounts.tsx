@@ -16,7 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, ExternalLink, Trash2 } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -435,16 +436,45 @@ export function ChannelBoundAccounts(props: ChannelBoundAccountsProps) {
               </>
             )}
 
-            {addressFromAccount && boundAccountAddress && (
-              <div className='text-xs'>
-                <span className='text-muted-foreground'>
-                  {t('Upstream address')}:{' '}
-                </span>
-                <span className='truncate font-mono'>
-                  {boundAccountAddress}
-                </span>
+            {addressFromAccount && (
+              <div className='border-border/60 bg-muted/10 flex items-start justify-between gap-3 rounded-lg border p-3'>
+                <div className='min-w-0'>
+                  <div className='text-muted-foreground text-xs font-medium'>
+                    {t('Upstream address')}
+                  </div>
+                  <div className='truncate font-mono text-sm'>
+                    {boundAccountAddress || t('Provider default address')}
+                  </div>
+                </div>
+                <Link
+                  to='/accounts'
+                  className='text-primary inline-flex shrink-0 items-center gap-1 text-xs hover:underline'
+                >
+                  <ExternalLink className='size-3' />
+                  {t('Manage in Accounts')}
+                </Link>
               </div>
             )}
+            <div className='text-muted-foreground space-y-1 rounded-md border border-dashed px-3 py-2.5 text-sm'>
+              <p>
+                {boundAccountId !== null
+                  ? t(
+                      'Credentials come from the bound accounts. Edit keys on the account page.'
+                    )
+                  : t(
+                      'Pick at least one account, or switch to manual entry to create one on save.'
+                    )}
+              </p>
+              {boundAccountId !== null && (
+                <Link
+                  to='/accounts'
+                  className='text-primary inline-flex items-center gap-1 text-xs hover:underline'
+                >
+                  <ExternalLink className='size-3' />
+                  {t('Manage in Accounts')}
+                </Link>
+              )}
+            </div>
           </div>
         )}
     </div>
