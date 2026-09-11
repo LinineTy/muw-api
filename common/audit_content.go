@@ -139,6 +139,20 @@ var auditContentTemplates = map[string]string{
 	"risk_control.reset_credit_scores":          "Reset all user credit scores to the full score (${full_score})",
 
 	"operation.vision_fallback_prompt_reset": "Restored the vision fallback description prompt to default",
+	"user.account_delete":                    "Account deletion",
+	"access_token.generate":                  "Generated a system access token",
+	"access_token.revoke":                    "Revoked the system access token",
+	"user.2fa_setup":                         "Started two-factor authentication setup",
+	"user.2fa_enable":                        "Enabled two-factor authentication",
+	"user.2fa_disable_self":                  "Disabled two-factor authentication",
+	"user.2fa_backup_codes":                  "Regenerated two-factor backup codes",
+	"user.security_verify":                   "Completed security verification",
+	"user.password_change":                   "Account password change",
+	"user.binding_start":                     "Account binding request",
+	"user.binding_bind":                      "Account binding",
+	"user.binding_unbind":                    "Account unlinking",
+	"user.email_binding_resend":              "Email confirmation code resend",
+	"redemption.delete_batch":                "Batch deleted ${count} redemption codes",
 }
 
 // auditPlaceholderRe 匹配模板里的 ${name} 占位符，用于校验参数是否齐全。
