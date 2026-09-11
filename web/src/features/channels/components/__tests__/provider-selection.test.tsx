@@ -280,7 +280,7 @@ test('extension associations follow declared types and exclude legacy task-only 
   render(
     <ChannelProviderPicker
       plugins={[
-        { ...extensionPlugin, name: 'OpenAI', channelTypes: [24, 55, 61, 999] },
+        { ...extensionPlugin, name: 'OpenAI', channelTypes: [24, 55, 63, 999] },
       ]}
       canBindPlugin
       loading={false}
@@ -844,7 +844,7 @@ test('searching a known type number selects that type and an unknown positive nu
   await user.keyboard('{ArrowDown}{Enter}')
   expect(select).toHaveBeenLastCalledWith({ kind: 'builtin', type: 999 })
   await user.clear(search)
-  await user.type(search, '61')
+  await user.type(search, '63')
   expect(screen.queryByRole('option')).not.toBeInTheDocument()
 })
 
