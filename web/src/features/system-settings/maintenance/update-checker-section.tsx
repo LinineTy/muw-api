@@ -34,6 +34,7 @@ import { formatTimestamp } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { SystemUpdateAction } from '@/features/system-update/system-update-action'
 
+import { SettingsPageActionsPortal } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 
 type UpdateCheckData = {
@@ -189,18 +190,24 @@ export function UpdateCheckerSection({
             </div>
           </div>
 
-          <SystemUpdateAction compact={false} />
-
-          <Button onClick={handleCheckUpdates} disabled={checking}>
-            {checking ? (
-              t('Checking updates...')
-            ) : (
-              <>
-                <RefreshCcwIcon className='me-2 h-4 w-4' />
-                {t('Check for updates')}
-              </>
-            )}
-          </Button>
+          {/* 与其它设置页一致：更新入口作为页面级操作放到右上角，避免与下方「检查更新」按钮文案相撞 */}
+          {/* 与其它设置页一致：更新相关操作统一放右上角。
+              左侧是更新状态入口（SystemUpdateAction），右侧是我们自建的检查按钮——
+              文案收进 aria-label/title，避免与状态入口的文案撞车。 */}
+          <SettingsPageActionsPortal>
+            <SystemUpdateAction compact={false} />
+            <Button
+              type='button'
+              size='icon-sm'
+              variant='outline'
+              onClick={handleCheckUpdates}
+              disabled={checking}
+              aria-label={t('Check for updates')}
+              title={t('Check for updates')}
+            >
+              <RefreshCcwIcon className={cn('size-4', checking && 'animate-spin')} />
+            </Button>
+          </SettingsPageActionsPortal>
 
           {changelog?.note?.markdown && (
             <div className='rounded-lg border p-4'>
