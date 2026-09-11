@@ -567,7 +567,7 @@ func validateChannel(channel *model.Channel, isAdd bool) error {
 	// 如果是添加操作，检查 channel 和 key 是否为空
 	if isAdd {
 		// OpenCode Zen 不填密钥时走免费套餐，key 可留空；其余渠道必须填密钥
-		if channel.Key == "" && channel.Type != constant.ChannelTypeOpenCodeZen {
+		if channel.Key == "" && !constant.ChannelTypeAllowsEmptyKey(channel.Type) {
 			return fmt.Errorf("channel cannot be empty")
 		}
 
@@ -917,7 +917,7 @@ func AddChannel(c *gin.Context) {
 	channels := make([]model.Channel, 0, len(keys))
 	for _, key := range keys {
 		// OpenCode Zen 允许空密钥（免费套餐），其余渠道跳过空密钥
-		if key == "" && addChannelRequest.Channel.Type != constant.ChannelTypeOpenCodeZen {
+		if key == "" && !constant.ChannelTypeAllowsEmptyKey(addChannelRequest.Channel.Type) {
 			continue
 		}
 		localChannel := addChannelRequest.Channel
@@ -1485,7 +1485,7 @@ func UpdateChannel(c *gin.Context) {
 	// OpenCode Zen 支持空密钥（免费套餐）：请求显式携带 key 且需要清空时，
 	// GORM Updates 会跳过空值字段，需单独 Select key 置空。
 	// 挂账户的渠道 key 归账户管理，跳过（清密钥走账户接口）。
-	if channel.Type == constant.ChannelTypeOpenCodeZen && channel.AccountId == 0 {
+	if constant.ChannelTypeAllowsEmptyKey(channel.Type) && channel.AccountId == 0 {
 		if _, keyProvided := requestData["key"]; keyProvided && channel.Key == "" && originChannel.Key != "" {
 			if err := channel.SaveKey(); err != nil {
 				common.ApiError(c, err)

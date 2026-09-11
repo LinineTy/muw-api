@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -270,4 +271,48 @@ func TestHasUsableBoundAccount(t *testing.T) {
 	usable, err = HasUsableBoundAccount(ch.Id)
 	require.NoError(t, err)
 	assert.False(t, usable, "绑定的账户全不可用")
+}
+
+// 允许空密钥的渠道（OpenCode Zen 免费套餐）挂上"空 key 账户"后必须还能选到 key——
+// 空 key 是合法凭证，不能被当成"没可用 key"跳过（否则一启用就报 no available account keys）。
+func TestGetNextKeyAcrossAccountsAllowsEmptyKeyForOpenCodeZen(t *testing.T) {
+	setupChannelAccountTestDB(t)
+	acc := &Account{
+		Name:        "zen-free",
+		Type:        constant.ChannelTypeOpenCodeZen,
+		Status:      common.ChannelStatusEnabled,
+		Key:         "",
+		CreatedTime: common.GetTimestamp(),
+	}
+	ch := &Channel{
+		Id:            101,
+		Name:          "zen",
+		Type:          constant.ChannelTypeOpenCodeZen,
+		Status:        common.ChannelStatusEnabled,
+		BoundAccounts: []*Account{acc},
+	}
+	key, _, apiErr := ch.getNextKeyAcrossAccounts()
+	require.Nil(t, apiErr, "空密钥渠道不该报 no available account keys")
+	assert.Equal(t, "", key)
+}
+
+// 其它类型仍然跳过空 key（空 key 会被上游拒绝，等同于"没有可用 key"）。
+func TestGetNextKeyAcrossAccountsSkipsEmptyKeyForOtherTypes(t *testing.T) {
+	setupChannelAccountTestDB(t)
+	acc := &Account{
+		Name:        "oai-empty",
+		Type:        constant.ChannelTypeOpenAI,
+		Status:      common.ChannelStatusEnabled,
+		Key:         "",
+		CreatedTime: common.GetTimestamp(),
+	}
+	ch := &Channel{
+		Id:            102,
+		Name:          "oai",
+		Type:          constant.ChannelTypeOpenAI,
+		Status:        common.ChannelStatusEnabled,
+		BoundAccounts: []*Account{acc},
+	}
+	_, _, apiErr := ch.getNextKeyAcrossAccounts()
+	require.NotNil(t, apiErr)
 }

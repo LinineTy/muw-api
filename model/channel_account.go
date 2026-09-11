@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -455,7 +456,9 @@ func (channel *Channel) getNextKeyAcrossAccounts() (string, int, *types.NewAPIEr
 			// 多 key 失败计数/套餐自动启停逻辑处置）。
 			continue
 		}
-		if strings.TrimSpace(key) == "" {
+		// 空 key 对"允许空密钥"的渠道（如 OpenCode Zen 免费套餐）是合法凭证，
+		// 不能当"没可用 key"跳过，否则这类渠道挂上账户后必然报 no available account keys。
+		if strings.TrimSpace(key) == "" && !constant.ChannelTypeAllowsEmptyKey(channel.Type) {
 			continue
 		}
 		return key, keyIndex, nil
