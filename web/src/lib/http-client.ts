@@ -18,7 +18,6 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import axios, { type AxiosRequestConfig } from 'axios'
 import { t } from 'i18next'
-import { toast } from 'sonner'
 
 import {
   applyAuthRotation,
@@ -29,7 +28,6 @@ import {
 import { handleServerError } from '@/lib/handle-server-error'
 import {
   getServerErrorMessage,
-  getServerErrorMessageKey,
   safeServerErrorMessage,
 } from '@/lib/server-error-message'
 import { useAuthStore } from '@/stores/auth-store'
@@ -148,14 +146,6 @@ api.interceptors.response.use(
       if (window.location.pathname !== '/activate') {
         window.location.replace('/activate')
       }
-    } else if (!skipErrorHandler) {
-      const messageKey = getServerErrorMessageKey(error)
-      const message = messageKey
-        ? t(messageKey)
-        : error?.response?.data?.message ||
-          error?.message ||
-          t('Request failed')
-      toast.error(message)
     }
     if (axios.isAxiosError(error)) error.message = getServerErrorMessage(error)
     throw error
