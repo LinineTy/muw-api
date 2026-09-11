@@ -1,14 +1,27 @@
 // @muw-owned
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { ArrowDown, ArrowUp, ExternalLink, Trash2 } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronRight,
+  ExternalLink,
+  Trash2,
+} from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useWatch, type UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Combobox } from '@/components/ui/combobox'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import {
   Tooltip,
@@ -17,6 +30,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { getAccounts } from '@/features/accounts/api'
+import { cn } from '@/lib/utils'
 
 import { CHANNEL_TYPE_OPTIONS } from '../../constants'
 
@@ -251,32 +265,63 @@ export function ChannelBoundAccounts(props: ChannelBoundAccountsProps) {
       {(!isEditing || hasBoundAccount) &&
         (isEditing || credentialMode === 'account') && (
           <div className='border-border/60 bg-muted/10 flex flex-col gap-2 rounded-lg border p-3'>
-            <button
-              type='button'
-              onClick={() => setAccountsExpanded(!accountsOpen)}
-              className='flex items-center justify-between gap-2 text-start'
-            >
-              <span className='flex min-w-0 items-center gap-2'>
-                <span className='text-sm font-medium'>
-                  {t('Bound accounts')}
-                </span>
-                {!accountsOpen && boundAccountNames && (
-                  <span className='text-muted-foreground min-w-0 truncate text-xs'>
-                    {boundAccountNames}
-                  </span>
-                )}
-              </span>
-              <span className='text-muted-foreground shrink-0 text-xs'>
-                {boundBindings.length}
-              </span>
-            </button>
+            <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+              <button
+                type='button'
+                onClick={() => setAccountsExpanded(!accountsOpen)}
+                className='text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-xs font-medium'
+              >
+                <ChevronRight
+                  className={cn(
+                    'size-3.5 transition-transform',
+                    accountsOpen && 'rotate-90'
+                  )}
+                />
+                <span>{t('Bound accounts')}</span>
+                <Badge variant='secondary'>{boundBindings.length}</Badge>
+              </button>
+              {/* 动作型下拉：不持有选中值，否则触发器会把原始 value 当文案显示（曾显示成 `0`） */}
+              <Select
+                items={addableAccounts.map((acc) => ({
+                  value: String(acc.id),
+                  label: `${acc.name ?? `#${acc.id}`} · ${channelTypeLabelOf(
+                    acc.type ?? 0
+                  )}`,
+                }))}
+                value={null}
+                disabled={addableAccounts.length === 0}
+                onValueChange={(v) => {
+                  if (v !== null) addBoundAccount(Number(v))
+                }}
+              >
+                <SelectTrigger size='sm' className='w-full sm:w-64'>
+                  <SelectValue placeholder={t('Add account')} />
+                </SelectTrigger>
+                <SelectContent alignItemWithTrigger={false}>
+                  <SelectGroup>
+                    {addableAccounts.map((acc) => (
+                      <SelectItem key={acc.id} value={String(acc.id)}>
+                        {acc.name ?? `#${acc.id}`} ·{' '}
+                        {channelTypeLabelOf(acc.type ?? 0)}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {!accountsOpen && boundAccountNames && (
+              <p className='text-muted-foreground truncate text-xs'>
+                {boundAccountNames}
+              </p>
+            )}
 
             {accountsOpen && (
               <>
                 {boundBindings.length === 0 && (
-                  <p className='text-muted-foreground text-xs'>
+                  <div className='text-muted-foreground rounded-md border border-dashed px-3 py-2.5 text-sm'>
                     {t('No account bound yet.')}
-                  </p>
+                  </div>
                 )}
                 {boundBindings.map((binding, index) => {
                   const meta = accountMetaById.get(binding.account_id) ?? null
@@ -371,23 +416,6 @@ export function ChannelBoundAccounts(props: ChannelBoundAccountsProps) {
                     </div>
                   )
                 })}
-                {addableAccounts.length > 0 && (
-                  <Combobox
-                    options={addableAccounts.map((acc) => ({
-                      value: String(acc.id),
-                      label: `${acc.name ?? `#${acc.id}`}（${channelTypeLabelOf(
-                        acc.type ?? 0
-                      )}）`,
-                    }))}
-                    value={null}
-                    onValueChange={(value: string | null) => {
-                      if (value) addBoundAccount(Number(value))
-                    }}
-                    placeholder={t('Add account')}
-                    searchPlaceholder={t('Search accounts')}
-                    emptyText={t('No matching accounts')}
-                  />
-                )}
                 <p className='text-muted-foreground text-xs'>
                   {t(
                     'Bound accounts rotate like multi-key: in list order, and each binding can be disabled per channel.'
