@@ -5196,6 +5196,7 @@
     "Return data conforming to a JSON schema": "Renvoyer des données conformes à un schéma JSON",
     "Return per-token log probabilities": "Retourner les log-probabilités par jeton",
     "Return to dashboard": "Retour au tableau de bord",
+    "Return to console": "Retourner à la console",
     "Return to the original window to continue.": "Revenez à la fenêtre d’origine pour continuer.",
     "Return vector embeddings for inputs": "Renvoyer des embeddings vectoriels pour les entrées",
     "Returned keys": "Clés renvoyées",

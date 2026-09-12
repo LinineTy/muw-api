@@ -7,7 +7,7 @@ import { isSidebarModuleEnabled } from '@/lib/nav-modules'
 export const Route = createFileRoute('/_authenticated/space/')({
   beforeLoad: () => {
     if (!isSidebarModuleEnabled('personal', 'space')) {
-      throw redirect({ to: '/dashboard' })
+      throw redirect({ to: '/os-desktop' })
     }
   },
   component: SpacePage,

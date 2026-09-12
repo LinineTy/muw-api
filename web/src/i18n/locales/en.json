@@ -5196,6 +5196,7 @@
     "Return data conforming to a JSON schema": "Return data conforming to a JSON schema",
     "Return per-token log probabilities": "Return per-token log probabilities",
     "Return to dashboard": "Return to dashboard",
+    "Return to console": "Return to console",
     "Return to the original window to continue.": "Return to the original window to continue.",
     "Return vector embeddings for inputs": "Return vector embeddings for inputs",
     "Returned keys": "Returned keys",

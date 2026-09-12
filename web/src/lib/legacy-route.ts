@@ -86,17 +86,20 @@ export function resolveLegacyRoute(rawHref: string): string | null {
     return buildTargetHref(target, source)
   }
   if (pathname === '/console/chat') {
-    return buildTargetHref('/dashboard', source)
+    // 「回控制台首页」的语义 = 桌面壳。'/console' 本身早就映射到 /os-desktop，
+    // 这里以前落 /dashboard（概览页）自相矛盾（2026-09-12 maintainer定：统一到桌面）。
+    return buildTargetHref('/os-desktop', source)
   }
   if (pathname.startsWith('/console/chat/')) {
     const chatID = pathname.slice('/console/chat/'.length)
-    return buildTargetHref(chatID ? `/chat/${chatID}` : '/dashboard', source)
+    return buildTargetHref(chatID ? `/chat/${chatID}` : '/os-desktop', source)
   }
 
   const target = legacyConsoleRoutes[pathname]
   if (target) return buildTargetHref(target, source)
   if (pathname.startsWith('/console/')) {
-    return buildTargetHref('/dashboard', source)
+    // 未知 /console/* 兜底同样回桌面壳（与 '/console' 一致）
+    return buildTargetHref('/os-desktop', source)
   }
 
   return null

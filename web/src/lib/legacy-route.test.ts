@@ -38,6 +38,8 @@ describe('legacy frontend route migration', () => {
       '/console/midjourney': '/usage-logs/drawing',
       '/console/task': '/usage-logs/task',
       '/console/chat/42': '/chat/42',
+      '/console/chat': '/os-desktop',
+      '/console/chat/': '/os-desktop',
     }
 
     for (const [source, target] of Object.entries(routes)) {
@@ -80,8 +82,9 @@ describe('legacy frontend route migration', () => {
   })
 
   test('safely redirects unknown console locations without touching new routes', () => {
+    // 未知 /console/* 与 '/console' 一样回桌面壳（不再落概览页）
     expect(resolveLegacyRoute('/console/removed?page=2#old')).toBe(
-      '/dashboard?page=2#old'
+      '/os-desktop?page=2#old'
     )
     expect(resolveLegacyRoute('/dashboard')).toBe(null)
     expect(resolveLegacyRoute('/api/status')).toBe(null)
