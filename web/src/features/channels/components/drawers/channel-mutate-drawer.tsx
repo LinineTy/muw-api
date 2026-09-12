@@ -40,6 +40,7 @@ import {
   SlidersHorizontal,
   Wand2,
   ExternalLink,
+  X,
 } from 'lucide-react'
 import {
   type ComponentProps,
@@ -50,7 +51,7 @@ import {
   useCallback,
   useRef,
 } from 'react'
-import { type SubmitErrorHandler, useForm } from 'react-hook-form'
+import { type SubmitErrorHandler, useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -103,6 +104,13 @@ import {
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { Textarea } from '@/components/ui/textarea'
 import { SecureVerificationDialog } from '@/features/auth/secure-verification'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
@@ -141,6 +149,7 @@ import {
   CLAUDE_FIELD_PASSTHROUGH_TYPES,
   CHANNEL_STATUS_LABELS,
   CHANNEL_TYPE_OPTIONS,
+  CODING_PLAN_SYMBOL_KEYS,
   CHANNEL_TYPE_OPENCODE_ZEN,
   CHANNEL_TYPE_TASK_PLUGIN,
   CHANNEL_TYPE_WARNINGS,
@@ -149,6 +158,7 @@ import {
   FIELD_DESCRIPTIONS,
   FIELD_PLACEHOLDERS,
   MODEL_FETCHABLE_TYPES,
+  detectCodingPlanProvider,
   OPENAI_FIELD_PASSTHROUGH_TYPES,
 } from '../../constants'
 import { useChannelKeyDisclosure } from '../../hooks/use-channel-key-disclosure'
@@ -174,6 +184,7 @@ import {
   hasModelConfigChanged,
   findMissingModelsInMapping,
   validateModelMappingJson,
+  syncModelSettings,
 } from '../../lib'
 import {
   getChannelConfigurationSection,
@@ -194,7 +205,8 @@ import {
   assessBaseUrlTrust,
   nextTaskPluginBaseUrl,
 } from '../../lib/task-plugin-base-url'
-import type { Channel } from '../../types'
+import type { Channel, ChannelModelSettingForm } from '../../types'
+import { NumericSpinnerInput } from '../numeric-spinner-input'
 import { ChannelPluginExtensions } from '../channel-plugin-extensions'
 import { ChannelTypeLogo } from '../channel-type-badge'
 import { useChannels } from '../channels-provider'
@@ -816,6 +828,20 @@ export function ChannelMutateDrawer({
         ) {
           return
         }
+        // 用户主动换类型:清掉旧类型的套餐端点 base_url。
+        // 套餐符号键或套餐专用地址(如 /api/anthropic 完整端点)只对特定类型有意义,
+        // 换类型后既无法转发也导致渠道仍出现在余量卡里。手动填的聚合代理地址(非套餐端点)不动,
+        // 避免误伤用户精心配的自定义路径。
+        const prevBaseUrl = form.getValues('base_url') ?? ''
+        if (
+          CODING_PLAN_SYMBOL_KEYS.includes(prevBaseUrl) ||
+          detectCodingPlanProvider(prevBaseUrl)
+        ) {
+          form.setValue('base_url', '', {
+            shouldDirty: true,
+            shouldValidate: true,
+          })
+        }
         form.setValue('type', target.type, { shouldDirty: true })
         if (!isEditing && !providerTarget && !form.getValues('name').trim()) {
           const label = CHANNEL_TYPE_OPTIONS.find(
@@ -1128,13 +1154,79 @@ export function ChannelMutateDrawer({
     }
   }, [channelId, queryClient, t])
 
-  // Unified function to update models
+  // 渠道内模型设置（禁用/上下文覆盖），与 models 同步
+  const modelSettings =
+    useWatch({ control: form.control, name: 'model_settings' }) ?? []
+
+  // 尚未配置设置的模型（「添加模型设置」下拉的候选）。
+  // 计算很轻（filter + some），不值得 memo；modelSettings 由 useWatch 提供。
+  const unconfiguredModels = currentModelsArray.filter(
+    (m) => !modelSettings.some((s) => s.model === m)
+  )
+
+  // 更新单个模型的设置（禁用 / 上下文覆盖）。context_window 为 0 表示继承模型默认。
+  // 无设置行的模型（默认启用 + 继承模型默认）先建行再应用变更，否则点击不生效。
+  const updateModelSetting = useCallback(
+    (model: string, patch: Partial<ChannelModelSettingForm>) => {
+      const current: ChannelModelSettingForm[] = (
+        form.getValues('model_settings') ?? []
+      ).map((s) => ({
+        model: s.model,
+        enabled: s.enabled,
+        context_window: s.context_window ?? null,
+      }))
+      const existing = current.find((s) => s.model === model)
+      const applyPatch = (
+        s: ChannelModelSettingForm
+      ): ChannelModelSettingForm => {
+        if ('context_window' in patch && (patch.context_window ?? 0) <= 0) {
+          return { ...s, context_window: null }
+        }
+        return {
+          ...s,
+          ...patch,
+          context_window: patch.context_window ?? s.context_window ?? null,
+        }
+      }
+      let next: ChannelModelSettingForm[]
+      if (existing) {
+        next = current.map((s) => (s.model === model ? applyPatch(s) : s))
+      } else {
+        next = [
+          ...current,
+          applyPatch({ model, enabled: true, context_window: null }),
+        ]
+      }
+      form.setValue('model_settings', next)
+    },
+    [form]
+  )
+
+  // 移除某模型的设置行 = 恢复默认（启用 + 继承模型默认）。
+  // 后端 ReplaceChannelModelSettings 全量对齐，缺省行即从表中清除。
+  const removeModelSetting = useCallback(
+    (model: string) => {
+      form.setValue(
+        'model_settings',
+        (form.getValues('model_settings') ?? []).filter(
+          (s) => s.model !== model
+        )
+      )
+    },
+    [form]
+  )
+
+  // Unified function to update models（并同步渠道内模型设置：新增补默认行、移除删行）
   const updateModels = useCallback(
     (newModels: string[], merge: boolean = false) => {
-      const finalModels = merge
-        ? formatModelsArray([...currentModelsArray, ...newModels])
-        : formatModelsArray(newModels)
-      form.setValue('models', finalModels)
+      const selected = merge
+        ? [...currentModelsArray, ...newModels]
+        : newModels
+      form.setValue('models', formatModelsArray(selected))
+      form.setValue(
+        'model_settings',
+        syncModelSettings(form.getValues('model_settings') ?? [], selected)
+      )
       return newModels.length
     },
     [currentModelsArray, form]
@@ -2819,6 +2911,129 @@ export function ChannelMutateDrawer({
                       copyChipOnClick
                     />
                   </FormControl>
+                  {currentModelsArray.length > 0 && (
+                    <div className='mt-4 space-y-2'>
+                      <div className='flex items-center justify-between gap-3'>
+                        <div className='flex items-center gap-2'>
+                          <Label className='text-foreground text-xs font-medium'>
+                            {t('Per-model settings')}
+                          </Label>
+                          {modelSettings.length > 0 && (
+                            <Badge
+                              variant='outline'
+                              className='text-muted-foreground text-xs'
+                            >
+                              {t('{{count}} of {{total}} configured', {
+                                count: modelSettings.length,
+                                total: currentModelsArray.length,
+                              })}
+                            </Badge>
+                          )}
+                        </div>
+                        {unconfiguredModels.length > 0 && (
+                          <Select
+                            key={unconfiguredModels.join('|')}
+                            onValueChange={(model) =>
+                              updateModelSetting(model as string, {
+                                enabled: true,
+                                context_window: null,
+                              })
+                            }
+                          >
+                            <SelectTrigger size='sm' className='w-44'>
+                              <SelectValue
+                                placeholder={t('Add model setting')}
+                              />
+                            </SelectTrigger>
+                            <SelectContent alignItemWithTrigger={false}>
+                              <SelectGroup>
+                                {unconfiguredModels.map((model) => (
+                                  <SelectItem key={model} value={model}>
+                                    {model}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
+                      {modelSettings.length > 0 ? (
+                        <div className='border-border/60 divide-y rounded-md border'>
+                          {modelSettings.map((setting) => (
+                            <div
+                              key={setting.model}
+                              className='flex items-center justify-between gap-3 px-3 py-2'
+                            >
+                              <span
+                                className={cn(
+                                  'truncate text-sm',
+                                  !setting.enabled &&
+                                    'text-muted-foreground line-through'
+                                )}
+                              >
+                                {setting.model}
+                              </span>
+                              <div className='flex shrink-0 items-center gap-3'>
+                                <NumericSpinnerInput
+                                  value={setting.context_window}
+                                  onChange={(v) =>
+                                    updateModelSetting(setting.model, {
+                                      context_window: v,
+                                    })
+                                  }
+                                  min={0}
+                                  label={t('Context')}
+                                />
+                                <Switch
+                                  checked={setting.enabled}
+                                  onCheckedChange={(checked) =>
+                                    updateModelSetting(setting.model, {
+                                      enabled: checked,
+                                    })
+                                  }
+                                  aria-label={t(
+                                    'Enable or disable {{model}}',
+                                    { model: setting.model }
+                                  )}
+                                />
+                                <TooltipProvider delay={100}>
+                                  <Tooltip>
+                                    <TooltipTrigger
+                                      render={
+                                        <Button
+                                          type='button'
+                                          variant='ghost'
+                                          size='sm'
+                                          className='text-muted-foreground hover:text-foreground h-6 w-6 p-0'
+                                          onClick={() =>
+                                            removeModelSetting(setting.model)
+                                          }
+                                        >
+                                          <X className='h-3.5 w-3.5' />
+                                        </Button>
+                                      }
+                                    />
+                                    <TooltipContent side='top'>
+                                      {t('Reset to default')}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className='text-muted-foreground text-xs'>
+                          {t('No custom settings. All models use defaults.')}
+                        </p>
+                      )}
+                      <p className='text-muted-foreground text-xs'>
+                        {t(
+                          'Disable individual models or override their context window. 0 = use model default.'
+                        )}
+                      </p>
+                    </div>
+                  )}
                   {canBindTaskPlugin &&
                     canHavePluginExtensions &&
                     !showProviderPicker && (
