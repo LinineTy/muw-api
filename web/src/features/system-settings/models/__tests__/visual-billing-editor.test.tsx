@@ -927,3 +927,51 @@ test('preserves legacy numeric drafts when editing an independent time multiplie
   fireEvent.blur(start)
   expect(start).toHaveValue(0)
 })
+
+test('makes a selected tier the fallback in one click and keeps every price', async () => {
+  const onBillingExprChange = vi.fn()
+  const props = {
+    requestRuleExpr: '',
+    onBillingExprChange,
+    onRequestRuleExprChange: vi.fn(),
+  }
+  const view = render(
+    <TieredPricingEditor {...props} billingExpr={chainedExpression} />
+  )
+  const user = userEvent.setup()
+  // 链尾的兜底档自己不提供这个动作
+  const lastTier = screen.getByRole('group', { name: 'Pricing tier long' })
+  expect(
+    within(lastTier).queryByRole('button', { name: 'Make fallback' })
+  ).not.toBeInTheDocument()
+  // 条件档提供；点一下 = 与末尾兜底档互换内容（位置与条件都不动）
+  const short = screen.getByRole('group', { name: 'Pricing tier short' })
+  await user.click(within(short).getByRole('button', { name: 'Make fallback' }))
+  const generated = onBillingExprChange.mock.lastCall?.[0]
+  assert(generated)
+  for (const [len, c, matchedTier] of [
+    [1000, 50, 'discount'],
+    [32000, 201, 'long'],
+    [40001, 100, 'mid'],
+    [128001, 100, 'short'],
+  ] as const) {
+    expect(
+      evaluateBillingExpression(generated, {
+        tokens: { len, p: len, c, cr: 0, cc: 0 },
+      })
+    ).toMatchObject({ status: 'success', matchedTier })
+  }
+  // 兜底徽标跟着换到链尾那一档
+  view.rerender(
+    <TieredPricingEditor {...props} billingExpr={generated} />
+  )
+  const rules = screen.getByRole('list', { name: 'Pricing rules' })
+  const items = within(rules)
+    .getAllByRole('listitem')
+    .filter((item) => item.parentElement === rules)
+  expect(
+    within(items.at(-1) as HTMLElement).getByRole('button', {
+      name: 'Edit pricing rule short',
+    })
+  ).toHaveTextContent('No preceding rule matched')
+})

@@ -31,7 +31,6 @@ function ModelCardComponent({
   const nameCell = renderCell('model_name')
   const statusCell = renderCell('status')
   const ruleCell = renderCell('name_rule')
-  const vendorCell = renderCell('vendor_id')
   const syncCell = renderCell('sync_official')
   const tagsCell = renderCell('tags')
   const endpointsCell = renderCell('endpoints')
@@ -53,14 +52,9 @@ function ModelCardComponent({
         </div>
       </div>
 
-      {/* 元信息：供应商 / 匹配规则 / 官方同步 / 端点 */}
+      {/* 元信息：匹配规则 / 官方同步 / 端点
+          （供应商不放这里：模型名下方那行已经显示，放两处重复 —— 2026-09-12 maintainer指出） */}
       <div className='grid grid-cols-2 gap-x-4 gap-y-2'>
-        <div className='min-w-0'>
-          <div className={labelClass}>{t('Vendor')}</div>
-          <div className='text-muted-foreground min-w-0 overflow-hidden text-sm'>
-            {vendorCell ?? '-'}
-          </div>
-        </div>
         <div className='min-w-0'>
           <div className={labelClass}>{t('Match Type')}</div>
           <div className='min-w-0 overflow-hidden'>{ruleCell}</div>
