@@ -335,11 +335,9 @@ it.each(['default', 'unset'] as const)(
       </QueryClientProvider>
     )
     const workspace = screen.getByRole('region', { name: 'Model prices' })
-    expect(workspace).toHaveClass(
-      'flex-1',
-      'min-h-0',
-      'grid-rows-[minmax(0,1fr)]'
-    )
+    // Fork layout: one full-width column with the editor in a right-hand drawer
+    // (upstream splits the region into two grid columns instead).
+    expect(workspace).toHaveClass('flex-1', 'min-h-0', 'flex-col')
     await waitFor(() => expect(client.isFetching()).toBe(0))
     if (variant === 'default') {
       const toggle = screen.getByRole('switch', { name: 'Expose ratio API' })

@@ -59,7 +59,6 @@ import { useMediaQuery } from '@/hooks'
 import { safeJsonParse } from '../utils/json-parser'
 import type { PricingMode } from './model-pricing-core'
 import {
-  ModelPricingEditorPanel,
   type ModelPricingEditorPanelHandle,
   ModelPricingSheet,
   type ModelRatioData,
@@ -353,16 +352,18 @@ const ModelRatioVisualEditorComponent = forwardRef<
         requestRuleExpr: editableModel.requestRuleExpr,
       })
       setEditorOpen(true)
-      if (isMobile) setSheetOpen(true)
+      // Fork 保持「平铺表格 + 抽屉」的既有交互：上游把这里改成只有窄屏才弹
+      // Sheet（PC 改用表格右侧的常驻面板），这里恢复为 PC 也开抽屉。
+      setSheetOpen(true)
     },
-    [isMobile]
+    []
   )
 
   const handleAdd = useCallback(() => {
     setEditData(null)
     setEditorOpen(true)
-    if (isMobile) setSheetOpen(true)
-  }, [isMobile])
+    setSheetOpen(true)
+  }, [])
 
   const handleGlobalFilterChange = useCallback<OnChangeFn<string>>(
     (updater) => {
@@ -636,7 +637,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
       <div
         role='region'
         aria-label={t('Model prices')}
-        className='grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] gap-4 md:grid-cols-[minmax(300px,0.72fr)_minmax(520px,1.28fr)] xl:grid-cols-[minmax(320px,0.68fr)_minmax(640px,1.32fr)]'
+        className='flex min-h-0 flex-1 flex-col gap-4'
       >
         <div className='flex min-h-0 min-w-0 flex-col gap-3'>
           <DataTableToolbar
@@ -737,45 +738,6 @@ const ModelRatioVisualEditorComponent = forwardRef<
 
           {hasRows && <DataTablePagination table={table} />}
         </div>
-
-        <div className='hidden min-h-0 min-w-0 md:block'>
-          {editorOpen ? (
-            <ModelPricingEditorPanel
-              ref={editorPanelRef}
-              editData={editData}
-              pluginVariants={
-                pricingConfig.data?.entries.find(
-                  (entry) => entry.model_name === editData?.name
-                )?.plugin_variants
-              }
-              usageSchema={
-                pricingConfig.data?.entries.find(
-                  (entry) => entry.model_name === editData?.name
-                )?.usage_schema
-              }
-              onSave={onSave}
-              isSaving={isSaving}
-              className='h-full min-h-0'
-            />
-          ) : (
-            <div className='bg-card text-muted-foreground flex h-full min-h-0 flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-6 text-center'>
-              <div className='text-foreground text-base font-medium'>
-                {t('Select a model to edit pricing')}
-              </div>
-              <p className='max-w-sm text-sm'>
-                {t(
-                  'Use the full-width table to scan prices, then select a row to edit it here.'
-                )}
-              </p>
-              {filterMode !== 'unset' && (
-                <Button variant='outline' onClick={handleAdd}>
-                  <Plus data-icon='inline-start' />
-                  {t('Add model')}
-                </Button>
-              )}
-            </div>
-          )}
-        </div>
       </div>
 
       <DataTableBulkActions table={table} entityName={t('model')}>
@@ -787,26 +749,25 @@ const ModelRatioVisualEditorComponent = forwardRef<
         </Button>
       </DataTableBulkActions>
 
-      {isMobile && (
-        <ModelPricingSheet
-          ref={editorPanelRef}
-          open={sheetOpen}
-          onOpenChange={setSheetOpen}
-          editData={editData}
-          pluginVariants={
-            pricingConfig.data?.entries.find(
-              (entry) => entry.model_name === editData?.name
-            )?.plugin_variants
-          }
-          usageSchema={
-            pricingConfig.data?.entries.find(
-              (entry) => entry.model_name === editData?.name
-            )?.usage_schema
-          }
-          onSave={onSave}
-          isSaving={isSaving}
-        />
-      )}
+      <ModelPricingSheet
+        ref={editorPanelRef}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        modal={isMobile}
+        editData={editData}
+        pluginVariants={
+          pricingConfig.data?.entries.find(
+            (entry) => entry.model_name === editData?.name
+          )?.plugin_variants
+        }
+        usageSchema={
+          pricingConfig.data?.entries.find(
+            (entry) => entry.model_name === editData?.name
+          )?.usage_schema
+        }
+        onSave={onSave}
+        isSaving={isSaving}
+      />
     </div>
   )
 })
