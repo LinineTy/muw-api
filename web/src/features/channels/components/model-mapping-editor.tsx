@@ -405,7 +405,13 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
             {t('Add Mapping')}
           </Button>
         </TabsContent>
-        <TabsContent value='json'>
+        <TabsContent value='json' className='space-y-2'>
+          {/* 与上游同款提示（文案 key 7 语言已齐），补回合并时丢的说明行 */}
+          <p className='text-muted-foreground text-sm'>
+            {t(
+              'JSON keys are request model names; values are upstream model names.'
+            )}
+          </p>
           <JsonCodeEditor
             value={jsonValue}
             onChange={handleJsonChange}
