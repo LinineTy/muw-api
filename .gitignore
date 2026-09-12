@@ -68,3 +68,7 @@ PRICING_DNF_TODO.md
 RESTORE_MUW_TODO.md
 UPSTREAM_SYNC_2_TODO.md
 OS_DESKTOP_NOTICE_TODO.md
+
+# 发版产物（release.sh 生成，按需 --publish 上传，不入库）
+update.json
+notes.md
