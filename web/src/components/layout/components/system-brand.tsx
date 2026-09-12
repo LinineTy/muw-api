@@ -62,7 +62,7 @@ export function SystemBrand(props: SystemBrandProps) {
           versionBadgeState === 'update' ? t('New version available') : undefined
         }
         className={cn(
-          'ring-background absolute -end-0.5 -bottom-0.5 size-2 rounded-full ring-2',
+          'ring-background absolute -end-0.5 -bottom-0.5 size-1.5 rounded-full ring-2',
           versionBadgeState === 'update' ? 'bg-amber-400' : 'bg-emerald-500'
         )}
       />

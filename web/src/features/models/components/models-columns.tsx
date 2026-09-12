@@ -288,14 +288,6 @@ export function useModelsColumns(
       ),
     },
     {
-      id: 'actions',
-      header: t('Actions'),
-      enableSorting: false,
-      enableHiding: false,
-      size: canPrice ? 170 : 105,
-      cell: ({ row }) => <DataTableRowActions row={row} />,
-    },
-    {
       accessorKey: 'status',
       header: t('Display policy'),
       enableHiding: false,
@@ -380,6 +372,16 @@ export function useModelsColumns(
           ? formatTimestampToDate(row.original.updated_time)
           : '—',
       meta: { mobileHidden: true },
+    },
+    // 操作列放最后并右侧固定（与渠道/账户等表格一致；上游把 actions 排在中间）
+    {
+      id: 'actions',
+      header: t('Actions'),
+      enableSorting: false,
+      enableHiding: false,
+      size: canPrice ? 170 : 105,
+      cell: ({ row }) => <DataTableRowActions row={row} />,
+      meta: { pinned: 'right' as const },
     },
   ]
 }
