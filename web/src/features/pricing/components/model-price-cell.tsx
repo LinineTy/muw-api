@@ -16,14 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { getCurrencyLabel } from '@/lib/currency'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { DEFAULT_TOKEN_UNIT } from '../constants'
-import { useBillingTime } from '../hooks/use-billing-time'
 import {
   getDynamicDisplayGroupRatio,
   getDynamicPriceUnitLabelKey,
@@ -32,7 +30,6 @@ import {
 } from '../lib/dynamic-price'
 import { isTokenBasedModel } from '../lib/model-helpers'
 import { formatPrice, formatRequestPrice } from '../lib/price'
-import { taskUsageUnitLabel } from '../lib/task-price-display'
 import type { PricingModel, TokenUnit } from '../types'
 
 export type ModelPriceCellOptions = {
@@ -47,49 +44,26 @@ export function ModelPriceCell(props: {
   model: PricingModel
   options?: ModelPriceCellOptions
   showExpression?: boolean
+  /** 表格单元格用:指标与单位并成一行,避免占两行、货币符号单独起行 */
+  compact?: boolean
 }) {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const currency = useSystemConfigStore((state) => state.config.currency)
   const currencyLabel =
     currency.quotaDisplayType === 'TOKENS' ? 'USD' : getCurrencyLabel()
   const options = props.options ?? {}
   const tokenUnit = options.tokenUnit ?? DEFAULT_TOKEN_UNIT
   const tokenUnitLabel = tokenUnit === 'K' ? '1K' : '1M'
-  const billingTime = useBillingTime(props.model.billing_expr)
-  const dynamic = useMemo(
-    () =>
-      getDynamicPricingSummary(props.model, {
-        priceRate: options.priceRate,
-        usdExchangeRate: options.usdExchangeRate,
-        showRechargePrice: options.showRechargePrice,
-        now: billingTime === undefined ? undefined : new Date(billingTime),
-        tokenUnit,
-        showCurrencySymbol: false,
-        groupRatioMultiplier: getDynamicDisplayGroupRatio(
-          props.model,
-          options.selectedGroup
-        ),
-      }),
-    // Currency is read indirectly by the price formatter.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [
+  const dynamic = getDynamicPricingSummary(props.model, {
+    ...options,
+    tokenUnit,
+    showCurrencySymbol: false,
+    groupRatioMultiplier: getDynamicDisplayGroupRatio(
       props.model,
-      tokenUnit,
-      options.priceRate,
-      options.usdExchangeRate,
-      options.showRechargePrice,
-      options.selectedGroup,
-      billingTime,
-      currency,
-    ]
-  )
+      options.selectedGroup
+    ),
+  })
   let metrics: Array<{ label: string; value: string }>
-  const providerCaption = dynamic?.providerCount
-    ? t('{{count}} providers', { count: dynamic.providerCount })
-    : ''
-  const unconfiguredCaption = dynamic?.hasUnconfiguredProviders
-    ? t('Not configured for some providers')
-    : ''
   let caption = t('{{currency}} / {{unit}} tokens', {
     currency: currencyLabel,
     unit: tokenUnitLabel,
@@ -97,18 +71,18 @@ export function ModelPriceCell(props: {
 
   if (dynamic) {
     if (dynamic.isSpecialExpression) {
+      if (props.compact) {
+        return (
+          <span className='text-muted-foreground block truncate text-xs'>
+            {t('Special billing expression')}
+          </span>
+        )
+      }
       return (
         <span className='block max-w-full min-w-0'>
           <span className='text-muted-foreground block truncate text-sm'>
             {t('Special billing expression')}
           </span>
-          {providerCaption && (
-            <span className='text-muted-foreground block text-xs'>
-              {[providerCaption, unconfiguredCaption]
-                .filter(Boolean)
-                .join(' · ')}
-            </span>
-          )}
           {props.showExpression !== false && (
             <code className='text-muted-foreground mt-1 line-clamp-2 block text-xs break-all whitespace-normal'>
               {dynamic.rawExpression}
@@ -117,53 +91,22 @@ export function ModelPriceCell(props: {
         </span>
       )
     }
-    const hasRequestPrice = dynamic.primaryEntries.some(
-      (entry) => entry.unit === 'request' || entry.unit === 'image'
-    )
-    metrics = dynamic.primaryEntries
-      .slice(0, hasRequestPrice ? 3 : 2)
-      .map((entry) => {
-        const unit = getDynamicPriceUnitLabelKey(entry)
-        const unitLabel = taskUsageUnitLabel(
-          entry,
-          i18n.language,
-          unit ? t(unit) : ''
-        )
-        let suffix = unitLabel ? `/${unitLabel}` : ''
-        if (hasRequestPrice && entry.unit === 'token') {
-          suffix = `/${t('{{unit}} tokens', { unit: tokenUnitLabel })}`
-        }
-        return {
-          label:
-            entry.labelKind === 'schema'
-              ? entry.shortLabel
-              : t(entry.shortLabel),
-          value: `${entry.formattedRange ?? entry.formatted}${suffix}`,
-        }
-      })
+    metrics = dynamic.primaryEntries.slice(0, 2).map((entry) => {
+      const unit = getDynamicPriceUnitLabelKey(entry)
+      return {
+        label:
+          entry.labelKind === 'schema' ? entry.shortLabel : t(entry.shortLabel),
+        value: `${entry.formattedRange ?? entry.formatted}${unit ? `/${t(unit)}` : ''}`,
+      }
+    })
     if (metrics.length === 0) {
       return (
         <span className='text-muted-foreground text-sm'>
-          {dynamic.hasUnconfiguredProviders
-            ? t('Not configured')
-            : t('Dynamic Pricing')}
-          {providerCaption && (
-            <span className='block text-xs'>
-              {[providerCaption, unconfiguredCaption]
-                .filter(Boolean)
-                .join(' · ')}
-            </span>
-          )}
+          {t('Dynamic Pricing')}
         </span>
       )
     }
-    if (dynamic.isTaskUsage || hasRequestPrice) caption = currencyLabel
-    if (dynamic.isTimePricing) caption += ` · ${t('Current period price')}`
-    if (dynamic.isMixedBilling) {
-      caption += ` · ${t('Token or per-call pricing')}`
-    }
-    if (providerCaption) caption += ` · ${providerCaption}`
-    if (unconfiguredCaption) caption += ` · ${unconfiguredCaption}`
+    if (dynamic.isTaskUsage) caption = currencyLabel
     if (dynamic.tierCount > 1) {
       caption += ` · ${t('{{count}} tiers', { count: dynamic.tierCount })}`
     }
@@ -232,6 +175,37 @@ export function ModelPriceCell(props: {
       ]
       caption = `${currencyLabel} / ${t('request')}`
     }
+  }
+  if (props.compact) {
+    // 紧凑模式:压掉单位里的空格(🍰 / 1M Token → 🍰/1M Token),让「输入 x 输出 y 单位」
+    // 尽量落在一行内,表格行高才整齐
+    const compactCaption = caption.replace(/\s*\/\s*/g, '/')
+    return (
+      <span
+        className='flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5'
+        title={[
+          ...metrics.map((metric) => `${metric.label} ${metric.value}`),
+          caption,
+        ].join(' · ')}
+      >
+        {metrics.map((metric) => (
+          <span
+            key={metric.label}
+            className='flex items-baseline gap-x-1 whitespace-nowrap'
+          >
+            <span className='text-muted-foreground text-xs'>
+              {metric.label}
+            </span>
+            <span className='font-mono text-sm tabular-nums'>
+              {metric.value}
+            </span>
+          </span>
+        ))}
+        <span className='text-muted-foreground text-xs whitespace-nowrap'>
+          {compactCaption}
+        </span>
+      </span>
+    )
   }
   return (
     <span className='block w-full max-w-full min-w-0 space-y-1.5'>

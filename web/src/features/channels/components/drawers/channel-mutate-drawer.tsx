@@ -127,6 +127,8 @@ import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
 import {
+  fetchModels,
+  fetchUpstreamModels,
   getAllModels,
   getChannel,
   getGroups,
@@ -508,6 +510,53 @@ export function ChannelMutateDrawer({
   const keyMode = formValues.key_mode
   const currentGroups = formValues.group
   const currentType = formValues.type
+  const shouldPreviewUnsavedModels =
+    !isEditing ||
+    (currentType === CHANNEL_TYPE_ADVANCED_CUSTOM && canEditSensitive)
+
+  const formPreviewFetcher = useCallback(async (): Promise<string[]> => {
+    if (!canEditSensitive) {
+      throw new Error(t("You don't have necessary permission"))
+    }
+    const type = form.getValues('type')
+    const editingAdvancedCustom =
+      isEditing && type === CHANNEL_TYPE_ADVANCED_CUSTOM
+    if (editingAdvancedCustom && channelId === null) {
+      throw new Error(t('No channel selected'))
+    }
+    const response = await fetchModels({
+      type,
+      key: isEditing ? undefined : form.getValues('key'),
+      channel_id: editingAdvancedCustom ? channelId || undefined : undefined,
+      base_url: form.getValues('base_url') || '',
+      advanced_custom: form.getValues('advanced_custom'),
+      header_override: form.getValues('header_override'),
+      proxy: form.getValues('proxy'),
+    })
+    if (response.success && response.data) {
+      return response.data
+    }
+    throw new Error(response.message || t('No models fetched from upstream'))
+  }, [canEditSensitive, channelId, form, isEditing, t])
+
+  // Fetch the models available from the upstream channel for the model mapping
+  // editor's model picker. Unsaved (new or advanced-custom) channels use the
+  // live form values; saved channels use the persisted channel config.
+  const fetchChannelAvailableModels = useCallback(async (): Promise<
+    string[]
+  > => {
+    if (shouldPreviewUnsavedModels) {
+      return formPreviewFetcher()
+    }
+    if (channelId == null) {
+      throw new Error(t('No channel selected'))
+    }
+    const response = await fetchUpstreamModels(channelId)
+    if (response.success && Array.isArray(response.data)) {
+      return response.data
+    }
+    throw new Error(response.message || t('Failed to fetch models'))
+  }, [shouldPreviewUnsavedModels, formPreviewFetcher, channelId, t])
   // 凭证来源与账户地址由 ChannelBoundAccounts 上报：决定「API 地址」区是只读行还是可编辑框
   const [credentialMode, setCredentialMode] = useState<'account' | 'manual'>(
     'account'
@@ -2140,8 +2189,11 @@ export function ChannelMutateDrawer({
                 value={field.value || ''}
                 onChange={field.onChange}
                 disabled={isSubmitting}
-                sourceModelOptions={currentModelsArray}
-                targetModelOptions={modelOptions.map((option) => option.value)}
+                fetchChannelModels={
+                  isEditing || canEditSensitive
+                    ? fetchChannelAvailableModels
+                    : undefined
+                }
               />
             </FormControl>
             {modelMappingGuardrail.invalidJson && (
