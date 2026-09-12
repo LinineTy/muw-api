@@ -198,6 +198,19 @@ export const MATCH_LTE = 'lte'
 export const MATCH_EXISTS = 'exists'
 export const MATCH_RANGE = 'range'
 
+/**
+ * Source operator of a parsed MATCH_RANGE. The expression language has two
+ * range spellings: a within-day window serializes as `fn >= s && fn < e`
+ * ('and'), an overnight window as `fn >= s || fn < e` ('or'). The op is not
+ * serialized — the builder re-derives it from the bounds — but the display and
+ * the validator need it to tell a real window from the degenerate spellings
+ * (`||` with start <= end matches every value, `&&` with start >= end can never
+ * match).
+ */
+export const RANGE_OP_AND = 'and'
+export const RANGE_OP_OR = 'or'
+export type RangeOp = typeof RANGE_OP_AND | typeof RANGE_OP_OR
+
 export const TIME_FUNCS = ['hour', 'minute', 'weekday', 'month', 'day'] as const
 export type TimeFunc = (typeof TIME_FUNCS)[number]
 
@@ -225,6 +238,9 @@ export type ParamHeaderCondition = {
   path: string
   mode: string
   value: string
+  /** Literal kind of an EQ value, so `param("x") == "true"` (string) round-trips
+   * as a string instead of collapsing into the boolean `== true`. */
+  valueKind?: 'string' | 'number' | 'boolean'
 }
 
 export type TimeCondition = {
@@ -235,16 +251,29 @@ export type TimeCondition = {
   value: string
   rangeStart: string
   rangeEnd: string
+  /** Source operator of a parsed MATCH_RANGE (see `RANGE_OP_AND` /
+   * `RANGE_OP_OR`); undefined for a range authored in the editor, whose
+   * operator the builder derives from the bounds. */
+  rangeOp?: RangeOp
 }
 
 export type RequestCondition = TimeCondition | ParamHeaderCondition
 
+/**
+ * A condition set is a DNF: an OR of AND-clauses ("branches"). `[]` means the
+ * empty DNF (always true) — only valid on the fallback tier.
+ */
+export type AndClause<T> = { conditions: T[] }
+export type Dnf<T> = AndClause<T>[]
+
 export type RequestRuleGroup = {
-  conditions: RequestCondition[]
+  conditions: Dnf<RequestCondition>
   multiplier: string
   conditionText?: string
   matched?: boolean
 }
+
+export type RequestDnf = Dnf<RequestCondition>
 
 export type RequestRuleTrace = {
   cond: string
@@ -258,12 +287,14 @@ export type TierCondition = {
   value: number
 }
 
+export type TierConditionDnf = Dnf<TierCondition>
+
 export type ParsedTier = {
   billingUnit?: 'token' | 'request'
   fixedPrice?: number
   conditionText?: string
   label: string
-  conditions: TierCondition[]
+  conditions: TierConditionDnf
   [field: string]: unknown
 }
 
@@ -355,6 +386,10 @@ function splitTopLevelAnd(expr: string): string[] {
   return splitExpressionAtTopLevel(expr, '&&')
 }
 
+function splitTopLevelOr(expr: string): string[] {
+  return splitExpressionAtTopLevel(expr, '||')
+}
+
 function parseExprLiteral(raw: string): string | null {
   const text = raw.trim()
   if (text === 'true' || text === 'false') return text
@@ -386,12 +421,16 @@ function isTimeValueInRange(timeFunc: TimeFunc, text: string): boolean {
 }
 
 function tryParseTimeCondition(expr: string): RequestCondition | null {
+  // The bound operator is captured rather than merely matched: `&&`
+  // (within-day) and `||` (overnight) both serialize a MATCH_RANGE, and losing
+  // which one was written would leave the display and the degenerate-range
+  // validator blind to the difference.
   let m = expr.match(
-    /^(hour|minute|weekday|month|day)\("([^"]+)"\) >= ([\d.eE+-]+) (?:&&|\|\|) \1\("\2"\) < ([\d.eE+-]+)$/
+    /^(hour|minute|weekday|month|day)\("([^"]+)"\) >= ([\d.eE+-]+) (&&|\|\|) \1\("\2"\) < ([\d.eE+-]+)$/
   )
   if (!m) {
     m = expr.match(
-      /^\((hour|minute|weekday|month|day)\("([^"]+)"\) >= ([\d.eE+-]+) (?:&&|\|\|) \1\("\2"\) < ([\d.eE+-]+)\)$/
+      /^\((hour|minute|weekday|month|day)\("([^"]+)"\) >= ([\d.eE+-]+) (&&|\|\|) \1\("\2"\) < ([\d.eE+-]+)\)$/
     )
   }
   if (m) {
@@ -400,7 +439,7 @@ function tryParseTimeCondition(expr: string): RequestCondition | null {
     // dropped when the visual editor rebuilds the expression.
     if (
       !isTimeValueInRange(m[1] as TimeFunc, m[3]) ||
-      !isTimeValueInRange(m[1] as TimeFunc, m[4])
+      !isTimeValueInRange(m[1] as TimeFunc, m[5])
     ) {
       return null
     }
@@ -411,7 +450,8 @@ function tryParseTimeCondition(expr: string): RequestCondition | null {
       mode: MATCH_RANGE,
       value: '',
       rangeStart: m[3],
-      rangeEnd: m[4],
+      rangeEnd: m[5],
+      rangeOp: m[4] === '&&' ? RANGE_OP_AND : RANGE_OP_OR,
     }
   }
   m = expr.match(
@@ -516,10 +556,12 @@ function tryParseTimeRangePair(
     value: '',
     rangeStart: ta.value,
     rangeEnd: tb.value,
+    rangeOp: RANGE_OP_AND,
   }
 }
 
-function tryParseRequestConditions(
+/** One AND-clause of a request-rule condition set. */
+function tryParseRequestClause(
   conditionStr: string
 ): RequestCondition[] | null {
   // A single time range like hour(tz) >= 9 && hour(tz) < 12 must stay one
@@ -546,6 +588,27 @@ function tryParseRequestConditions(
     conditions.push(condition)
   }
   return conditions.length > 0 ? conditions : null
+}
+
+/**
+ * Parse a request-rule condition set into a DNF. `a && b || c` reads as
+ * `(a && b) || c`: branches split on top-level `||` first, so an OR is never
+ * silently collapsed into the AND-clause of another branch.
+ */
+function tryParseRequestConditions(conditionStr: string): RequestDnf | null {
+  // An overnight window (hour(tz) >= 22 || hour(tz) < 6) is one MATCH_RANGE
+  // condition carrying its source operator, not two OR branches.
+  const wholeTimeCond = tryParseTimeCondition(conditionStr.trim())
+  if (wholeTimeCond) return [{ conditions: [wholeTimeCond] }]
+
+  const branches = splitTopLevelOr(conditionStr)
+  const dnf: RequestDnf = []
+  for (const branch of branches) {
+    const conditions = tryParseRequestClause(branch)
+    if (!conditions) return null
+    dnf.push({ conditions })
+  }
+  return dnf.length > 0 ? dnf : null
 }
 
 function tryParseRuleGroupFactor(part: string): RequestRuleGroup | null {
@@ -665,12 +728,25 @@ export function createEmptyTimeCondition(): TimeCondition {
   }
 }
 
-export function createEmptyRuleGroup(): RequestRuleGroup {
-  return { conditions: [createEmptyCondition()], multiplier: '' }
+/**
+ * Wrap a flat list of conditions as a single AND-clause DNF. Authoring sites
+ * (presets, defaults) use it to keep the common single-branch case terse.
+ */
+export function andClause<T>(...conditions: T[]): Dnf<T> {
+  return [{ conditions }]
 }
 
+export function createEmptyRuleGroup(): RequestRuleGroup {
+  return {
+    conditions: [{ conditions: [createEmptyCondition()] }],
+    multiplier: '',
+  }
+}
 export function createEmptyTimeRuleGroup(): RequestRuleGroup {
-  return { conditions: [createEmptyTimeCondition()], multiplier: '' }
+  return {
+    conditions: [{ conditions: [createEmptyTimeCondition()] }],
+    multiplier: '',
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -779,15 +855,17 @@ function buildTimeConditionExpr(cond: TimeCondition): string {
     if (!isTimeValueInRange(timeFunc, s) || !isTimeValueInRange(timeFunc, e)) {
       return ''
     }
-    // Overnight range (start > end) crosses the day boundary, e.g. 21-6.
-    // A within-day range (start <= end), e.g. 9-12, must use && so the
-    // condition is not a tautology that always applies the multiplier.
-    const sNum = Number(s)
-    const eNum = Number(e)
-    if (sNum > eNum) {
-      return `${fn} >= ${s} || ${fn} < ${e}`
-    }
-    return `${fn} >= ${s} && ${fn} < ${e}`
+    // The source operator wins when the range came from a parsed expression:
+    // rewriting `fn >= 9 || fn < 12` as `&&` would silently change its meaning.
+    // Ranges authored in the editor carry no `rangeOp`, so the bounds decide —
+    // start > end is an overnight window (21-6), start <= end a within-day one.
+    const overnight =
+      normalized.rangeOp === undefined
+        ? Number(s) > Number(e)
+        : normalized.rangeOp === RANGE_OP_OR
+    return overnight
+      ? `${fn} >= ${s} || ${fn} < ${e}`
+      : `${fn} >= ${s} && ${fn} < ${e}`
   }
   const v = normalized.value.trim()
   if (!isTimeValueInRange(timeFunc, v)) return ''
@@ -842,15 +920,27 @@ function buildRequestConditionExpr(cond: RequestCondition): string {
 function buildRuleGroupFactor(group: RequestRuleGroup): string {
   const multiplier = (group.multiplier || '').trim()
   if (!NUMERIC_LITERAL_REGEX.test(multiplier)) return ''
-  const condExprs = (group.conditions || [])
-    .map(buildRequestConditionExpr)
+  // Each branch is an AND-clause; the branches themselves are OR-ed. A clause
+  // that is empty contributes nothing and drops the whole group (the previous
+  // flat model treated a missing condition the same way).
+  const branches = (group.conditions || [])
+    .map((clause) => {
+      const parts = (clause.conditions || [])
+        .map(buildRequestConditionExpr)
+        .filter(Boolean)
+      if (parts.length === 0) return ''
+      if (parts.length === 1) return parts[0]
+      return parts
+        .map((expr) => (expr.includes(' || ') ? `(${expr})` : expr))
+        .join(' && ')
+    })
     .filter(Boolean)
-  if (condExprs.length === 0) return ''
+  if (branches.length === 0) return ''
 
   const combined =
-    condExprs.length === 1
-      ? condExprs[0]
-      : condExprs.map((e) => (e.includes(' || ') ? `(${e})` : e)).join(' && ')
+    branches.length === 1
+      ? branches[0]
+      : branches.map((branch) => `(${branch})`).join(' || ')
   return `(${combined} ? ${multiplier} : 1)`
 }
 

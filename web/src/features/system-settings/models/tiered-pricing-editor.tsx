@@ -68,6 +68,7 @@ import {
   SOURCE_HEADER,
   SOURCE_PARAM,
   SOURCE_TIME,
+  andClause,
   buildRequestRuleExpr,
   combineBillingExpr,
   createEmptyCondition,
@@ -82,6 +83,7 @@ import {
   type TimeCondition,
   type TimeFunc,
 } from '@/features/pricing/lib/billing-expr'
+import { ConditionBuilder } from '@/features/pricing/lib/condition-builder'
 import {
   parseVisualBillingDocument,
   serializeVisualBillingDocument,
@@ -193,14 +195,14 @@ const PRESET_GROUPS: PresetGroup[] = [
         expr: 'tier("base", p * 5 + c * 25 + cr * 0.5 + cc * 6.25 + cc1h * 10)',
         requestRules: [
           {
-            conditions: [
+            conditions: andClause(
               {
                 source: SOURCE_HEADER as 'header',
                 path: 'anthropic-beta',
                 mode: MATCH_CONTAINS,
                 value: 'fast-mode-2026-02-01',
               },
-            ],
+            ),
             multiplier: '6',
           },
         ],
@@ -211,25 +213,25 @@ const PRESET_GROUPS: PresetGroup[] = [
         expr: 'len <= 272000 ? tier("standard", p * 2.5 + c * 15 + cr * 0.25) : tier("long_context", p * 5 + c * 22.5 + cr * 0.5)',
         requestRules: [
           {
-            conditions: [
+            conditions: andClause(
               {
                 source: SOURCE_PARAM as 'param',
                 path: 'service_tier',
                 mode: MATCH_EQ,
                 value: 'priority',
               },
-            ],
+            ),
             multiplier: '2',
           },
           {
-            conditions: [
+            conditions: andClause(
               {
                 source: SOURCE_PARAM as 'param',
                 path: 'service_tier',
                 mode: MATCH_EQ,
                 value: 'flex',
               },
-            ],
+            ),
             multiplier: '0.5',
           },
         ],
@@ -245,7 +247,7 @@ const PRESET_GROUPS: PresetGroup[] = [
         expr: 'tier("base", p * 3 + c * 15)',
         requestRules: [
           {
-            conditions: [
+            conditions: andClause(
               {
                 source: SOURCE_TIME as 'time',
                 timeFunc: 'hour',
@@ -255,7 +257,7 @@ const PRESET_GROUPS: PresetGroup[] = [
                 rangeStart: '21',
                 rangeEnd: '6',
               },
-            ],
+            ),
             multiplier: '0.5',
           },
         ],
@@ -266,7 +268,7 @@ const PRESET_GROUPS: PresetGroup[] = [
         expr: 'tier("base", p * 3 + c * 15)',
         requestRules: [
           {
-            conditions: [
+            conditions: andClause(
               {
                 source: SOURCE_TIME as 'time',
                 timeFunc: 'weekday',
@@ -276,11 +278,11 @@ const PRESET_GROUPS: PresetGroup[] = [
                 rangeStart: '',
                 rangeEnd: '',
               },
-            ],
+            ),
             multiplier: '0.8',
           },
           {
-            conditions: [
+            conditions: andClause(
               {
                 source: SOURCE_TIME as 'time',
                 timeFunc: 'weekday',
@@ -290,7 +292,7 @@ const PRESET_GROUPS: PresetGroup[] = [
                 rangeStart: '',
                 rangeEnd: '',
               },
-            ],
+            ),
             multiplier: '0.8',
           },
         ],
@@ -562,25 +564,6 @@ function RuleGroupCard({
 }: RuleGroupCardProps) {
   const { t } = useTranslation()
 
-  const handleConditionChange = (
-    conditionIndex: number,
-    next: RequestCondition
-  ) => {
-    const conditions = [...group.conditions]
-    conditions[conditionIndex] = next
-    onChange({ ...group, conditions })
-  }
-
-  const handleAddCondition = (timeMode: boolean) => {
-    onChange({
-      ...group,
-      conditions: [
-        ...group.conditions,
-        timeMode ? createEmptyTimeCondition() : createEmptyCondition(),
-      ],
-    })
-  }
-
   return (
     <div className='bg-muted/30 space-y-3 rounded-md border p-3'>
       <div className='flex items-center justify-between gap-2'>
@@ -597,42 +580,26 @@ function RuleGroupCard({
         </Button>
       </div>
 
-      <div className='space-y-2'>
-        {group.conditions.map((condition, conditionIndex) => (
+      <ConditionBuilder
+        dnf={group.conditions}
+        onChange={(next) => onChange({ ...group, conditions: next })}
+        renderRow={({
+          value,
+          onChange: onRowChange,
+          onRemove: onRowRemove,
+        }) => (
           <RuleConditionRow
-            // eslint-disable-next-line react/no-array-index-key -- Parsed editor rows have no IDs; preserve input identity while their editable labels and values change.
-            key={conditionIndex}
-            condition={condition}
-            onChange={(next) => handleConditionChange(conditionIndex, next)}
-            onRemove={() =>
-              onChange({
-                ...group,
-                conditions: group.conditions.filter(
-                  (_, i) => i !== conditionIndex
-                ),
-              })
-            }
+            condition={value}
+            onChange={onRowChange}
+            onRemove={onRowRemove}
           />
-        ))}
-        <div className='flex flex-wrap gap-2'>
-          <Button
-            variant='ghost'
-            size='sm'
-            onClick={() => handleAddCondition(false)}
-          >
-            <Plus className='mr-1 h-3 w-3' />
-            {t('Add param/header')}
-          </Button>
-          <Button
-            variant='ghost'
-            size='sm'
-            onClick={() => handleAddCondition(true)}
-          >
-            <Plus className='mr-1 h-3 w-3' />
-            {t('Add time condition')}
-          </Button>
-        </div>
-      </div>
+        )}
+        createEmptyAtom={() => createEmptyCondition()}
+        rowAddLabel={t('Add condition')}
+        branchAddLabel={t('Add OR branch')}
+        orLabel={t('OR')}
+        translateIssue={(key) => t(key)}
+      />
 
       <div className='flex items-center gap-2'>
         <Label className='text-xs'>{t('Multiplier')}</Label>

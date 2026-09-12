@@ -43,7 +43,7 @@ import {
   type RequestCondition,
   type RequestRuleGroup,
   type RequestRuleTrace,
-  type TierCondition,
+  type TierConditionDnf,
 } from '../lib/billing-expr'
 import { formatBillingCondition } from '../lib/billing-expression/condition-display'
 import { compileBillingExpression } from '../lib/billing-expression/parser'
@@ -154,17 +154,25 @@ function formatTokenHint(value: string | number): string {
 }
 
 function formatConditionSummary(
-  conditions: TierCondition[],
+  dnf: TierConditionDnf,
   t: (key: string) => string
 ): string {
-  return conditions
-    .map((c) => {
-      const varLabel = t(VAR_LABELS[c.var] || c.var)
-      const hint = formatTokenHint(c.value)
-      return `${varLabel} ${OP_LABELS[c.op] || c.op} ${hint || c.value}`
-    })
+  // DNF: an OR of AND-clauses. A single branch stays unbracketed so the common
+  // flat shape reads exactly as before.
+  const branches = dnf
+    .map((clause) =>
+      clause.conditions
+        .map((c) => {
+          const varLabel = t(VAR_LABELS[c.var] || c.var)
+          const hint = formatTokenHint(c.value)
+          return `${varLabel} ${OP_LABELS[c.op] || c.op} ${hint || c.value}`
+        })
+        .filter(Boolean)
+        .join(' && ')
+    )
     .filter(Boolean)
-    .join(' && ')
+  if (branches.length <= 1) return branches.join('')
+  return branches.map((branch) => `(${branch})`).join(' || ')
 }
 
 function isTaskBreakdownTier(tier: BreakdownTier): tier is ParsedTaskTier {
@@ -263,9 +271,18 @@ function describeGroup(
     const formatted = formatBillingCondition(group.conditionText, t, locale)
     if (formatted) return formatted
   }
-  const description = (group.conditions || [])
-    .map((condition) => describeCondition(condition, t))
-    .join(' && ')
+  const branches = (group.conditions || [])
+    .map((clause) =>
+      clause.conditions
+        .map((condition) => describeCondition(condition, t))
+        .filter(Boolean)
+        .join(' && ')
+    )
+    .filter(Boolean)
+  const description =
+    branches.length <= 1
+      ? branches.join('')
+      : branches.map((branch) => `(${branch})`).join(' || ')
   return description || group.conditionText || ''
 }
 
