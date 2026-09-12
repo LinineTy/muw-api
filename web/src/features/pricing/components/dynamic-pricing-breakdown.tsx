@@ -27,25 +27,18 @@ import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import {
   BILLING_PRICING_VARS,
-  MATCH_CONTAINS,
-  MATCH_EQ,
-  MATCH_EXISTS,
-  MATCH_GTE,
-  MATCH_LT,
-  MATCH_RANGE,
-  SOURCE_TIME,
   parseTiersFromExpr,
   requestRuleGroupsFromTrace,
   splitBillingExprAndRequestRules,
   tryParseRequestRuleExpr,
   type ParsedTaskTier,
   type ParsedTier,
-  type RequestCondition,
   type RequestRuleGroup,
   type RequestRuleTrace,
   type TierConditionDnf,
 } from '../lib/billing-expr'
 import { formatBillingCondition } from '../lib/billing-expression/condition-display'
+import { formatRequestDnfText } from '../lib/condition-format'
 import { compileBillingExpression } from '../lib/billing-expression/parser'
 import { isBreakdownTierMatched } from '../lib/breakdown-tier-match'
 import {
@@ -133,14 +126,6 @@ const OP_LABELS: Record<string, string> = {
   '>': '>',
   '>=': '≥',
 }
-const TIME_FUNC_LABELS: Record<string, string> = {
-  hour: 'Hour',
-  minute: 'Minute',
-  weekday: 'Weekday',
-  month: 'Month',
-  day: 'Day',
-}
-
 function formatTokenHint(value: string | number): string {
   const n = Number(value)
   if (!Number.isFinite(n) || n === 0) return ''
@@ -229,39 +214,6 @@ function formatBreakdownPrice(
   return amount
 }
 
-function describeCondition(
-  cond: RequestCondition,
-  t: (key: string) => string
-): string {
-  if (cond.source === SOURCE_TIME) {
-    const fn = t(TIME_FUNC_LABELS[cond.timeFunc] || cond.timeFunc)
-    const tz = cond.timezone || 'UTC'
-    if (cond.mode === MATCH_RANGE) {
-      return `${fn} ${cond.rangeStart}:00~${cond.rangeEnd}:00 (${tz})`
-    }
-    const opMap: Record<string, string> = {
-      [MATCH_EQ]: '=',
-      [MATCH_GTE]: '≥',
-      [MATCH_LT]: '<',
-    }
-    return `${fn} ${opMap[cond.mode] || '='} ${cond.value} (${tz})`
-  }
-  const src = cond.source === 'header' ? t('Header') : t('Body param')
-  const path = cond.path || ''
-  if (cond.mode === MATCH_EXISTS) return `${src} ${path} ${t('Exists')}`
-  if (cond.mode === MATCH_CONTAINS) {
-    return `${src} ${path} ${t('Contains')} "${cond.value}"`
-  }
-  const opMap: Record<string, string> = {
-    eq: '=',
-    gt: '>',
-    gte: '≥',
-    lt: '<',
-    lte: '≤',
-  }
-  return `${src} ${path} ${opMap[cond.mode] || '='} ${cond.value}`
-}
-
 function describeGroup(
   group: RequestRuleGroup,
   t: (key: string) => string,
@@ -271,19 +223,9 @@ function describeGroup(
     const formatted = formatBillingCondition(group.conditionText, t, locale)
     if (formatted) return formatted
   }
-  const branches = (group.conditions || [])
-    .map((clause) =>
-      clause.conditions
-        .map((condition) => describeCondition(condition, t))
-        .filter(Boolean)
-        .join(' && ')
-    )
-    .filter(Boolean)
-  const description =
-    branches.length <= 1
-      ? branches.join('')
-      : branches.map((branch) => `(${branch})`).join(' || ')
-  return description || group.conditionText || ''
+  // Structured fallback: honours the source operator of a MATCH_RANGE window
+  // (`&&` within-day vs `||` overnight) instead of re-deriving it from bounds.
+  return formatRequestDnfText(group.conditions, t) || group.conditionText || ''
 }
 
 function nextOccurrenceKey(
