@@ -7806,6 +7806,8 @@
     "Why set this?": "为什么需要设置？",
     "You are offline. Updates will be checked when you reconnect.": "当前处于离线状态，恢复联网后将检查更新。",
     "You can add models manually or try fetching again.": "可以手动添加模型，也可以重新获取。",
-    "Zhipu GLM": "智谱GLM"
+    "Zhipu GLM": "智谱GLM",
+    "New version available": "有新版本可用",
+    "Coding-plan quota monitoring is configured on the account.": "编码套餐余量监控已配置在账户上，请在账户页维护。"
   }
 }

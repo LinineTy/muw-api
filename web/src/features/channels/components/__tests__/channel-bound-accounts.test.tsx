@@ -148,7 +148,7 @@ test('新建渠道默认「使用账户」：不渲染渠道侧凭证输入，�
   expect(screen.getByText('Provider default address')).toBeVisible()
 
   // 空态 + 无可添加账户时下拉禁用
-  expect(screen.getByText('No account bound yet.')).toBeVisible()
+  expect(screen.getByText('No bound account yet.')).toBeVisible()
   expect(addAccountTrigger()).toBeDisabled()
 })
 

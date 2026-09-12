@@ -7803,6 +7803,8 @@
     "Why set this?": "Зачем это настраивать?",
     "You are offline. Updates will be checked when you reconnect.": "Нет подключения к сети. Проверка обновлений возобновится после подключения.",
     "You can add models manually or try fetching again.": "Добавьте модели вручную или повторите запрос.",
-    "Zhipu GLM": "Zhipu GLM"
+    "Zhipu GLM": "Zhipu GLM",
+    "New version available": "Доступна новая версия",
+    "Coding-plan quota monitoring is configured on the account.": "Мониторинг квоты тарифного плана настраивается в аккаунте."
   }
 }

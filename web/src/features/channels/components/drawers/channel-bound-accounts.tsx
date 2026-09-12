@@ -333,7 +333,7 @@ export function ChannelBoundAccounts(props: ChannelBoundAccountsProps) {
                         'border-destructive/60 text-destructive'
                     )}
                   >
-                    <p>{t('No account bound yet.')}</p>
+                    <p>{t('No bound account yet.')}</p>
                     {missingCredentialError && (
                       <p className='mt-1'>
                         {t(
@@ -450,7 +450,7 @@ export function ChannelBoundAccounts(props: ChannelBoundAccountsProps) {
                 })}
                 <p className='text-muted-foreground text-xs'>
                   {t(
-                    'Bound accounts rotate like multi-key: in list order, and each binding can be disabled per channel.'
+                    'Bound accounts rotate like multi-key: in list order, each can be disabled for this channel, and a failed account is skipped.'
                   )}
                 </p>
               </>

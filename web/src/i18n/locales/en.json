@@ -7803,6 +7803,8 @@
     "Why set this?": "Why set this?",
     "You are offline. Updates will be checked when you reconnect.": "You are offline. Updates will be checked when you reconnect.",
     "You can add models manually or try fetching again.": "You can add models manually or try fetching again.",
-    "Zhipu GLM": "Zhipu GLM"
+    "Zhipu GLM": "Zhipu GLM",
+    "New version available": "New version available",
+    "Coding-plan quota monitoring is configured on the account.": "Coding-plan quota monitoring is configured on the account."
   }
 }

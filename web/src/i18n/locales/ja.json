@@ -7803,6 +7803,8 @@
     "Why set this?": "なぜ設定が必要？",
     "You are offline. Updates will be checked when you reconnect.": "オフラインです。再接続後に更新を確認します。",
     "You can add models manually or try fetching again.": "モデルを手動で追加するか、再取得できます。",
-    "Zhipu GLM": "Zhipu GLM"
+    "Zhipu GLM": "Zhipu GLM",
+    "New version available": "新しいバージョンがあります",
+    "Coding-plan quota monitoring is configured on the account.": "コーディングプランのクォータ監視はアカウント側で設定します。"
   }
 }
