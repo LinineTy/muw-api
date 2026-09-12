@@ -52,8 +52,9 @@ function ModelCardComponent({
         </div>
       </div>
 
-      {/* 元信息：匹配规则 / 官方同步 / 端点
-          （供应商不放这里：模型名下方那行已经显示，放两处重复 —— 2026-09-12 maintainer指出） */}
+      {/* 元信息：匹配规则 / 官方同步 / 端点 + 标签
+          （供应商不放这里：模型名下方那行已经显示，放两处重复 —— 2026-09-12 maintainer指出）
+          端点与标签同处一行、各占一列 —— 2026-09-13 maintainer指出（原先端点独占一行、标签另起全宽块） */}
       <div className='grid grid-cols-2 gap-x-4 gap-y-2'>
         <div className='min-w-0'>
           <div className={labelClass}>{t('Match Type')}</div>
@@ -67,14 +68,13 @@ function ModelCardComponent({
           <div className={labelClass}>{t('Endpoints')}</div>
           <div className='min-w-0 overflow-hidden'>{endpointsCell}</div>
         </div>
+        {tagsCell && (
+          <div className='min-w-0'>
+            <div className={labelClass}>{t('Tags')}</div>
+            <div className='min-w-0 overflow-hidden'>{tagsCell}</div>
+          </div>
+        )}
       </div>
-
-      {tagsCell && (
-        <div className='min-w-0'>
-          <div className={labelClass}>{t('Tags')}</div>
-          <div className='min-w-0 overflow-hidden'>{tagsCell}</div>
-        </div>
-      )}
     </div>
   )
 }
