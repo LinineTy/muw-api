@@ -116,6 +116,19 @@ export type ModelRatioVisualEditorHandle = {
 
 const STORAGE_KEY = 'model-ratio-column-visibility'
 
+/**
+ * 表格列宽按**列 id** 取，而不是按位置写死五条 <col>。
+ * 按位置写死时，「查看」里取消勾选「模式」会让后面所有列宽错位
+ * （价格摘要被压到 120px、操作列拿到 w-auto 失去定宽）——2026-09-12 maintainer反馈。
+ */
+const MODEL_RATIO_COL_WIDTHS: Record<string, string> = {
+  select: 'w-9',
+  name: 'w-[300px]',
+  billingMode: 'w-[120px]',
+  priceSummary: 'w-auto',
+  actions: 'w-20',
+}
+
 const ModelRatioVisualEditorComponent = forwardRef<
   ModelRatioVisualEditorHandle,
   ModelRatioVisualEditorProps
@@ -734,11 +747,12 @@ const ModelRatioVisualEditorComponent = forwardRef<
               ]}
               colgroup={
                 <colgroup>
-                  {batchMode && <col className='w-9' />}
-                  <col className='w-[300px]' />
-                  <col className='w-[120px]' />
-                  <col className='w-auto' />
-                  <col className='w-20' />
+                  {table.getVisibleLeafColumns().map((column) => (
+                    <col
+                      key={column.id}
+                      className={MODEL_RATIO_COL_WIDTHS[column.id] ?? 'w-auto'}
+                    />
+                  ))}
                 </colgroup>
               }
               renderRow={(row, { getCellClassName }) => (

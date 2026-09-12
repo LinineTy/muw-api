@@ -427,7 +427,7 @@ function RuleConditionRow({
         value={timeCond.mode}
         onValueChange={(v) => v !== null && handleModeChange(v)}
       >
-        <SelectTrigger className='w-32' size='sm'>
+        <SelectTrigger className='w-fit' size='sm'>
           <SelectValue>{getMatchLabel(timeCond.mode)}</SelectValue>
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false}>
@@ -480,7 +480,7 @@ function RuleConditionRow({
         value={phCond.mode}
         onValueChange={(v) => v !== null && handleModeChange(v)}
       >
-        <SelectTrigger className='w-32' size='sm'>
+        <SelectTrigger className='w-fit' size='sm'>
           <SelectValue>{getMatchLabel(phCond.mode)}</SelectValue>
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false}>
@@ -517,7 +517,7 @@ function RuleConditionRow({
         value={condition.source}
         onValueChange={(v) => v !== null && handleSourceChange(v)}
       >
-        <SelectTrigger className='w-28' size='sm'>
+        <SelectTrigger className='w-fit' size='sm'>
           <SelectValue>{sourceLabel}</SelectValue>
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false}>
