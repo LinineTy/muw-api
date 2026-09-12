@@ -26,6 +26,7 @@ import { getModelHealth } from './api'
 import { HealthLegend } from './components/health-legend'
 import { ModelHealthCard } from './components/model-health-card'
 import { ModelHealthSummary } from './components/model-health-summary'
+import { summarizeModelHealth } from './lib/summary'
 import type { ModelHealthRow } from './types'
 
 export function ModelHealth() {
@@ -83,35 +84,17 @@ export function ModelHealth() {
       </Empty>
     )
   } else {
-    // 汇总统计跟随当前查询范围(天数/仅不健康),直接由 rows 聚合。
-    const channelCount = new Set(rows.map((row) => row.channel_id)).size
-    const totalTests = rows.reduce((sum, row) => sum + row.test_count, 0)
-    const totalSuccess = rows.reduce((sum, row) => sum + row.success_count, 0)
-    // 汇总成功率与技术口径对齐(client 错误不进分母、审核拦截计成功),
-    // 与卡片 badge、非管理员视图一致。
-    const totalClientErrors = rows.reduce(
-      (sum, row) => sum + (row.client_error_count ?? 0),
-      0
-    )
-    const totalModeration = rows.reduce(
-      (sum, row) => sum + (row.moderation_count ?? 0),
-      0
-    )
-    const denom = totalTests - totalClientErrors
-    const successRate =
-      denom > 0 ? ((totalSuccess + totalModeration) / denom) * 100 : 100
-    const weightedLatency = rows.reduce(
-      (sum, row) => sum + row.avg_response_time * row.test_count,
-      0
-    )
-    const avgResponseTime = totalTests > 0 ? weightedLatency / totalTests : 0
-    // "异常模型" = 该模型任一 (channel, model) 行成功率低于 100%。
-    const unhealthyModelCount = [...groups.values()].filter((rows) =>
-      rows.some((row) => row.success_rate < 100)
-    ).length
-    const trafficModelCount = [...groups.values()].filter((rows) =>
-      rows.some((row) => (row.user_traffic_count ?? 0) > 0)
-    ).length
+    // 汇总统计跟随当前查询范围(天数/仅不健康)：口径抽到 lib/summary.ts（唯一来源），
+    // 桌面"健康度"小组件复用同一份，避免两处口径漂移。
+    const stats = summarizeModelHealth(rows)
+    const {
+      channelCount,
+      totalTests,
+      successRate,
+      avgResponseTime,
+      unhealthyModelCount,
+      trafficModelCount,
+    } = stats
 
     content = (
       <div className='space-y-3'>

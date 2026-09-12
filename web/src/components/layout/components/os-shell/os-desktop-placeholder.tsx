@@ -3,7 +3,9 @@ import { useDirection } from '@/context/direction-provider'
 import { cn } from '@/lib/utils'
 
 import { OsDesktopBalance } from './os-desktop-balance'
+import { OsDesktopModelHealth } from './os-desktop-model-health'
 import { OsDesktopNotices } from './os-desktop-notices'
+import { OsDesktopRequests } from './os-desktop-requests'
 import { OsDesktopSystemMetrics } from './os-desktop-system-metrics'
 import { useOsShellNavigate } from './os-open'
 import { useOsNavItems } from './use-os-nav'
@@ -73,9 +75,13 @@ export function OsDesktopPlaceholder() {
           组件尺寸档见 os-widget.tsx,摆放顺序=组件写入顺序(行优先)。
           放不下(窄屏)时整块隐藏,磁贴优先 */}
       <OsWidgetGrid>
-        {/* 顺序 = 摆放顺序（行优先）。maintainer定：系统信息两张 1x1 放最上面 */}
+        {/* 顺序 = 摆放顺序（行优先）。maintainer定：系统信息两张 1x1 放最上面。
+            第 1 行 = CPU + 内存 + 模型健康；第 2 行 = 余额(2) + 今日请求数；
+            第 3-4 行 = 公告(3x2) —— 4 行 × 3 列正好排满，不留空洞 */}
         <OsDesktopSystemMetrics />
+        <OsDesktopModelHealth />
         <OsDesktopBalance />
+        <OsDesktopRequests />
         <OsDesktopNotices />
       </OsWidgetGrid>
     </div>
