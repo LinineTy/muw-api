@@ -25,6 +25,7 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
 import { useVersionBadge } from '@/features/system-update/use-version-badge'
+import { DEFAULT_SYSTEM_NAME } from '@/lib/constants'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { cn } from '@/lib/utils'
@@ -68,7 +69,7 @@ export function SystemBrand(props: SystemBrandProps) {
       />
     )
 
-  const name = status?.system_name || props.defaultName || 'New API'
+  const name = status?.system_name || props.defaultName || DEFAULT_SYSTEM_NAME
   const variant = props.variant ?? 'sidebar'
 
   if (variant === 'icon') {

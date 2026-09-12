@@ -21,7 +21,9 @@ For commercial licensing, please contact support@quantumnous.com
  */
 
 // System Configuration Defaults
-export const DEFAULT_SYSTEM_NAME = 'New API'
+// 站点名兜底:接口还没回来 / 拿不到 system_name 时显示(站点显示名本身由选项 SystemName 控制)。
+// fork 自己的品牌(2026-09-13 maintainer定),上游署名面见 footer/README/版权头,不在此处。
+export const DEFAULT_SYSTEM_NAME = 'Muw API Dev'
 export const DEFAULT_LOGO = '/logo.png'
 
 // LocalStorage Keys
