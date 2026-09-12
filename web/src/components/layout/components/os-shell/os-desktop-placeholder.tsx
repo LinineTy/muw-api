@@ -58,8 +58,18 @@ export function OsDesktopPlaceholder() {
               title={item.title}
               className='group hover:bg-popover/40 focus-visible:ring-ring/40 flex w-[6.5rem] flex-col items-center gap-2 rounded-xl px-1 py-2 transition-colors outline-none focus-visible:ring-2'
             >
-              {/* 方圆形磁贴:圆角约 20%,玻璃底,与 Dock 的圆形球体区分 */}
-              <span className='bg-popover/55 border-border/40 group-hover:border-border/70 flex size-14 items-center justify-center rounded-[1.15rem] border backdrop-blur-[6px] transition-transform duration-200 group-hover:scale-[1.04]'>
+              {/* 方圆形磁贴:玻璃底,与 Dock 的圆形球体区分。
+                  圆角**不写死**（原来硬编码 1.15rem，切主题/圆角设置纹丝不动 —— maintainer 2026-09-12 抓的）：
+                  内圆角 = 外圆角 − 四周留白，才能与外层按钮（rounded-xl）保持同心；max() 兜住"圆角=0"。
+                  用内联 style 而不是 arbitrary class：Tailwind 生成不了嵌套 max()+calc() 的类。
+                  系数从 --radius 现算（×1.4 与 .rounded-xl 同档）：--radius-xl 这个变量在样式表里
+                  已经是展开过的 calc(1rem * 1.4)，直接 var() 它等于写死、不跟设置。 */}
+              <span
+                style={{
+                  borderRadius:
+                    'max(0px, calc(var(--radius) * 1.4 - 0.25rem))',
+                }}
+                className='bg-popover/55 border-border/40 group-hover:border-border/70 flex size-14 items-center justify-center border backdrop-blur-[6px] transition-transform duration-200 group-hover:scale-[1.04]'>
                 {Icon ? <Icon className='size-6' aria-hidden='true' /> : null}
               </span>
               <span className='line-clamp-2 w-full text-center text-xs leading-tight'>
