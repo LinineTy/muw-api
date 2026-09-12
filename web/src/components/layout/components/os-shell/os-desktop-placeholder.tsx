@@ -2,7 +2,9 @@ import { useDirection } from '@/context/direction-provider'
 // @muw-owned
 import { cn } from '@/lib/utils'
 
+import { OsDesktopBalance } from './os-desktop-balance'
 import { OsDesktopNotices } from './os-desktop-notices'
+import { OsDesktopSystemMetrics } from './os-desktop-system-metrics'
 import { useOsShellNavigate } from './os-open'
 import { useOsNavItems } from './use-os-nav'
 import { OsWidgetGrid } from './os-widget-grid'
@@ -71,6 +73,9 @@ export function OsDesktopPlaceholder() {
           组件尺寸档见 os-widget.tsx,摆放顺序=组件写入顺序(行优先)。
           放不下(窄屏)时整块隐藏,磁贴优先 */}
       <OsWidgetGrid>
+        {/* 顺序 = 摆放顺序（行优先）。maintainer定：系统信息两张 1x1 放最上面 */}
+        <OsDesktopSystemMetrics />
+        <OsDesktopBalance />
         <OsDesktopNotices />
       </OsWidgetGrid>
     </div>

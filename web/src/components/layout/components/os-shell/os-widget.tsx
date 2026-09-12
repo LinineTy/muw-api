@@ -33,6 +33,13 @@ const SIZE_SPAN: Record<OsWidgetSize, { col: number; row: number }> = {
   '3x3': { col: 3, row: 3 },
 }
 
+/**
+ * 整卡可点时的内容按钮样式：铺满内容区、上下分栏（标签在上、数值在下）。
+ * 壳本身保持非交互（`<section>`），要整卡可点就在 children 里放一个用这个类名的 button。
+ */
+export const WIDGET_CLICKABLE_CLASS =
+  'focus-visible:ring-ring/40 flex h-full w-full cursor-pointer flex-col justify-between gap-1 text-left outline-none focus-visible:ring-2'
+
 export interface OsWidgetProps {
   size: OsWidgetSize
   /** 标题行；1x1 这种小格子建议不传，直接用内容区的数字 */
