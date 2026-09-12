@@ -32,7 +32,7 @@ interface AnnouncementsListProps {
 /**
  * Get relative time string from a date
  */
-function getRelativeTime(publishDate: string | Date, t: TFunction): string {
+export function getRelativeTime(publishDate: string | Date, t: TFunction): string {
   if (!publishDate) return ''
 
   const now = new Date()
@@ -91,7 +91,7 @@ function getRelativeTime(publishDate: string | Date, t: TFunction): string {
 /**
  * Announcement status dot indicator
  */
-function AnnouncementDot({ type }: { type?: string }) {
+export function AnnouncementDot({ type }: { type?: string }) {
   return (
     <span
       className={cn(
