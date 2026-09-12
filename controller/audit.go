@@ -1,6 +1,9 @@
 package controller
 
 import (
+	"errors"
+	"strings"
+
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
@@ -56,8 +59,23 @@ func recordManageAuditFor(c *gin.Context, targetUserId int, action string, param
 // recordUserSecurityAudit 记录普通用户自己的安全敏感操作（如 passkey 绑定/解绑）。
 // 这类日志没有管理员操作者，不写 admin_info；同时不依赖 AdminAuth/RootAuth 的兜底。
 func recordUserSecurityAudit(c *gin.Context, userId int, action string, params map[string]interface{}) {
+	// 上游增强：把 params 里的 success / security_error_code 落到 AuditRequestInfo，
+	// 否则被拒的安全操作会被记成成功。
+	if code := c.GetString("security_error_code"); code != "" {
+		if params == nil {
+			params = map[string]any{}
+		}
+		params["code"] = code
+	}
+	var auditInfo *model.AuditRequestInfo
+	if success, ok := params["success"].(bool); ok {
+		auditInfo = &model.AuditRequestInfo{
+			Method: c.Request.Method, Route: c.FullPath(), Path: c.FullPath(),
+			Status: c.Writer.Status(), Success: success,
+		}
+	}
 	content, _ := common.AuditContentEN(action, params)
-	model.RecordOperationAuditLog(userId, c.GetInt("role"), content, c.ClientIP(), action, params, nil, nil, c)
+	model.RecordOperationAuditLog(userId, c.GetInt("role"), content, c.ClientIP(), action, params, nil, auditInfo, c)
 }
 
 // tokenAuditParams 返回当前请求的 API token 审计参数（中间件 TokenOperationAudit 已
@@ -81,4 +99,35 @@ func tokenBatchAuditParams(c *gin.Context, ids []int) model.AuditFields {
 		params["requested_ids_truncated"] = true
 	}
 	return params
+}
+
+// recordPasskeyDomainAudit 记录 Passkey 域名（RP ID）变更审计。
+// 来自上游「safe multi-RP ID passkey support」；内容渲染走本 fork 的
+// common.AuditContentEN（模板集中在 common/audit_content.go）。
+func recordPasskeyDomainAudit(c *gin.Context, change *model.PasskeyDomainChange, confirmed bool, err error) {
+	confirmed = confirmed && err == nil && change != nil && len(change.RemovedRPIDs) > 0
+	params := map[string]any{"success": err == nil, "confirmed": confirmed}
+	if change != nil {
+		params["domains"] = strings.Join(change.RemovedRPIDs, ", ")
+		params["removed_rp_ids"] = change.RemovedRPIDs
+		params["known"] = change.AffectedCredentials
+		params["unknown"] = change.UnknownCredentials
+		params["previous_rp_id"] = change.PreviousRPID
+		params["effective_rp_id"] = change.EffectiveRPID
+	}
+	action := "option.passkey_domains"
+	if errors.Is(err, model.ErrPasskeyDomainRemovalConfirmation) {
+		action = "option.passkey_domains_blocked"
+	} else if err != nil {
+		action = "option.passkey_domains_failed"
+	} else if confirmed && change != nil && len(change.RemovedRPIDs) > 0 {
+		action = "option.passkey_domains_confirmed"
+	}
+	auditInfo := &model.AuditRequestInfo{
+		Method: c.Request.Method, Route: c.FullPath(), Path: c.FullPath(),
+		Status: c.Writer.Status(), Success: err == nil,
+	}
+	content, _ := common.AuditContentEN(action, params)
+	model.RecordOperationAuditLog(c.GetInt("id"), c.GetInt("role"), content, c.ClientIP(), action, params, auditOperatorInfo(c), auditInfo, c)
+	markAuditLogged(c)
 }

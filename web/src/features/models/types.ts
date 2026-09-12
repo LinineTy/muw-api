@@ -26,7 +26,6 @@ import { z } from 'zod'
  * Bound channel information
  */
 export interface BoundChannel {
-  channel_id: number
   name: string
   type: number
 }
@@ -53,7 +52,7 @@ export interface Model {
   created_time: number
   updated_time: number
   name_rule: number
-  /** 上下文窗口（token），0/空 = 不限制；relay 转发超限 400 拒绝 */
+  /** 上下文窗口（token），0/空 = 不限制；relay 转发超限 400 拒绝（fork 自研，上游无此字段） */
   context_window?: number | null
   // Runtime fields
   bound_channels?: BoundChannel[]
@@ -185,6 +184,8 @@ export type MetadataSyncValues = {
   vendor: string
   endpoints: string
   name_rule: number
+  /** 上下文窗口（token），0/空 = 不限制；relay 转发超限 400 拒绝（fork 自研，上游无此字段） */
+  context_window?: number | null
   status: number
 }
 export type MetadataSyncCandidate = {
@@ -346,10 +347,90 @@ export type SyncLocale = 'zh' | 'zh-CN' | 'en' | 'ja'
 export type SyncSource = 'official'
 
 // ============================================================================
-// Model Tab Types
+// Model Deployments Types
 // ============================================================================
 
 /**
  * Model tab type
  */
-export type ModelTabCategory = 'metadata' | 'vendors'
+export type ModelTabCategory = 'metadata' | 'vendors' | 'deployments'
+
+/**
+ * Deployment entity from API
+ */
+export interface Deployment {
+  id: string | number
+  container_name?: string
+  deployment_name?: string
+  name?: string
+  status?: string
+  provider?: string
+  /**
+   * Human readable string returned by backend, e.g. "2 hour 15 minutes"
+   * or "completed".
+   */
+  time_remaining?: string
+  /**
+   * Remaining minutes (numeric) returned by backend.
+   */
+  compute_minutes_remaining?: number
+  /**
+   * Served minutes (numeric) returned by backend.
+   */
+  compute_minutes_served?: number
+  /**
+   * Completed percent (0-100) returned by backend.
+   */
+  completed_percent?: number
+  hardware_info?: string | Record<string, unknown>
+  hardware_name?: string
+  brand_name?: string
+  hardware_quantity?: number
+  created_at?: string | number
+  updated_at?: string | number
+  [key: string]: unknown
+}
+
+/**
+ * Deployment settings response
+ */
+export interface DeploymentSettingsResponse {
+  success: boolean
+  message?: string
+  data?: {
+    enabled?: boolean
+    [key: string]: unknown
+  }
+}
+
+/**
+ * List deployments response
+ */
+export interface ListDeploymentsResponse {
+  success: boolean
+  message?: string
+  data?: {
+    items?: Deployment[]
+    total?: number
+    page?: number
+    page_size?: number
+    status_counts?: Record<string, number>
+  }
+}
+
+/**
+ * Deployment logs response
+ */
+export interface DeploymentLogsResponse {
+  success: boolean
+  message?: string
+  data?: {
+    logs?: Array<{
+      timestamp?: string
+      level?: string
+      message?: string
+      source?: string
+    }>
+    cursor?: string
+  }
+}

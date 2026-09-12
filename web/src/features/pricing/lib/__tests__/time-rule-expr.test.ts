@@ -30,11 +30,6 @@ import {
   tryParseRequestRuleExpr,
 } from '../billing-expr'
 
-// Restored after the upstream sync merge dropped this file, ported from
-// upstream's flat `conditions: RequestCondition[]` model to this fork's DNF
-// model (`conditions` is a list of AND-clauses). The builder semantics it
-// guards (`&&` for a within-day window, `||` for an overnight one) come from
-// upstream PR #6934.
 function timeCondition(overrides: Partial<TimeCondition> = {}): TimeCondition {
   return {
     source: 'time',
@@ -50,9 +45,7 @@ function timeCondition(overrides: Partial<TimeCondition> = {}): TimeCondition {
 
 function timeRangeGroup(start: string, end: string): RequestRuleGroup {
   return {
-    conditions: [
-      { conditions: [timeCondition({ rangeStart: start, rangeEnd: end })] },
-    ],
+    conditions: [{ conditions: [timeCondition({ rangeStart: start, rangeEnd: end })] }],
     multiplier: '2',
   }
 }
@@ -62,9 +55,7 @@ function scalarTimeGroup(
   timeFunc: TimeFunc = 'hour'
 ): RequestRuleGroup {
   return {
-    conditions: [
-      { conditions: [timeCondition({ mode: MATCH_GTE, value, timeFunc })] },
-    ],
+    conditions: [{ conditions: [timeCondition({ mode: MATCH_GTE, value, timeFunc })] }],
     multiplier: '2',
   }
 }
@@ -132,7 +123,7 @@ describe('time range expression parsing', () => {
       '(hour("Asia/Shanghai") >= 9 && hour("Asia/Shanghai") < 12 ? 2 : 1)'
     )
     expect(groups).toHaveLength(1)
-    expect(groups?.[0].conditions).toHaveLength(1)
+    expect(groups?.[0].conditions[0].conditions).toHaveLength(1)
     const condition = groups?.[0].conditions[0].conditions[0] as TimeCondition
     expect(condition.mode).toBe(MATCH_RANGE)
     expect(condition.rangeStart).toBe('9')
@@ -143,7 +134,7 @@ describe('time range expression parsing', () => {
     const groups = tryParseRequestRuleExpr(
       '(hour("Asia/Shanghai") >= 21 || hour("Asia/Shanghai") < 6 ? 2 : 1)'
     )
-    expect(groups?.[0].conditions).toHaveLength(1)
+    expect(groups?.[0].conditions[0].conditions).toHaveLength(1)
     const condition = groups?.[0].conditions[0].conditions[0] as TimeCondition
     expect(condition.mode).toBe(MATCH_RANGE)
     expect(condition.rangeStart).toBe('21')
@@ -180,7 +171,7 @@ describe('time range expression parsing', () => {
     )
     expect(groups).toHaveLength(2)
     for (const group of groups ?? []) {
-      expect(group.conditions).toHaveLength(1)
+      expect(group.conditions[0].conditions).toHaveLength(1)
       expect(group.conditions[0].conditions[0].mode).toBe(MATCH_RANGE)
     }
   })

@@ -33,6 +33,7 @@ import { api } from '@/lib/api'
 import { formatTimestamp } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
+import { SettingsPageActionsPortal } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 
 type UpdateCheckData = {
@@ -188,16 +189,22 @@ export function UpdateCheckerSection({
             </div>
           </div>
 
-          <Button onClick={handleCheckUpdates} disabled={checking}>
-            {checking ? (
-              t('Checking updates...')
-            ) : (
-              <>
-                <RefreshCcwIcon className='me-2 h-4 w-4' />
-                {t('Check for updates')}
-              </>
-            )}
-          </Button>
+          {/* 与其它设置页一致：更新入口作为页面级操作放到右上角，避免与下方「检查更新」按钮文案相撞 */}
+          {/* 与其它设置页一致：更新操作统一放右上角。
+              只用我们自己的更新源（/api/status/update-check，带内置 changelog），
+              不引入上游走 GitHub releases 的入口。 */}
+          <SettingsPageActionsPortal>
+            <Button
+              type='button'
+              size='sm'
+              variant='default'
+              onClick={handleCheckUpdates}
+              disabled={checking}
+            >
+              <RefreshCcwIcon className={cn('me-2 size-4', checking && 'animate-spin')} />
+              {checking ? t('Checking updates...') : t('Check for updates')}
+            </Button>
+          </SettingsPageActionsPortal>
 
           {changelog?.note?.markdown && (
             <div className='rounded-lg border p-4'>

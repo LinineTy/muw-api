@@ -47,7 +47,7 @@ func TestValidateChannelProxy(t *testing.T) {
 				Setting: common.GetPointer(string(setting)),
 			}
 
-			err = validateChannel(channel, false)
+			err = validateChannel(channel, false, false)
 
 			if test.wantErr {
 				require.ErrorContains(t, err, "invalid channel proxy")
@@ -76,7 +76,7 @@ func TestValidateChannelRequiresNewAPIBaseURL(t *testing.T) {
 				BaseURL: test.baseURL,
 			}
 
-			err := validateChannel(channel, false)
+			err := validateChannel(channel, false, false)
 
 			if test.wantErr {
 				require.ErrorContains(t, err, "New API channel base URL cannot be empty")
@@ -124,7 +124,21 @@ func TestValidateChannelAllowsEmptyKeyForOpenCodeZen(t *testing.T) {
 		Group:  "default",
 	}
 
-	err := validateChannel(channel, true)
+	err := validateChannel(channel, true, false)
+
+	require.NoError(t, err)
+	assert.Empty(t, channel.Key)
+}
+
+// 绑定共享账户时渠道自身不持有凭证，空 key 合法（凭证真相源在账户）。
+func TestValidateChannelAllowsEmptyKeyWhenBoundToAccounts(t *testing.T) {
+	channel := &model.Channel{
+		Type:   constant.ChannelTypeOpenAI,
+		Models: "gpt-5",
+		Group:  "default",
+	}
+
+	err := validateChannel(channel, true, true)
 
 	require.NoError(t, err)
 	assert.Empty(t, channel.Key)
@@ -137,9 +151,9 @@ func TestValidateChannelRejectsEmptyKeyForOtherTypes(t *testing.T) {
 		Group:  "default",
 	}
 
-	err := validateChannel(channel, true)
+	err := validateChannel(channel, true, false)
 
-	require.ErrorContains(t, err, "channel cannot be empty")
+	require.ErrorIs(t, err, errChannelKeyRequired)
 }
 
 func TestResponsesCompactAPITypeSupport(t *testing.T) {

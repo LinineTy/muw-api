@@ -25,20 +25,20 @@ export function parseTaskResult() { return {}; }
 	baseURL := "https://example.com"
 
 	channel := &model.Channel{Type: constant.ChannelTypeTaskPlugin, BaseURL: &baseURL}
-	require.ErrorContains(t, validateChannel(channel, false), "task plugin key is required")
+	require.ErrorContains(t, validateChannel(channel, false, false), "task plugin key is required")
 
 	missing := `{"task_plugin_key":"missing"}`
 	channel.Setting = &missing
-	require.ErrorContains(t, validateChannel(channel, false), "is not registered")
+	require.ErrorContains(t, validateChannel(channel, false, false), "is not registered")
 
 	longKey := `{"task_plugin_key":"` + strings.Repeat("x", 31) + `"}`
 	channel.Setting = &longKey
-	require.ErrorContains(t, validateChannel(channel, false), "must not exceed 30")
+	require.ErrorContains(t, validateChannel(channel, false, false), "must not exceed 30")
 
 	valid := `{"task_plugin_key":"channel-validation"}`
 	channel.Setting = &valid
 	channel.BaseURL = nil
-	require.ErrorContains(t, validateChannel(channel, false), "base URL is required")
+	require.ErrorContains(t, validateChannel(channel, false, false), "base URL is required")
 }
 
 func TestValidateTaskPluginChannelFillsPluginDefaultBaseURL(t *testing.T) {
@@ -57,13 +57,13 @@ export function parseTaskResult() { return {}; }
 	empty := "  "
 	for _, baseURL := range []*string{nil, &empty} {
 		channel := &model.Channel{Type: constant.ChannelTypeTaskPlugin, Key: "sk", Setting: &bound, BaseURL: baseURL}
-		require.NoError(t, validateChannel(channel, true))
+		require.NoError(t, validateChannel(channel, true, false))
 		require.NotNil(t, channel.BaseURL)
 		assert.Equal(t, "http://127.0.0.1:8000", *channel.BaseURL, "normalized plugin default is persisted onto the channel")
 	}
 
 	explicit := "https://override.example.com"
 	channel := &model.Channel{Type: constant.ChannelTypeTaskPlugin, Setting: &bound, BaseURL: &explicit}
-	require.NoError(t, validateChannel(channel, false))
+	require.NoError(t, validateChannel(channel, false, false))
 	assert.Equal(t, explicit, *channel.BaseURL, "an administrator value is never replaced by the plugin default")
 }

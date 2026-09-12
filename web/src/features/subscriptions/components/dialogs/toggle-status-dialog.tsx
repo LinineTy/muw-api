@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { handleServerError } from '@/lib/handle-server-error'
 
 import {
   adminSaveGroupPinProduct,
@@ -63,10 +64,10 @@ export function ToggleStatusDialog() {
         triggerRefresh()
         setOpen(null)
       } else {
-        toast.error(res.message || t('Operation failed'))
+        handleServerError(res)
       }
-    } catch {
-      toast.error(t('Operation failed'))
+    } catch (error) {
+      handleServerError(error, t('Operation failed'))
     } finally {
       setLoading(false)
     }

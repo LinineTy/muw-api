@@ -28,8 +28,13 @@ var auditContentTemplates = map[string]string{
 	"user.topup_complete":   "Completed top-up order for the user",
 	"user.oauth_unbind":     "Removed an OAuth binding for the user",
 	"option.update":         "Updated system setting ${key}",
-	"option.reset_ratio":    "Reset model ratios",
-	"option.clear_affinity_cache": "Cleared channel affinity cache",
+
+	"option.passkey_domains":           "Updated Passkey domains: removed ${domains}; affected ${known}; unknown ${unknown}",
+	"option.passkey_domains_confirmed": "Confirmed removal of Passkey domains: ${domains}; affected ${known}; unknown ${unknown}",
+	"option.passkey_domains_blocked":   "Passkey domain change blocked: ${domains}; affected ${known}; unknown ${unknown}",
+	"option.passkey_domains_failed":    "Passkey domain update failed",
+	"option.reset_ratio":               "Reset model ratios",
+	"option.clear_affinity_cache":      "Cleared channel affinity cache",
 
 	"channel.create":              "Created channel ${name} (type ${type}, count ${count})",
 	"channel.update":              "Updated channel ${name} (ID: ${id})",
@@ -57,9 +62,9 @@ var auditContentTemplates = map[string]string{
 	"channel.ollama_delete":       "Deleted Ollama model",
 	"channel.upstream_detect":     "Detected upstream model updates",
 
-	"redemption.create": "Created ${count} redemption codes named ${name} (${quota} each)",
-	"redemption.update":        "Updated a redemption code",
-	"redemption.delete":        "Deleted a redemption code",
+	"redemption.create":         "Created ${count} redemption codes named ${name} (${quota} each)",
+	"redemption.update":         "Updated a redemption code",
+	"redemption.delete":         "Deleted a redemption code",
 	"redemption.delete_invalid": "Deleted invalid redemption codes",
 
 	"subscription.plan_reset":                   "Reset active subscriptions for plan ${plan_id}",
@@ -134,6 +139,20 @@ var auditContentTemplates = map[string]string{
 	"risk_control.reset_credit_scores":          "Reset all user credit scores to the full score (${full_score})",
 
 	"operation.vision_fallback_prompt_reset": "Restored the vision fallback description prompt to default",
+	"user.account_delete":                    "Account deletion",
+	"access_token.generate":                  "Generated a system access token",
+	"access_token.revoke":                    "Revoked the system access token",
+	"user.2fa_setup":                         "Started two-factor authentication setup",
+	"user.2fa_enable":                        "Enabled two-factor authentication",
+	"user.2fa_disable_self":                  "Disabled two-factor authentication",
+	"user.2fa_backup_codes":                  "Regenerated two-factor backup codes",
+	"user.security_verify":                   "Completed security verification",
+	"user.password_change":                   "Account password change",
+	"user.binding_start":                     "Account binding request",
+	"user.binding_bind":                      "Account binding",
+	"user.binding_unbind":                    "Account unlinking",
+	"user.email_binding_resend":              "Email confirmation code resend",
+	"redemption.delete_batch":                "Batch deleted ${count} redemption codes",
 }
 
 // auditPlaceholderRe 匹配模板里的 ${name} 占位符，用于校验参数是否齐全。

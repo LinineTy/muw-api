@@ -140,6 +140,13 @@ A release is **ONE commit** that changes **exactly two files**: `CHANGELOG.md` (
 - Preserve explicit zero values in upstream relay request DTOs: absent client JSON fields must become `nil` and be omitted, while explicit `0`, `0.0`, or `false` values must remain non-`nil` and be sent upstream.
 - Avoid non-pointer scalars with `omitempty` for optional request parameters, because zero values will be silently dropped during marshal.
 
+**JavaScript task plugins (mandatory):**
+
+- Before implementing, modifying, or reviewing JavaScript task plugins or their host API/runtime, MUST read [Task Plugin API v1](docs/plugin-api/v1.md), including its description writing and translation conventions. When changing the plugin contract, also check `docs/plugin-api/v1.schema.json` and `docs/plugin-api/v1.d.ts` for consistency.
+- For numeric billing fields in `usageSchema` and `usageProfiles[].schema`, `description` MUST name the **billing subject + unit price**, because it labels the price input in the UI. For example, `image_count` uses `Image generation unit price` / `图片生成单价`, not `Generated image count` / `生成图片张数`; `seconds` uses `Video generation unit price` / `视频生成单价`. The field value remains a usage quantity, not a price.
+- Put units in `unit`. Keep protocol limits, usage sources, defaults, estimation, and settlement details in code comments or technical documentation. Descriptions must be short, equivalent across languages, and free of numeric prices and trailing punctuation. Follow the API document's separate wording rules for actions, booleans, and other enum conditions.
+- Review metadata wording explicitly before completing plugin work. These are authoring requirements; successful compilation, schema validation, or tests do not verify that descriptions follow them.
+
 **Billing expression system:** When working on tiered/dynamic billing (expression-based pricing), MUST read `pkg/billingexpr/expr.md` first. It documents the design philosophy, expression language, full architecture, token normalization rules, quota conversion, and expression versioning. All billing expression changes must follow that document.
 
 **Built-in model pricing:** New built-in model prices MUST be defined as self-contained billing expressions in `setting/billing_setting/builtin_billing.go`, using real USD per million tokens. Do not add new built-in prices to the legacy model/completion/cache ratio tables. Preserve explicit administrator pricing overrides. Existing legacy prices are migrated only when explicitly requested. Verify published prices and cover applicable context-length thresholds and cache categories.
@@ -170,9 +177,26 @@ A release is **ONE commit** that changes **exactly two files**: `CHANGELOG.md` (
 - Avoid hand-written assertion helpers unless they encode a reusable project-specific invariant.
 - When cleaning tests, preserve meaningful regression coverage. If a deleted test covered a real contract indirectly, replace it with a smaller test that asserts that contract directly.
 
-**Documentation files:** Do NOT add new files under `docs/` or any of its subdirectories unless the user explicitly requests it.
+**Documentation files:**
+
+- Do NOT add new files under `docs/` or any of its subdirectories unless the user explicitly requests it.
+- Do NOT create or generate documentation files in this repository's plugin directories under `plugins/`, including `plugins/tasks/<plugin>/` and their subdirectories. This includes README files, changelogs, usage guides, and other documentation files, regardless of format.
 
 ### Frontend Rules
+
+**Fork-owned feature isolation (mandatory for upstream sync, added 2026-09-12):**
+
+muw-api is a fork of new-api and syncs from upstream long-term. Self-built features inlined into upstream files collide on every sync — measured: the channel drawer's account block produced 8 conflict hunks while inlined, and **0** once extracted.
+
+1. **Build self-owned features as standalone components/modules.** Do not inline them into upstream files.
+2. **Leave only a single mount line in the upstream file** (plus the needed imports). The conflict surface is then exactly that line.
+3. **Couple to upstream only through explicit props.** When upstream state is needed, pass it in — e.g. `<ChannelBoundAccounts form={form} isEditing={isEditing} channelData={channelData} open={open} />` receives the drawer's react-hook-form instance. Do not edit upstream internals or import upstream private modules.
+4. **Bring your own styling** (Tailwind classes); never patch upstream style files for a feature.
+5. ⚠️ **"Standalone" means the code boundary, not the data interface.** Such components still read upstream form/context/query keys (`use-form-context`, `StatusContext`, `STATUS_QUERY_KEY`, …) and must follow those changes. Do not assume the feature can ignore upstream entirely.
+6. Acceptance check: in `git diff upstream..HEAD`, a self-owned feature should appear as **one mount line + standalone files**, nothing else.
+
+Reference implementation: `web/src/features/channels/components/drawers/channel-bound-accounts.tsx` (extracted out of the ~5.8k-line drawer; survived the 2026-09 upstream sync with zero conflicts).
+
 
 **Field-tested UI pitfalls (OS shell + settings, 2026-09-08):** Every rule below came from a real user-reported defect that survived code review and screenshot passes. Re-check these when building anything similar.
 
