@@ -737,8 +737,8 @@ const ModelRatioVisualEditorComponent = forwardRef<
                   {batchMode && <col className='w-9' />}
                   <col className='w-[300px]' />
                   <col className='w-[120px]' />
-                  <col className='w-[300px]' />
                   <col className='w-auto' />
+                  <col className='w-20' />
                 </colgroup>
               }
               renderRow={(row, { getCellClassName }) => (
