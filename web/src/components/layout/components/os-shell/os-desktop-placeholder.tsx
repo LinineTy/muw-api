@@ -2,6 +2,7 @@ import { useDirection } from '@/context/direction-provider'
 // @muw-owned
 import { cn } from '@/lib/utils'
 
+import { OsDesktopNotices } from './os-desktop-notices'
 import { useOsShellNavigate } from './os-open'
 import { useOsNavItems } from './use-os-nav'
 
@@ -22,7 +23,8 @@ export function OsDesktopPlaceholder() {
   return (
     <div
       className={cn(
-        'flex h-full w-full flex-col overflow-auto py-8',
+        // 横向分栏:左边磁贴网格,右边时间线公告堆叠卡
+        'flex h-full w-full gap-6 py-8',
         // 细条宽 48px 贴边 4px:内容至少让出 56px,再留一点呼吸
         rtl ? 'pr-16 pl-8' : 'pl-16 pr-8'
       )}
@@ -31,7 +33,7 @@ export function OsDesktopPlaceholder() {
           行高 auto-fill 必须配**确定高度**才算得出行数,否则只会摊成一行 —— 
           所以这里 min-h-0 flex-1 撑满剩余高度 */}
       <div
-        className='grid min-h-0 flex-1 gap-x-1 gap-y-2'
+        className='grid min-h-0 flex-1 gap-x-1 gap-y-2 overflow-auto'
         style={{
           gridAutoFlow: 'column',
           // 行:按可用高度自动分行(屏越高一列放得越多)
@@ -62,6 +64,10 @@ export function OsDesktopPlaceholder() {
           )
         })}
       </div>
+
+      {/* 右侧:时间线公告堆叠卡(一卡一条,点一下滚下一张)。
+          放不下(窄屏)时整块隐藏,磁贴优先 */}
+      <OsDesktopNotices className='hidden w-[21rem] shrink-0 self-start xl:flex' />
     </div>
   )
 }
