@@ -162,6 +162,7 @@ func InitOptionMap() {
 	common.OptionMap["CheckSensitiveEnabled"] = strconv.FormatBool(setting.CheckSensitiveEnabled)
 	common.OptionMap["DemoSiteEnabled"] = strconv.FormatBool(operation_setting.DemoSiteEnabled)
 	common.OptionMap["SelfUseModeEnabled"] = strconv.FormatBool(operation_setting.SelfUseModeEnabled)
+	common.OptionMap["UpdateCheckDevChannelEnabled"] = strconv.FormatBool(operation_setting.UpdateCheckDevChannelEnabled)
 	common.OptionMap["AffiliateProgramEnabled"] = strconv.FormatBool(operation_setting.AffiliateProgramEnabled)
 	common.OptionMap["ModelRequestRateLimitEnabled"] = strconv.FormatBool(setting.ModelRequestRateLimitEnabled)
 	common.OptionMap["CheckSensitiveOnPromptEnabled"] = strconv.FormatBool(setting.CheckSensitiveOnPromptEnabled)
@@ -476,6 +477,8 @@ func updateOptionMap(key string, value string) (err error) {
 			operation_setting.DemoSiteEnabled = boolValue
 		case "SelfUseModeEnabled":
 			operation_setting.SelfUseModeEnabled = boolValue
+		case "UpdateCheckDevChannelEnabled":
+			operation_setting.UpdateCheckDevChannelEnabled = boolValue
 		case "AffiliateProgramEnabled":
 			operation_setting.AffiliateProgramEnabled = boolValue
 		case "CheckSensitiveOnPromptEnabled":

@@ -23,6 +23,7 @@ import { toast } from 'sonner'
 
 import { Dialog } from '@/components/dialog'
 import { Markdown } from '@/components/ui/markdown'
+import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import {
   Collapsible,
@@ -35,6 +36,8 @@ import { cn } from '@/lib/utils'
 
 import { SettingsPageActionsPortal } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
+import { useSystemOptions } from '../hooks/use-system-options'
+import { useUpdateOption } from '../hooks/use-update-option'
 
 type UpdateCheckData = {
   has_update: boolean
@@ -117,6 +120,16 @@ export function UpdateCheckerSection({
   const [changelog, setChangelog] = useState<ChangelogData | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
 
+  // 是否连"未标记稳定"的开发版一起检测（默认关：只看对外公告的稳定版）。
+  const { data: optionsData } = useSystemOptions()
+  const updateOption = useUpdateOption()
+  const devChannelEnabled =
+    String(
+      optionsData?.data?.find(
+        (option) => option.key === 'UpdateCheckDevChannelEnabled'
+      )?.value ?? ''
+    ) === 'true'
+
   const uptime = startTime ? formatTimestamp(startTime) : t('Unknown')
   const version = currentVersion || t('Unknown')
 
@@ -186,6 +199,32 @@ export function UpdateCheckerSection({
                 {t('Uptime since')}
               </div>
               <div className='text-lg font-semibold'>{uptime}</div>
+            </div>
+          </div>
+
+          {/* 通道开关：默认只比发布清单里的稳定版；打开后连开发版（最新构建）一起比 */}
+          <div className='rounded-lg border p-4'>
+            <div className='flex items-center justify-between gap-4'>
+              <div className='space-y-1'>
+                <div className='text-sm font-medium'>
+                  {t('Check for development builds')}
+                </div>
+                <div className='text-muted-foreground text-sm'>
+                  {t(
+                    'When enabled, update checks use the latest development build instead of the marked stable release.'
+                  )}
+                </div>
+              </div>
+              <Switch
+                checked={devChannelEnabled}
+                disabled={updateOption.isPending}
+                onCheckedChange={(checked) =>
+                  updateOption.mutate({
+                    key: 'UpdateCheckDevChannelEnabled',
+                    value: checked,
+                  })
+                }
+              />
             </div>
           </div>
 

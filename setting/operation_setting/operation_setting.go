@@ -4,6 +4,12 @@ import "strings"
 
 var DemoSiteEnabled = false
 var SelfUseModeEnabled = false
+
+// UpdateCheckDevChannelEnabled 决定「检查更新」是否也看开发版(未标记稳定的版本)。
+// 关(默认)时只比发布清单里的 stable 版本号:别人看到的永远是稳定版公告;
+// 打开后改比 dev 版本号,用于自己这台尽早看到新构建(2026-09-13 maintainer定)。
+var UpdateCheckDevChannelEnabled = false
+
 // AffiliateProgramEnabled 控制推广返利(邀请)功能是否启用。关闭后钱包不再
 // 展示推荐卡片，新注册/新 OAuth 登录也不再处理邀请码、不再发放邀请奖励。
 var AffiliateProgramEnabled = true
