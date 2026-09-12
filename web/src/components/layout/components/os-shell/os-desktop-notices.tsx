@@ -24,6 +24,12 @@ const VISIBLE_STACK = 3
 const CARD_HEIGHT_REM = 12
 /** 后面每张露出的高度（rem）——「下面一小节」 */
 const STACK_STEP_REM = 2.6
+/**
+ * 后面每张**上移**这么多（rem），把自己的上边框塞到前一张卡底下。
+ * 不塞的话两张卡的 1px 边框会在接缝处叠成一条深色线（浅色主题下都能量出来，
+ * 琉璃主题压在深色壁纸上就像「黑线」）——2026-09-12 maintainer反馈。
+ */
+const STACK_TUCK_REM = 0.2
 
 /**
  * OS 桌面右侧 · 时间线公告堆叠卡
@@ -98,7 +104,12 @@ export function OsDesktopNotices({ className }: { className?: string }) {
     <div
       aria-hidden={hidden}
       className={cn(
-        'flex w-[21rem] flex-col gap-3 transition-[opacity,translate] duration-300 ease-out will-change-[opacity,translate]',
+        // ⚠️ 不要给这个 wrapper 加 will-change / filter / opacity 之外的合成提示：
+        // 它们会把 wrapper 变成 backdrop root，里面每张卡的 backdrop-blur 只能采样
+        // 到这个 root 内部，Chrome 在卡与卡的接缝处会画出一条硬边/黑线
+        // （2026-09-12 maintainer反馈：鼠标移出页面后接缝处冒黑线，hover 卡片才消失
+        //  = 典型的重绘/合成层陈旧问题；去掉这个 hint 让卡片直接采样页面背景）
+        'flex w-[21rem] flex-col gap-3 transition-[opacity,translate] duration-300 ease-out',
         hidden
           ? 'pointer-events-none translate-x-3 opacity-0'
           : 'translate-x-0 opacity-100',
@@ -160,9 +171,15 @@ export function OsDesktopNotices({ className }: { className?: string }) {
               style={{
                 // 只有最前面一张是完整卡，后面每张整体挪到下面、高度只留一小节
                 top: `${
-                  isFront ? 0 : CARD_HEIGHT_REM + (pos - 1) * STACK_STEP_REM
+                  isFront
+                    ? 0
+                    : CARD_HEIGHT_REM +
+                      (pos - 1) * STACK_STEP_REM -
+                      STACK_TUCK_REM
                 }rem`,
-                height: `${isFront ? CARD_HEIGHT_REM : STACK_STEP_REM}rem`,
+                height: `${
+                  isFront ? CARD_HEIGHT_REM : STACK_STEP_REM + STACK_TUCK_REM
+                }rem`,
                 zIndex: visibleCount - pos,
               }}
               className={cn(
