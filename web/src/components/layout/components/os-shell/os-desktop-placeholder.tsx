@@ -67,7 +67,7 @@ export function OsDesktopPlaceholder() {
 
       {/* 右侧:时间线公告堆叠卡(一卡一条,点一下滚下一张)。
           放不下(窄屏)时整块隐藏,磁贴优先 */}
-      <OsDesktopNotices className='hidden w-[21rem] shrink-0 self-start xl:flex' />
+      <OsDesktopNotices className='hidden shrink-0 self-start xl:flex' />
     </div>
   )
 }

@@ -1,6 +1,6 @@
 // @muw-owned
-import { ChevronDown, Megaphone, X } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { ChevronDown, X } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -12,6 +12,8 @@ import { RichContent } from '@/components/rich-content'
 import { useNotifications } from '@/hooks/use-notifications'
 import { formatDateTimeObject } from '@/lib/time'
 import { cn } from '@/lib/utils'
+
+import { useOsNoticeStore } from './os-notice-store'
 
 /**
  * 堆叠里最多露出几张（含最前面那张完整卡）。
@@ -32,10 +34,20 @@ const STACK_STEP_REM = 2.6
  */
 export function OsDesktopNotices({ className }: { className?: string }) {
   const { t } = useTranslation()
-  const { announcements, loading } = useNotifications()
+  const { announcements, loading, unreadAnnouncementsCount } = useNotifications()
   const total = announcements.length
   const [active, setActive] = useState(0)
-  const [collapsed, setCollapsed] = useState(false)
+  const collapsed = useOsNoticeStore((state) => state.collapsed)
+  const setCollapsed = useOsNoticeStore((state) => state.setCollapsed)
+
+  // 有新公告（未读数增加）自动恢复显示；手动收起后不会被反复弹开
+  const previousUnread = useRef(unreadAnnouncementsCount)
+  useEffect(() => {
+    if (unreadAnnouncementsCount > previousUnread.current) {
+      setCollapsed(false)
+    }
+    previousUnread.current = unreadAnnouncementsCount
+  }, [unreadAnnouncementsCount, setCollapsed])
 
   // 公告数量变化（后台增删）后收敛索引，避免越界后空白
   useEffect(() => {
@@ -67,31 +79,15 @@ export function OsDesktopNotices({ className }: { className?: string }) {
     [showNext]
   )
 
-  if (collapsed) {
-    return (
-      <button
-        type='button'
-        onClick={() => setCollapsed(false)}
-        title={t('System Announcements')}
-        aria-label={t('System Announcements')}
-        className={cn(
-          'text-muted-foreground hover:text-foreground bg-popover/55 border-border/40 hover:border-border/70 flex size-10 shrink-0 items-center justify-center rounded-full border backdrop-blur-[6px] transition-colors',
-          className
-        )}
-      >
-        <Megaphone className='size-4' aria-hidden='true' />
-      </button>
-    )
-  }
-
-  if (loading || total === 0) {
+  // 收起后不留悬浮球：入口在左侧细条的公告球（带未读角标）
+  if (collapsed || loading || total === 0) {
     return null
   }
 
   const visibleCount = Math.min(VISIBLE_STACK, total)
 
   return (
-    <div className={cn('flex flex-col gap-3', className)}>
+    <div className={cn('flex w-[21rem] flex-col gap-3', className)}>
       <div className='flex items-start justify-between gap-2 px-1'>
         <div className='min-w-0'>
           <p className='text-sm font-medium'>{t('System Announcements')}</p>
@@ -153,7 +149,8 @@ export function OsDesktopNotices({ className }: { className?: string }) {
                 zIndex: visibleCount - pos,
               }}
               className={cn(
-                'bg-popover/60 border-border/40 hover:border-border/70 focus-visible:ring-ring/40 shadow-sm absolute inset-x-0 flex cursor-pointer flex-col overflow-hidden rounded-2xl border px-4 py-3 text-left backdrop-blur-xl transition-[top,height,border-color,box-shadow] duration-300 ease-out outline-none hover:shadow-md focus-visible:ring-2'
+                // 非琉璃主题下也要看得出「一块一卡」：底色更实、边框更清楚、投影更明显
+                'bg-card/85 border-border/70 hover:border-border focus-visible:ring-ring/40 shadow-md hover:shadow-lg absolute inset-x-0 flex cursor-pointer flex-col overflow-hidden rounded-2xl border px-4 py-3 text-left backdrop-blur-xl transition-[top,height,border-color,box-shadow] duration-300 ease-out outline-none focus-visible:ring-2'
               )}
             >
               <div
