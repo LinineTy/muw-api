@@ -39,7 +39,7 @@ import { ModelPriceCell } from '@/features/pricing/components/model-price-cell'
 import { formatTimestampToDate } from '@/lib/format'
 import { getLobeIcon } from '@/lib/lobe-icon'
 
-import { getNameRuleConfig } from '../constants'
+import { getModelStatusConfig, getNameRuleConfig } from '../constants'
 import { parseModelTags, formatEndpointsDisplay } from '../lib'
 import { getModelChannelState } from '../lib/model-utils'
 import type { Model, Vendor } from '../types'
@@ -66,6 +66,7 @@ export function useModelsColumns(
     [pricing]
   )
   const rules = getNameRuleConfig(t)
+  const MODEL_STATUS_CONFIG = getModelStatusConfig(t)
   return [
     {
       id: 'select',
@@ -287,13 +288,37 @@ export function useModelsColumns(
         </TruncatedCell>
       ),
     },
+    // 状态列：文案与渲染换回 fork 口径（上游 rework 改成了「展示策略 / 允许 / 隐藏」纯文本，
+    // 与工具栏那张「状态（显示/未显示）」筛选对不上，且"允许"说不清允许什么 —— 2026-09-12 maintainer定）
     {
       accessorKey: 'status',
-      header: t('Display policy'),
-      enableHiding: false,
+      header: t('Status'),
+      meta: { mobileBadge: true },
+      cell: ({ row }) => {
+        const status = row.getValue('status') as number
+        const config =
+          MODEL_STATUS_CONFIG[status as 0 | 1] || MODEL_STATUS_CONFIG[0]
+        return (
+          <StatusBadge
+            variant={config.variant}
+            size='sm'
+            copyable={false}
+            className='-ml-1.5 max-w-none shrink-0'
+          >
+            {config.label}
+          </StatusBadge>
+        )
+      },
+      filterFn: (row, id, value) => {
+        if (!value || value.length === 0 || value.includes('all')) return true
+        const status = row.getValue(id) as number
+        if (value.includes('enabled')) return status === 1
+        if (value.includes('disabled')) return status !== 1
+        return false
+      },
+      size: 110,
+      minSize: 110,
       enableSorting: false,
-      cell: ({ row }) =>
-        row.original.status === 1 ? t('Allowed') : t('Not listed'),
     },
     {
       accessorKey: 'id',
