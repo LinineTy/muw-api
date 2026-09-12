@@ -23,11 +23,11 @@ import { cn } from '@/lib/utils'
  *   3x2 = 21.5 × 12.75rem  标准卡（公告卡就是这档）
  *   3x3 = 21.5 × 19.25rem  列表 / 多行
  *
- * 圆角**随行数走**：单行卡只有 6.25rem(100px) 高，而 liquid-glass 预设下 `rounded-2xl`
- * 是 36px（--radius 1.25rem × 1.8）—— 圆角吃掉近四成高度，标签/进度条就贴到弧线上，
- * 像"糊边"（2026-09-12 maintainer点名性能显示那两张 1x1）。所以单行卡降一档用 `rounded-lg`
- * （= --radius，本预设 20px），2 行以上保持 `rounded-2xl`；用主题 token 而非写死 px，
- * 换主题预设时两档一起缩放。
+ * 圆角**随行数走**，并且**一律用主题 token**（不写死 px，跟"圆角"设置一起缩放）：
+ *   单行卡（1x1 / 2x1）→ `rounded-lg`（= --radius）
+ *   两行以上（2x2 / 3x2 / 3x3）→ `rounded-xl`（= --radius × 1.4，与全站 Card / Dialog 同档）
+ * 单行卡只有 6.25rem(100px) 高，用大卡的档位会让圆角吃掉三四成高度、内容贴到弧线上
+ * 像"糊边"（2026-09-12 maintainer点名性能显示那两张 1x1），所以小卡降一档。
  */
 export type OsWidgetSize = '1x1' | '2x1' | '2x2' | '3x2' | '3x3'
 
@@ -37,9 +37,12 @@ const SIZE_SPAN: Record<
 > = {
   '1x1': { col: 1, row: 1, radius: 'rounded-lg' },
   '2x1': { col: 2, row: 1, radius: 'rounded-lg' },
-  '2x2': { col: 2, row: 2, radius: 'rounded-2xl' },
-  '3x2': { col: 3, row: 2, radius: 'rounded-2xl' },
-  '3x3': { col: 3, row: 3, radius: 'rounded-2xl' },
+  // 大卡用 rounded-xl（= --radius × 1.4），与全站 Card / Dialog 同一档；
+  // 原来写 rounded-2xl（× 1.8）→ 圆角设置选 1.0 时实际是 1.8rem=28.8px，明显比设置值大一圈
+  //（maintainer 2026-09-12："琉璃的圆角是不是比预设里的 1.0 还大啊"）
+  '2x2': { col: 2, row: 2, radius: 'rounded-xl' },
+  '3x2': { col: 3, row: 2, radius: 'rounded-xl' },
+  '3x3': { col: 3, row: 3, radius: 'rounded-xl' },
 }
 
 /**
