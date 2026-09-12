@@ -34,7 +34,9 @@ export const WIDGET_GRID_STYLE: CSSProperties = {
 export function OsWidgetGrid({ children }: { children: ReactNode }) {
   return (
     <div
-      className='hidden min-h-0 shrink-0 self-start overflow-y-auto xl:grid'
+      // overflow-x 必须是 hidden：只写 overflow-y-auto 时 CSS 会把 overflow-x 也算成 auto，
+      // 收起态的公告卡 translate-x-3 溢出 12px → 底部冒一条横向滚动条（2026-09-12 maintainer抓的）
+      className='hidden min-h-0 shrink-0 self-start overflow-x-hidden overflow-y-auto xl:grid'
       style={{ ...WIDGET_GRID_STYLE, contentVisibility: 'auto' }}
     >
       {children}

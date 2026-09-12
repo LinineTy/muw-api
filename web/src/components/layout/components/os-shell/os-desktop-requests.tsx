@@ -48,8 +48,6 @@ export function OsDesktopRequests() {
     refetchInterval: 120000,
   })
 
-  if (data === undefined) return null
-
   return (
     <OsWidget size='1x1'>
       <button
@@ -61,7 +59,7 @@ export function OsDesktopRequests() {
           {t('Requests')}
         </span>
         <span className='text-xl leading-none font-semibold tabular-nums'>
-          {formatNumber(data)}
+          {data === undefined ? '—' : formatNumber(data)}
         </span>
         <span className='text-muted-foreground text-[0.625rem] leading-none'>
           {t('Today')}
