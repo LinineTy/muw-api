@@ -37,9 +37,10 @@ describe('OpenCode Zen channel', () => {
     })
     expect(MODEL_FETCHABLE_TYPES.has(CHANNEL_TYPE_OPENCODE_ZEN)).toBe(true)
     expect(getChannelTypeIcon(CHANNEL_TYPE_OPENCODE_ZEN)).toBe('OpenCode')
-    expect(
-      getChannelTypeConfig(CHANNEL_TYPE_OPENCODE_ZEN).defaultBaseUrl
-    ).toBe('https://opencode.ai/zen')
+    // 默认 Base URL 的真相源在后端 ChannelBaseURLs[62]，占位提示由
+    // /api/channel/default_base_urls 下发（2026-09-12 上游同步，前端不再硬编码）
+    const zenConfig = getChannelTypeConfig(CHANNEL_TYPE_OPENCODE_ZEN)
+    expect(zenConfig.hints?.baseUrl).toContain('https://opencode.ai/zen')
   })
 
   test('allows creating a channel with an empty key (free plan)', () => {
