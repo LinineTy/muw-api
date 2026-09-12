@@ -45,7 +45,7 @@ function timeCondition(overrides: Partial<TimeCondition> = {}): TimeCondition {
 
 function timeRangeGroup(start: string, end: string): RequestRuleGroup {
   return {
-    conditions: [timeCondition({ rangeStart: start, rangeEnd: end })],
+    conditions: [{ conditions: [timeCondition({ rangeStart: start, rangeEnd: end })] }],
     multiplier: '2',
   }
 }
@@ -55,7 +55,7 @@ function scalarTimeGroup(
   timeFunc: TimeFunc = 'hour'
 ): RequestRuleGroup {
   return {
-    conditions: [timeCondition({ mode: MATCH_GTE, value, timeFunc })],
+    conditions: [{ conditions: [timeCondition({ mode: MATCH_GTE, value, timeFunc })] }],
     multiplier: '2',
   }
 }
@@ -123,8 +123,8 @@ describe('time range expression parsing', () => {
       '(hour("Asia/Shanghai") >= 9 && hour("Asia/Shanghai") < 12 ? 2 : 1)'
     )
     expect(groups).toHaveLength(1)
-    expect(groups?.[0].conditions).toHaveLength(1)
-    const condition = groups?.[0].conditions[0] as TimeCondition
+    expect(groups?.[0].conditions[0].conditions).toHaveLength(1)
+    const condition = groups?.[0].conditions[0].conditions[0] as TimeCondition
     expect(condition.mode).toBe(MATCH_RANGE)
     expect(condition.rangeStart).toBe('9')
     expect(condition.rangeEnd).toBe('12')
@@ -134,8 +134,8 @@ describe('time range expression parsing', () => {
     const groups = tryParseRequestRuleExpr(
       '(hour("Asia/Shanghai") >= 21 || hour("Asia/Shanghai") < 6 ? 2 : 1)'
     )
-    expect(groups?.[0].conditions).toHaveLength(1)
-    const condition = groups?.[0].conditions[0] as TimeCondition
+    expect(groups?.[0].conditions[0].conditions).toHaveLength(1)
+    const condition = groups?.[0].conditions[0].conditions[0] as TimeCondition
     expect(condition.mode).toBe(MATCH_RANGE)
     expect(condition.rangeStart).toBe('21')
     expect(condition.rangeEnd).toBe('6')
@@ -145,11 +145,11 @@ describe('time range expression parsing', () => {
     const groups = tryParseRequestRuleExpr(
       '(param("service_tier") == "fast" && hour("Asia/Shanghai") >= 9 && hour("Asia/Shanghai") < 12 ? 2 : 1)'
     )
-    expect(groups?.[0].conditions.map((c) => c.mode)).toEqual([
+    expect(groups?.[0].conditions[0].conditions.map((c) => c.mode)).toEqual([
       MATCH_EQ,
       MATCH_RANGE,
     ])
-    const range = groups?.[0].conditions[1] as TimeCondition
+    const range = groups?.[0].conditions[0].conditions[1] as TimeCondition
     expect(range.rangeStart).toBe('9')
     expect(range.rangeEnd).toBe('12')
   })
@@ -158,7 +158,7 @@ describe('time range expression parsing', () => {
     const groups = tryParseRequestRuleExpr(
       '((hour("Asia/Shanghai") >= 21 || hour("Asia/Shanghai") < 6) && param("service_tier") == "fast" ? 3 : 1)'
     )
-    expect(groups?.[0].conditions.map((c) => c.mode)).toEqual([
+    expect(groups?.[0].conditions[0].conditions.map((c) => c.mode)).toEqual([
       MATCH_RANGE,
       MATCH_EQ,
     ])
@@ -171,8 +171,8 @@ describe('time range expression parsing', () => {
     )
     expect(groups).toHaveLength(2)
     for (const group of groups ?? []) {
-      expect(group.conditions).toHaveLength(1)
-      expect(group.conditions[0].mode).toBe(MATCH_RANGE)
+      expect(group.conditions[0].conditions).toHaveLength(1)
+      expect(group.conditions[0].conditions[0].mode).toBe(MATCH_RANGE)
     }
   })
 
@@ -200,12 +200,16 @@ describe('time range round-trip stability', () => {
       {
         conditions: [
           {
-            source: 'param',
-            path: 'service_tier',
-            mode: MATCH_EQ,
-            value: 'fast',
-          } satisfies RequestCondition,
-          timeCondition({ rangeStart: '9', rangeEnd: '12' }),
+            conditions: [
+              {
+                source: 'param',
+                path: 'service_tier',
+                mode: MATCH_EQ,
+                value: 'fast',
+              } satisfies RequestCondition,
+              timeCondition({ rangeStart: '9', rangeEnd: '12' }),
+            ],
+          },
         ],
         multiplier: '2',
       },

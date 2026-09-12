@@ -32,13 +32,19 @@ export type TokenTierCondition = {
   op: '<' | '<=' | '>' | '>='
   value: number
 }
+/**
+ * A tier condition set is a DNF: an OR of AND-clauses ("branches"). The empty
+ * DNF (`[]`) means "always true" and belongs to the fallback tier only.
+ */
+export type TierConditionClause = { conditions: TokenTierCondition[] }
+export type TierConditionDnf = TierConditionClause[]
 export type TokenTier = {
   conditionText?: string
   imageCount?: boolean
   billingUnit?: 'token' | 'request'
   fixedPrice?: number
   label: string
-  conditions: TokenTierCondition[]
+  conditions: TierConditionDnf
   prices: Partial<Record<TokenVariable, number>>
 }
 export type TimeTokenTier = TokenTier & {
@@ -57,27 +63,52 @@ export function flattenBinary(
   ]
 }
 
-function tokenConditions(node: ExpressionNode): TokenTierCondition[] | null {
-  const conditions: TokenTierCondition[] = []
-  for (const part of flattenBinary(node, '&&')) {
-    if (
-      part.kind !== 'binary' ||
-      !['<', '<=', '>', '>='].includes(part.operator) ||
-      part.left.kind !== 'variable' ||
-      !['p', 'c', 'len'].includes(part.left.name) ||
-      part.right.kind !== 'literal' ||
-      typeof part.right.value !== 'number' ||
-      part.right.value < 0
-    ) {
-      return null
-    }
-    conditions.push({
-      var: part.left.name as TokenTierCondition['var'],
-      op: part.operator as TokenTierCondition['op'],
-      value: part.right.value,
-    })
+function tokenConditionAtom(part: ExpressionNode): TokenTierCondition | null {
+  if (
+    part.kind !== 'binary' ||
+    !['<', '<=', '>', '>='].includes(part.operator) ||
+    part.left.kind !== 'variable' ||
+    !['p', 'c', 'len'].includes(part.left.name) ||
+    part.right.kind !== 'literal' ||
+    typeof part.right.value !== 'number' ||
+    part.right.value < 0
+  ) {
+    return null
   }
-  return conditions
+  return {
+    var: part.left.name as TokenTierCondition['var'],
+    op: part.operator as TokenTierCondition['op'],
+    value: part.right.value,
+  }
+}
+
+/**
+ * Parse a tier condition into DNF — an OR of AND-clauses. `a && b || c` reads
+ * as `(a && b) || c`. A nested OR under AND (`a && (b || c)`) is not canonical
+ * DNF; it is rejected so the caller keeps the expression in raw mode instead of
+ * silently changing its meaning.
+ */
+function tokenConditions(node: ExpressionNode): TierConditionDnf | null {
+  const dnf: TierConditionDnf = []
+  for (const branch of flattenBinary(node, '||')) {
+    const clause: TokenTierCondition[] = []
+    for (const part of flattenBinary(branch, '&&')) {
+      const atom = tokenConditionAtom(part)
+      if (!atom) return null
+      clause.push(atom)
+    }
+    dnf.push({ conditions: clause })
+  }
+  return dnf
+}
+
+/** Render a DNF back to source-like text (`(a && b) || c`). */
+export function tierConditionsText(dnf: TierConditionDnf): string {
+  const branches = dnf.map((clause) =>
+    clause.conditions.map((c) => `${c.var} ${c.op} ${c.value}`).join(' && ')
+  )
+  if (branches.length <= 1) return branches.join('')
+  return branches.map((text) => `(${text})`).join(' || ')
 }
 
 function nonnegativePriceLiteral(node: ExpressionNode): number | null {
@@ -101,7 +132,7 @@ function nonnegativePriceLiteral(node: ExpressionNode): number | null {
 
 function tokenTier(
   node: ExpressionNode,
-  conditions: TokenTierCondition[]
+  conditions: TierConditionDnf
 ): TokenTier | null {
   if (
     node.kind !== 'call' ||
@@ -284,12 +315,9 @@ function timeTierBranches(
   return tiers.map((tier) => ({
     ...tier,
     timeConditions: path,
-    conditionText: [
-      timeDescription,
-      ...tier.conditions.map(
-        (condition) => `${condition.var} ${condition.op} ${condition.value}`
-      ),
-    ].join(' && '),
+    conditionText: [timeDescription, tierConditionsText(tier.conditions)]
+      .filter(Boolean)
+      .join(' && '),
   }))
 }
 
