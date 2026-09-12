@@ -105,10 +105,10 @@ export function OsDesktopNotices({ className }: { className?: string }) {
     <div
       aria-hidden={hidden}
       className={cn(
-        // ⚠️ 别给这个 wrapper 加 will-change / filter 之类的合成提示：它会把 wrapper
-        // 变成 backdrop root，卡片的 backdrop-blur 只能采样 root 内部，容易出硬边/鬼影
-        //（2026-09-12 踩过：鼠标移出页面后接缝冒黑线、只有重绘才恢复）
-        'w-[21rem] transition-[opacity,translate] duration-300 ease-out',
+        // ⚠️ 必须带 flex flex-col：外层从 placeholder 传进来的 className 里有 `xl:flex`，
+        // 只写 flex-col 的话 wrapper 在 xl 下是**行**flex，里面的卡片会退化成一个 flex item
+        // 收缩到内容宽度（实测 233px / 336px），右侧多出一条空档 —— 2026-09-12 maintainer抓出来的
+        'flex w-[21rem] flex-col transition-[opacity,translate] duration-300 ease-out',
         hidden
           ? 'pointer-events-none translate-x-3 opacity-0'
           : 'translate-x-0 opacity-100',
@@ -117,7 +117,7 @@ export function OsDesktopNotices({ className }: { className?: string }) {
     >
       <div
         style={{ height: `${CARD_HEIGHT_REM}rem` }}
-        className='bg-card/90 border-border/70 hover:border-border focus-visible:ring-ring/40 shadow-md hover:shadow-lg flex flex-col overflow-hidden rounded-2xl border px-4 py-3 backdrop-blur-md'
+        className='bg-card/90 border-border/70 hover:border-border focus-visible:ring-ring/40 shadow-md hover:shadow-lg flex w-full flex-col overflow-hidden rounded-2xl border px-4 py-3 backdrop-blur-md'
       >
         {/* 头部：标题 + 收起（全量元素都进卡，卡外不再有任何元素） */}
         <div className='flex items-start justify-between gap-2'>
