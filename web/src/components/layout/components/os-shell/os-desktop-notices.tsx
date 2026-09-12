@@ -14,15 +14,10 @@ import { formatDateTimeObject } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
 import { useOsNoticeStore } from './os-notice-store'
+import { OsWidget } from './os-widget'
 
 /**
- * 单卡高度（rem）——「大框」。
- * 标题、正文、翻页现在**都在卡里**，所以比旧的「纯内容框」高 1rem。
- */
-const CARD_HEIGHT_REM = 13
-
-/**
- * OS 桌面右侧 · 时间线公告卡（**单卡单条**）
+ * OS 桌面 · 时间线公告**小组件**（3x2）
  *
  * 只取「时间线」（announcements）——通知（notice）已经有糊脸强制阅读弹窗，桌面不重复。
  *
@@ -30,8 +25,12 @@ const CARD_HEIGHT_REM = 13
  * 比原来的「堆叠露出多张」更彻底地根除接缝鬼影 —— 只有一张卡，卡与卡之间不存在接缝，
  * 也就不存在「鼠标移出页面后接缝处冒黑线、只有重绘才恢复」那类合成层陈旧绘制问题。
  * 默认显示最新一条；点卡体或底部箭头都能翻（循环）。无公告时不渲染，桌面保持干净。
+ *
+ * 2026-09-12 晚：迁入小组件系统（os-widget.tsx）当第一个样例。
+ * 尺寸改由网格 span 决定（3x2 = 21.5 × 12.75rem），组件内不再写 `w-[21rem]` / 固定高度 ——
+ * 那次的「宽度跟着公告长短变、右边漏空档」就是"组件自己定尺寸"造成的，系统里不再有这种口子。
  */
-export function OsDesktopNotices({ className }: { className?: string }) {
+export function OsDesktopNotices() {
   const { t } = useTranslation()
   const { announcements, loading, unreadAnnouncementsCount } = useNotifications()
   const total = announcements.length
@@ -102,73 +101,24 @@ export function OsDesktopNotices({ className }: { className?: string }) {
   const absoluteTime = publishDate ? formatDateTimeObject(publishDate) : ''
 
   return (
-    <div
+    <OsWidget
+      size='3x2'
       aria-hidden={hidden}
-      className={cn(
-        // ⚠️ 必须带 flex flex-col：外层从 placeholder 传进来的 className 里有 `xl:flex`，
-        // 只写 flex-col 的话 wrapper 在 xl 下是**行**flex，里面的卡片会退化成一个 flex item
-        // 收缩到内容宽度（实测 233px / 336px），右侧多出一条空档 —— 2026-09-12 maintainer抓出来的
-        'flex w-[21rem] flex-col transition-[opacity,translate] duration-300 ease-out',
-        hidden
-          ? 'pointer-events-none translate-x-3 opacity-0'
-          : 'translate-x-0 opacity-100',
-        className
-      )}
-    >
-      <div
-        style={{ height: `${CARD_HEIGHT_REM}rem` }}
-        className='bg-card/90 border-border/70 hover:border-border focus-visible:ring-ring/40 shadow-md hover:shadow-lg flex w-full flex-col overflow-hidden rounded-2xl border px-4 py-3 backdrop-blur-md'
-      >
-        {/* 头部：标题 + 收起（全量元素都进卡，卡外不再有任何元素） */}
-        <div className='flex items-start justify-between gap-2'>
-          <div className='min-w-0'>
-            <p className='text-sm font-medium'>{t('System Announcements')}</p>
-            <p className='text-muted-foreground truncate text-xs'>
-              {t('Latest platform updates and notices')}
-            </p>
-          </div>
-          <button
-            type='button'
-            onClick={() => setCollapsed(true)}
-            title={t('Close')}
-            aria-label={t('Close')}
-            className='text-muted-foreground hover:text-foreground -mt-0.5 -mr-1 shrink-0 rounded-md p-1 transition-colors'
-          >
-            <X className='size-3.5' aria-hidden='true' />
-          </button>
-        </div>
-
-        {/* 正文：一次只显示一条，内容长了在卡内滚动；点卡体翻到下一条 */}
-        <div
-          role='button'
-          tabIndex={0}
-          onClick={handleCardClick}
-          onKeyDown={handleCardKeyDown}
-          className='focus-visible:ring-ring/40 mt-3 flex min-h-0 flex-1 cursor-pointer items-start gap-3 overflow-y-auto pr-1 outline-none focus-visible:ring-2'
+      title={t('System Announcements')}
+      subtitle={t('Latest platform updates and notices')}
+      actions={
+        <button
+          type='button'
+          onClick={() => setCollapsed(true)}
+          title={t('Close')}
+          aria-label={t('Close')}
+          className='text-muted-foreground hover:text-foreground -mt-0.5 -mr-1 shrink-0 rounded-md p-1 transition-colors'
         >
-          <AnnouncementDot type={current.type} />
-          <div className='flex min-w-0 flex-1 flex-col gap-2'>
-            <div className='text-sm'>
-              <RichContent breaks content={current.content || ''} />
-            </div>
-
-            {current.extra ? (
-              <div className='text-muted-foreground text-xs'>
-                <RichContent breaks content={current.extra} />
-              </div>
-            ) : null}
-
-            {absoluteTime ? (
-              <div className='text-muted-foreground text-xs'>
-                {relativeTime ? `${relativeTime} • ` : null}
-                {absoluteTime}
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        {/* 卡底部：上下翻页（左计数、右按钮） */}
-        <div className='text-muted-foreground mt-3 flex items-center justify-between text-xs'>
+          <X className='size-3.5' aria-hidden='true' />
+        </button>
+      }
+      footer={
+        <>
           <span>
             {active + 1} / {total}
           </span>
@@ -192,8 +142,44 @@ export function OsDesktopNotices({ className }: { className?: string }) {
               <ChevronDown className='size-4' aria-hidden='true' />
             </button>
           </div>
+        </>
+      }
+      className={cn(
+        // 尺寸不在这里定：由网格 span（3x2）算出来，宽度不可能再跟着公告长短变
+        'transition-[opacity,translate] duration-300 ease-out',
+        hidden
+          ? 'pointer-events-none translate-x-3 opacity-0'
+          : 'translate-x-0 opacity-100'
+      )}
+    >
+      {/* 正文：一次只显示一条，内容长了在卡内滚动；点卡体翻到下一条 */}
+      <div
+        role='button'
+        tabIndex={0}
+        onClick={handleCardClick}
+        onKeyDown={handleCardKeyDown}
+        className='focus-visible:ring-ring/40 flex min-h-0 flex-1 cursor-pointer items-start gap-3 overflow-y-auto pr-1 outline-none focus-visible:ring-2'
+      >
+        <AnnouncementDot type={current.type} />
+        <div className='flex min-w-0 flex-1 flex-col gap-2'>
+          <div className='text-sm'>
+            <RichContent breaks content={current.content || ''} />
+          </div>
+
+          {current.extra ? (
+            <div className='text-muted-foreground text-xs'>
+              <RichContent breaks content={current.extra} />
+            </div>
+          ) : null}
+
+          {absoluteTime ? (
+            <div className='text-muted-foreground text-xs'>
+              {relativeTime ? `${relativeTime} • ` : null}
+              {absoluteTime}
+            </div>
+          ) : null}
         </div>
       </div>
-    </div>
+    </OsWidget>
   )
 }

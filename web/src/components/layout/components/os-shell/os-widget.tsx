@@ -1,0 +1,121 @@
+// @muw-owned
+import type { ReactNode } from 'react'
+
+import { cn } from '@/lib/utils'
+
+/**
+ * OS 桌面 · 小组件系统（v1）
+ *
+ * 定位：桌面右侧**分区**里的数据卡（左区是图标网格，两区共用同一套度量）。
+ * 度量与图标网格完全一致 —— 列 7rem、行 6.25rem、列缝 0.25rem、行缝 0.5rem，
+ * 所以小组件的边缘天然和图标对齐（见 os-widget-grid.tsx 的 WIDGET_GRID_STYLE）。
+ *
+ * ⚠️ 核心纪律：**尺寸由网格 span 决定，绝不由内容决定**。
+ * 组件内容只负责"填满给它的格子"，不许撑开或缩小自己 —— 2026-09-12 踩过：
+ * 公告卡当时没有定尺寸，宽度跟着内容变（短公告 233px / 应有 336px），
+ * 右边多出一截空档。在系统里 `gridColumn/gridRow` 的 span 就是尺寸的唯一来源，
+ * 内容再长也只是在自己格子里滚动，结构上不可能复现那类问题。
+ *
+ * 尺寸档（只开这 5 档，避免"每个组件长一个样"）：
+ *   1x1 = 7 × 6.25rem      单值（一个数字/一个图标级信息）
+ *   2x1 = 14.25 × 6.25rem  一条数据 + 标签
+ *   2x2 = 14.25 × 12.75rem 带迷你图
+ *   3x2 = 21.5 × 12.75rem  标准卡（公告卡就是这档）
+ *   3x3 = 21.5 × 19.25rem  列表 / 多行
+ */
+export type OsWidgetSize = '1x1' | '2x1' | '2x2' | '3x2' | '3x3'
+
+const SIZE_SPAN: Record<OsWidgetSize, { col: number; row: number }> = {
+  '1x1': { col: 1, row: 1 },
+  '2x1': { col: 2, row: 1 },
+  '2x2': { col: 2, row: 2 },
+  '3x2': { col: 3, row: 2 },
+  '3x3': { col: 3, row: 3 },
+}
+
+export interface OsWidgetProps {
+  size: OsWidgetSize
+  /** 标题行；1x1 这种小格子建议不传，直接用内容区的数字 */
+  title?: ReactNode
+  subtitle?: ReactNode
+  /** 标题行右侧的操作（关闭、刷新、跳转之类） */
+  actions?: ReactNode
+  /** 底部行（计数、翻页、次要信息） */
+  footer?: ReactNode
+  children?: ReactNode
+  className?: string
+  bodyClassName?: string
+  /** 收起/淡出态用；交给网格保留占位（组件卸载会让网格塌一格） */
+  'aria-hidden'?: boolean
+}
+
+export function OsWidget({
+  size,
+  title,
+  subtitle,
+  actions,
+  footer,
+  children,
+  className,
+  bodyClassName,
+  'aria-hidden': ariaHidden,
+}: OsWidgetProps) {
+  const span = SIZE_SPAN[size]
+  // 1x1 只有 7×6.25rem，常规内边距会把内容挤没，单独收紧
+  const compact = size === '1x1'
+
+  return (
+    <section
+      aria-hidden={ariaHidden}
+      style={{
+        gridColumn: `span ${span.col}`,
+        gridRow: `span ${span.row}`,
+      }}
+      className={cn(
+        // 与公告卡同一套琉璃底：卡自身不透明度过低，靠 backdrop-blur 出材质
+        'bg-card/90 border-border/70 shadow-md flex h-full w-full flex-col overflow-hidden rounded-2xl border backdrop-blur-md',
+        compact ? 'px-3 py-2' : 'px-4 py-3',
+        className
+      )}
+    >
+      {title ? (
+        <header className='flex items-start justify-between gap-2'>
+          <div className='min-w-0'>
+            <p
+              className={cn(
+                'truncate font-medium',
+                compact ? 'text-xs' : 'text-sm'
+              )}
+            >
+              {title}
+            </p>
+            {subtitle ? (
+              <p className='text-muted-foreground truncate text-xs'>
+                {subtitle}
+              </p>
+            ) : null}
+          </div>
+          {actions ? (
+            <div className='flex shrink-0 items-center gap-0.5'>{actions}</div>
+          ) : null}
+        </header>
+      ) : null}
+
+      <div
+        className={cn(
+          'flex min-h-0 flex-1 flex-col',
+          title && (compact ? 'mt-1.5' : 'mt-3'),
+          bodyClassName
+        )}
+      >
+        {children}
+      </div>
+
+      {footer ? (
+        <div className='text-muted-foreground mt-3 flex items-center justify-between text-xs'>
+          {footer}
+        </div>
+      ) : null}
+    </section>
+  )
+}

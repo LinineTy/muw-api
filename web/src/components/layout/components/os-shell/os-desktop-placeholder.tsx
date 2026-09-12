@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { OsDesktopNotices } from './os-desktop-notices'
 import { useOsShellNavigate } from './os-open'
 import { useOsNavItems } from './use-os-nav'
+import { OsWidgetGrid } from './os-widget-grid'
 
 /**
  * OS 桌面壳 · 空桌面态:
@@ -65,9 +66,13 @@ export function OsDesktopPlaceholder() {
         })}
       </div>
 
-      {/* 右侧:时间线公告堆叠卡(一卡一条,点一下滚下一张)。
+      {/* 右侧:小组件区(分区布局)。与左区共用度量 —— 列 7rem / 行 6.25rem /
+          列缝 0.25rem / 行缝 0.5rem,所以组件卡与图标严格对齐。
+          组件尺寸档见 os-widget.tsx,摆放顺序=组件写入顺序(行优先)。
           放不下(窄屏)时整块隐藏,磁贴优先 */}
-      <OsDesktopNotices className='hidden shrink-0 self-start xl:flex' />
+      <OsWidgetGrid>
+        <OsDesktopNotices />
+      </OsWidgetGrid>
     </div>
   )
 }
