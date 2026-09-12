@@ -847,7 +847,11 @@ body[data-theme-radius='xl'] {
   --table-disabled-hover: oklch(1 0 0 / 0.55);
   --table-disabled-border: oklch(0.85 0 0 / 0.45);
 
-  --radius: 1.25rem;
+  /* 琉璃的圆角默认值：原 1.25rem，maintainer 2026-09-12 定 0.95rem
+   *（1.25 太大 —— 大卡 rounded-xl 会到 28px，肉眼比"圆角=1.0"档还大；
+   * 0.95rem 让 Auto 略小于 1.0 档，观感更收。）
+   * 注意：这个值只在用户没手动选过圆角时生效（body 上没有 data-theme-radius）。 */
+  --radius: 0.95rem;
 }
 /* 有照片时:在照片层上方叠一层黑色遮罩(强度由管理端"背景图遮罩"滑块控制,
  * 经 useAppBackground 写到 --app-bg-mask-opacity),驯服明暗差异较大的照片;
