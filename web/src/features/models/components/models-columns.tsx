@@ -22,7 +22,8 @@ import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
 import { BadgeListCell, TruncatedCell } from '@/components/data-table'
-import { StatusBadge } from '@/components/status-badge'
+import { ProviderBadge } from '@/components/provider-badge'
+import { StatusBadge, type StatusVariant } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -47,6 +48,18 @@ import { DataTableRowActions } from './data-table-row-actions'
 import { DescriptionCell } from './description-cell'
 import { ModelSquareStatus } from './model-square-status'
 import { useModels } from './models-provider'
+
+/**
+ * 匹配类型配置里的 color（green/blue/orange/purple/error…）→ StatusBadge variant。
+ * fork 老口径就是按语义给匹配类型上色，上游 rework 只保留了 label。
+ */
+function nameRuleVariant(color: string): StatusVariant {
+  if (color === 'error') return 'danger'
+  if (color in { green: 1, blue: 1, orange: 1, purple: 1 }) {
+    return color as StatusVariant
+  }
+  return 'neutral'
+}
 
 export function useModelsColumns(
   vendors: Vendor[] = [],
@@ -126,11 +139,18 @@ export function useModelsColumns(
                 />
               </div>
               <div className='text-muted-foreground mt-1 flex min-w-0 items-center gap-2 text-xs'>
-                <span className='truncate' title={vendor?.name}>
-                  {model.id > 0
-                    ? (vendor?.name ?? t('No vendor'))
-                    : t('Missing metadata')}
-                </span>
+                {model.id > 0 && vendor ? (
+                  <ProviderBadge
+                    iconKey={vendor.icon}
+                    iconSize={12}
+                    label={vendor.name}
+                    className='min-w-0'
+                  />
+                ) : (
+                  <span className='truncate'>
+                    {model.id > 0 ? t('No vendor') : t('Missing metadata')}
+                  </span>
+                )}
                 {model.name_rule !== 0 && (
                   <span className='shrink-0'>
                     {rules[model.name_rule as 0 | 1 | 2 | 3]?.label} ·{' '}
@@ -265,7 +285,7 @@ export function useModelsColumns(
           expandable
           max={1}
           items={parseModelTags(row.original.tags ?? '').map((tag) => (
-            <StatusBadge key={tag} label={tag} variant='neutral' size='sm' />
+            <StatusBadge key={tag} label={tag} autoColor={tag} size='sm' />
           ))}
         />
       ),
@@ -280,13 +300,24 @@ export function useModelsColumns(
       size: 145,
       enableSorting: false,
       meta: { mobileHidden: true, label: t('Sync policy') },
-      cell: ({ row }) => (
-        <TruncatedCell className='text-muted-foreground max-w-[120px] text-sm'>
-          {row.original.id > 0 &&
-            (row.original.sync_official ? t('Allow updates') : t('Keep local'))}
-          {!row.original.id && '—'}
-        </TruncatedCell>
-      ),
+      cell: ({ row }) => {
+        // fork 老口径：官方同步按语义着色（同步=success、保留本地=warning）；
+        // 上游 rework 之后退化成纯灰文本，2026-09-13 maintainer指出「旧版如此花哨，新版好素」
+        if (!row.original.id) {
+          return <span className='text-muted-foreground text-sm'>—</span>
+        }
+        const synced = Boolean(row.original.sync_official)
+        return (
+          <StatusBadge
+            variant={synced ? 'success' : 'warning'}
+            size='sm'
+            copyable={false}
+            className='-ml-1.5 max-w-none shrink-0'
+          >
+            {synced ? t('Allow updates') : t('Keep local')}
+          </StatusBadge>
+        )
+      },
     },
     // 状态列：文案与渲染换回 fork 口径（上游 rework 改成了「展示策略 / 允许 / 隐藏」纯文本，
     // 与工具栏那张「状态（显示/未显示）」筛选对不上，且"允许"说不清允许什么 —— 2026-09-12 maintainer定）
@@ -332,11 +363,17 @@ export function useModelsColumns(
       header: t('Vendor'),
       size: 150,
       enableSorting: false,
-      cell: ({ row }) => (
-        <TruncatedCell>
-          {vendorMap.get(row.original.vendor_id ?? 0)?.name ?? '—'}
-        </TruncatedCell>
-      ),
+      cell: ({ row }) => {
+        const vendor = vendorMap.get(row.original.vendor_id ?? 0)
+        if (!vendor) {
+          return <span className='text-muted-foreground text-xs'>—</span>
+        }
+        return (
+          <BadgeListCell
+            items={[<ProviderBadge iconKey={vendor.icon} label={vendor.name} />]}
+          />
+        )
+      },
       meta: { mobileHidden: true },
     },
     {
@@ -344,7 +381,20 @@ export function useModelsColumns(
       header: t('Match Type'),
       size: 100,
       enableSorting: false,
-      cell: ({ row }) => rules[row.original.name_rule as 0 | 1 | 2 | 3]?.label,
+      cell: ({ row }) => {
+        const config = rules[row.original.name_rule as 0 | 1 | 2 | 3]
+        if (!config) return null
+        return (
+          <StatusBadge
+            variant={nameRuleVariant(config.color)}
+            size='sm'
+            copyable={false}
+            className='-ml-1.5 max-w-none shrink-0'
+          >
+            {config.label}
+          </StatusBadge>
+        )
+      },
       meta: { mobileHidden: true },
     },
     {
@@ -371,7 +421,7 @@ export function useModelsColumns(
           expandLabel={t('Supported endpoints')}
           items={formatEndpointsDisplay(row.original.endpoints ?? '').map(
             (endpoint) => (
-              <StatusBadge key={endpoint} label={endpoint} variant='neutral' />
+              <StatusBadge key={endpoint} label={endpoint} autoColor={endpoint} />
             )
           )}
         />
