@@ -5196,6 +5196,7 @@
     "Return data conforming to a JSON schema": "Возвращать данные, соответствующие JSON-схеме",
     "Return per-token log probabilities": "Возвращать логарифмические вероятности по токенам",
     "Return to dashboard": "Вернуться на панель управления",
+    "Return to console": "Вернуться в консоль",
     "Return to the original window to continue.": "Вернитесь в исходное окно, чтобы продолжить.",
     "Return vector embeddings for inputs": "Возвращать векторные эмбеддинги для входных данных",
     "Returned keys": "Возвращённые ключи",

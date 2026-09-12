@@ -5196,6 +5196,7 @@
     "Return data conforming to a JSON schema": "Trả về dữ liệu tuân theo JSON Schema",
     "Return per-token log probabilities": "Trả về log probabilities cho từng token",
     "Return to dashboard": "Quay lại bảng điều khiển",
+    "Return to console": "Quay lại bảng điều khiển",
     "Return to the original window to continue.": "Quay lại cửa sổ ban đầu để tiếp tục.",
     "Return vector embeddings for inputs": "Trả về vector embedding cho đầu vào",
     "Returned keys": "Số khóa trả về",

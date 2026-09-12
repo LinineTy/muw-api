@@ -5196,6 +5196,7 @@
     "Return data conforming to a JSON schema": "返回符合 JSON Schema 的数据",
     "Return per-token log probabilities": "返回每个 token 的对数概率",
     "Return to dashboard": "返回仪表盘",
+    "Return to console": "返回控制台",
     "Return to the original window to continue.": "返回原窗口继续操作。",
     "Return vector embeddings for inputs": "为输入返回向量嵌入",
     "Returned keys": "返回密钥数",

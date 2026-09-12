@@ -13,7 +13,7 @@ const ordersSearchSchema = z.object({
 export const Route = createFileRoute('/_authenticated/orders/')({
   beforeLoad: () => {
     if (!isSidebarModuleEnabled('personal', 'orders')) {
-      throw redirect({ to: '/dashboard' })
+      throw redirect({ to: '/os-desktop' })
     }
   },
   component: OrdersPage,

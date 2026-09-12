@@ -5196,6 +5196,7 @@
     "Return data conforming to a JSON schema": "JSON スキーマに準拠したデータを返却",
     "Return per-token log probabilities": "トークンごとの対数確率を返します",
     "Return to dashboard": "ダッシュボードに戻る",
+    "Return to console": "コンソールに戻る",
     "Return to the original window to continue.": "元のウィンドウに戻って続行してください。",
     "Return vector embeddings for inputs": "入力に対してベクトル埋め込みを返却",
     "Returned keys": "返却したキー数",
