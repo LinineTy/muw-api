@@ -21,7 +21,10 @@ func init() {
 	Version = strings.TrimSpace(Version)
 }
 
-var SystemName = "New API"
+// SystemName 是"数据库里没有 SystemName 选项时"的默认站点名；线上实例由选项
+// 覆盖（设置 → 站点与品牌）。fork 自己的品牌名，2026-09-13 maintainer定（改这个不涉及
+// 上游署名：README/版权头/module path/镜像名仍保持原样，见 AGENTS.md fork note）。
+var SystemName = "Muw API Dev"
 var Footer = ""
 var Logo = ""
 var TopUpLink = ""
