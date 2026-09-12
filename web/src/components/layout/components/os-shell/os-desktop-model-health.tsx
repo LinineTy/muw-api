@@ -17,7 +17,11 @@ import { OsWidget, WIDGET_CLICKABLE_CLASS } from './os-widget'
  *
  * 数据源 `/api/channel/health/models`（**UserAuth，任意登录用户可读**，不是管理接口），
  * queryKey 与健康页默认视图一致（['model-health', 1, false]）→ 命中同一份缓存。
- * 点击 = 打开模型健康页。无样本（返回空）时不渲染，避免显示一个假的 100%。
+ * 点击 = 打开模型健康页。
+ *
+ * ⚠️ 没样本/请求未回来时**卡片照常显示、数值给 `—`**（2026-09-12 maintainer："没有健康度直接不显示了？"）。
+ * 早期版本直接 return null，结果他那边库里没有测试记录 → 整张卡消失、下面还留个洞；
+ * 组件"悄悄消失"比"显示一个 —"糟糕得多。只在**没有任何可信数值**时给 —，绝不显示假的 100%。
  */
 export function OsDesktopModelHealth() {
   const { t } = useTranslation()
@@ -32,12 +36,19 @@ export function OsDesktopModelHealth() {
   })
 
   const rows = data?.data ?? []
-  if (rows.length === 0) return null
-
-  const { successRate } = summarizeModelHealth(rows)
-  const value = Math.max(0, Math.min(100, successRate))
+  const hasData = rows.length > 0
+  const value = hasData
+    ? Math.max(0, Math.min(100, summarizeModelHealth(rows).successRate))
+    : null
   const barClass =
-    value >= 99 ? 'bg-primary' : value >= 90 ? 'bg-amber-500' : 'bg-destructive'
+    value === null
+      ? 'bg-muted-foreground/40'
+      : value >= 99
+        ? 'bg-primary'
+        : value >= 90
+          ? 'bg-amber-500'
+          : 'bg-destructive'
+  const barWidth = value ?? 0
 
   return (
     <OsWidget size='1x1'>
@@ -50,12 +61,12 @@ export function OsDesktopModelHealth() {
           {t('Model Health')}
         </span>
         <span className='text-xl leading-none font-semibold tabular-nums'>
-          {Math.round(value)}%
+          {value === null ? '—' : `${Math.round(value)}%`}
         </span>
         <span className='bg-muted/70 h-1 w-full overflow-hidden rounded-full'>
           <span
             className={`block h-full rounded-full ${barClass}`}
-            style={{ width: `${value}%` }}
+            style={{ width: `${barWidth}%` }}
           />
         </span>
       </button>

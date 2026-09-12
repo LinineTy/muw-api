@@ -50,8 +50,10 @@ export function OsDesktopBalance() {
     staleTime: 60000,
   })
 
+  // 取不到数据时照常显示卡片、数值给 —（组件悄悄消失会留下空洞，比 — 难理解得多）
   const user = selfData?.data
-  if (!user || typeof user.quota !== 'number') return null
+  const balance =
+    user && typeof user.quota === 'number' ? formatQuota(user.quota) : null
 
   return (
     <OsWidget size='2x1'>
@@ -63,11 +65,12 @@ export function OsDesktopBalance() {
         <span className='flex w-full items-center justify-between gap-2'>
           <span className='text-muted-foreground text-xs'>{t('Balance')}</span>
           <span className='text-muted-foreground truncate text-xs tabular-nums'>
-            {t('Today')} {formatQuota(todayQuota ?? 0)}
+            {t('Today')}{' '}
+            {todayQuota === undefined ? '—' : formatQuota(todayQuota)}
           </span>
         </span>
         <span className='truncate text-2xl leading-none font-semibold tabular-nums'>
-          {formatQuota(user.quota)}
+          {balance ?? '—'}
         </span>
       </button>
     </OsWidget>

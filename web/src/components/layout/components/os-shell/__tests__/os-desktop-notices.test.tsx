@@ -64,12 +64,11 @@ describe('OsDesktopNotices', () => {
       expect(card(container)).not.toHaveAttribute('aria-hidden', 'true')
     )
 
-    // 点 × 收起
+    // 点 × 收起 → 先透明（过渡），随后整卡卸载、把格子还给网格
     screen.getByLabelText('Close').click()
     rerender(<OsDesktopNotices />)
-    await waitFor(() =>
-      expect(card(container)).toHaveAttribute('aria-hidden', 'true')
-    )
+    await waitFor(() => expect(card(container)?.getAttribute('aria-hidden')).toBe('true'))
+    await waitFor(() => expect(card(container)).toBeNull(), { timeout: 2000 })
 
     // 新公告到来：未读数 1 → 2
     state = {
@@ -92,13 +91,11 @@ describe('OsDesktopNotices', () => {
     const { container, rerender } = render(<OsDesktopNotices />)
     screen.getByLabelText('Close').click()
     rerender(<OsDesktopNotices />)
-    await waitFor(() =>
-      expect(card(container)).toHaveAttribute('aria-hidden', 'true')
-    )
+    await waitFor(() => expect(card(container)).toBeNull(), { timeout: 2000 })
 
-    // 重渲染（数字没变）
+    // 重渲染（数字没变）也不能自己冒出来
     rerender(<OsDesktopNotices />)
-    expect(card(container)).toHaveAttribute('aria-hidden', 'true')
+    expect(card(container)).toBeNull()
   })
 
   test('没有公告时不渲染', () => {

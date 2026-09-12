@@ -44,6 +44,19 @@ export function OsDesktopNotices() {
     return () => cancelAnimationFrame(raf)
   }, [])
 
+  // 收起后**先把格子让出来**：淡出 300ms 再卸载。
+  // 之前只做透明+右移，格子还占着（maintainer 2026-09-12："公告向右隐藏还占宽度"），
+  // 而且 translate 溢出还会把组件的横向滚动条顶出来。
+  const [unmounted, setUnmounted] = useState(false)
+  useEffect(() => {
+    if (!collapsed) {
+      setUnmounted(false)
+      return
+    }
+    const timer = window.setTimeout(() => setUnmounted(true), 320)
+    return () => window.clearTimeout(timer)
+  }, [collapsed])
+
   // 有新公告（未读数增加）自动恢复显示；手动收起后不会被反复弹开
   const previousUnread = useRef(unreadAnnouncementsCount)
   useEffect(() => {
@@ -87,8 +100,8 @@ export function OsDesktopNotices() {
     [showNext]
   )
 
-  // 无数据时不渲染；收起则保留挂载走过渡（卸载就没有动画了）
-  if (loading || total === 0) {
+  // 无数据不渲染；收起淡出结束后整个卸载（把 3x2 的格子还给网格）
+  if (loading || total === 0 || unmounted) {
     return null
   }
 

@@ -31,11 +31,14 @@ function barClass(percent: number) {
 
 function MetricWidget(props: {
   label: string
-  percent: number
+  /** undefined = 该指标还没上报/还没回来 → 显示 — */
+  percent: number | undefined
   onOpen: () => void
 }) {
   const { label, percent, onOpen } = props
-  const clamped = Math.max(0, Math.min(100, percent))
+  // 数值还没回来（或该指标没上报）就显示 —，**卡片本身不消失** ——
+  // 组件悄悄消失会留下空洞、让人以为坏了（2026-09-12 maintainer抓的就是这个）
+  const clamped = percent === undefined ? null : Math.max(0, Math.min(100, percent))
 
   return (
     <OsWidget size='1x1'>
@@ -44,12 +47,14 @@ function MetricWidget(props: {
           {label}
         </span>
         <span className='text-xl leading-none font-semibold tabular-nums'>
-          {Math.round(clamped)}%
+          {clamped === null ? '—' : `${Math.round(clamped)}%`}
         </span>
         <span className='bg-muted/70 h-1 w-full overflow-hidden rounded-full'>
           <span
-            className={`block h-full rounded-full ${barClass(clamped)}`}
-            style={{ width: `${clamped}%` }}
+            className={`block h-full rounded-full ${
+              clamped === null ? 'bg-muted-foreground/40' : barClass(clamped)
+            }`}
+            style={{ width: `${clamped ?? 0}%` }}
           />
         </span>
       </button>
@@ -64,20 +69,17 @@ export function OsDesktopSystemMetrics() {
   const { systemLoad: enabled } = useDashboardContentVisibility()
   const { load } = useSystemLoad(enabled)
 
-  if (!enabled || !load) return null
-  const { cpu_usage: cpu, memory_usage: memory } = load
-  if (cpu === undefined && memory === undefined) return null
+  // 只有后台关掉了"显示系统负载"才整体不渲染（那是管理员的显式选择，概览页同样处理）
+  if (!enabled) return null
+  const { cpu_usage: cpu, memory_usage: memory } = load ?? {}
 
   const open = () => osNavigate('/dashboard')
 
   return (
     <>
-      {cpu === undefined ? null : (
-        <MetricWidget label={t('CPU')} percent={cpu} onOpen={open} />
-      )}
-      {memory === undefined ? null : (
-        <MetricWidget label={t('Memory')} percent={memory} onOpen={open} />
-      )}
+      {/* 两张卡恒定渲染（数值没回来就是 —），保证网格布局稳定、不会忽多忽少 */}
+      <MetricWidget label={t('CPU')} percent={cpu} onOpen={open} />
+      <MetricWidget label={t('Memory')} percent={memory} onOpen={open} />
     </>
   )
 }
