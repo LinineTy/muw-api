@@ -43,11 +43,12 @@ function ModelCardComponent({
       data-state={isSelected ? 'selected' : undefined}
       className='flex flex-col gap-3'
     >
-      {/* 头部：模型名/图标 + 状态，右侧行内操作 */}
+      {/* 头部：模型名/图标，右侧行内操作
+          （展示策略不再裸放在这里：没有标签的「允许/隐藏」看不出是什么，
+            2026-09-12 maintainer指出 —— 挪进下面的元信息格，和别的字段一样带标签） */}
       <div className='flex items-start justify-between gap-2'>
         <div className='min-w-0 flex-1 overflow-hidden'>{nameCell}</div>
         <div className='flex shrink-0 items-center gap-1.5'>
-          {statusCell}
           {actionsCell}
         </div>
       </div>
@@ -62,6 +63,10 @@ function ModelCardComponent({
         <div className='min-w-0'>
           <div className={labelClass}>{t('Official Sync')}</div>
           <div className='min-w-0 overflow-hidden'>{syncCell}</div>
+        </div>
+        <div className='min-w-0'>
+          <div className={labelClass}>{t('Display policy')}</div>
+          <div className='min-w-0 overflow-hidden'>{statusCell}</div>
         </div>
         <div className='min-w-0'>
           <div className={labelClass}>{t('Endpoints')}</div>
