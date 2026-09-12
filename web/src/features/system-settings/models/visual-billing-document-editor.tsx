@@ -167,6 +167,9 @@ function PricingRuleCard(
     number: string
     first: boolean
     fallback: boolean
+    /** 这一档能不能一键变成兜底档（条件档 + 末尾确实是裸兜底档时才给）。 */
+    canMakeFallback?: boolean
+    onMakeFallback?: () => void
   }
 ) {
   const { t, i18n } = useTranslation()
@@ -282,6 +285,16 @@ function PricingRuleCard(
             className={`mt-1 size-4 shrink-0 transition-transform ${open || hasIssues ? 'rotate-180' : ''}`}
           />
         </CollapsibleTrigger>
+        {props.canMakeFallback && (
+          <Button
+            variant='ghost'
+            size='sm'
+            className='mt-0.5 h-6 shrink-0 px-2 text-xs'
+            onClick={props.onMakeFallback}
+          >
+            {t('Make fallback')}
+          </Button>
+        )}
         {node.kind === 'branch' && (
           <DataTableRowActionMenu
             ariaLabel={t('Branch actions {{path}}', { path: props.number })}
@@ -348,6 +361,37 @@ function PricingRuleList(props: PricingNodeProps & { prefix: string }) {
     current = current.no
   }
   rules.push(current)
+  const lastIndex = rules.length - 1
+  // 「设为兜底档」：把选中的档与末尾的无条件兜底档**互换内容**（标签/价格等），
+  // 位置与条件都不动 —— 选中的档成为"前面的规则均未命中"的兜底档，
+  // 原兜底档接管它的条件。复用各位置的 node.id，避免 issues/React key 错位。
+  // 只在"条件档（yes 是单档）+ 末尾是裸档"这种扁平结构下开放，嵌套结构不做猜测。
+  const makeFallback = (index: number) => {
+    const source = rules[index]
+    const fallbackNode = rules[lastIndex]
+    if (
+      index === lastIndex ||
+      source.kind !== 'branch' ||
+      source.yes.kind !== 'tier' ||
+      fallbackNode.kind !== 'tier'
+    ) {
+      return
+    }
+    const selected = source.yes
+    const next = rules.map((node, i) => {
+      if (i === index) {
+        return { ...source, yes: { ...fallbackNode, id: selected.id } }
+      }
+      if (i === lastIndex) return { ...selected, id: fallbackNode.id }
+      return node
+    })
+    let root = next[lastIndex]
+    for (let previous = lastIndex - 1; previous >= 0; previous--) {
+      const branch = next[previous]
+      if (branch.kind === 'branch') root = { ...branch, no: root }
+    }
+    props.onChange(root)
+  }
   return (
     <ol aria-label={t('Pricing rules')} className='min-w-0 space-y-3'>
       {rules.map((node, index) => (
@@ -357,7 +401,15 @@ function PricingRuleList(props: PricingNodeProps & { prefix: string }) {
             node={node}
             number={`${props.prefix}${index + 1}`}
             first={index === 0}
-            fallback={index > 0 && node.kind === 'tier'}
+            // 兜底档 = 链尾那一档（上游原判定 `index > 0` 会把第 2 档起全标成兜底）
+            fallback={index === lastIndex && index > 0 && node.kind === 'tier'}
+            canMakeFallback={
+              index !== lastIndex &&
+              node.kind === 'branch' &&
+              node.yes.kind === 'tier' &&
+              rules[lastIndex].kind === 'tier'
+            }
+            onMakeFallback={() => makeFallback(index)}
             onChange={(next) => {
               let root = next
               for (let previous = index - 1; previous >= 0; previous--) {
