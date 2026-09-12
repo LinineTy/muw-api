@@ -37,13 +37,6 @@ export function OsDesktopNotices() {
   const [active, setActive] = useState(0)
   const collapsed = useOsNoticeStore((state) => state.collapsed)
   const setCollapsed = useOsNoticeStore((state) => state.setCollapsed)
-  // 首次挂载后再置真：首帧透明，靠 CSS 过渡淡入（否则是硬切）
-  const [entered, setEntered] = useState(false)
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => setEntered(true))
-    return () => cancelAnimationFrame(raf)
-  }, [])
-
   // 收起后**先把格子让出来**：淡出 300ms 再卸载。
   // 之前只做透明+右移，格子还占着（maintainer 2026-09-12："公告向右隐藏还占宽度"），
   // 而且 translate 溢出还会把组件的横向滚动条顶出来。
@@ -56,6 +49,21 @@ export function OsDesktopNotices() {
     const timer = window.setTimeout(() => setUnmounted(true), 320)
     return () => window.clearTimeout(timer)
   }, [collapsed])
+
+  // 淡入标记：**跟随"该不该显示"**而不是挂载时机。
+  // 早先是挂载后 rAF 置真 —— 但卡片在数据回来前是 return null，等数据到了 entered 早已是 true，
+  // 于是"出现"是硬切、没有动画（2026-09-12 maintainer："公告出现的动画没了"）。
+  // 现在：只要显示条件成立就重新走一次"先透明、下一帧再显示"，数据到达 / 收起后重新展开都有淡入。
+  const shouldShow = !loading && total > 0 && !unmounted
+  const [entered, setEntered] = useState(false)
+  useEffect(() => {
+    if (!shouldShow) {
+      setEntered(false)
+      return
+    }
+    const raf = requestAnimationFrame(() => setEntered(true))
+    return () => cancelAnimationFrame(raf)
+  }, [shouldShow])
 
   // 有新公告（未读数增加）自动恢复显示；手动收起后不会被反复弹开
   const previousUnread = useRef(unreadAnnouncementsCount)

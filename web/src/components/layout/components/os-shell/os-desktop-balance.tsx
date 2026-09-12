@@ -8,7 +8,7 @@ import { formatQuota } from '@/lib/format'
 import { getSelf } from '@/lib/api'
 
 import { useOsShellNavigate } from './os-open'
-import { OsWidget, WIDGET_CLICKABLE_CLASS } from './os-widget'
+import { OsWidget } from './os-widget'
 
 /**
  * OS 桌面 · 余额小组件（2x1）
@@ -60,7 +60,9 @@ export function OsDesktopBalance() {
       <button
         type='button'
         onClick={() => osNavigate('/wallet')}
-        className={WIDGET_CLICKABLE_CLASS}
+        // 不用 WIDGET_CLICKABLE_CLASS 的 justify-between：那会把大数字压到卡底（maintainer 2026-09-12
+        // "余额往上挪点"）。这里标签行贴顶（与相邻卡的标签同一水平线），数字在剩余空间里居中。
+        className='focus-visible:ring-ring/40 flex h-full w-full cursor-pointer flex-col text-left outline-none focus-visible:ring-2'
       >
         <span className='flex w-full items-center justify-between gap-2'>
           <span className='text-muted-foreground text-xs'>{t('Balance')}</span>
@@ -69,8 +71,10 @@ export function OsDesktopBalance() {
             {todayQuota === undefined ? '—' : formatQuota(todayQuota)}
           </span>
         </span>
-        <span className='truncate text-2xl leading-none font-semibold tabular-nums'>
-          {balance ?? '—'}
+        <span className='flex min-h-0 flex-1 items-center'>
+          <span className='truncate text-2xl leading-none font-semibold tabular-nums'>
+            {balance ?? '—'}
+          </span>
         </span>
       </button>
     </OsWidget>
