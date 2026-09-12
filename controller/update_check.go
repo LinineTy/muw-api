@@ -54,7 +54,11 @@ import (
 //
 // 未知字段一律忽略，以后要在清单里加字段（如 min_supported_version）不必改后端。
 // 自建分发时用 UPDATE_CHECK_URL 指向自己的清单。
-const updateCheckURLDefault = "https://registry.dev3.mulink.top/update.json"
+// ⚠️ 路径故意用 .md 而不是 .json：反代前面是腾讯 EdgeOne，它**按路径缓存、忽略查询串**
+// （`?t=` 破缓存无效，请求头带 no-cache 也不绕），但站点给 .md 配了"忽略缓存"，实测
+// `.md` 每次 MISS 回源、`.json` 会被缓存住（2026-09-13 maintainer排查 + 实测）。
+// 另外源站这几个 location 都补了 `Cache-Control: no-store`，配合"遵循源站"规则也不该再被缓存。
+const updateCheckURLDefault = "https://registry.dev3.mulink.top/update.md"
 
 // updateChannelManifest 清单里的一个通道。
 type updateChannelManifest struct {
