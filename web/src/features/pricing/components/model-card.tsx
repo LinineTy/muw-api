@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 import { CopyButton } from '@/components/copy-button'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
+import { successRateVariant } from '@/features/model-health/lib/success-rate-tier'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 import { useSystemConfigStore } from '@/stores/system-config-store'
@@ -53,6 +54,8 @@ export interface ModelCardProps {
   showRechargePrice?: boolean
   selectedGroup?: string
   perf?: ModelPerfBadgeData
+  /** 24h 技术成功率(0-100)。undefined = 无数据/未登录,不渲染状态点。 */
+  healthRate?: number
 }
 
 export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
@@ -70,6 +73,17 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const modelIcon = modelIconKey ? getLobeIcon(modelIconKey, 28) : null
   const initial = props.model.model_name?.charAt(0).toUpperCase() || '?'
   const isUnconfiguredTaskUsage = isUnconfiguredTaskUsageModel(props.model)
+  // 状态点配色与模型健康页同档(≥99 绿/≥90 蓝/≥70 黄/其余红);
+  // undefined = 未登录或该模型 24h 无记录,不渲染。
+  const healthDotColor =
+    props.healthRate === undefined
+      ? null
+      : {
+          success: 'bg-success',
+          info: 'bg-info',
+          warning: 'bg-warning',
+          danger: 'bg-destructive',
+        }[successRateVariant(props.healthRate)]
   const billingTime = useBillingTime(props.model.billing_expr)
   const currency = useSystemConfigStore((state) => state.config.currency)
   const dynamicPriceOptions = useMemo(
@@ -254,7 +268,18 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   }
 
   return (
-    <Card className='hover:ring-foreground/20 h-full min-w-0 gap-3 transition-colors'>
+    <Card className='relative h-full min-w-0 gap-3 transition-colors hover:ring-foreground/20'>
+      {/* 状态点:absolute 钉在卡片右上角,长名字换行也不移位 */}
+      {healthDotColor && (
+        <span
+          aria-hidden
+          title={`${t('24h success rate')}: ${props.healthRate}%`}
+          className={cn(
+            'absolute top-3 right-3 size-1.5 rounded-full',
+            healthDotColor
+          )}
+        />
+      )}
       <CardHeader className='flex flex-row items-start gap-3'>
         <div
           aria-hidden

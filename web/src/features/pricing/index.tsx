@@ -34,6 +34,7 @@ import {
 } from './components'
 import { EXCLUDED_GROUPS, VIEW_MODES } from './constants'
 import { useFilters } from './hooks/use-filters'
+import { useModelHealthStatus } from './hooks/use-model-health-status'
 import { usePricingData } from './hooks/use-pricing-data'
 
 export function Pricing() {
@@ -53,6 +54,9 @@ export function Pricing() {
     priceRate,
     usdExchangeRate,
   } = usePricingData()
+
+  // 卡片状态点:登录后按 24h 成功率分色,未登录/无数据不渲染
+  const healthMap = useModelHealthStatus().data
 
   const {
     searchInput,
@@ -126,6 +130,7 @@ export function Pricing() {
         <ModelCardGrid
           models={filteredModels}
           onModelClick={handleModelClick}
+          healthMap={healthMap}
           priceRate={priceRate}
           usdExchangeRate={usdExchangeRate}
           tokenUnit={tokenUnit}

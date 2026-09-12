@@ -237,6 +237,22 @@ export function useModelsColumns(
         )
       },
     },
+    // MERGE-DECISION: 列集以 fork 为准（含 Context Window），仅并入上游的定价列。
+    // Context Window column
+    {
+      accessorKey: 'context_window',
+      header: t('Context Window'),
+      meta: { mobileHidden: true },
+      cell: ({ row }) => {
+        const cw = row.getValue('context_window') as number | null | undefined
+        if (!cw) {
+          return <span className='text-muted-foreground'>—</span>
+        }
+        return <span className='font-mono text-sm'>{cw.toLocaleString()}</span>
+      },
+      size: 100,
+      enableSorting: false,
+    },
     {
       accessorKey: 'tags',
       header: t('Tags'),
