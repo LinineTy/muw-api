@@ -23,11 +23,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/gin-gonic/gin"
 )
@@ -35,30 +37,35 @@ import (
 // 更新检测的源 = 一份「发布清单」update.json（由 repo 根的 release.sh 生成）：
 //
 //	GET https://registry.dev3.mulink.top/update.json
-//	{"version":"v26.09.13.muw.15","released_at":"2026-09-13T02:40:00Z","commit":"614daeae7"}
+//	{
+//	  "stable": {"version":"v26.08.20.muw.1",  "notes":"notes.md"},
+//	  "dev":    {"version":"v26.09.13.muw.15", "notes":"notes-dev.md"}
+//	}
 //
-// 该版本的更新说明正文（从 CHANGELOG.md 顶部条目切出）在同源 notes.md。
-// 清单只是静态文件，清单里有什么版本就公告什么版本 —— **发布是人为开关**：
-// release.sh 不传 `--publish` 就不上传这两个文件，任何部署都不会被提示有新版本
-// （2026-09-13 maintainer定：镜像/清单的公开与否由他控制，主题那批改动不对外公告）。
+// 两个通道（2026-09-13 maintainer定）：
+//   - stable：**对外公告的稳定版**。所有部署都按它判断有没有更新 —— 稳定版是
+//     "标记"出来的（仓库根的 STABLE 文件），不是靠藏起来。
+//   - dev：最新构建。只有打开「检测开发版更新」开关的实例才按它判断
+//     （operation_setting.UpdateCheckDevChannelEnabled）。
 //
-// 旧实现读 registry 的 tags/list 再从 tag 名里解析版本号，依赖"镜像被转储进
-// registry"这条副链（转储任务是 1Panel 上的定时任务，停掉或不跑就静默失灵），
-// 还得兜住 tag 命名/历史杂后缀/CDN 缓存；2026-09-13 按maintainer「换个更好的更新源」
-// 换成清单：一次请求拿版本，字段可扩展，且与镜像分发彻底解耦。
-// 自建分发时用 UPDATE_CHECK_URL / UPDATE_CHECK_NOTES_URL 指向自己的清单与说明。
+// notes 是该版说明正文的文件名（相对清单 URL 解析，也接受绝对 URL），
+// release.sh 从 CHANGELOG 顶部条目切出。说明不能内置进二进制：旧版本部署的
+// 二进制里没有新版本的说明，得像上游 GitHub release body 那样动态拉。
+//
+// 未知字段一律忽略，以后要在清单里加字段（如 min_supported_version）不必改后端。
+// 自建分发时用 UPDATE_CHECK_URL 指向自己的清单。
 const updateCheckURLDefault = "https://registry.dev3.mulink.top/update.json"
 
-// updateCheckNotesURLDefault 更新说明正文的 URL（release.sh 上传的 notes.md，
-// 与清单同源）。说明不能内置进二进制：旧版本部署的二进制里没有新版本的说明，
-// 得像上游 GitHub release body 那样从公共源动态拉。
-const updateCheckNotesURLDefault = "https://registry.dev3.mulink.top/notes.md"
-
-// releaseManifest 发布清单。只消费 version —— released_at / commit 是给人看的
-// （curl 一下就知道这版什么时候发的），其余未知字段一律忽略，以后要在清单里加
-// 字段（如 min_supported_version）不必改后端。
-type releaseManifest struct {
+// updateChannelManifest 清单里的一个通道。
+type updateChannelManifest struct {
 	Version string `json:"version"`
+	Notes   string `json:"notes"`
+}
+
+// releaseManifest 发布清单（见文件头说明）。
+type releaseManifest struct {
+	Stable updateChannelManifest `json:"stable"`
+	Dev    updateChannelManifest `json:"dev"`
 }
 
 // parseForkVersion 解析 muw fork 版本号,支持两种体系,返回可比数组:
@@ -193,25 +200,55 @@ func fetchUpdateSource(ctx context.Context, rawURL string, limit int64) ([]byte,
 	return io.ReadAll(io.LimitReader(resp.Body, limit))
 }
 
-// fetchReleaseManifest 取发布清单并解析出最新版本号。
-func fetchReleaseManifest(ctx context.Context, manifestURL string) (string, error) {
+// fetchReleaseManifest 取发布清单。
+func fetchReleaseManifest(ctx context.Context, manifestURL string) (*releaseManifest, error) {
 	data, err := fetchUpdateSource(ctx, manifestURL, 64<<10)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	var manifest releaseManifest
 	if err := common.Unmarshal(data, &manifest); err != nil {
-		return "", fmt.Errorf("更新清单解析失败: %w", err)
+		return nil, fmt.Errorf("更新清单解析失败: %w", err)
 	}
-	version := strings.TrimSpace(manifest.Version)
-	if version == "" {
-		return "", fmt.Errorf("更新清单里没有 version 字段")
-	}
-	return version, nil
+	return &manifest, nil
 }
 
-// fetchVersionNotes 拉取该版本的更新说明正文。失败返回空串,不阻塞更新检测本身。
+// pickChannel 按「检测开发版更新」开关选通道。开了但清单里没有 dev 条目时
+// 退回 stable（不该因为少写一段就让检查更新彻底失败）。
+func pickChannel(manifest *releaseManifest) (string, updateChannelManifest) {
+	if operation_setting.UpdateCheckDevChannelEnabled &&
+		strings.TrimSpace(manifest.Dev.Version) != "" {
+		return "dev", manifest.Dev
+	}
+	return "stable", manifest.Stable
+}
+
+// resolveNotesURL 把清单里的 notes 文件名解析成绝对 URL。
+func resolveNotesURL(manifestURL, notes string) string {
+	notes = strings.TrimSpace(notes)
+	if notes == "" {
+		return ""
+	}
+	if strings.HasPrefix(notes, "http://") || strings.HasPrefix(notes, "https://") {
+		return notes
+	}
+	base, err := url.Parse(manifestURL)
+	if err != nil {
+		return ""
+	}
+	ref, err := url.Parse(notes)
+	if err != nil {
+		return ""
+	}
+	return base.ResolveReference(ref).String()
+}
+
+// fetchVersionNotes 拉取该版本的更新说明正文。失败/未配置返回空串,
+// 不阻塞更新检测本身。
 func fetchVersionNotes(ctx context.Context, notesURL string) string {
+	if notesURL == "" {
+		return ""
+	}
 	data, err := fetchUpdateSource(ctx, notesURL, 1<<20)
 	if err != nil {
 		return ""
@@ -227,9 +264,16 @@ func GetUpdateCheck(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
 	defer cancel()
 
-	latestTag, err := fetchReleaseManifest(ctx, manifestURL)
+	manifest, err := fetchReleaseManifest(ctx, manifestURL)
 	if err != nil {
 		common.ApiError(c, err)
+		return
+	}
+
+	channel, entry := pickChannel(manifest)
+	latestTag := strings.TrimSpace(entry.Version)
+	if latestTag == "" {
+		common.ApiError(c, fmt.Errorf("更新清单里没有 %s 通道的版本号", channel))
 		return
 	}
 
@@ -240,8 +284,7 @@ func GetUpdateCheck(c *gin.Context) {
 
 	latestChangelog := ""
 	if hasUpdate {
-		notesURL := common.GetEnvOrDefaultString("UPDATE_CHECK_NOTES_URL", updateCheckNotesURLDefault)
-		latestChangelog = fetchVersionNotes(ctx, notesURL)
+		latestChangelog = fetchVersionNotes(ctx, resolveNotesURL(manifestURL, entry.Notes))
 	}
 
 	common.ApiSuccess(c, gin.H{
@@ -249,5 +292,6 @@ func GetUpdateCheck(c *gin.Context) {
 		"latest_tag":       latestTag,
 		"current_version":  common.Version,
 		"latest_changelog": latestChangelog,
+		"channel":          channel,
 	})
 }
