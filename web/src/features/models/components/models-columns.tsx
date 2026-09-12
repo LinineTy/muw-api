@@ -294,15 +294,16 @@ export function useModelsColumns(
       accessorKey: 'sync_official',
       header: () => (
         <TruncatedCell className='max-w-[120px]'>
-          {t('Sync policy')}
+          {t('Official Sync')}
         </TruncatedCell>
       ),
       size: 145,
       enableSorting: false,
-      meta: { mobileHidden: true, label: t('Sync policy') },
+      meta: { mobileHidden: true, label: t('Official Sync') },
       cell: ({ row }) => {
-        // fork 老口径：官方同步按语义着色（同步=success、保留本地=warning）；
-        // 上游 rework 之后退化成纯灰文本，2026-09-13 maintainer指出「旧版如此花哨，新版好素」
+        // fork 老口径：官方同步按语义着色（官方同步=success、不同步=warning），
+        // 文案也用老的（上游 rework 换成了 Sync policy / Allow updates / Keep local 的灰文本）；
+        // 2026-09-13 maintainer：「旧版如此花哨，新版好素」「文案还是老版本的直观」
         if (!row.original.id) {
           return <span className='text-muted-foreground text-sm'>—</span>
         }
@@ -314,7 +315,7 @@ export function useModelsColumns(
             copyable={false}
             className='-ml-1.5 max-w-none shrink-0'
           >
-            {synced ? t('Allow updates') : t('Keep local')}
+            {synced ? t('Official Sync') : t('No Sync')}
           </StatusBadge>
         )
       },
