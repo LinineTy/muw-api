@@ -24,7 +24,7 @@ import type {
   VisibilityState,
   SortingState,
 } from '@tanstack/react-table'
-import { Copy, Plus } from 'lucide-react'
+import { Copy, ListChecks, Plus } from 'lucide-react'
 import {
   useState,
   useMemo,
@@ -47,6 +47,11 @@ import {
   useDataTable,
 } from '@/components/data-table'
 import { Button } from '@/components/ui/button'
+import {
+  MobileToggleMenu,
+  ToggleMenuItem,
+  TogglePill,
+} from '@/components/ui/responsive-toggle'
 import { useModelPricing } from '@/features/model-pricing/api'
 import {
   applyPricingDraft,
@@ -161,6 +166,8 @@ const ModelRatioVisualEditorComponent = forwardRef<
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = useState('')
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
+  // 批量模式开关：默认关，打开后才显示勾选列与底部分批栏（与其它页统一）。
+  const [batchMode, setBatchMode] = useState(false)
   const editorPanelRef = useRef<ModelPricingEditorPanelHandle>(null)
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
@@ -496,10 +503,11 @@ const ModelRatioVisualEditorComponent = forwardRef<
         onDelete: handleDelete,
         onEdit: handleEdit,
         deleteDisabled: filterMode === 'unset',
+        selectable: batchMode,
         taskModelNames,
         t,
       }),
-    [handleEdit, handleDelete, filterMode, t, taskModelNames]
+    [handleEdit, handleDelete, filterMode, batchMode, t, taskModelNames]
   )
 
   const ensurePageInRange = useCallback((pageCount: number) => {
@@ -521,7 +529,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
     columnVisibility,
     pagination,
     rowSelection,
-    enableRowSelection: true,
+    enableRowSelection: batchMode,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: handleGlobalFilterChange,
@@ -673,12 +681,34 @@ const ModelRatioVisualEditorComponent = forwardRef<
               },
             ]}
             preActions={
-              filterMode === 'unset' ? undefined : (
-                <Button onClick={handleAdd}>
-                  <Plus data-icon='inline-start' />
-                  {t('Add model')}
-                </Button>
-              )
+              <>
+                <TogglePill
+                  id='ratio-batch-mode'
+                  label={t('Batch Operations')}
+                  icon={
+                    <ListChecks
+                      className='text-muted-foreground h-4 w-4'
+                      aria-hidden='true'
+                    />
+                  }
+                  checked={batchMode}
+                  onCheckedChange={setBatchMode}
+                />
+                {filterMode !== 'unset' && (
+                  <Button onClick={handleAdd}>
+                    <Plus data-icon='inline-start' />
+                    {t('Add model')}
+                  </Button>
+                )}
+                <MobileToggleMenu>
+                  <ToggleMenuItem
+                    label={t('Batch Operations')}
+                    icon={<ListChecks className='size-4' aria-hidden='true' />}
+                    checked={batchMode}
+                    onCheckedChange={setBatchMode}
+                  />
+                </MobileToggleMenu>
+              </>
             }
           />
 
@@ -704,7 +734,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
               ]}
               colgroup={
                 <colgroup>
-                  <col className='w-9' />
+                  {batchMode && <col className='w-9' />}
                   <col className='w-[300px]' />
                   <col className='w-[120px]' />
                   <col className='w-[300px]' />
@@ -740,14 +770,16 @@ const ModelRatioVisualEditorComponent = forwardRef<
         </div>
       </div>
 
-      <DataTableBulkActions table={table} entityName={t('model')}>
-        <Button size='sm' disabled={!editData} onClick={handleBatchCopy}>
-          <Copy data-icon='inline-start' />
-          {editData
-            ? t('Copy {{name}} pricing', { name: editData.name })
-            : t('Open a source model first')}
-        </Button>
-      </DataTableBulkActions>
+      {batchMode && (
+        <DataTableBulkActions table={table} entityName={t('model')}>
+          <Button size='sm' disabled={!editData} onClick={handleBatchCopy}>
+            <Copy data-icon='inline-start' />
+            {editData
+              ? t('Copy {{name}} pricing', { name: editData.name })
+              : t('Open a source model first')}
+          </Button>
+        </DataTableBulkActions>
+      )}
 
       <ModelPricingSheet
         ref={editorPanelRef}

@@ -33,6 +33,8 @@ import type { ModelPerfBadgeData } from './model-perf-badge'
 export interface ModelCardGridProps {
   models: PricingModel[]
   onModelClick: (modelName: string) => void
+  /** model_name → 24h 技术成功率;undefined 值 = 无数据,卡片不渲染状态点 */
+  healthMap?: Map<string, number>
   priceRate?: number
   usdExchangeRate?: number
   tokenUnit?: TokenUnit
@@ -85,6 +87,7 @@ export function ModelCardGrid(props: ModelCardGridProps) {
             showRechargePrice={props.showRechargePrice}
             selectedGroup={props.selectedGroup}
             perf={perfMap.get(model.model_name || '')}
+            healthRate={props.healthMap?.get(model.model_name || '')}
             onClick={() => props.onModelClick(model.model_name || '')}
           />
         ))}
