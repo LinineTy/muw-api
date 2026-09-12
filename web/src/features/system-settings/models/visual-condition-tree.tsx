@@ -252,6 +252,8 @@ function ConditionFields(props: ConditionProps) {
       <div className='flex min-w-0 flex-1 flex-wrap items-center gap-2'>
         <BillingTimeProbeFields
           includeTokens
+          // 阶梯条件只给计费/长度探针；时间类变量归乘数区（请求规则）—— 2026-09-12 maintainer定
+          tokensOnly
           probe={comparison.probe}
           timezone={comparison.timezone}
           invalidTimezone={errors.some(
