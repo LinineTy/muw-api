@@ -79,8 +79,11 @@ export function OsWidget({
         gridRow: `span ${span.row}`,
       }}
       className={cn(
-        // 与公告卡同一套琉璃底：卡自身不透明度过低，靠 backdrop-blur 出材质
-        'bg-card/90 border-border/70 shadow-md flex h-full w-full flex-col overflow-hidden rounded-2xl border backdrop-blur-md',
+        // 与公告卡同一套琉璃底：卡自身不透明度过低，靠 backdrop-blur 出材质。
+        // ⚠️ 不留阴影（2026-09-12 maintainer："底部阴影很出戏"）：Tailwind 的 shadow-md
+        // 是贴边的小硬阴影，在浅色壁纸上会给每张卡糊一条灰边；组件是"贴在桌面上"的元素，
+        // 不像 Dock/窗口那样悬浮（那两处用的是 0_12px_40px 这类大范围柔影）。无阴影与磁贴一致。
+        'bg-card/90 border-border/70 flex h-full w-full flex-col overflow-hidden rounded-2xl border backdrop-blur-md',
         compact ? 'px-3 py-2' : 'px-4 py-3',
         className
       )}
