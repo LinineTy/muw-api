@@ -123,11 +123,12 @@ export function UpdateCheckerSection({
   // 是否连"未标记稳定"的开发版一起检测（默认关：只看对外公告的稳定版）。
   const { data: optionsData } = useSystemOptions()
   const updateOption = useUpdateOption()
+  // 选项接口在异常/被 mock 的情况下不一定给数组，这里先兜一层再查（避免 .find 抛错把整节炸掉）
+  const options = Array.isArray(optionsData?.data) ? optionsData.data : []
   const devChannelEnabled =
     String(
-      optionsData?.data?.find(
-        (option) => option.key === 'UpdateCheckDevChannelEnabled'
-      )?.value ?? ''
+      options.find((option) => option.key === 'UpdateCheckDevChannelEnabled')
+        ?.value ?? ''
     ) === 'true'
 
   const uptime = startTime ? formatTimestamp(startTime) : t('Unknown')
