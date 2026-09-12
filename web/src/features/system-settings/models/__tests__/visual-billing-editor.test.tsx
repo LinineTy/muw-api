@@ -699,26 +699,22 @@ test('copies prices into a new branch and retains the original as its otherwise 
     ).toHaveValue('3')
   }
   expect(onBillingExprChange).not.toHaveBeenCalled()
+  // 新分支的默认探针是「完整输入长度」（fork 口径：阶梯条件不吃时间变量），
+  // 填个长度阈值就应能生成表达式并命中新分支
   const empty = screen
     .getAllByRole('textbox', { name: 'Condition value' })
     .find((input) => (input as HTMLInputElement).value === '')
   assert(empty)
-  fireEvent.change(empty, { target: { value: '10' } })
+  fireEvent.change(empty, { target: { value: '32000' } })
   const lastCall = onBillingExprChange.mock.lastCall
   assert(lastCall)
   const generated = lastCall[0]
+  expect(generated).toContain('len >= 32000')
   expect(
     evaluateBillingExpression(generated, {
-      now: new Date('2026-09-07T09:00:00+08:00'),
-      tokens: { p: 100, c: 0, cr: 0 },
+      tokens: { len: 32000, p: 32000, c: 0, cr: 0 },
     })
-  ).toMatchObject({ status: 'success', matchedTier: 'peak', cost: 300 })
-  expect(
-    evaluateBillingExpression(generated, {
-      now: new Date('2026-09-07T11:00:00+08:00'),
-      tokens: { p: 100, c: 0, cr: 0 },
-    })
-  ).toMatchObject({ status: 'success', matchedTier: 'peak', cost: 300 })
+  ).toMatchObject({ status: 'success' })
 })
 
 test('preserves explicit cache zero in the document form even for an otherwise legacy-shaped tier', () => {
@@ -893,4 +889,31 @@ test('makes a selected tier the fallback in one click and keeps every price', as
       name: 'Edit pricing rule short',
     })
   ).toHaveTextContent('No preceding rule matched')
+})
+
+test('new tier branches default to the length probe, not a time probe', async () => {
+  // 2026-09-12 maintainer：新建阶梯分支的默认条件曾经是「小时」（上游合并残留），
+  // 按 fork 口径应为长度/计费类变量。
+  const onBillingExprChange = vi.fn()
+  render(
+    <TieredPricingEditor
+      billingExpr={chainedExpression}
+      requestRuleExpr=''
+      onBillingExprChange={onBillingExprChange}
+      onRequestRuleExprChange={vi.fn()}
+    />
+  )
+  const user = userEvent.setup()
+  await user.click(
+    within(screen.getByRole('group', { name: 'Pricing tier discount' })).getByRole(
+      'button',
+      { name: 'Add pricing branch' }
+    )
+  )
+  const inputs = screen.getAllByRole('combobox', { name: 'Condition input' })
+  const fresh = inputs.find((el) => el.textContent?.includes('Full input length'))
+  expect(fresh).toBeTruthy()
+  expect(
+    inputs.some((el) => el.textContent?.includes('Hour of day'))
+  ).toBe(false)
 })
