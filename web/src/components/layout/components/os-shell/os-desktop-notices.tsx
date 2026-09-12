@@ -1,5 +1,5 @@
 // @muw-owned
-import { ChevronDown, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -16,27 +16,20 @@ import { cn } from '@/lib/utils'
 import { useOsNoticeStore } from './os-notice-store'
 
 /**
- * 堆叠里最多露出几张（含最前面那张完整卡）。
- * 最前面一张是完整卡，后面每张只在下方露出 `STACK_STEP_REM` 的一小节。
+ * 单卡高度（rem）——「大框」。
+ * 标题、正文、翻页现在**都在卡里**，所以比旧的「纯内容框」高 1rem。
  */
-const VISIBLE_STACK = 3
-/** 完整卡高度（rem）——「大框」 */
-const CARD_HEIGHT_REM = 12
-/** 后面每张露出的高度（rem）——「下面一小节」 */
-const STACK_STEP_REM = 2.6
-/**
- * 后面每张**上移**这么多（rem），把自己的上边框塞到前一张卡底下。
- * 不塞的话两张卡的 1px 边框会在接缝处叠成一条深色线（浅色主题下都能量出来，
- * 琉璃主题压在深色壁纸上就像「黑线」）——2026-09-12 maintainer反馈。
- */
-const STACK_TUCK_REM = 0.2
+const CARD_HEIGHT_REM = 13
 
 /**
- * OS 桌面右侧 · 时间线公告堆叠卡
+ * OS 桌面右侧 · 时间线公告卡（**单卡单条**）
  *
  * 只取「时间线」（announcements）——通知（notice）已经有糊脸强制阅读弹窗，桌面不重复。
- * 一卡一条公告：最前面一张完整展示，后面每张只在下方露出一小节（大框 + 小节）；
- * 点任意一张（或底部箭头）滚到下一张，循环。无公告时不渲染，桌面保持干净。
+ *
+ * 2026-09-12 maintainer定的形态：**全量元素进卡，一次只显示一条公告，卡底部给上下翻页按钮**。
+ * 比原来的「堆叠露出多张」更彻底地根除接缝鬼影 —— 只有一张卡，卡与卡之间不存在接缝，
+ * 也就不存在「鼠标移出页面后接缝处冒黑线、只有重绘才恢复」那类合成层陈旧绘制问题。
+ * 默认显示最新一条；点卡体或底部箭头都能翻（循环）。无公告时不渲染，桌面保持干净。
  */
 export function OsDesktopNotices({ className }: { className?: string }) {
   const { t } = useTranslation()
@@ -72,10 +65,14 @@ export function OsDesktopNotices({ className }: { className?: string }) {
     setActive((current) => (total > 0 ? (current + 1) % total : 0))
   }, [total])
 
-  // 卡内有富文本链接：点链接照常打开，不触发翻页
+  const showPrev = useCallback(() => {
+    setActive((current) => (total > 0 ? (current - 1 + total) % total : 0))
+  }, [total])
+
+  // 卡内是富文本：点链接照常打开、点按钮走按钮自己的逻辑，都不触发翻页
   const handleCardClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
-      if ((event.target as HTMLElement).closest('a')) return
+      if ((event.target as HTMLElement).closest('a, button')) return
       showNext()
     },
     [showNext]
@@ -98,139 +95,104 @@ export function OsDesktopNotices({ className }: { className?: string }) {
 
   const hidden = collapsed || !entered
 
-  const visibleCount = Math.min(VISIBLE_STACK, total)
+  const current: AnnouncementItem =
+    announcements[Math.min(active, total - 1)]
+  const publishDate = current.publishDate ? new Date(current.publishDate) : null
+  const relativeTime = publishDate ? getRelativeTime(publishDate, t) : ''
+  const absoluteTime = publishDate ? formatDateTimeObject(publishDate) : ''
 
   return (
     <div
       aria-hidden={hidden}
       className={cn(
-        // ⚠️ 不要给这个 wrapper 加 will-change / filter / opacity 之外的合成提示：
-        // 它们会把 wrapper 变成 backdrop root，里面每张卡的 backdrop-blur 只能采样
-        // 到这个 root 内部，Chrome 在卡与卡的接缝处会画出一条硬边/黑线
-        // （2026-09-12 maintainer反馈：鼠标移出页面后接缝处冒黑线，hover 卡片才消失
-        //  = 典型的重绘/合成层陈旧问题；去掉这个 hint 让卡片直接采样页面背景）
-        'flex w-[21rem] flex-col gap-3 transition-[opacity,translate] duration-300 ease-out',
+        // ⚠️ 别给这个 wrapper 加 will-change / filter 之类的合成提示：它会把 wrapper
+        // 变成 backdrop root，卡片的 backdrop-blur 只能采样 root 内部，容易出硬边/鬼影
+        //（2026-09-12 踩过：鼠标移出页面后接缝冒黑线、只有重绘才恢复）
+        'w-[21rem] transition-[opacity,translate] duration-300 ease-out',
         hidden
           ? 'pointer-events-none translate-x-3 opacity-0'
           : 'translate-x-0 opacity-100',
         className
       )}
     >
-      <div className='flex items-start justify-between gap-2 px-1'>
-        <div className='min-w-0'>
-          <p className='text-sm font-medium'>{t('System Announcements')}</p>
-          <p className='text-muted-foreground truncate text-xs'>
-            {t('Latest platform updates and notices')}
-          </p>
-        </div>
-        <button
-          type='button'
-          onClick={() => setCollapsed(true)}
-          title={t('Close')}
-          aria-label={t('Close')}
-          className='text-muted-foreground hover:text-foreground -mt-0.5 shrink-0 rounded-md p-1 transition-colors'
-        >
-          <X className='size-3.5' aria-hidden='true' />
-        </button>
-      </div>
-
       <div
-        className='relative'
-        style={{
-          height: `calc(${CARD_HEIGHT_REM}rem + ${
-            (visibleCount - 1) * STACK_STEP_REM
-          }rem)`,
-        }}
+        style={{ height: `${CARD_HEIGHT_REM}rem` }}
+        className='bg-card/90 border-border/70 hover:border-border focus-visible:ring-ring/40 shadow-md hover:shadow-lg flex flex-col overflow-hidden rounded-2xl border px-4 py-3 backdrop-blur-md'
       >
-        {announcements.map((item: AnnouncementItem, idx) => {
-          const pos = (idx - active + total) % total
-          if (pos >= visibleCount) return null
+        {/* 头部：标题 + 收起（全量元素都进卡，卡外不再有任何元素） */}
+        <div className='flex items-start justify-between gap-2'>
+          <div className='min-w-0'>
+            <p className='text-sm font-medium'>{t('System Announcements')}</p>
+            <p className='text-muted-foreground truncate text-xs'>
+              {t('Latest platform updates and notices')}
+            </p>
+          </div>
+          <button
+            type='button'
+            onClick={() => setCollapsed(true)}
+            title={t('Close')}
+            aria-label={t('Close')}
+            className='text-muted-foreground hover:text-foreground -mt-0.5 -mr-1 shrink-0 rounded-md p-1 transition-colors'
+          >
+            <X className='size-3.5' aria-hidden='true' />
+          </button>
+        </div>
 
-          const isFront = pos === 0
-          const publishDate = item.publishDate
-            ? new Date(item.publishDate)
-            : null
-          const relativeTime = publishDate
-            ? getRelativeTime(publishDate, t)
-            : ''
-          const absoluteTime = publishDate
-            ? formatDateTimeObject(publishDate)
-            : ''
-          const key =
-            item.id !== undefined && item.id !== null
-              ? `id:${item.id}`
-              : `idx:${idx}`
-
-          return (
-            <div
-              key={key}
-              role='button'
-              tabIndex={0}
-              onClick={handleCardClick}
-              onKeyDown={handleCardKeyDown}
-              style={{
-                // 只有最前面一张是完整卡，后面每张整体挪到下面、高度只留一小节
-                top: `${
-                  isFront
-                    ? 0
-                    : CARD_HEIGHT_REM +
-                      (pos - 1) * STACK_STEP_REM -
-                      STACK_TUCK_REM
-                }rem`,
-                height: `${
-                  isFront ? CARD_HEIGHT_REM : STACK_STEP_REM + STACK_TUCK_REM
-                }rem`,
-                zIndex: visibleCount - pos,
-              }}
-              className={cn(
-                // 非琉璃主题下也要看得出「一块一卡」：底色更实、边框更清楚、投影更明显
-                'bg-card/90 border-border/70 hover:border-border focus-visible:ring-ring/40 shadow-md hover:shadow-lg absolute inset-x-0 flex cursor-pointer flex-col overflow-hidden rounded-2xl border px-4 py-3 text-left backdrop-blur-md transition-[top,height,border-color,box-shadow] duration-300 ease-out outline-none focus-visible:ring-2'
-              )}
-            >
-              <div
-                className={cn(
-                  'flex min-h-0 flex-1 items-start gap-3 pr-1',
-                  isFront && 'overflow-y-auto'
-                )}
-              >
-                <AnnouncementDot type={item.type} />
-                <div className='flex min-w-0 flex-1 flex-col gap-2'>
-                  <div className='text-sm'>
-                    <RichContent breaks content={item.content || ''} />
-                  </div>
-
-                  {item.extra ? (
-                    <div className='text-muted-foreground text-xs'>
-                      <RichContent breaks content={item.extra} />
-                    </div>
-                  ) : null}
-
-                  {absoluteTime ? (
-                    <div className='text-muted-foreground text-xs'>
-                      {relativeTime ? `${relativeTime} • ` : null}
-                      {absoluteTime}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      <div className='text-muted-foreground flex items-center justify-between px-1 text-xs'>
-        <span>
-          {active + 1} / {total}
-        </span>
-        <button
-          type='button'
-          onClick={showNext}
-          title={t('Next')}
-          aria-label={t('Next')}
-          className='hover:text-foreground rounded-md p-0.5 transition-colors'
+        {/* 正文：一次只显示一条，内容长了在卡内滚动；点卡体翻到下一条 */}
+        <div
+          role='button'
+          tabIndex={0}
+          onClick={handleCardClick}
+          onKeyDown={handleCardKeyDown}
+          className='focus-visible:ring-ring/40 mt-3 flex min-h-0 flex-1 cursor-pointer items-start gap-3 overflow-y-auto pr-1 outline-none focus-visible:ring-2'
         >
-          <ChevronDown className='size-4' aria-hidden='true' />
-        </button>
+          <AnnouncementDot type={current.type} />
+          <div className='flex min-w-0 flex-1 flex-col gap-2'>
+            <div className='text-sm'>
+              <RichContent breaks content={current.content || ''} />
+            </div>
+
+            {current.extra ? (
+              <div className='text-muted-foreground text-xs'>
+                <RichContent breaks content={current.extra} />
+              </div>
+            ) : null}
+
+            {absoluteTime ? (
+              <div className='text-muted-foreground text-xs'>
+                {relativeTime ? `${relativeTime} • ` : null}
+                {absoluteTime}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {/* 卡底部：上下翻页（左计数、右按钮） */}
+        <div className='text-muted-foreground mt-3 flex items-center justify-between text-xs'>
+          <span>
+            {active + 1} / {total}
+          </span>
+          <div className='flex items-center gap-0.5'>
+            <button
+              type='button'
+              onClick={showPrev}
+              title={t('Previous announcement')}
+              aria-label={t('Previous announcement')}
+              className='hover:text-foreground hover:bg-muted rounded-md p-1 transition-colors'
+            >
+              <ChevronUp className='size-4' aria-hidden='true' />
+            </button>
+            <button
+              type='button'
+              onClick={showNext}
+              title={t('Next announcement')}
+              aria-label={t('Next announcement')}
+              className='hover:text-foreground hover:bg-muted rounded-md p-1 transition-colors'
+            >
+              <ChevronDown className='size-4' aria-hidden='true' />
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )
