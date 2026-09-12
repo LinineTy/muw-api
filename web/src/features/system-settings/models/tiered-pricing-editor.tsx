@@ -85,6 +85,10 @@ import {
 } from '@/features/pricing/lib/billing-expr'
 import { ConditionBuilder } from '@/features/pricing/lib/condition-builder'
 import {
+  checkRequestDnfIssues,
+  formatRequestDnfText,
+} from '@/features/pricing/lib/condition-format'
+import {
   parseVisualBillingDocument,
   serializeVisualBillingDocument,
   type VisualBillingDocument,
@@ -563,6 +567,11 @@ function RuleGroupCard({
   onRemove,
 }: RuleGroupCardProps) {
   const { t } = useTranslation()
+  const translate = (key: string) => t(key)
+  // Live preview + the "never matches" / "empty branch" diagnostics that the DNF
+  // editor surfaces while the group is being edited.
+  const issues = checkRequestDnfIssues(group.conditions, translate)
+  const preview = formatRequestDnfText(group.conditions, translate)
 
   return (
     <div className='bg-muted/30 space-y-3 rounded-md border p-3'>
@@ -598,6 +607,8 @@ function RuleGroupCard({
         rowAddLabel={t('Add condition')}
         branchAddLabel={t('Add OR branch')}
         orLabel={t('OR')}
+        preview={preview}
+        issues={issues}
         translateIssue={(key) => t(key)}
       />
 
