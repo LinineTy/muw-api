@@ -257,123 +257,42 @@ test('keeps the condition tree as the default after switching models and applyin
   )
 })
 
-test('builds weekday peak pricing with two time ranges from an empty visual form', async () => {
+test('keeps time probes out of tier conditions after the fork split', async () => {
+  // fork 口径（2026-09-12 maintainer定）：阶梯条件只给计费/长度变量，时间类变量归乘数区。
+  // 上游 rework 把两套变量合成一套，这里锁住拆分后的行为，防止下次同步再被合回去。
   const onBillingExprChange = vi.fn()
   render(
     <TieredPricingEditor
-      billingExpr=''
+      billingExpr={chainedExpression}
       requestRuleExpr=''
       onBillingExprChange={onBillingExprChange}
       onRequestRuleExprChange={vi.fn()}
     />
   )
   const user = userEvent.setup()
-  fireEvent.change(screen.getByRole('textbox', { name: 'Tier name' }), {
-    target: { value: '空闲' },
-  })
-  fireEvent.change(screen.getByRole('textbox', { name: 'Input price' }), {
-    target: { value: '1.5' },
-  })
-  fireEvent.change(screen.getByRole('textbox', { name: 'Output price' }), {
-    target: { value: '4.5' },
-  })
   await user.click(
-    screen.getByRole('checkbox', { name: 'Include Cache read price' })
+    screen.getAllByRole('combobox', { name: 'Condition input' })[0]
   )
-  fireEvent.change(screen.getByRole('textbox', { name: 'Cache read price' }), {
-    target: { value: '0.05' },
-  })
-  await user.click(screen.getByRole('button', { name: 'Add pricing branch' }))
-  fireEvent.change(screen.getAllByRole('textbox', { name: 'Tier name' })[0], {
-    target: { value: '高峰' },
-  })
-  const peak = within(screen.getByRole('group', { name: 'Pricing tier 高峰' }))
-  fireEvent.change(peak.getByRole('textbox', { name: 'Input price' }), {
-    target: { value: '3' },
-  })
-  fireEvent.change(peak.getByRole('textbox', { name: 'Output price' }), {
-    target: { value: '9' },
-  })
-  fireEvent.change(peak.getByRole('textbox', { name: 'Cache read price' }), {
-    target: { value: '0.10' },
-  })
+  expect(screen.getByRole('option', { name: 'Full input length' })).toBeVisible()
+  expect(screen.queryByRole('option', { name: 'Weekday' })).toBeNull()
+  expect(screen.queryByRole('option', { name: 'Hour of day' })).toBeNull()
+  expect(onBillingExprChange).not.toHaveBeenCalled()
+})
 
-  await user.click(screen.getByRole('combobox', { name: 'Condition input' }))
-  await user.click(screen.getByRole('option', { name: 'Weekday' }))
-  await user.click(screen.getByRole('combobox', { name: 'Condition value' }))
-  await user.click(screen.getByRole('option', { name: 'Monday' }))
-  await user.click(screen.getByRole('button', { name: 'Condition actions 1' }))
-  await user.click(screen.getByRole('menuitem', { name: 'Add condition' }))
-  await user.click(
-    screen.getAllByRole('combobox', { name: 'Condition input' })[1]
+test('still edits a legacy tier that already carries a time condition', () => {
+  // 老文档/上游风格表达式里阶梯条件已经是时间变量 → 当前值仍要显示出来（否则保存即损坏）
+  const onBillingExprChange = vi.fn()
+  render(
+    <TieredPricingEditor
+      billingExpr='hour("UTC") >= 9 ? tier("on", p * 1) : tier("off", p * 2)'
+      requestRuleExpr=''
+      onBillingExprChange={onBillingExprChange}
+      onRequestRuleExprChange={vi.fn()}
+    />
   )
-  await user.click(screen.getByRole('option', { name: 'Weekday' }))
-  await user.click(
-    screen.getAllByRole('combobox', { name: 'Condition value' })[1]
-  )
-  await user.click(screen.getByRole('option', { name: 'Friday' }))
-  await user.click(
-    screen.getAllByRole('combobox', { name: 'Comparison operator' })[1]
-  )
-  await user.click(screen.getByRole('option', { name: '<=' }))
-  await user.click(screen.getByRole('button', { name: 'Add to group 1' }))
-  await user.click(
-    screen.getByRole('menuitem', { name: 'Add condition group' })
-  )
-
-  for (const [index, start, end] of [
-    [1, 9, 12],
-    [2, 14, 18],
-  ]) {
-    await user.click(screen.getByRole('button', { name: 'Add to group 1.2' }))
-    await user.click(
-      screen.getByRole('menuitem', { name: 'Add condition group' })
-    )
-    const period = within(
-      screen.getByRole('group', { name: `Condition group 1.2.${index}` })
-    )
-    await user.click(period.getByRole('combobox', { name: 'Condition group' }))
-    await user.click(screen.getByRole('option', { name: 'All conditions' }))
-    await user.click(
-      screen.getByRole('button', { name: `Add to group 1.2.${index}` })
-    )
-    await user.click(screen.getByRole('menuitem', { name: 'Add condition' }))
-    fireEvent.change(period.getByRole('textbox', { name: 'Condition value' }), {
-      target: { value: String(start) },
-    })
-    await user.click(
-      screen.getByRole('button', { name: `Add to group 1.2.${index}` })
-    )
-    await user.click(screen.getByRole('menuitem', { name: 'Add condition' }))
-    fireEvent.change(
-      period.getAllByRole('textbox', { name: 'Condition value' })[1],
-      { target: { value: String(end) } }
-    )
-    await user.click(
-      period.getAllByRole('combobox', { name: 'Comparison operator' })[1]
-    )
-    await user.click(screen.getByRole('option', { name: '<' }))
-  }
-
-  const generated = onBillingExprChange.mock.lastCall?.[0]
-  assert(generated)
-  for (const [localTime, matchedTier, cost] of [
-    ['2026-09-07T08:59:00', '空闲', 600.5],
-    ['2026-09-07T09:00:00', '高峰', 1201],
-    ['2026-09-07T12:00:00', '空闲', 600.5],
-    ['2026-09-07T14:00:00', '高峰', 1201],
-    ['2026-09-07T18:00:00', '空闲', 600.5],
-    ['2026-09-11T10:00:00', '高峰', 1201],
-    ['2026-09-12T10:00:00', '空闲', 600.5],
-    ['2026-09-13T15:00:00', '空闲', 600.5],
-  ] as const) {
-    expect(
-      evaluateBillingExpression(generated, {
-        now: new Date(`${localTime}+08:00`),
-        tokens: { p: 100, c: 100, cr: 10 },
-      })
-    ).toMatchObject({ status: 'success', matchedTier, cost })
-  }
+  const probes = screen.getAllByRole('combobox', { name: 'Condition input' })
+  expect(probes.some((el) => el.textContent?.includes('Hour of day'))).toBe(true)
+  expect(onBillingExprChange).not.toHaveBeenCalled()
 })
 
 test('edits image cache pricing and preserves an explicitly free cache lane', () => {

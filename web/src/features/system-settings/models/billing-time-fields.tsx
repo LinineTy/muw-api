@@ -51,12 +51,22 @@ export function BillingTimeProbeFields(props: {
   probe: VisualComparison['probe']
   timezone: string
   includeTokens?: boolean
+  /**
+   * 阶梯条件专用：只给计费/长度探针（len / p / c），时间类探针归乘数区（请求规则）。
+   * 2026-09-12 maintainer定：「旧版阶梯条件里只有输入输出相关的，新版把条件乘数区的全加上了」
+   * —— 上游 rework 把两套变量合成一套，按 fork 口径拆回。
+   * 当前值若本来就是时间探针（老文档/上游风格表达式），仍并入选项以免显示成空值、保存即损坏。
+   */
+  tokensOnly?: boolean
   invalidTimezone?: boolean
   onChange: (probe: VisualComparison['probe'], timezone: string) => void
 }) {
   const { t } = useTranslation()
-  const probes: VisualComparison['probe'][] = [...TIME_FUNCS]
-  if (props.includeTokens) probes.push('len', 'p', 'c')
+  const probes: VisualComparison['probe'][] = props.tokensOnly
+    ? (['len', 'p', 'c'] as VisualComparison['probe'][])
+    : [...TIME_FUNCS]
+  if (props.includeTokens && !props.tokensOnly) probes.push('len', 'p', 'c')
+  if (!probes.includes(props.probe)) probes.push(props.probe)
   const isTime = (TIME_FUNCS as readonly string[]).includes(props.probe)
   const zones = COMMON_TIMEZONES.map((zone) => ({
     value: zone.value,
