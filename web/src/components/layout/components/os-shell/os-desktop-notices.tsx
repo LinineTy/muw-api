@@ -98,10 +98,10 @@ export function OsDesktopNotices({ className }: { className?: string }) {
     <div
       aria-hidden={hidden}
       className={cn(
-        'flex w-[21rem] flex-col gap-3 transition-[opacity,transform] duration-300 ease-out will-change-[opacity,transform]',
+        'flex w-[21rem] flex-col gap-3 transition-[opacity,translate] duration-300 ease-out will-change-[opacity,translate]',
         hidden
-          ? 'pointer-events-none translate-x-4 scale-[0.98] opacity-0'
-          : 'translate-x-0 scale-100 opacity-100',
+          ? 'pointer-events-none translate-x-3 opacity-0'
+          : 'translate-x-0 opacity-100',
         className
       )}
     >
@@ -167,7 +167,7 @@ export function OsDesktopNotices({ className }: { className?: string }) {
               }}
               className={cn(
                 // 非琉璃主题下也要看得出「一块一卡」：底色更实、边框更清楚、投影更明显
-                'bg-card/85 border-border/70 hover:border-border focus-visible:ring-ring/40 shadow-md hover:shadow-lg absolute inset-x-0 flex cursor-pointer flex-col overflow-hidden rounded-2xl border px-4 py-3 text-left backdrop-blur-xl transition-[top,height,border-color,box-shadow] duration-300 ease-out outline-none focus-visible:ring-2'
+                'bg-card/90 border-border/70 hover:border-border focus-visible:ring-ring/40 shadow-md hover:shadow-lg absolute inset-x-0 flex cursor-pointer flex-col overflow-hidden rounded-2xl border px-4 py-3 text-left backdrop-blur-md transition-[top,height,border-color,box-shadow] duration-300 ease-out outline-none focus-visible:ring-2'
               )}
             >
               <div
