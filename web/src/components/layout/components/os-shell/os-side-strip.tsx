@@ -37,6 +37,7 @@ import { useOsBallStore } from './os-ball-store'
 import { FAB_BALL_SM, FAB_ICON_SM } from './os-ball-style'
 import { useOsNoticeStore } from './os-notice-store'
 import { useOsShellNavigate } from './os-open'
+import { OsWidgetsBall } from './os-widgets-ball'
 
 /**
  * OS 桌面壳 · 左侧细竖条(原底部左右两簇合并而来):
@@ -275,13 +276,17 @@ function RailSystemGroup({ side }: { side: 'left' | 'right' }) {
   )
 }
 
-/** 下坨:快速导航 / 公告 / 第三方接入(工具项) */
+/** 下坨:快速导航 / 公告 / 组件开关 / 第三方接入(工具项) */
 function RailToolsGroup({ side }: { side: 'left' | 'right' }) {
   return (
     <div className='flex flex-col items-center gap-0.5'>
       <NavJumpGroup side={side} />
 
       <OsNoticeBall />
+
+      {/* 组件开关：紧挨公告球下方（maintainer："插中间"）；公告卡不在这个菜单里，
+          它归上面的铃铛管 —— 两处能关同一个东西会让人困惑 */}
+      <OsWidgetsBall side={side} />
 
       <ChatPresetsBall side={side} />
     </div>
