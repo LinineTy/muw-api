@@ -2,14 +2,11 @@ import { useDirection } from '@/context/direction-provider'
 // @muw-owned
 import { cn } from '@/lib/utils'
 
-import { OsDesktopBalance } from './os-desktop-balance'
-import { OsDesktopModelHealth } from './os-desktop-model-health'
-import { OsDesktopNotices } from './os-desktop-notices'
-import { OsDesktopRequests } from './os-desktop-requests'
-import { OsDesktopSystemMetrics } from './os-desktop-system-metrics'
 import { useOsShellNavigate } from './os-open'
 import { useOsNavItems } from './use-os-nav'
 import { OsWidgetGrid } from './os-widget-grid'
+import { OS_WIDGETS } from './os-widget-registry'
+import { useOsWidgetStore } from './os-widget-store'
 
 /**
  * OS 桌面壳 · 空桌面态:
@@ -24,6 +21,9 @@ export function OsDesktopPlaceholder() {
   const osNavigate = useOsShellNavigate()
   const { dir } = useDirection()
   const rtl = dir === 'rtl'
+  // 组件显隐偏好（竖条"组件"球里勾选，存浏览器本地）
+  const hiddenWidgets = useOsWidgetStore((state) => state.hidden)
+  const visibleWidgets = OS_WIDGETS.filter((item) => !hiddenWidgets[item.id])
 
   return (
     <div
@@ -72,17 +72,13 @@ export function OsDesktopPlaceholder() {
 
       {/* 右侧:小组件区(分区布局)。与左区共用度量 —— 列 7rem / 行 6.25rem /
           列缝 0.25rem / 行缝 0.5rem,所以组件卡与图标严格对齐。
-          组件尺寸档见 os-widget.tsx,摆放顺序=组件写入顺序(行优先)。
+          渲染顺序与开关都来自注册表 os-widget-registry(唯一来源),用户可用竖条的
+          "组件"球关掉某个组件(偏好存浏览器本地,见 os-widget-store)。
           放不下(窄屏)时整块隐藏,磁贴优先 */}
       <OsWidgetGrid>
-        {/* 顺序 = 摆放顺序（行优先）。maintainer定：系统信息两张 1x1 放最上面。
-            第 1 行 = CPU + 内存 + 模型健康；第 2 行 = 余额(2) + 今日请求数；
-            第 3-4 行 = 公告(3x2) —— 4 行 × 3 列正好排满，不留空洞 */}
-        <OsDesktopSystemMetrics />
-        <OsDesktopModelHealth />
-        <OsDesktopBalance />
-        <OsDesktopRequests />
-        <OsDesktopNotices />
+        {visibleWidgets.map(({ id, Render }) => (
+          <Render key={id} />
+        ))}
       </OsWidgetGrid>
     </div>
   )
