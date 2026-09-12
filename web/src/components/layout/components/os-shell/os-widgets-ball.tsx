@@ -1,5 +1,5 @@
 // @muw-owned
-import { LayoutGrid } from 'lucide-react'
+import { Component } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -51,12 +51,14 @@ export function OsWidgetsBall({ side }: { side: 'left' | 'right' }) {
           />
         }
       >
-        <LayoutGrid className={FAB_ICON_SM} aria-hidden='true' />
+        {/* 别用 LayoutGrid：那是 Dock 磁贴开始面板的图标，两个球会长得一样 */}
+        <Component className={FAB_ICON_SM} aria-hidden='true' />
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align='center'
         side={side}
         sideOffset={8}
+        collisionPadding={12}
         className='z-[80] min-w-44'
       >
         {/* ⚠️ 必须包一层 Group：Base UI 的 CheckboxItem 属于"分组内零件"，
