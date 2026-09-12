@@ -22,15 +22,24 @@ import { cn } from '@/lib/utils'
  *   2x2 = 14.25 × 12.75rem 带迷你图
  *   3x2 = 21.5 × 12.75rem  标准卡（公告卡就是这档）
  *   3x3 = 21.5 × 19.25rem  列表 / 多行
+ *
+ * 圆角**随行数走**：单行卡只有 6.25rem(100px) 高，而 liquid-glass 预设下 `rounded-2xl`
+ * 是 36px（--radius 1.25rem × 1.8）—— 圆角吃掉近四成高度，标签/进度条就贴到弧线上，
+ * 像"糊边"（2026-09-12 maintainer点名性能显示那两张 1x1）。所以单行卡降一档用 `rounded-lg`
+ * （= --radius，本预设 20px），2 行以上保持 `rounded-2xl`；用主题 token 而非写死 px，
+ * 换主题预设时两档一起缩放。
  */
 export type OsWidgetSize = '1x1' | '2x1' | '2x2' | '3x2' | '3x3'
 
-const SIZE_SPAN: Record<OsWidgetSize, { col: number; row: number }> = {
-  '1x1': { col: 1, row: 1 },
-  '2x1': { col: 2, row: 1 },
-  '2x2': { col: 2, row: 2 },
-  '3x2': { col: 3, row: 2 },
-  '3x3': { col: 3, row: 3 },
+const SIZE_SPAN: Record<
+  OsWidgetSize,
+  { col: number; row: number; radius: string }
+> = {
+  '1x1': { col: 1, row: 1, radius: 'rounded-lg' },
+  '2x1': { col: 2, row: 1, radius: 'rounded-lg' },
+  '2x2': { col: 2, row: 2, radius: 'rounded-2xl' },
+  '3x2': { col: 3, row: 2, radius: 'rounded-2xl' },
+  '3x3': { col: 3, row: 3, radius: 'rounded-2xl' },
 }
 
 /**
@@ -68,7 +77,7 @@ export function OsWidget({
   'aria-hidden': ariaHidden,
 }: OsWidgetProps) {
   const span = SIZE_SPAN[size]
-  // 1x1 只有 7×6.25rem，常规内边距会把内容挤没，单独收紧
+  // 1x1 只有 7×6.25rem，标题行用小一号字（正文内边距**不**再收紧，见下）
   const compact = size === '1x1'
 
   return (
@@ -83,8 +92,11 @@ export function OsWidget({
         // ⚠️ 不留阴影（2026-09-12 maintainer："底部阴影很出戏"）：Tailwind 的 shadow-md
         // 是贴边的小硬阴影，在浅色壁纸上会给每张卡糊一条灰边；组件是"贴在桌面上"的元素，
         // 不像 Dock/窗口那样悬浮（那两处用的是 0_12px_40px 这类大范围柔影）。无阴影与磁贴一致。
-        'bg-card/90 border-border/70 flex h-full w-full flex-col overflow-hidden rounded-2xl border backdrop-blur-md',
-        compact ? 'px-3 py-2' : 'px-4 py-3',
+        // ⚠️ 内边距**不小于圆角半径**（圆角 1rem ⇒ 内边距 1rem/0.75rem）：
+        // 1x1 原来单独收紧成 px-3 py-2，内容贴到圆角上像"糊边"（2026-09-12 maintainer点名性能显示那两张）。
+        // 所有尺寸统一 px-4 py-3，也顺便让各卡的标签左缘对齐在同一条竖线上。
+        'bg-card/90 border-border/70 flex h-full w-full flex-col overflow-hidden border px-4 py-3 backdrop-blur-md',
+        span.radius,
         className
       )}
     >
