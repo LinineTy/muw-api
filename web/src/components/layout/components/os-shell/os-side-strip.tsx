@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 // @muw-owned
 import {
+  Bell,
   ExternalLink,
   Globe,
   Link2,
@@ -13,7 +14,6 @@ import { toast } from 'sonner'
 
 import { ConfigDrawer } from '@/components/config-drawer'
 import { LanguageSwitcher } from '@/components/language-switcher'
-import { NotificationPopover } from '@/components/notification-popover'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import {
   DropdownMenu,
@@ -29,13 +29,13 @@ import {
   resolveChatUrl,
   type ChatPreset,
 } from '@/features/chat/lib/chat-links'
-import { useNotifications } from '@/hooks/use-notifications'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 import { cn } from '@/lib/utils'
 
 import { SystemBrand } from '../system-brand'
 import { useOsBallStore } from './os-ball-store'
 import { FAB_BALL_SM, FAB_ICON_SM } from './os-ball-style'
+import { useOsNoticeStore } from './os-notice-store'
 import { useOsShellNavigate } from './os-open'
 
 /**
@@ -277,36 +277,42 @@ function RailSystemGroup({ side }: { side: 'left' | 'right' }) {
 
 /** 下坨:快速导航 / 公告 / 第三方接入(工具项) */
 function RailToolsGroup({ side }: { side: 'left' | 'right' }) {
-  const notifications = useNotifications()
-  const { t } = useTranslation()
-
   return (
     <div className='flex flex-col items-center gap-0.5'>
       <NavJumpGroup side={side} />
 
-      <NotificationPopover
-        open={notifications.popoverOpen}
-        onOpenChange={notifications.setPopoverOpen}
-        unreadCount={notifications.unreadCount}
-        activeTab={notifications.activeTab}
-        onTabChange={notifications.setActiveTab}
-        notice={notifications.notice}
-        announcements={notifications.announcements}
-        loading={notifications.loading}
-        contentSide={side}
-        trigger={
-          <button
-            type='button'
-            aria-label={t('Notifications')}
-            title={t('Notifications')}
-            onClick={closeNavCard}
-            className={cn(FAB_BALL_SM, 'relative')}
-          />
-        }
-      />
+      <OsNoticeBall />
 
       <ChatPresetsBall side={side} />
     </div>
+  )
+}
+
+/**
+ * 时间线公告入口（原来的铃铛位置，外观不变）。
+ * 功能改为：点一下展开/收起桌面右上角的公告堆叠卡 ——
+ * 卡片上的 × 会把它整个隐藏，恢复显示就靠这里；未读不靠角标，
+ * 改由「有新公告自动展开」承担。
+ */
+function OsNoticeBall() {
+  const { t } = useTranslation()
+  const collapsed = useOsNoticeStore((state) => state.collapsed)
+  const toggleNotice = useOsNoticeStore((state) => state.toggle)
+
+  return (
+    <button
+      type='button'
+      aria-label={t('System Announcements')}
+      title={t('System Announcements')}
+      data-state={collapsed ? 'closed' : 'open'}
+      onClick={() => {
+        closeNavCard()
+        toggleNotice()
+      }}
+      className={FAB_BALL_SM}
+    >
+      <Bell className={FAB_ICON_SM} aria-hidden='true' />
+    </button>
   )
 }
 
