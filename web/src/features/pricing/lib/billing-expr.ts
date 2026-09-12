@@ -390,12 +390,24 @@ function splitTopLevelOr(expr: string): string[] {
   return splitExpressionAtTopLevel(expr, '||')
 }
 
-function parseExprLiteral(raw: string): string | null {
+type ExprLiteral = { value: string; kind: 'string' | 'number' | 'boolean' }
+
+function parseExprLiteral(raw: string): ExprLiteral | null {
   const text = raw.trim()
-  if (text === 'true' || text === 'false') return text
-  if (NUMERIC_LITERAL_REGEX.test(text)) return text
+  if (text === 'true' || text === 'false') {
+    return { value: text, kind: 'boolean' }
+  }
+  if (NUMERIC_LITERAL_REGEX.test(text)) return { value: text, kind: 'number' }
   try {
-    return JSON.parse(text) as string
+    const parsed = JSON.parse(text) as unknown
+    if (typeof parsed === 'string') return { value: parsed, kind: 'string' }
+    if (typeof parsed === 'number') {
+      return { value: String(parsed), kind: 'number' }
+    }
+    if (typeof parsed === 'boolean') {
+      return { value: String(parsed), kind: 'boolean' }
+    }
+    return null
   } catch {
     return null
   }
@@ -530,7 +542,8 @@ function tryParseRequestCondition(expr: string): RequestCondition | null {
       source: m[1] as 'param' | 'header',
       path: m[2],
       mode: MATCH_EQ,
-      value: String(parsedValue),
+      value: parsedValue.value,
+      valueKind: parsedValue.kind,
     }
   }
 
@@ -564,20 +577,31 @@ function tryParseTimeRangePair(
 function tryParseRequestClause(
   conditionStr: string
 ): RequestCondition[] | null {
+  // A branch may arrive parenthesized (`(a && b) || (c)`, which is exactly what
+  // the builder emits for a multi-branch group); unwrap before splitting so a
+  // wrapped branch is not mistaken for an unknown condition shape.
+  const trimmed = unwrapExpressionParens(conditionStr)
   // A single time range like hour(tz) >= 9 && hour(tz) < 12 must stay one
   // MATCH_RANGE condition instead of being split into two scalar conditions.
-  const wholeTimeCond = tryParseTimeCondition(conditionStr.trim())
+  const wholeTimeCond = tryParseTimeCondition(trimmed)
   if (wholeTimeCond) return [wholeTimeCond]
+  // A param CONTAINS is emitted as `param("x") != nil && has(param("x"), "y")`
+  // — one condition that spans an `&&`, so the whole clause is tried before the
+  // AND split would tear the nil-guard away from its has().
+  const wholeCondition = tryParseRequestCondition(trimmed)
+  if (wholeCondition) return [wholeCondition]
 
-  const andParts = splitTopLevelAnd(conditionStr)
+  const andParts = splitTopLevelAnd(trimmed).map((part) =>
+    unwrapExpressionParens(part)
+  )
   const conditions: RequestCondition[] = []
   for (let i = 0; i < andParts.length; i += 1) {
-    const part = andParts[i].trim()
+    const part = andParts[i]
     // Adjacent matching time bounds (fn >= X && fn < Y) form one range; merge
     // them so the visual editor keeps a single MATCH_RANGE row even when
     // other conditions follow in the same group.
-    const next = i + 1 < andParts.length ? andParts[i + 1].trim() : ''
-    const merged = next ? tryParseTimeRangePair(part, next) : null
+    const next = i + 1 < andParts.length ? andParts[i + 1] : ''
+    const merged = next ? tryParseCompoundPair(part, next) : null
     if (merged) {
       conditions.push(merged)
       i += 1
@@ -595,6 +619,72 @@ function tryParseRequestClause(
  * `(a && b) || c`: branches split on top-level `||` first, so an OR is never
  * silently collapsed into the AND-clause of another branch.
  */
+/**
+ * `param("x") != nil && has(param("x"), "y")` is one CONTAINS condition that
+ * spans an `&&`. Recombine the pair after the AND split so the nil-guard is
+ * not dropped (a bare `has(param(...))` would match on absent params too).
+ */
+function tryParseParamContainsPair(
+  lower: string,
+  upper: string
+): RequestCondition | null {
+  const guard = lower.match(/^param\("([^"]+)"\) != nil$/)
+  if (!guard) return null
+  const contains = upper.match(
+    /^has\(param\("([^"]+)"\), ("(?:[^"\\]|\\.)*")\)$/
+  )
+  if (!contains || contains[1] !== guard[1]) return null
+  return {
+    source: 'param',
+    path: guard[1],
+    mode: MATCH_CONTAINS,
+    value: JSON.parse(contains[2]) as string,
+  }
+}
+
+/**
+ * `param("x") != nil && param("x") >= N` is one numeric comparison that spans
+ * an `&&`. Recombine the pair after the AND split so the nil-guard survives.
+ */
+function tryParseParamComparisonPair(
+  lower: string,
+  upper: string
+): RequestCondition | null {
+  const guard = lower.match(/^param\("([^"]+)"\) != nil$/)
+  if (!guard) return null
+  const comparison = upper.match(
+    /^param\("([^"]+)"\) (>|>=|<|<=) ([\d.eE+-]+)$/
+  )
+  if (!comparison || comparison[1] !== guard[1]) return null
+  const opMap: Record<string, string> = {
+    '>': MATCH_GT,
+    '>=': MATCH_GTE,
+    '<': MATCH_LT,
+    '<=': MATCH_LTE,
+  }
+  return {
+    source: 'param',
+    path: guard[1],
+    mode: opMap[comparison[2]],
+    value: comparison[3],
+  }
+}
+
+/**
+ * Recombine a condition the builder writes as two AND-ed atoms, from the
+ * fragments the AND split produced.
+ */
+function tryParseCompoundPair(
+  lower: string,
+  upper: string
+): RequestCondition | null {
+  return (
+    tryParseTimeRangePair(lower, upper) ??
+    tryParseParamContainsPair(lower, upper) ??
+    tryParseParamComparisonPair(lower, upper)
+  )
+}
+
 function tryParseRequestConditions(conditionStr: string): RequestDnf | null {
   // An overnight window (hour(tz) >= 22 || hour(tz) < 6) is one MATCH_RANGE
   // condition carrying its source operator, not two OR branches.
@@ -742,6 +832,7 @@ export function createEmptyRuleGroup(): RequestRuleGroup {
     multiplier: '',
   }
 }
+
 export function createEmptyTimeRuleGroup(): RequestRuleGroup {
   return {
     conditions: [{ conditions: [createEmptyTimeCondition()] }],
@@ -787,6 +878,16 @@ function isTimeFunc(value: unknown): value is TimeFunc {
   return typeof value === 'string' && TIME_FUNCS.includes(value as TimeFunc)
 }
 
+function isRangeOp(value: unknown): value is RangeOp {
+  return value === RANGE_OP_AND || value === RANGE_OP_OR
+}
+
+function isValueKind(
+  value: unknown
+): value is 'string' | 'number' | 'boolean' {
+  return value === 'string' || value === 'number' || value === 'boolean'
+}
+
 export function normalizeCondition(
   cond: Partial<RequestCondition> | null | undefined
 ): RequestCondition {
@@ -815,6 +916,12 @@ export function normalizeCondition(
       rangeStart:
         timeCond?.rangeStart == null ? '' : String(timeCond.rangeStart),
       rangeEnd: timeCond?.rangeEnd == null ? '' : String(timeCond.rangeEnd),
+      // Keep the parsed source operator: dropping it here would make the
+      // builder fall back to the bounds heuristic and flip an overnight
+      // `||` window into a never-matching `&&` on save.
+      ...(mode === MATCH_RANGE && isRangeOp(timeCond?.rangeOp)
+        ? { rangeOp: timeCond.rangeOp }
+        : {}),
     }
   }
 
@@ -828,6 +935,7 @@ export function normalizeCondition(
     path: phCond?.path || '',
     mode,
     value: phCond?.value == null ? '' : String(phCond.value),
+    ...(isValueKind(phCond?.valueKind) ? { valueKind: phCond.valueKind } : {}),
   }
 }
 
@@ -835,9 +943,22 @@ export function normalizeCondition(
 // Editor: build expression strings
 // ---------------------------------------------------------------------------
 
-function buildExprLiteral(mode: string, value: string): string {
+function buildExprLiteral(
+  mode: string,
+  value: string,
+  valueKind?: 'string' | 'number' | 'boolean'
+): string {
   const text = String(value || '').trim()
   if (mode === MATCH_CONTAINS) return JSON.stringify(text)
+  // A parsed condition remembers the literal kind it was written with, so
+  // `param("x") == "true"` (a string) must not round-trip into `== true`.
+  if (valueKind === 'string') return JSON.stringify(text)
+  if (valueKind === 'boolean') {
+    return text === 'true' || text === 'false' ? text : JSON.stringify(text)
+  }
+  if (valueKind === 'number') {
+    return NUMERIC_LITERAL_REGEX.test(text) ? text : JSON.stringify(text)
+  }
   if (text === 'true' || text === 'false') return text
   if (NUMERIC_LITERAL_REGEX.test(text)) return text
   return JSON.stringify(text)
@@ -913,7 +1034,7 @@ function buildRequestConditionExpr(cond: RequestCondition): string {
     }
     case MATCH_EQ:
     default:
-      return `${sourceExpr} == ${buildExprLiteral(normalized.mode, normalized.value)}`
+      return `${sourceExpr} == ${buildExprLiteral(normalized.mode, normalized.value, normalized.valueKind)}`
   }
 }
 
