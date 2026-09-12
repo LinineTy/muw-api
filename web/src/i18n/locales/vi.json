@@ -7805,6 +7805,8 @@
     "You can add models manually or try fetching again.": "Bạn có thể thêm mô hình thủ công hoặc thử lấy lại.",
     "Zhipu GLM": "Zhipu GLM",
     "New version available": "Có phiên bản mới",
-    "Coding-plan quota monitoring is configured on the account.": "Theo dõi hạn mức gói lập trình được cấu hình ở tài khoản."
+    "Coding-plan quota monitoring is configured on the account.": "Theo dõi hạn mức gói lập trình được cấu hình ở tài khoản.",
+    "Previous announcement": "Thông báo trước",
+    "Next announcement": "Thông báo tiếp theo"
   }
 }

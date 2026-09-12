@@ -7805,6 +7805,8 @@
     "You can add models manually or try fetching again.": "You can add models manually or try fetching again.",
     "Zhipu GLM": "Zhipu GLM",
     "New version available": "New version available",
-    "Coding-plan quota monitoring is configured on the account.": "Coding-plan quota monitoring is configured on the account."
+    "Coding-plan quota monitoring is configured on the account.": "Coding-plan quota monitoring is configured on the account.",
+    "Previous announcement": "Previous announcement",
+    "Next announcement": "Next announcement"
   }
 }

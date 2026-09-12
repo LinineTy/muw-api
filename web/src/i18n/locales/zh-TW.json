@@ -7805,6 +7805,8 @@
     "You can add models manually or try fetching again.": "可以手動新增模型，也可以重新取得。",
     "Zhipu GLM": "智譜GLM",
     "New version available": "有新版本可用",
-    "Coding-plan quota monitoring is configured on the account.": "編碼套餐餘量監控已配置在帳戶上，請在帳戶頁維護。"
+    "Coding-plan quota monitoring is configured on the account.": "編碼套餐餘量監控已配置在帳戶上，請在帳戶頁維護。",
+    "Previous announcement": "上一則公告",
+    "Next announcement": "下一則公告"
   }
 }
