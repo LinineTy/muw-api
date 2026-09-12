@@ -191,8 +191,8 @@ export function UpdateCheckerSection({
 
           {/* 与其它设置页一致：更新入口作为页面级操作放到右上角，避免与下方「检查更新」按钮文案相撞 */}
           {/* 与其它设置页一致：更新操作统一放右上角。
-              只用我们自己的更新源（/api/status/update-check，带内置 changelog），
-              不引入上游走 GitHub releases 的入口。 */}
+              只用我们自己的更新源（/api/status/update-check → 发布清单 update.json
+              + 同源 notes.md），不引入上游走 GitHub releases 的入口。 */}
           <SettingsPageActionsPortal>
             <Button
               type='button'

@@ -38,9 +38,10 @@ export type ForkUpdateCheckData = {
  * 上游的版本呈现是「品牌名旁常驻版本号文本 + 去 GitHub 查 release」，本 fork 改成
  * 「logo 右下角一个小球」：绿 = 已是最新、黄 = 有新版本、灰 = 检查失败或未知。
  *
- * 数据源是本仓库自己的 `/api/status/update-check`（后端读 registry.dev3 的 tags
- * 列表并与 `common.Version` 比较，再从公共 CHANGELOG 取新版本说明）——不再问
+ * 数据源是本仓库自己的 `/api/status/update-check`（后端读发布清单 update.json，
+ * 与 `common.Version` 比较，需要时再从同源 notes.md 取该版说明）——不再问
  * GitHub，因为我们的版本号（`vYY.MM.DD.muw.N`）与上游 tag 体系无关。
+ * 清单由 release.sh 生成，**只有 `--publish` 才上传**：不发布就不公告新版本。
  *
  * 该接口需要管理员权限，故非管理员返回 `unknown`（不渲染小球）。
  */

@@ -32,25 +32,41 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// 更新检查的镜像源:muw fork 自己的官方 registry。发布时 release.sh 会把
-// latest + 版本 tag 一起传上服务器,由服务器定时任务同步进 registry,因此
-// tags/list 里能看到 fork 自己的 vX.Y.Z-rc.N-muw.M 版本号。该接口匿名公开可读
-// (GET),但无 CORS 头,故由后端代查再返回给前端。
-// 可用环境变量 UPDATE_CHECK_REGISTRY 覆盖(如换 registry 部署)。
-const updateCheckRegistryDefault = "https://registry.dev3.mulink.top/v2/muw/new-api"
+// 更新检测的源 = 一份「发布清单」update.json（由 repo 根的 release.sh 生成）：
+//
+//	GET https://registry.dev3.mulink.top/update.json
+//	{"version":"v26.09.13.muw.15","released_at":"2026-09-13T02:40:00Z","commit":"614daeae7"}
+//
+// 该版本的更新说明正文（从 CHANGELOG.md 顶部条目切出）在同源 notes.md。
+// 清单只是静态文件，清单里有什么版本就公告什么版本 —— **发布是人为开关**：
+// release.sh 不传 `--publish` 就不上传这两个文件，任何部署都不会被提示有新版本
+// （2026-09-13 maintainer定：镜像/清单的公开与否由他控制，主题那批改动不对外公告）。
+//
+// 旧实现读 registry 的 tags/list 再从 tag 名里解析版本号，依赖"镜像被转储进
+// registry"这条副链（转储任务是 1Panel 上的定时任务，停掉或不跑就静默失灵），
+// 还得兜住 tag 命名/历史杂后缀/CDN 缓存；2026-09-13 按maintainer「换个更好的更新源」
+// 换成清单：一次请求拿版本，字段可扩展，且与镜像分发彻底解耦。
+// 自建分发时用 UPDATE_CHECK_URL / UPDATE_CHECK_NOTES_URL 指向自己的清单与说明。
+const updateCheckURLDefault = "https://registry.dev3.mulink.top/update.json"
 
-// updateCheckChangelogDefault 公共 CHANGELOG.md 的 URL,挂在更新检测 registry 的
-// 反向代理下同源服务(registry.dev3.mulink.top 是反代,反代上把该路径映射到
-// 仓库的 CHANGELOG.md 文件即可)。更新说明不能随当前二进制内置(旧版本部署的
-// 二进制里没有新版本的 changelog),而是像上游 GitHub release body 一样从公共源
-// 动态拉取。可用 UPDATE_CHECK_CHANGELOG_URL 覆盖。
-const updateCheckChangelogDefault = "https://registry.dev3.mulink.top/CHANGELOG.md"
+// updateCheckNotesURLDefault 更新说明正文的 URL（release.sh 上传的 notes.md，
+// 与清单同源）。说明不能内置进二进制：旧版本部署的二进制里没有新版本的说明，
+// 得像上游 GitHub release body 那样从公共源动态拉。
+const updateCheckNotesURLDefault = "https://registry.dev3.mulink.top/notes.md"
+
+// releaseManifest 发布清单。只消费 version —— released_at / commit 是给人看的
+// （curl 一下就知道这版什么时候发的），其余未知字段一律忽略，以后要在清单里加
+// 字段（如 min_supported_version）不必改后端。
+type releaseManifest struct {
+	Version string `json:"version"`
+}
 
 // parseForkVersion 解析 muw fork 版本号,支持两种体系,返回可比数组:
 //   - 旧 semver:vX.Y.Z[-rc.N][-muw.M][后缀] → [1, X, Y, Z, 稳定度(1=正式,0=rc), rc号, muw号]
 //   - 日期制:vYY.MM.DD[.muw.N]             → [2, YY, MM, DD, muw号]
+//
 // 首维是体系优先级(epoch):日期制(2)恒大于旧格式(1)——因此部署旧版本号
-// 的实例只要 registry 里出现日期制版本就提示更新(「旧版本号一律提示升级到
+// 的实例只要清单里出现日期制版本就提示更新(「旧版本号一律提示升级到
 // 新体系」)。无法解析(如 latest、普通 tag)返回 nil。历史误标的杂后缀(如 .ts)
 // 直接忽略。
 func parseForkVersion(s string) []int {
@@ -151,140 +167,87 @@ func compareForkVersions(a, b []int) int {
 	return 0
 }
 
-// GetUpdateCheck 查询 fork 官方 registry 的 tags,返回是否有比当前版本更新的版本。
-// 只读接口;tags/list 匿名公开(GET),但无 CORS,故由后端代查。
-func GetUpdateCheck(c *gin.Context) {
-	registry := common.GetEnvOrDefaultString("UPDATE_CHECK_REGISTRY", updateCheckRegistryDefault)
-	url := registry
-	if !strings.HasSuffix(url, "/tags/list") {
-		url = strings.TrimRight(url, "/") + "/tags/list"
+// fetchUpdateSource 取更新源里的静态文件。带时间戳查询参数绕 CDN 缓存:
+// 清单/说明都挂在反代(EdgeOne)后面,旧缓存里没有新版本 → 表现成"提示有新版
+// 但日志空白",2026-09-11 在 CHANGELOG.md 上踩过这个坑。检查更新不频繁,
+// 回源代价可忽略。
+func fetchUpdateSource(ctx context.Context, rawURL string, limit int64) ([]byte, error) {
+	sep := "?"
+	if strings.Contains(rawURL, "?") {
+		sep = "&"
 	}
+	req, err := http.NewRequestWithContext(
+		ctx, http.MethodGet, rawURL+sep+"t="+strconv.FormatInt(time.Now().Unix(), 10), nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("更新源 %s 返回 %d", rawURL, resp.StatusCode)
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, limit))
+}
+
+// fetchReleaseManifest 取发布清单并解析出最新版本号。
+func fetchReleaseManifest(ctx context.Context, manifestURL string) (string, error) {
+	data, err := fetchUpdateSource(ctx, manifestURL, 64<<10)
+	if err != nil {
+		return "", err
+	}
+	var manifest releaseManifest
+	if err := common.Unmarshal(data, &manifest); err != nil {
+		return "", fmt.Errorf("更新清单解析失败: %w", err)
+	}
+	version := strings.TrimSpace(manifest.Version)
+	if version == "" {
+		return "", fmt.Errorf("更新清单里没有 version 字段")
+	}
+	return version, nil
+}
+
+// fetchVersionNotes 拉取该版本的更新说明正文。失败返回空串,不阻塞更新检测本身。
+func fetchVersionNotes(ctx context.Context, notesURL string) string {
+	data, err := fetchUpdateSource(ctx, notesURL, 1<<20)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
+// GetUpdateCheck 读发布清单,返回是否有比当前版本更新的版本。
+// 只读接口;清单是静态文件(GET),但无 CORS,故由后端代查再返回给前端。
+func GetUpdateCheck(c *gin.Context) {
+	manifestURL := common.GetEnvOrDefaultString("UPDATE_CHECK_URL", updateCheckURLDefault)
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	latestTag, err := fetchReleaseManifest(ctx, manifestURL)
 	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		common.ApiError(c, fmt.Errorf("registry tags 接口返回 %d", resp.StatusCode))
-		return
-	}
-
-	var payload struct {
-		Tags []string `json:"tags"`
-	}
-	if err := common.DecodeJson(resp.Body, &payload); err != nil {
 		common.ApiError(c, err)
 		return
 	}
 
 	current := parseForkVersion(common.Version)
-	var latestVals []int
-	latestTag := ""
-	for _, tag := range payload.Tags {
-		v := parseForkVersion(tag)
-		if v == nil {
-			continue
-		}
-		if latestVals == nil || compareForkVersions(v, latestVals) > 0 {
-			latestVals = v
-			latestTag = tag
-		}
+	latestVals := parseForkVersion(latestTag)
+	// 清单里版本号解析不出来(手抖写错)时按"无更新"处理,不误报。
+	hasUpdate := latestVals != nil && (current == nil || compareForkVersions(latestVals, current) > 0)
+
+	latestChangelog := ""
+	if hasUpdate {
+		notesURL := common.GetEnvOrDefaultString("UPDATE_CHECK_NOTES_URL", updateCheckNotesURLDefault)
+		latestChangelog = fetchVersionNotes(ctx, notesURL)
 	}
 
-	hasUpdate := latestTag != "" && (current == nil || compareForkVersions(latestVals, current) > 0)
-	latestChangelog := ""
-	if hasUpdate && latestTag != "" {
-		// 从公共源拉取新版本的更新说明(任何版本的部署都能读到)。
-		latestChangelog = fetchVersionChangelog(latestTag)
-	}
 	common.ApiSuccess(c, gin.H{
 		"has_update":       hasUpdate,
 		"latest_tag":       latestTag,
 		"current_version":  common.Version,
 		"latest_changelog": latestChangelog,
 	})
-}
-
-// fetchVersionChangelog 拉取公共 CHANGELOG.md 并提取指定版本的条目。
-// 拉取/解析失败时返回空串,不阻塞更新检测本身。
-func fetchVersionChangelog(version string) string {
-	url := common.GetEnvOrDefaultString("UPDATE_CHECK_CHANGELOG_URL", updateCheckChangelogDefault)
-	// CHANGELOG.md 是静态文件,CDN(EdgeOne 等)可能长期缓存旧版本——旧缓存里没有
-	// 新版本条目,提取必然落空(表现为弹窗提示有新版本但更新日志空白)。带时间戳
-	// 查询参数强制绕缓存,保证每次拉到最新内容(检查更新不频繁,回源代价可忽略)。
-	sep := "?"
-	if strings.Contains(url, "?") {
-		sep = "&"
-	}
-	url += sep + "t=" + strconv.FormatInt(time.Now().Unix(), 10)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return ""
-	}
-	req.Header.Set("Accept", "text/plain")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return ""
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return ""
-	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return ""
-	}
-	return extractChangelogSection(string(data), version)
-}
-
-// extractChangelogSection 从 CHANGELOG.md 文本中提取 "## <version>" 标题到
-// 下一个 "## " 标题之间的内容(不含标题行)。处理「长版本号是短版本号前缀」
-// 的误匹配(如 v1 vs v10)。
-func extractChangelogSection(markdown, version string) string {
-	header := "## " + version
-	idx := strings.Index(markdown, header)
-	for idx >= 0 {
-		end := idx + len(header)
-		if end >= len(markdown) || markdown[end] == ' ' || markdown[end] == '\n' {
-			break
-		}
-		// 前缀误匹配(如 v1 命中 v10):继续向后找。
-		next := strings.Index(markdown[end:], header)
-		if next < 0 {
-			idx = -1
-			break
-		}
-		idx = end + next
-	}
-	if idx < 0 {
-		return ""
-	}
-
-	start := idx + len(header)
-	// 跳到标题行末尾(标题可能是 "## vX (日期)" 等,内容从下一行开始)。
-	if nl := strings.Index(markdown[start:], "\n"); nl >= 0 {
-		start += nl + 1
-	}
-	rest := markdown[start:]
-	nextHeader := strings.Index(rest, "\n## ")
-	if nextHeader < 0 {
-		return strings.TrimSpace(rest)
-	}
-	return strings.TrimSpace(rest[:nextHeader])
 }

@@ -19,8 +19,13 @@ For commercial licensing, please contact support@quantumnous.com
 package controller
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -90,24 +95,86 @@ func TestCompareForkVersions(t *testing.T) {
 	) > 0)
 }
 
-func TestExtractChangelogSection(t *testing.T) {
-	const md = `# 更新日志
+// manifestServer 起一个同时提供 update.json 与 notes.md 的假更新源。
+func manifestServer(t *testing.T, manifestBody string) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/update.json", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(manifestBody))
+	})
+	mux.HandleFunc("/notes.md", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("### 更新源\n- 改成读发布清单\n"))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv
+}
 
-## v26.08.14.muw.1 (2026-08-14)
+func TestFetchReleaseManifest(t *testing.T) {
+	// 多出来的字段（released_at/commit/未来字段）一律忽略。
+	srv := manifestServer(t, `{"version":"v26.09.13.muw.15","released_at":"2026-09-13T02:40:00Z","commit":"614daeae7","min_supported_version":"v26.09.01.muw.1"}`)
+	version, err := fetchReleaseManifest(context.Background(), srv.URL+"/update.json")
+	require.NoError(t, err)
+	assert.Equal(t, "v26.09.13.muw.15", version)
 
-### 云空间
-- 新增购买
+	// 没有 version 字段 → 报错（交给上层按"无更新"处理，不误报）。
+	empty := manifestServer(t, `{"released_at":"2026-09-13T02:40:00Z"}`)
+	_, err = fetchReleaseManifest(context.Background(), empty.URL+"/update.json")
+	assert.Error(t, err)
 
-### 游乐场
-- 修复同步
+	// 源不可达 → 报错。
+	down := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(down.Close)
+	_, err = fetchReleaseManifest(context.Background(), down.URL+"/update.json")
+	assert.Error(t, err)
+}
 
-## v26.08.13.muw.2 (2026-08-13)
+func TestGetUpdateCheckUsesManifest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	srv := manifestServer(t, `{"version":"v26.09.13.muw.15"}`)
+	t.Setenv("UPDATE_CHECK_URL", srv.URL+"/update.json")
+	t.Setenv("UPDATE_CHECK_NOTES_URL", srv.URL+"/notes.md")
 
-- 上一版内容
-`
-	assert.Equal(t, "### 云空间\n- 新增购买\n\n### 游乐场\n- 修复同步", extractChangelogSection(md, "v26.08.14.muw.1"))
-	assert.Equal(t, "- 上一版内容", extractChangelogSection(md, "v26.08.13.muw.2"))
-	// 不存在 / 版本号是另一版本前缀时不误匹配。
-	assert.Equal(t, "", extractChangelogSection(md, "v26.08.14.muw.10"))
-	assert.Equal(t, "", extractChangelogSection(md, "v99"))
+	previous := common.Version
+	t.Cleanup(func() { common.Version = previous })
+
+	callUpdateCheck := func(t *testing.T, current string) (bool, string, string) {
+		t.Helper()
+		common.Version = current
+		recorder := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(recorder)
+		ctx.Request = httptest.NewRequest(http.MethodGet, "/api/status/update-check", nil)
+		GetUpdateCheck(ctx)
+
+		var response struct {
+			Success bool   `json:"success"`
+			Message string `json:"message"`
+			Data    struct {
+				HasUpdate       bool   `json:"has_update"`
+				LatestTag       string `json:"latest_tag"`
+				CurrentVersion  string `json:"current_version"`
+				LatestChangelog string `json:"latest_changelog"`
+			} `json:"data"`
+		}
+		require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+		require.True(t, response.Success, response.Message)
+		return response.Data.HasUpdate, response.Data.LatestTag, response.Data.LatestChangelog
+	}
+
+	// 旧版本部署 → 提示更新，并带上该版说明正文。
+	hasUpdate, latestTag, changelog := callUpdateCheck(t, "v26.09.13.muw.14")
+	assert.True(t, hasUpdate)
+	assert.Equal(t, "v26.09.13.muw.15", latestTag)
+	assert.Contains(t, changelog, "改成读发布清单")
+
+	// 同版本 → 不提示更新（说明也不拉）。
+	hasUpdate, _, changelog = callUpdateCheck(t, "v26.09.13.muw.15")
+	assert.False(t, hasUpdate)
+	assert.Empty(t, changelog)
+
+	// 清单里出现日期制版本，而当前是旧 semver 体系 → 提示升级到新体系。
+	hasUpdate, _, _ = callUpdateCheck(t, "v1.0.0-rc.24-muw.1")
+	assert.True(t, hasUpdate)
 }
