@@ -133,6 +133,7 @@ function ChatPresetsBall({ side }: { side: 'left' | 'right' }) {
         align='center'
         side={side}
         sideOffset={8}
+        collisionPadding={12}
         className='z-[80] min-w-64'
       >
         {visiblePresets.map((preset) =>
@@ -195,6 +196,7 @@ function NavJumpGroup({ side }: { side: 'left' | 'right' }) {
         align='center'
         side={side}
         sideOffset={8}
+        collisionPadding={12}
         className='z-[80]'
       >
         {links.map((link) =>
@@ -237,6 +239,8 @@ function RailSystemGroup({ side }: { side: 'left' | 'right' }) {
     <div className='flex flex-col items-center gap-0.5'>
       <LanguageSwitcher
         contentSide={side}
+        // 居中：弹卡以球为竖直中心；太长时由 collisionPadding 保证上移且不贴屏幕边
+        contentAlign='center'
         trigger={
           <button
             type='button'
@@ -262,6 +266,7 @@ function RailSystemGroup({ side }: { side: 'left' | 'right' }) {
 
       <ProfileDropdown
         contentSide={side}
+        contentAlign='center'
         onNavigate={(path) => osNavigate(path)}
         trigger={
           <button

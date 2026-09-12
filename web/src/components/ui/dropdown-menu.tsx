@@ -45,12 +45,15 @@ function DropdownMenuContent({
   alignOffset = 0,
   side = 'bottom',
   sideOffset = 4,
+  // 视口留白：Base UI 默认 5px，贴边被挤开时会几乎贴着屏幕边缘；抬到 8px 更稳，
+  // 竖条那种"弹卡很长、必须上移"的场景还可以再传大一点（见 os-side-strip）
+  collisionPadding = 12,
   className,
   ...props
 }: MenuPrimitive.Popup.Props &
   Pick<
     MenuPrimitive.Positioner.Props,
-    'align' | 'alignOffset' | 'side' | 'sideOffset'
+    'align' | 'alignOffset' | 'side' | 'sideOffset' | 'collisionPadding'
   >) {
   return (
     <MenuPrimitive.Portal>
@@ -60,6 +63,7 @@ function DropdownMenuContent({
         alignOffset={alignOffset}
         side={side}
         sideOffset={sideOffset}
+        collisionPadding={collisionPadding}
       >
         <MenuPrimitive.Popup
           data-slot='dropdown-menu-content'
