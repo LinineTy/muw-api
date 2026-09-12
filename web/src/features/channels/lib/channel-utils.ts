@@ -71,7 +71,7 @@ export function getChannelTypeIcon(type: number): string {
     // Chinese providers
     15: 'Baidu', // Baidu
     46: 'Baidu', // Baidu V2
-    26: 'Zhipu', // Zhipu V4
+    26: 'Zhipu GLM', // Zhipu GLM
     17: 'Qwen', // Ali
     18: 'Spark', // Xunfei
     23: 'Hunyuan', // Tencent

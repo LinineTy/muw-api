@@ -21,6 +21,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { DataTablePage, useDataTable } from '@/components/data-table'
+import { requireServerSuccess } from '@/lib/server-error-message'
 
 import { adminListGroupPinProducts, getAdminPlans } from '../api'
 import { planRecordFromGroupPinProduct } from '../lib'
@@ -41,7 +42,10 @@ export function SubscriptionsTable() {
   // 不影响套餐照常展示。
   const { data: planRows, isLoading: plansLoading } = useQuery({
     queryKey: ['admin-subscription-plans', refreshTrigger],
-    queryFn: async () => (await getAdminPlans()).data || [],
+    queryFn: async () => {
+      const result = requireServerSuccess(await getAdminPlans())
+      return result.data || []
+    },
     placeholderData: (prev) => prev,
   })
 
