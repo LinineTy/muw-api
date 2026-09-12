@@ -167,7 +167,7 @@ function rawRangeComparisonsText(
   end: string,
   pad: string
 ): string {
-  return `${prefix} ≥ ${start}${pad} · ${prefix} < ${end}${pad}`
+  return `${prefix} ≥ ${start}${pad} / ${prefix} < ${end}${pad}`
 }
 
 function hourConditionText(cond: TimeCondition, t: TranslateFn): string {
