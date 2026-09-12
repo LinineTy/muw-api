@@ -39,6 +39,12 @@ export function OsDesktopNotices({ className }: { className?: string }) {
   const [active, setActive] = useState(0)
   const collapsed = useOsNoticeStore((state) => state.collapsed)
   const setCollapsed = useOsNoticeStore((state) => state.setCollapsed)
+  // 首次挂载后再置真：首帧透明，靠 CSS 过渡淡入（否则是硬切）
+  const [entered, setEntered] = useState(false)
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setEntered(true))
+    return () => cancelAnimationFrame(raf)
+  }, [])
 
   // 有新公告（未读数增加）自动恢复显示；手动收起后不会被反复弹开
   const previousUnread = useRef(unreadAnnouncementsCount)
@@ -79,15 +85,26 @@ export function OsDesktopNotices({ className }: { className?: string }) {
     [showNext]
   )
 
-  // 收起后不留悬浮球：入口在左侧细条的公告球（带未读角标）
-  if (collapsed || loading || total === 0) {
+  // 无数据时不渲染；收起则保留挂载走过渡（卸载就没有动画了）
+  if (loading || total === 0) {
     return null
   }
+
+  const hidden = collapsed || !entered
 
   const visibleCount = Math.min(VISIBLE_STACK, total)
 
   return (
-    <div className={cn('flex w-[21rem] flex-col gap-3', className)}>
+    <div
+      aria-hidden={hidden}
+      className={cn(
+        'flex w-[21rem] flex-col gap-3 transition-[opacity,transform] duration-300 ease-out will-change-[opacity,transform]',
+        hidden
+          ? 'pointer-events-none translate-x-4 scale-[0.98] opacity-0'
+          : 'translate-x-0 scale-100 opacity-100',
+        className
+      )}
+    >
       <div className='flex items-start justify-between gap-2 px-1'>
         <div className='min-w-0'>
           <p className='text-sm font-medium'>{t('System Announcements')}</p>
