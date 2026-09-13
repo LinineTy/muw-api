@@ -18,8 +18,10 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 import { RefreshCw } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -29,7 +31,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { CODING_PLAN_PROVIDER_OPTIONS } from '@/features/channels/constants'
-import { formatPercent } from '@/lib/format'
+import { formatPercent, formatTimestampToDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 import { getAccountCodingPlanQuota } from '../api'
@@ -71,37 +73,73 @@ function remainingTextClass(remaining: number): string {
   return 'text-muted-foreground'
 }
 
+// 厂商给的是 ISO 字符串；统一走全局日期写法（YYYY-MM-DD HH:mm:ss），
+// 别用 toLocaleString —— 那会跟着浏览器默认语言变（中文界面里出现 9/13/2026, 3:00:00 PM）。
 function formatResetsAt(resetsAt: string | null | undefined): string {
   if (!resetsAt) return '—'
   const ms = new Date(resetsAt).getTime()
   if (Number.isNaN(ms)) return resetsAt
-  return new Date(ms).toLocaleString()
+  return formatTimestampToDate(ms, 'milliseconds')
+}
+
+/** 余量条：填的是**剩余**量（与右边的百分比同口径）。 */
+function QuotaBar({
+  remaining,
+  className,
+}: {
+  remaining: number
+  className?: string
+}) {
+  return (
+    <div
+      className={cn(
+        'bg-muted h-1.5 min-w-12 overflow-hidden rounded-full',
+        className
+      )}
+    >
+      <div
+        className={cn('h-full rounded-full', remainingToneClass(remaining))}
+        style={{ width: `${remaining}%` }}
+      />
+    </div>
+  )
 }
 
 /**
- * 单条窗口的余量行：窗口短名 + 进度条（填的是**剩余**量）+ 剩余百分比。
- * 悬停给出「已用 x%」与重置时间——条与数字都是剩余口径，避免把 100-util 误读成已用。
+ * 单元格里的一行：窗口短名 + 余量条 + 剩余百分比，**整行可点** —— 点开列出全部窗口的
+ * 居中弹窗（手机上没法悬停，`title` 只在桌面有效；而周限/月限这类窗口一多，单元格里
+ * 也塞不下文字。2026-09-13 maintainer定：点条条开居中弹窗，里面所有数据条都在）。
  */
-function QuotaTierBar({ tier }: { tier: AccountCodingPlanTier }) {
+function QuotaTierRow({
+  tier,
+  onOpen,
+}: {
+  tier: AccountCodingPlanTier
+  onOpen: () => void
+}) {
   const { t } = useTranslation()
   const used = Math.max(0, Math.min(100, tier.utilization))
   const remaining = 100 - used
-  const detail = t('Used {{pct}}%', { pct: formatPercent(used) })
+  const label = tierLabel(tier.name, t)
   const title = tier.resets_at
-    ? `${detail} · ${t('Reset')} ${formatResetsAt(tier.resets_at)}`
-    : detail
+    ? `${t('Used {{pct}}%', { pct: formatPercent(used) })} · ${t('Reset')} ${formatResetsAt(tier.resets_at)}`
+    : t('Used {{pct}}%', { pct: formatPercent(used) })
 
   return (
-    <div className={TIER_ROW_CLASS} title={title}>
+    <button
+      type='button'
+      onClick={onOpen}
+      title={title}
+      aria-label={`${label} · ${t('Remaining')} ${formatPercent(remaining)} · ${title}`}
+      className={cn(
+        TIER_ROW_CLASS,
+        'hover:bg-muted/60 focus-visible:ring-ring/50 w-full cursor-pointer rounded-sm px-0.5 text-left focus-visible:ring-2 focus-visible:outline-hidden'
+      )}
+    >
       <span className='text-muted-foreground min-w-8 shrink-0 text-[11px] whitespace-nowrap'>
-        {tierLabel(tier.name, t)}
+        {label}
       </span>
-      <div className='bg-muted h-1.5 min-w-12 flex-1 overflow-hidden rounded-full'>
-        <div
-          className={cn('h-full rounded-full', remainingToneClass(remaining))}
-          style={{ width: `${remaining}%` }}
-        />
-      </div>
+      <QuotaBar remaining={remaining} className='flex-1' />
       <span
         className={cn(
           'shrink-0 font-mono text-[11px] tabular-nums',
@@ -110,6 +148,43 @@ function QuotaTierBar({ tier }: { tier: AccountCodingPlanTier }) {
       >
         {formatPercent(remaining)}
       </span>
+    </button>
+  )
+}
+
+/** 弹窗里的一行：窗口名 + 余量条 + 已使用 + **完整重置时间**（厂商给了原始数值就再补一行）。 */
+function QuotaTierDetail({ tier }: { tier: AccountCodingPlanTier }) {
+  const { t } = useTranslation()
+  const used = Math.max(0, Math.min(100, tier.utilization))
+  const remaining = 100 - used
+  const hasRawValues = tier.limit != null || tier.remaining != null
+
+  return (
+    <div className='flex flex-col gap-1.5'>
+      <div className='flex items-center justify-between gap-3'>
+        <span className='text-sm font-medium'>{tierLabel(tier.name, t)}</span>
+        <span
+          className={cn(
+            'font-mono text-sm tabular-nums',
+            remainingTextClass(remaining)
+          )}
+        >
+          {formatPercent(remaining)}
+        </span>
+      </div>
+      <QuotaBar remaining={remaining} className='h-2' />
+      <div className='text-muted-foreground text-xs'>
+        {t('Used')} {formatPercent(used)}
+      </div>
+      <div className='text-muted-foreground text-xs'>
+        {t('Reset')} {formatResetsAt(tier.resets_at)}
+      </div>
+      {hasRawValues ? (
+        <div className='text-muted-foreground text-xs'>
+          {t('Total')} {tier.limit ?? '—'} · {t('Remaining')}{' '}
+          {tier.remaining ?? '—'}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -131,6 +206,7 @@ export function CodingPlanQuotaCell({
   autoRefresh?: boolean
 }) {
   const { t } = useTranslation()
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const monitored = isCodingPlanMonitored(account.coding_plan_provider)
 
   const { data, error, isError, isLoading, isFetching, refetch } = useQuery({
@@ -188,7 +264,11 @@ export function CodingPlanQuotaCell({
     body = (
       <div className={TIER_GRID_CLASS}>
         {tiers.map((tier) => (
-          <QuotaTierBar key={tier.name} tier={tier} />
+          <QuotaTierRow
+            key={tier.name}
+            tier={tier}
+            onOpen={() => setDetailsOpen(true)}
+          />
         ))}
       </div>
     )
@@ -227,6 +307,21 @@ export function CodingPlanQuotaCell({
         </TooltipProvider>
       </div>
       {body}
+      <Dialog
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+        title={t('Coding plan quota')}
+        description={[providerLabel(account.coding_plan_provider), data?.level]
+          .filter(Boolean)
+          .join(' · ')}
+        contentClassName='sm:max-w-md'
+      >
+        <div className='flex flex-col gap-5'>
+          {tiers.map((tier) => (
+            <QuotaTierDetail key={tier.name} tier={tier} />
+          ))}
+        </div>
+      </Dialog>
     </div>
   )
 }
