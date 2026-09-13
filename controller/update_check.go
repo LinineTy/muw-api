@@ -34,19 +34,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// 更新检测的源 = 一份「发布清单」update.json（由 repo 根的 release.sh 生成）：
+// 更新检测的源 = 一份「发布清单」update.md（内容仍是 JSON，由 repo 根的 release.sh 生成）：
 //
-//	GET https://registry.dev3.mulink.top/update.json
+//	GET https://registry.dev3.mulink.top/update.md
 //	{
 //	  "stable": {"version":"v26.08.20.muw.1",  "notes":"notes.md"},
-//	  "dev":    {"version":"v26.09.13.muw.15", "notes":"notes-dev.md"}
+//	  "dev":    {"version":"v26.09.13.muw.17", "notes":"notes-dev.md"}
 //	}
 //
 // 两个通道（2026-09-13 maintainer定）：
-//   - stable：**对外公告的稳定版**。所有部署都按它判断有没有更新 —— 稳定版是
-//     "标记"出来的（仓库根的 STABLE 文件），不是靠藏起来。
+//   - stable：**对外公告的稳定版**。没打开「检测开发版更新」的部署都按它判断。
 //   - dev：最新构建。只有打开「检测开发版更新」开关的实例才按它判断
 //     （operation_setting.UpdateCheckDevChannelEnabled）。
+//   两个通道都只是清单里的一栏，由 repo 根 release.sh 发版时按问到的公告范围生成：
+//   选"稳定版"= 本次版本（同时把本次版本写进仓库根的 STABLE 作记录），选"开发版"= 保持上次公告值。
 //
 // notes 是该版说明正文的文件名（相对清单 URL 解析，也接受绝对 URL），
 // release.sh 从 CHANGELOG 顶部条目切出。说明不能内置进二进制：旧版本部署的
