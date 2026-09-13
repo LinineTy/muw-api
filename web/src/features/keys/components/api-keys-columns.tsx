@@ -20,6 +20,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 
+import { DataTableColumnHeader } from '@/components/data-table'
 import { StatusBadge } from '@/components/status-badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useMediaQuery } from '@/hooks'
@@ -88,7 +89,7 @@ export function useApiKeysColumns(
                 onCheckedChange={(value) =>
                   table.toggleAllPageRowsSelected(!!value)
                 }
-                aria-label='Select all'
+                aria-label={t('Select all')}
                 className='translate-y-[2px]'
               />
             ),
@@ -96,7 +97,7 @@ export function useApiKeysColumns(
               <Checkbox
                 checked={row.getIsSelected()}
                 onCheckedChange={(value) => row.toggleSelected(!!value)}
-                aria-label='Select row'
+                aria-label={t('Select row')}
                 className='translate-y-[2px]'
               />
             ),
@@ -106,29 +107,6 @@ export function useApiKeysColumns(
           } satisfies ColumnDef<ApiKey>,
         ]
       : []),
-    {
-      id: 'select',
-      header: ({ table }) => (
-        <Checkbox
-          checked={table.getIsAllPageRowsSelected()}
-          indeterminate={table.getIsSomePageRowsSelected()}
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label={t('Select all')}
-          className='translate-y-[2px]'
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label={t('Select row')}
-          className='translate-y-[2px]'
-        />
-      ),
-      enableSorting: false,
-      enableHiding: false,
-      size: 40,
-    },
     {
       accessorKey: 'name',
       header: t('Name'),
@@ -168,7 +146,26 @@ export function useApiKeysColumns(
     {
       id: 'quota',
       accessorKey: 'remain_quota',
-      header: `${t('Quota')} (${quotaUnit})`,
+      // 两段式表头：左「额度 (单位)」对应单元格里的剩余值，右「已用」对应已消费值
+      // —— 上游 551bb63ed 去掉了桌面端的行内标签后，右侧数字一直没有表题
+      // （2026-09-13 maintainer指出）。宽度/栅格与 ApiKeyQuotaCell 的桌面版一致（max-w-45 + grid-cols-2），
+      // 保证两段标题分别落在两个数字正上方。
+      header: ({ column }) => (
+        <DataTableColumnHeader
+          column={column}
+          title={
+            // 两段式表头：左「额度 (单位)」对应单元格里的剩余值，右「已用」对应已消费值。
+            // 上游 551bb63ed 去掉了桌面端的行内标签后，右侧数字一直没有表题（2026-09-13 maintainer指出）。
+            // 栅格宽度与 ApiKeyQuotaCell 桌面版一致（w-45 + grid-cols-2），两段标题分别落在两个数字正上方。
+            <span className='grid w-45 grid-cols-2 items-center gap-x-2'>
+              <span className='min-w-0 truncate'>{`${t('Quota')} (${quotaUnit})`}</span>
+              <span className='truncate text-right font-normal'>
+                {t('Used amount')}
+              </span>
+            </span>
+          }
+        />
+      ),
       cell: ({ row }) => <ApiKeyQuotaCell apiKey={row.original} now={now} />,
       size: 260,
       minSize: 260,
