@@ -113,6 +113,9 @@ export function useAccountsColumns(options: {
         id: 'name',
         accessorFn: (item) => item.account.name,
         header: () => t('Name'),
+        // 「查看」（列显隐）弹层取的是 meta.label —— header 是函数时它读不到，
+        // 会退化成列 id（英文 name/type）；这里补上，与表头同一份译文。
+        meta: { label: t('Name') },
         cell: ({ row }) => (
           <div className='flex items-center gap-1.5'>
             <span className='font-medium'>{row.original.account.name}</span>
@@ -128,6 +131,7 @@ export function useAccountsColumns(options: {
         id: 'type',
         accessorFn: (item) => item.account.type,
         header: () => t('Provider'),
+        meta: { label: t('Provider') },
         cell: ({ row }) => (
           <span className='text-xs'>
             {typeLabel(row.original.account.type)}
@@ -186,17 +190,21 @@ export function useAccountsColumns(options: {
       {
         // 隐藏列：仅用于工具栏的「是否被引用 / 是否开启监控」筛选（toolbar 只在列存在时
         // 才渲染对应筛选），表格与卡片都不展示它。
+        // enableHiding:false = 不参与「查看」（列显隐）——它是纯筛选载体，cell 返回 null，
+        // 一旦被勾出来就是一条只有表头、内容空白的重复列（2026-09-13 maintainer截图）。
         id: 'referenced',
         accessorFn: (item) => (item.channel_count > 0 ? 1 : 0),
         header: () => t('Referenced by'),
+        enableHiding: false,
         cell: () => null,
       },
       {
-        // 隐藏列：供「套餐余量监控」筛选使用。
+        // 隐藏列：供「套餐余量监控」筛选使用（同 referenced：不参与列显隐）。
         id: 'monitoring',
         accessorFn: (item) =>
           isCodingPlanMonitored(item.account.coding_plan_provider) ? 1 : 0,
         header: () => t('Quota monitoring'),
+        enableHiding: false,
         cell: () => null,
       },
       {
