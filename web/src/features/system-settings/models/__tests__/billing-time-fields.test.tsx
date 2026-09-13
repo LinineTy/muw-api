@@ -1,6 +1,7 @@
 // @muw-owned
 import { render, screen } from '@testing-library/react'
-import { expect, it } from 'vitest'
+import userEvent from '@testing-library/user-event'
+import { expect, it, vi } from 'vitest'
 
 import { BillingTimeRangeFields } from '../billing-time-fields'
 
@@ -39,4 +40,32 @@ it('keeps numeric drafts for non-weekday probes', () => {
   expect(screen.queryByRole('combobox')).toBeNull()
   expect(screen.getByLabelText('Start')).toHaveValue(14)
   expect(screen.getByLabelText('End')).toHaveValue(18)
+})
+
+// 星期 0 = 星期日（Go time.Weekday），下拉必须是完整 7 天、顺序 日→六，
+// 且选「星期日」写回的仍是 0（后端唯一认的周日值）。
+it('offers all seven days including Sunday and writes 0 back', async () => {
+  const onChange = vi.fn()
+  render(
+    <BillingTimeRangeFields
+      probe='weekday'
+      normalizeNumberDrafts
+      start='1'
+      end='6'
+      onChange={onChange}
+    />
+  )
+  await userEvent.click(screen.getByRole('combobox', { name: 'Start weekday' }))
+  const options = await screen.findAllByRole('option')
+  expect(options.map((option) => option.textContent)).toEqual([
+    'Sunday',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+  ])
+  await userEvent.click(screen.getByRole('option', { name: 'Sunday' }))
+  expect(onChange).toHaveBeenCalledWith('0', '6')
 })
