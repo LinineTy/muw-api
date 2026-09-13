@@ -17,10 +17,33 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import '@testing-library/jest-dom/vitest'
+import { configure } from '@testing-library/react'
 import { cleanup } from '@testing-library/react'
 import i18next from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import { afterEach, beforeAll } from 'vitest'
+
+import { api } from '@/lib/api'
+
+// waitFor / findBy* 的默认超时是 1s。全量跑时 4 个 worker 会把 CPU 抢满，动作链
+//（点提交 → zod 异步校验 → RHF handleSubmit → mutation → POST）实测会明显变慢。
+// 与 vitest.config.ts 把 testTimeout 提到 20s 同一个理由，统一把异步工具超时放宽到 5s。
+// 注意：channel-bound-accounts 长期被记成 "flaky" 的真因不是这个超时，而是下面那段
+// 「未 mock 的请求真的出网 → 401 → 会话刷新失败 → 登出」，见下方注释。
+configure({ asyncUtilTimeout: 5000 })
+
+// 用例没 mock 的请求一律不许真的出网。jsdom 的默认 origin 是 http://localhost:3000，
+// 而本机（容器/开发机）常常就有一个 dev 服务在跑：漏 mock 的 POST/PUT 会真的打到它并
+// 拿到 401 → 触发 http-client 的「刷新会话 → 失败即登出」链路，把用例 beforeEach 里
+// 设好的登录态清掉（表现=提交按钮变 disabled、断言超时，且随负载时快时慢）。
+// 这里统一让未 mock 的请求以网络错误失败：既不开这个口子，也不再依赖"本机是否恰好有服务在听"。
+api.defaults.adapter = async (config) => {
+  throw Object.assign(new Error('Network disabled in tests'), {
+    config,
+    isAxiosError: true,
+    code: 'ERR_NETWORK',
+  })
+}
 
 beforeAll(async () => {
   await i18next.use(initReactI18next).init({
