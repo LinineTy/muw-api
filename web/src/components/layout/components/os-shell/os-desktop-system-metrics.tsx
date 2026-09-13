@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import { useSystemLoad } from '@/features/dashboard/hooks/use-system-load'
 import { useDashboardContentVisibility } from '@/features/dashboard/hooks/use-status-data'
+import { DASHBOARD_DEFAULT_SECTION } from '@/features/dashboard/section-registry'
 
 import { useOsShellNavigate } from './os-open'
 import { OsWidget, WIDGET_CLICKABLE_CLASS } from './os-widget'
@@ -73,7 +74,11 @@ export function OsDesktopSystemMetrics() {
   if (!enabled) return null
   const { cpu_usage: cpu, memory_usage: memory } = load ?? {}
 
-  const open = () => osNavigate('/dashboard')
+  // 概览的规范 URL = `/dashboard/<默认分区>`（侧栏 / 磁贴 / Dock 用的都是它）。
+  // 早先写 `/dashboard` 只是 index 路由的 redirect stub：页面能打开，但
+  // matchOsNavItem 匹配不到 → 窗口标题退化成原始路径、Dock 也没有图标
+  // （2026-09-13 maintainer截图）。开窗一律传能被导航表识别的 URL。
+  const open = () => osNavigate(`/dashboard/${DASHBOARD_DEFAULT_SECTION}`)
 
   return (
     <>

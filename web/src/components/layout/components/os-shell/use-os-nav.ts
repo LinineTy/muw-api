@@ -63,7 +63,15 @@ export function useOsNavItems(): OsNavItem[] {
   return useMemo(() => groups.flatMap((g) => g.items), [groups])
 }
 
-/** 按当前 pathname 匹配导航项(最长前缀优先) */
+/**
+ * 按当前 pathname 匹配导航项(最长前缀优先)
+ *
+ * 兜底:pathname 恰好是某导航项的**父路径**时(如 `/dashboard` → `/dashboard/overview`、
+ * `/usage-logs` → `/usage-logs/common`)取导航顺序里的第一个子项。分段页的 index 路由
+ * 只是 redirect stub,页面能打开,但匹配不到导航项就会让窗口标题退化成原始路径、
+ * Dock/标题栏丢图标(2026-09-13 桌面小组件开窗就是这么撞上的);
+ * 这里兜一层,任何"父路径"入口都能落到该分区的默认页。
+ */
 export function matchOsNavItem(
   items: OsNavItem[],
   pathname: string
@@ -71,8 +79,13 @@ export function matchOsNavItem(
   const matches = items.filter(
     (item) => pathname === item.url || pathname.startsWith(`${item.url}/`)
   )
-  if (matches.length === 0) return undefined
-  return matches.reduce((a, b) => (b.url.length > a.url.length ? b : a))
+  if (matches.length > 0) {
+    return matches.reduce((a, b) => (b.url.length > a.url.length ? b : a))
+  }
+
+  const parent = pathname.replace(/\/+$/, '')
+  if (parent === '' || parent === '/') return undefined
+  return items.find((item) => item.url.startsWith(`${parent}/`))
 }
 
 /** 当前激活导航项(窗口标题栏用) */
