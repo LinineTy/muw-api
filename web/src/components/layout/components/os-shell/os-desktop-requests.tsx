@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { getUserQuotaDates } from '@/features/dashboard/api'
+import { USAGE_LOGS_DEFAULT_SECTION } from '@/features/usage-logs/section-registry'
 import { formatNumber } from '@/lib/format'
 
 import { useOsShellNavigate } from './os-open'
@@ -52,7 +53,9 @@ export function OsDesktopRequests() {
     <OsWidget size='1x1'>
       <button
         type='button'
-        onClick={() => osNavigate('/usage-logs')}
+        // 使用日志的规范 URL = `/usage-logs/<默认分区>`（侧栏用的就是它）。
+        // 传 `/usage-logs` 只是 redirect stub → 窗口标题变原始路径、Dock 没图标（2026-09-13 maintainer截图）
+        onClick={() => osNavigate(`/usage-logs/${USAGE_LOGS_DEFAULT_SECTION}`)}
         className={WIDGET_CLICKABLE_CLASS}
       >
         <span className='text-muted-foreground truncate text-[0.6875rem] leading-none'>
