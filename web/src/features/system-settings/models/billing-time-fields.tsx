@@ -131,9 +131,12 @@ export function BillingConditionValueInput(props: {
   probe?: VisualComparison['probe']
 }) {
   const { t, i18n } = useTranslation()
+  // 星期是枚举，永远用下拉（0~6 = 周日~周六）；数值草稿（normalizeNumberDrafts）只对
+  // hour/minute/month/day 这类数字探针有意义 —— 2026-09-13 maintainer指出乘数区的星期范围
+  // 显示成了原始数字「1 至 6」。原先这里多一个 `!normalizeNumberDrafts` 条件，导致
+  // 乘数区（传了 normalizeNumberDrafts）落回数字输入框。
   if (
     props.probe === 'weekday' &&
-    !props.normalizeNumberDrafts &&
     (props.value === '' || /^[0-6]$/.test(props.value))
   ) {
     const formatter = new Intl.DateTimeFormat(

@@ -268,3 +268,27 @@ it('uses the same recharge conversion and token unit in task condition prices', 
   expect(screen.getAllByText('$5/1M token')).toHaveLength(2)
   expect(screen.getAllByText('$3/1M token')).toHaveLength(2)
 })
+
+// 日志（带 request_rules trace）与模型广场（无 trace，走结构化解析）必须显示同一套文案。
+// 2026-09-13 maintainer指出：日志里是「周一至周五 18:00至24:00或00:00至14:00或周六或周日」，
+// 模型广场是「每天 18:00~次日 14:00 · 每周一~周五 或 每周六 或 每周日」，以后者为准。
+const crossMidnightExpr =
+  '(tier("base", p * 0.8 + c * 2.8 + cr * 0.23)) * (hour("Asia/Shanghai") >= 14 && hour("Asia/Shanghai") < 18 && weekday("Asia/Shanghai") >= 1 && weekday("Asia/Shanghai") < 6 ? 1.2 : 1) * (((hour("Asia/Shanghai") >= 18 || hour("Asia/Shanghai") < 14) && weekday("Asia/Shanghai") >= 1 && weekday("Asia/Shanghai") < 6) || (weekday("Asia/Shanghai") == 6) || (weekday("Asia/Shanghai") == 0) ? 0.4 : 1)'
+const crossMidnightCond =
+  '((hour("Asia/Shanghai") >= 18 || hour("Asia/Shanghai") < 14) && weekday("Asia/Shanghai") >= 1 && weekday("Asia/Shanghai") < 6) || (weekday("Asia/Shanghai") == 6) || (weekday("Asia/Shanghai") == 0)'
+
+it('renders traced log rules with the model-square wording (cross-midnight kept whole)', async () => {
+  render(
+    <DynamicPricingBreakdown
+      billingExpr={crossMidnightExpr}
+      requestRules={[
+        { cond: crossMidnightCond, multiplier: 0.4, matched: true },
+      ]}
+    />
+  )
+  const row = screen.getByText(/0\.4x/).closest('li')
+  expect(row).not.toBeNull()
+  // 跨零点区间整体呈现（与模型广场一致）：18:00~Next day 14:00
+  expect(row?.textContent).toContain('Next day 14:00')
+  expect(row?.textContent).not.toContain('24:00')
+})

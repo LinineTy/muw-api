@@ -104,6 +104,7 @@ import {
 import { cn } from '@/lib/utils'
 
 import {
+  BillingConditionValueInput,
   BillingTimeProbeFields,
   BillingTimeRangeFields,
 } from './billing-time-fields'
@@ -443,6 +444,7 @@ function RuleConditionRow({
       {timeCond.mode === MATCH_RANGE ? (
         <BillingTimeRangeFields
           normalizeNumberDrafts
+          probe={timeCond.timeFunc}
           start={timeCond.rangeStart}
           end={timeCond.rangeEnd}
           onChange={(rangeStart, rangeEnd) =>
@@ -450,13 +452,12 @@ function RuleConditionRow({
           }
         />
       ) : (
-        <DraftNumberInput
+        <BillingConditionValueInput
+          normalizeNumberDrafts
+          probe={timeCond.timeFunc}
+          label={t('Value')}
           value={timeCond.value}
-          onValueChange={(value) =>
-            onChange({ ...timeCond, value: String(value) })
-          }
-          placeholder={t('Value')}
-          className='w-24'
+          onChange={(value) => onChange({ ...timeCond, value })}
         />
       )}
     </>

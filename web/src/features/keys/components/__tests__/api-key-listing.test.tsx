@@ -87,6 +87,9 @@ function QuotaTable(props: { apiKey: ApiKey }) {
     columns,
     data: [props.apiKey],
     getCoreRowModel: getCoreRowModel(),
+    // 表头在真实页面里由 DataTableColumnHeader 渲染排序按钮；这个夹具只关心单元格，
+    // 关掉排序以免表头多出一个按钮影响 `getByRole('button')` 单数查询。
+    enableSorting: false,
   })
   return (
     <table>
@@ -153,8 +156,9 @@ afterEach(() => {
 
 it('shows desktop remaining and used amounts side by side without labels, with the currency only in the header', () => {
   renderQuota()
+  // 表头是两段式：左「额度 (单位)」右「已用」，可访问名是两段拼接，故用正则匹配
   expect(
-    screen.getByRole('columnheader', { name: 'Quota ($)' })
+    screen.getByRole('columnheader', { name: /Quota \(\$\)/ })
   ).toBeInTheDocument()
   const trigger = screen.getByRole('button', {
     name: /Remaining 80; Remaining percentage 40%; Used amount 120/,
@@ -222,7 +226,7 @@ it('keeps small custom-currency amounts exact and shows full values in the detai
   })
   renderQuota({ ...key, remain_quota: 1900, used_quota: 1100 })
   expect(
-    screen.getByRole('columnheader', { name: 'Quota (🐱)' })
+    screen.getByRole('columnheader', { name: /Quota \(🐱\)/ })
   ).toBeInTheDocument()
   const button = screen.getByRole('button')
   expect(button).toHaveTextContent('0.0038')
@@ -360,7 +364,9 @@ it('combines creation and last use while keeping expiry, models and IP restricti
   ).toBeInTheDocument()
   const timeCell = screen.getByRole('cell', { name: /Created.*Last Used/ })
   expect(within(timeCell).getByText('Last Used')).toBeInTheDocument()
-  const quotaHeader = screen.getByRole('columnheader', { name: 'Quota ($)' })
+  const quotaHeader = screen.getByRole('columnheader', {
+    name: /Quota \(\$\)/,
+  })
   const quotaTrigger = screen.getByRole('button', {
     name: /Remaining 80; Remaining percentage 40%; Used amount 120/,
   })
@@ -524,4 +530,30 @@ it('keeps mobile quota readable and opens complete model and IP restrictions by 
   details = await screen.findByRole('dialog')
   expect(within(details).getByText('192.0.2.1')).toBeVisible()
   expect(within(details).getByText('2001:db8::1')).toBeVisible()
+})
+
+function ColumnIds({ enableSelection }: { enableSelection: boolean }) {
+  const columns = useApiKeysColumns(now, { enableSelection })
+  return <span data-testid='column-ids'>{columns.map((c) => c.id).join('|')}</span>
+}
+
+// 上游同步把「勾选列」重复合并进来过一次：批量模式打开后表里出现两排勾选框
+// （2026-09-13 maintainer截图指出）。这里锁死「开批量=刚好一列 / 关批量=没有」。
+it('keeps exactly one selection column, and none while batch mode is off', () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, enabled: false } },
+  })
+  clients.push(client)
+  const tree = (enableSelection: boolean) => (
+    <I18nextProvider i18n={i18n}>
+      <QueryClientProvider client={client}>
+        <ColumnIds enableSelection={enableSelection} />
+      </QueryClientProvider>
+    </I18nextProvider>
+  )
+  const view = render(tree(true))
+  const ids = () => screen.getByTestId('column-ids').textContent?.split('|') ?? []
+  expect(ids().filter((id) => id === 'select')).toHaveLength(1)
+  view.rerender(tree(false))
+  expect(ids().filter((id) => id === 'select')).toHaveLength(0)
 })
