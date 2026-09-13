@@ -209,7 +209,12 @@ export function useAccountsColumns(options: {
       },
       {
         id: 'actions',
-        header: () => <span className='sr-only'>{t('Actions')}</span>,
+        // 列名要**看得见**（原来写成 sr-only，界面上就是"操作列没有列名"）；
+        // 文案沿用现成的 `Actions`＝「操作」（7 语言都有，零 locale 改动）
+        header: () => t('Actions'),
+        // 右侧固定：表格横向滚动时行操作始终留在右边（与渠道 / 密钥 / 用户表同一约定，
+        // 走 DataTable 的 `meta.pinned`，见 core/column-pinning.ts）
+        meta: { pinned: 'right' as const },
         cell: ({ row }) => {
           const referenced = row.original.channel_count > 0
           return (

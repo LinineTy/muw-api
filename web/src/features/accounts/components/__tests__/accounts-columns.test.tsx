@@ -39,4 +39,14 @@ describe('accounts columns · 列显隐', () => {
       expect(column.meta?.label).toBeTruthy()
     }
   })
+
+  test('操作列：右侧固定 + 列名可见（与渠道/密钥/用户表同一约定）', () => {
+    const { result } = renderHook(useColumns)
+    const actions = result.current.find((column) => column.id === 'actions')
+    expect(actions?.meta?.pinned).toBe('right')
+    // 原来写成 <span className='sr-only'>，界面上就是"操作列没有列名"
+    const renderHeader = actions?.header as () => React.ReactNode
+    expect(typeof renderHeader).toBe('function')
+    expect(renderHeader()).toBe('Actions')
+  })
 })
