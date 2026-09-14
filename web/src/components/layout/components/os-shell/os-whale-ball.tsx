@@ -68,7 +68,8 @@ function WhaleRow({
  * OS 桌面 · 竖条「鲸鱼」球（挂件的唯一设置入口）
  *
  * maintainer 2026-09-14：「那个调节的和小组件一样放边栏里」—— 于是原版挂在鲸鱼右上角的
- * 汉堡菜单整个不要了，只把**大小 / 音效开关 / 音量**三行挪到竖条球里，与「组件」球同形态。
+ * 汉堡菜单整个不要了，只把**显隐 / 大小 / 音效开关 / 音效集 / 音量**挪到竖条球里，与「组件」球同形态。
+ * 显隐是「整个挂件」的总开关（maintainer：「万一不想看了还能关掉」）。
  *
  * 图标用 lucide 的 `Fish`：lucide 1.25.0 里没有鲸鱼图标（只有 fish 系列），
  * 手画的线条鲸鱼maintainer看着丑（"好丑，类似鱼的图标就行了，最好是原生就有的"），
@@ -77,12 +78,14 @@ function WhaleRow({
 export function OsWhaleBall({ side }: { side: 'left' | 'right' }) {
   const { t } = useTranslation()
   const scale = useOsWhaleStore((state) => state.scale)
+  const visible = useOsWhaleStore((state) => state.visible)
   const soundOn = useOsWhaleStore((state) => state.soundOn)
   const soundSet = useOsWhaleStore((state) => state.soundSet)
   const volume = useOsWhaleStore((state) => state.volume)
   const setScale = useOsWhaleStore((state) => state.setScale)
   const setSoundOn = useOsWhaleStore((state) => state.setSoundOn)
   const setSoundSet = useOsWhaleStore((state) => state.setSoundSet)
+  const setVisible = useOsWhaleStore((state) => state.setVisible)
   const setVolume = useOsWhaleStore((state) => state.setVolume)
 
   return (
@@ -110,6 +113,15 @@ export function OsWhaleBall({ side }: { side: 'left' | 'right' }) {
         {/* ⚠️ CheckboxItem 必须在 Menu.Group 里（Base UI 的硬要求，见 os-widgets-ball） */}
         <DropdownMenuGroup>
           <DropdownMenuLabel>{t('Whale')}</DropdownMenuLabel>
+
+          {/* 整个挂件的显隐（maintainer 2026-09-14：「万一不想看了还能关掉」）。
+              关掉后鲸鱼整块不渲染 —— 但**这颗球不会消失**（球属于竖条），所以随时能再打开。 */}
+          <DropdownMenuCheckboxItem
+            checked={visible}
+            onCheckedChange={(checked) => setVisible(checked)}
+          >
+            {t('Show')}
+          </DropdownMenuCheckboxItem>
 
           <WhaleRow label={t('Size')} value={`${scale.toFixed(1)}×`}>
             <Slider

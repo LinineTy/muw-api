@@ -52,6 +52,7 @@ beforeEach(() => {
     soundOn: true,
     volume: 1,
     soundSet: WHALE_DEFAULT_SOUND_SET,
+    visible: true,
   })
 })
 
@@ -147,6 +148,34 @@ describe('OsWhale', () => {
     played = []
     tapWhale()
     expect(played.some((src) => src.includes('duck-press.mp3'))).toBe(true)
+  })
+
+  test('整个挂件可关可开：关掉后什么都不渲染，其它偏好原样保留', () => {
+    const { container } = render(<OsWhale />)
+    expect(whaleShell(container)).toBeTruthy()
+
+    act(() => useOsWhaleStore.getState().setScale(1.8))
+    act(() => useOsWhaleStore.getState().setVisible(false))
+    // 关掉 = 整块不渲染（盒子/像素命中/气泡/音效一起消失），右下角点击照常穿透
+    expect(container.firstElementChild).toBeNull()
+
+    act(() => useOsWhaleStore.getState().setVisible(true))
+    const shell = whaleShell(container)
+    expect(shell.className).toContain('fixed')
+    expect(shell.getAttribute('style')).toContain('* 1.8)')
+  })
+
+  test('关掉后不再吞指针事件（点原位置不会出声、不会张嘴）', () => {
+    const { container } = render(<OsWhale />)
+    tapWhale()
+    expect(played.length).toBeGreaterThan(0)
+    if (bubbleText(container)) tapWhale() // 收掉刚打开的气泡
+
+    act(() => useOsWhaleStore.getState().setVisible(false))
+    played = []
+    tapWhale()
+    expect(played).toEqual([])
+    expect(bubbleText(container)).toBe('')
   })
 
   test('点一下张嘴说一句台词，再点一次闭嘴', () => {

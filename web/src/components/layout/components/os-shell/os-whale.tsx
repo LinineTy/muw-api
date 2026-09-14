@@ -77,6 +77,7 @@ function lineStyle(line: WhaleLine): React.CSSProperties {
 }
 
 export function OsWhale() {
+  const visible = useOsWhaleStore((state) => state.visible)
   const scale = useOsWhaleStore((state) => state.scale)
   const volume = useOsWhaleStore((state) => state.volume)
   const soundSet = useOsWhaleStore((state) => state.soundSet)
@@ -295,6 +296,8 @@ export function OsWhale() {
 
   // —— 指针交互（document 级 + 命中过滤）——
   useEffect(() => {
+    // 挂件关掉时不挂监听：省掉每一下点击的命中测试，也保证右下角完全"不存在"
+    if (!visible) return
     const onPointerDown = (event: PointerEvent) => {
       if (event.button !== 0 && event.pointerType === 'mouse') return
       if (!isWhaleHit(event)) return
@@ -351,7 +354,7 @@ export function OsWhale() {
       document.removeEventListener('pointercancel', onPointerCancel, true)
       document.removeEventListener('click', onClickCapture, true)
     }
-  }, [isWhaleHit, playPress, pressUp, toggleBubble])
+  }, [visible, isWhaleHit, playPress, pressUp, toggleBubble])
 
   // 卸载时清计时器
   useEffect(
@@ -362,6 +365,12 @@ export function OsWhale() {
     },
     []
   )
+
+  // 整个挂件的显隐开关（maintainer 2026-09-14：「万一不想看了还能关掉」）——
+  // 关掉就整块不渲染：盒子、像素命中、气泡、音效全都不存在，右下角点击照常穿透到窗口。
+  // ⚠️ 放在所有 hook 之后（React 的 hook 顺序要求）；设置入口在侧栏「鲸鱼」球，
+  // 那颗球长在竖条上，不受这里影响，所以关了照样能打开。
+  if (!visible) return null
 
   const rows = content?.kind === 'text' ? content.rows : []
 
