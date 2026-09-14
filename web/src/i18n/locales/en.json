@@ -7966,6 +7966,14 @@
     "Pass-through": "Pass-through",
     "Pass-through help": "Pass-through help",
     "Pass-through requires native forwarding": "Pass-through requires native forwarding",
-    "Send the original request body to upstream without conversion. Only available for native forwarding routes.": "Send the original request body to upstream without conversion. Only available for native forwarding routes."
+    "Send the original request body to upstream without conversion. Only available for native forwarding routes.": "Send the original request body to upstream without conversion. Only available for native forwarding routes.",
+    "Auto-disable channel": "Auto-disable channel",
+    "Check for new upstream models": "Check for new upstream models",
+    "Detect model updates": "Detect model updates",
+    "Disable channels on repeated failures": "Disable channels on repeated failures",
+    "Preserve the original request body": "Preserve the original request body",
+    "Quick options": "Quick options",
+    "Requires upstream WebSocket support": "Requires upstream WebSocket support",
+    "Responses WebSocket": "Responses WebSocket"
   }
 }

@@ -7966,6 +7966,14 @@
     "Pass-through": "パススルー",
     "Pass-through help": "パススルーのヘルプ",
     "Pass-through requires native forwarding": "パススルーにはネイティブ転送が必要です",
-    "Send the original request body to upstream without conversion. Only available for native forwarding routes.": "元のリクエストボディを変換せずにアップストリームへ送信します。ネイティブ転送ルートでのみ利用できます。"
+    "Send the original request body to upstream without conversion. Only available for native forwarding routes.": "元のリクエストボディを変換せずにアップストリームへ送信します。ネイティブ転送ルートでのみ利用できます。",
+    "Auto-disable channel": "チャネル自動無効化",
+    "Check for new upstream models": "上流の新しいモデルを定期確認",
+    "Detect model updates": "モデル更新を検出",
+    "Disable channels on repeated failures": "失敗が続くチャネルを自動で無効化",
+    "Preserve the original request body": "元のリクエスト本文を保持",
+    "Quick options": "クイック設定",
+    "Requires upstream WebSocket support": "上流の WebSocket 対応が必要",
+    "Responses WebSocket": "Responses WebSocket"
   }
 }

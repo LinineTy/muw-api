@@ -7966,6 +7966,14 @@
     "Pass-through": "Сквозная передача",
     "Pass-through help": "Справка по сквозной передаче",
     "Pass-through requires native forwarding": "Сквозная передача требует нативной пересылки",
-    "Send the original request body to upstream without conversion. Only available for native forwarding routes.": "Отправлять исходное тело запроса вышестоящему серверу без преобразования. Доступно только для маршрутов с нативной пересылкой."
+    "Send the original request body to upstream without conversion. Only available for native forwarding routes.": "Отправлять исходное тело запроса вышестоящему серверу без преобразования. Доступно только для маршрутов с нативной пересылкой.",
+    "Auto-disable channel": "Автоотключение канала",
+    "Check for new upstream models": "Периодически искать новые модели",
+    "Detect model updates": "Проверять обновления моделей",
+    "Disable channels on repeated failures": "Отключать при повторных сбоях",
+    "Preserve the original request body": "Сохранять исходное тело запроса",
+    "Quick options": "Быстрые настройки",
+    "Requires upstream WebSocket support": "Требуется поддержка WebSocket провайдером",
+    "Responses WebSocket": "Responses WebSocket"
   }
 }

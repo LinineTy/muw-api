@@ -7966,6 +7966,14 @@
     "Pass-through": "透傳",
     "Pass-through help": "透傳說明",
     "Pass-through requires native forwarding": "透傳僅支援原生轉發",
-    "Send the original request body to upstream without conversion. Only available for native forwarding routes.": "將原始請求體不經轉換直接傳送到上游。僅原生轉發路由可用。"
+    "Send the original request body to upstream without conversion. Only available for native forwarding routes.": "將原始請求體不經轉換直接傳送到上游。僅原生轉發路由可用。",
+    "Auto-disable channel": "異常自動停用",
+    "Check for new upstream models": "定期探索上游新增模型",
+    "Detect model updates": "偵測模型更新",
+    "Disable channels on repeated failures": "多次失敗時自動停用",
+    "Preserve the original request body": "保留用戶端原始請求內容",
+    "Quick options": "快捷選項",
+    "Requires upstream WebSocket support": "需上游支援 WebSocket",
+    "Responses WebSocket": "Responses WebSocket"
   }
 }

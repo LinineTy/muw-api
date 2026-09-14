@@ -7966,6 +7966,14 @@
     "Pass-through": "Transmission directe",
     "Pass-through help": "Aide sur la transmission directe",
     "Pass-through requires native forwarding": "La transmission directe nécessite le transfert natif",
-    "Send the original request body to upstream without conversion. Only available for native forwarding routes.": "Envoyer le corps de la requête d'origine à l'upstream sans conversion. Disponible uniquement pour les routes en transfert natif."
+    "Send the original request body to upstream without conversion. Only available for native forwarding routes.": "Envoyer le corps de la requête d'origine à l'upstream sans conversion. Disponible uniquement pour les routes en transfert natif.",
+    "Auto-disable channel": "Désactivation auto",
+    "Check for new upstream models": "Rechercher les nouveaux modèles en amont",
+    "Detect model updates": "Détecter les nouveaux modèles",
+    "Disable channels on repeated failures": "Désactiver après des échecs répétés",
+    "Preserve the original request body": "Conserver le corps de requête original",
+    "Quick options": "Options rapides",
+    "Requires upstream WebSocket support": "Nécessite WebSocket en amont",
+    "Responses WebSocket": "Responses WebSocket"
   }
 }

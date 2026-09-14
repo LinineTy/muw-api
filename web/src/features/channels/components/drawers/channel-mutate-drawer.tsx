@@ -214,6 +214,7 @@ import {
 import type { Channel, ChannelModelSettingForm } from '../../types'
 import { NumericSpinnerInput } from '../numeric-spinner-input'
 import { ChannelPluginExtensions } from '../channel-plugin-extensions'
+import { ChannelQuickOptions } from '../channel-quick-options'
 import { ChannelTypeLogo } from '../channel-type-badge'
 import { useChannels } from '../channels-provider'
 import { AdvancedCustomEditorDialog } from '../dialogs/advanced-custom-editor-dialog'
@@ -4509,6 +4510,13 @@ export function ChannelMutateDrawer({
           </>
         }
         models={modelsSection}
+        quickOptions={
+          <ChannelQuickOptions
+            channelType={currentType}
+            sensitiveLocked={sensitiveLocked}
+            disabled={isSubmitting}
+          />
+        }
         routing={
           <>
             {modelMappingFields}
