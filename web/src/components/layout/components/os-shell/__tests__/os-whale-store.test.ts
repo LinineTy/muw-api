@@ -11,23 +11,24 @@ import {
 /**
  * 小鲸鱼挂件偏好（大小 / 音效 / 音量）
  *
- * 边界照搬原版（0.6–2.5 倍、默认 1.5）：滑动条之外还能从 localStorage 手改，
+ * 边界（0.6–2.0 倍、默认 1.2，maintainer 2026-09-14 收紧）：滑动条之外还能从 localStorage 手改，
  * setter 一律过一遍夹取，避免脏值把鲸鱼放大到糊屏或缩到看不见。
  */
 describe('小鲸鱼挂件偏好', () => {
-  test('默认：1.5 倍、音效开、音量满', () => {
+  test('默认：1.2 倍、音效开、音量满', () => {
     useOsWhaleStore.setState({
       scale: WHALE_DEFAULT_SCALE,
       soundOn: true,
       volume: 1,
     })
     const state = useOsWhaleStore.getState()
-    expect(state.scale).toBe(1.5)
+    expect(state.scale).toBe(WHALE_DEFAULT_SCALE)
+    expect(state.scale).toBe(1.2)
     expect(state.soundOn).toBe(true)
     expect(state.volume).toBe(1)
   })
 
-  test('大小夹在 0.6–2.5，并按 0.1 取整', () => {
+  test('大小夹在 0.6–2.0，并按 0.1 取整', () => {
     const { setScale } = useOsWhaleStore.getState()
     setScale(99)
     expect(useOsWhaleStore.getState().scale).toBe(WHALE_MAX_SCALE)
