@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 /**
- * OS 壳 · 小鲸鱼挂件偏好（大小 / 音效开关 / 音效集 / 音量）
+ * OS 壳 · 小鲸鱼挂件偏好（显隐 / 大小 / 音效开关 / 音效集 / 音量）
  *
  * 存**浏览器本地**（zustand persist → localStorage），与桌面小组件的显隐偏好同一套思路：
  * 挂件是"个人桌面装饰"，换浏览器回到默认即可，不值得为它加后端字段。
@@ -65,6 +65,12 @@ function clampVolume(value: number): number {
 }
 
 type OsWhaleStore = {
+  /**
+   * 整个挂件的显隐（maintainer 2026-09-14：「万一不想看了还能关掉」）。
+   * 关掉 = `OsWhale` 直接不渲染：盒子/像素命中/气泡/音效一起消失，右下角点击照常穿透。
+   * 入口在侧栏「鲸鱼」球 —— 球属于竖条、不受这里影响，所以关了还能再打开。
+   */
+  visible: boolean
   /** 鲸鱼大小倍数（0.6–2.0） */
   scale: number
   /** 按压/松手音效开关 */
@@ -77,11 +83,13 @@ type OsWhaleStore = {
   setSoundOn: (on: boolean) => void
   setVolume: (volume: number) => void
   setSoundSet: (soundSet: WhaleSoundSet) => void
+  setVisible: (visible: boolean) => void
 }
 
 export const useOsWhaleStore = create<OsWhaleStore>()(
   persist(
     (set) => ({
+      visible: true,
       scale: WHALE_DEFAULT_SCALE,
       soundOn: true,
       volume: 1,
@@ -90,10 +98,12 @@ export const useOsWhaleStore = create<OsWhaleStore>()(
       setSoundOn: (on) => set({ soundOn: on }),
       setVolume: (volume) => set({ volume: clampVolume(volume) }),
       setSoundSet: (soundSet) => set({ soundSet: normalizeSoundSet(soundSet) }),
+      setVisible: (visible) => set({ visible }),
     }),
     {
       name: 'os-whale',
       partialize: (state) => ({
+        visible: state.visible,
         scale: state.scale,
         soundOn: state.soundOn,
         volume: state.volume,
@@ -104,6 +114,7 @@ export const useOsWhaleStore = create<OsWhaleStore>()(
         const saved = (persisted ?? {}) as Partial<OsWhaleStore>
         return {
           ...current,
+          visible: saved.visible !== false,
           scale: clampScale(Number(saved.scale)),
           soundOn: saved.soundOn !== false,
           volume: clampVolume(Number(saved.volume)),

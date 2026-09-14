@@ -18,8 +18,9 @@ import {
  * 音效集同理：脏值（或以后删掉的旧集合名）一律回落到默认，不能把 whale 卡成无声。
  */
 describe('小鲸鱼挂件偏好', () => {
-  test('默认：1.2 倍、音效开、音量满、音效集 = 小黄鸭', () => {
+  test('默认：1.2 倍、音效开、音量满、音效集 = 小黄鸭、挂件可见', () => {
     useOsWhaleStore.setState({
+      visible: true,
       scale: WHALE_DEFAULT_SCALE,
       soundOn: true,
       volume: 1,
@@ -31,6 +32,14 @@ describe('小鲸鱼挂件偏好', () => {
     expect(state.soundOn).toBe(true)
     expect(state.volume).toBe(1)
     expect(state.soundSet).toBe('duck')
+    expect(state.visible).toBe(true)
+  })
+
+  test('整个挂件可以关（关了 OsWhale 整块不渲染，见 os-whale.tsx 的 early return）', () => {
+    useOsWhaleStore.getState().setVisible(false)
+    expect(useOsWhaleStore.getState().visible).toBe(false)
+    useOsWhaleStore.getState().setVisible(true)
+    expect(useOsWhaleStore.getState().visible).toBe(true)
   })
 
   test('大小夹在 0.6–2.0，并按 0.1 取整', () => {
