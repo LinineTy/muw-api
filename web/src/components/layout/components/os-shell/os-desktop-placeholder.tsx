@@ -27,6 +27,9 @@ export function OsDesktopPlaceholder() {
 
   return (
     <div
+      // 桌面层标记:挂件（os-whale.tsx 的 whaleIsExposed）靠它区分"这点是桌面、鲸鱼露着"
+      // 与"这点被窗口/壳控件盖住"。桌面整体被窗口盖住时**仍需保留**这层标记。
+      data-os-desktop=''
       className={cn(
         // 横向分栏:左边磁贴网格,右边时间线公告堆叠卡
         'flex h-full w-full gap-6 py-8',
