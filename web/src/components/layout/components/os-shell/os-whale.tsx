@@ -356,6 +356,19 @@ export function OsWhale() {
     }
   }, [visible, isWhaleHit, playPress, pressUp, toggleBubble])
 
+  // 关掉挂件时顺手收干净：气泡收掉、挂起的松手音计时器清掉、正在播的音频停掉 ——
+  // 不然隐藏期间计时器还在跑，重新打开会先冒出一个"半截气泡"或补一声幽灵音。
+  useEffect(() => {
+    if (visible) return
+    closeBubble()
+    if (releaseTimerRef.current) {
+      window.clearTimeout(releaseTimerRef.current)
+      releaseTimerRef.current = null
+    }
+    pressAudioRef.current?.pause()
+    releaseAudioRef.current?.pause()
+  }, [visible, closeBubble])
+
   // 卸载时清计时器
   useEffect(
     () => () => {
@@ -373,11 +386,15 @@ export function OsWhale() {
   if (!visible) return null
 
   const rows = content?.kind === 'text' ? content.rows : []
-
   return (
     <div
       aria-hidden='true'
-      className='pointer-events-none fixed right-0 bottom-0 z-[60] select-none'
+      // ⚠️ 层级必须卡在「窗口之上、弹窗之下」这一段：
+      //   窗口 z-30 → 鲸鱼 z-40 → 弹窗/遮罩 z-50（dialog.tsx 里 6 处都是 z-50）
+      //   → Dock z-70 / 竖条球弹层 z-80。
+      // 原来写的 z-[60] 会让这层装饰**浮在所有弹窗和遮罩上面**（2026-09-14 review 抓到，
+      // 用「盖一层 z-50 不透明遮罩看鲸鱼像素还在不在」实测出来的）。
+      className='pointer-events-none fixed right-0 bottom-0 z-40 select-none'
       style={
         {
           width: base,
