@@ -7902,6 +7902,8 @@
     "Extra credits": "Дополнительные кредиты",
     "Purchased": "Куплено",
     "Free credits": "Бесплатные кредиты",
-    "Alibaba Cloud Model Studio workspace endpoint, e.g. https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com (copy the API Host from the workspace page in the console). Leave empty to keep using the shared domain dashscope.aliyuncs.com, which no longer receives new features since 2026-09-30.": "Выделенный эндпоинт рабочего пространства Alibaba Cloud Model Studio, например https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com (скопируйте API Host на странице управления рабочими пространствами в консоли). Оставьте пустым, чтобы использовать общий домен dashscope.aliyuncs.com, который с 2026-09-30 не получает новых возможностей."
+    "Alibaba Cloud Model Studio workspace endpoint, e.g. https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com (copy the API Host from the workspace page in the console). Leave empty to keep using the shared domain dashscope.aliyuncs.com, which no longer receives new features since 2026-09-30.": "Выделенный эндпоинт рабочего пространства Alibaba Cloud Model Studio, например https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com (скопируйте API Host на странице управления рабочими пространствами в консоли). Оставьте пустым, чтобы использовать общий домен dashscope.aliyuncs.com, который с 2026-09-30 не получает новых возможностей.",
+    "Enable only if the upstream supports Responses WebSocket. HTTP requests are unaffected when disabled.": "Включайте, только если провайдер поддерживает Responses WebSocket. При отключении обычные HTTP-запросы остаются доступны.",
+    "Enable Responses WebSocket": "Включить Responses WebSocket"
   }
 }
