@@ -7817,6 +7817,9 @@
     "Coding-plan quota monitoring is configured on the account.": "コーディングプランのクォータ監視はアカウント側で設定します。",
     "Previous announcement": "前の告知",
     "Next announcement": "次の告知",
-    "Desktop widgets": "デスクトップウィジェット"
+    "Desktop widgets": "デスクトップウィジェット",
+    "Whale": "クジラ",
+    "Sound": "効果音",
+    "Volume": "音量"
   }
 }
