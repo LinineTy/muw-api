@@ -478,6 +478,10 @@ export function OsWhale() {
             style={{
               left: '44.25%',
               top: '38%',
+              // ⚠️ 必须给个宽度：绝对定位在 left:44.25% 时，可用宽度只剩"容器宽 - 166px"（≈209px），
+              // 长台词会被这个上限挤成两行（原版 560u≈205px 正好卡在这个可用宽度上）。
+              // 显式给 700u 再靠 translate 居中，长句才有地方摊开（气泡内圈最窄也有 ~740u）。
+              width: 'calc(var(--whale-u) * 700)',
               color: TEXT_INK,
               opacity: open && content?.kind === 'text' ? 1 : 0,
               transitionDelay: open ? '0.36s' : '0s',
