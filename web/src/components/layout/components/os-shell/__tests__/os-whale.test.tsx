@@ -10,7 +10,7 @@ import {
   WHALE_SOLO_LINES,
   WHALE_WHINE_LINES,
 } from '../os-whale-lines'
-import { useOsWhaleStore } from '../os-whale-store'
+import { useOsWhaleStore, WHALE_DEFAULT_SCALE } from '../os-whale-store'
 
 /**
  * 小鲸鱼挂件 · 手感契约
@@ -43,7 +43,7 @@ beforeEach(() => {
   vi.spyOn(window.HTMLMediaElement.prototype, 'pause').mockImplementation(
     () => undefined
   )
-  useOsWhaleStore.setState({ scale: 1.5, soundOn: true, volume: 1 })
+  useOsWhaleStore.setState({ scale: WHALE_DEFAULT_SCALE, soundOn: true, volume: 1 })
 })
 
 afterEach(() => {
@@ -87,7 +87,7 @@ function bubbleText(container: HTMLElement) {
 }
 
 describe('OsWhale', () => {
-  test('右下角定格，尺寸跟着 store 的倍数走（默认 1.5 倍）', () => {
+  test('右下角定格，尺寸跟着 store 的倍数走（默认 1.2 倍）', () => {
     const { container } = render(<OsWhale />)
     const shell = whaleShell(container)
     expect(shell.className).toContain('fixed')
@@ -96,10 +96,10 @@ describe('OsWhale', () => {
     // 可穿透：只有点到鲸鱼像素才响应
     expect(shell.className).toContain('pointer-events-none')
     // jsdom 的 CSS 解析器不认识 clamp/calc，直接看 inline style 原文
-    expect(shell.getAttribute('style')).toContain('* 1.5)')
+    expect(shell.getAttribute('style')).toContain('* 1.2)')
 
-    act(() => useOsWhaleStore.getState().setScale(2.1))
-    expect(whaleShell(container).getAttribute('style')).toContain('* 2.1)')
+    act(() => useOsWhaleStore.getState().setScale(1.8))
+    expect(whaleShell(container).getAttribute('style')).toContain('* 1.8)')
   })
 
   test('按下去压扁（底部不动），松手回弹', () => {

@@ -8,12 +8,14 @@ import { persist } from 'zustand/middleware'
  * 存**浏览器本地**（zustand persist → localStorage），与桌面小组件的显隐偏好同一套思路：
  * 挂件是"个人桌面装饰"，换浏览器回到默认即可，不值得为它加后端字段。
  *
- * 大小开合范围照搬原版（0.6–2.5 倍，默认 1.5）；原版那套后端 size.json 落盘机制不要 ——
+ * 大小范围是原版 0.6–2.5 收紧后的口径（2026-09-14 maintainer「压小吧，然后默认大小也缩小」）：
+ * 上限 2.5 → 2.0、默认 1.5 → 1.2（1440×900 下鲸鱼本体 223px → 178px）；
+ * 原版那套后端 size.json 落盘机制不要 ——
  * 这里没有宿主进程，偏好放浏览器就够。
  */
 export const WHALE_MIN_SCALE = 0.6
-export const WHALE_MAX_SCALE = 2.5
-export const WHALE_DEFAULT_SCALE = 1.5
+export const WHALE_MAX_SCALE = 2.0
+export const WHALE_DEFAULT_SCALE = 1.2
 
 /** 与滑动条步长一致（0.1） */
 function clampScale(value: number): number {
@@ -30,7 +32,7 @@ function clampVolume(value: number): number {
 }
 
 type OsWhaleStore = {
-  /** 鲸鱼大小倍数（0.6–2.5） */
+  /** 鲸鱼大小倍数（0.6–2.0） */
   scale: number
   /** 按压/松手音效开关 */
   soundOn: boolean
