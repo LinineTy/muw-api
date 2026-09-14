@@ -10,7 +10,11 @@ import {
   WHALE_SOLO_LINES,
   WHALE_WHINE_LINES,
 } from '../os-whale-lines'
-import { useOsWhaleStore, WHALE_DEFAULT_SCALE } from '../os-whale-store'
+import {
+  useOsWhaleStore,
+  WHALE_DEFAULT_SCALE,
+  WHALE_DEFAULT_SOUND_SET,
+} from '../os-whale-store'
 
 /**
  * 小鲸鱼挂件 · 手感契约
@@ -43,7 +47,12 @@ beforeEach(() => {
   vi.spyOn(window.HTMLMediaElement.prototype, 'pause').mockImplementation(
     () => undefined
   )
-  useOsWhaleStore.setState({ scale: WHALE_DEFAULT_SCALE, soundOn: true, volume: 1 })
+  useOsWhaleStore.setState({
+    scale: WHALE_DEFAULT_SCALE,
+    soundOn: true,
+    volume: 1,
+    soundSet: WHALE_DEFAULT_SOUND_SET,
+  })
 })
 
 afterEach(() => {
@@ -117,12 +126,27 @@ describe('OsWhale', () => {
   test('按压出声；音效关掉就不出声', () => {
     render(<OsWhale />)
     tapWhale()
-    expect(played.some((src) => src.includes('press.mp3'))).toBe(true)
+    expect(played.some((src) => src.includes('duck-press.mp3'))).toBe(true)
 
     played = []
     act(() => useOsWhaleStore.getState().setSoundOn(false))
     tapWhale()
     expect(played).toEqual([])
+  })
+
+  test('切音效集后按压走另一套素材（小黄鸭 → 音效 1）', () => {
+    render(<OsWhale />)
+    act(() => useOsWhaleStore.getState().setSoundSet('fx1'))
+    played = []
+    tapWhale()
+    // 切集要重建 Audio：按的必须是 fx1 那套，不能还挂着上一集的 src
+    expect(played.some((src) => src.includes('fx1-press.mp3'))).toBe(true)
+    expect(played.some((src) => src.includes('duck-press.mp3'))).toBe(false)
+
+    act(() => useOsWhaleStore.getState().setSoundSet('duck'))
+    played = []
+    tapWhale()
+    expect(played.some((src) => src.includes('duck-press.mp3'))).toBe(true)
   })
 
   test('点一下张嘴说一句台词，再点一次闭嘴', () => {
