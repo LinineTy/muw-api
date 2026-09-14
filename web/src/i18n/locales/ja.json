@@ -7902,6 +7902,8 @@
     "Extra credits": "追加クレジット",
     "Purchased": "購入分",
     "Free credits": "付与分",
-    "Alibaba Cloud Model Studio workspace endpoint, e.g. https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com (copy the API Host from the workspace page in the console). Leave empty to keep using the shared domain dashscope.aliyuncs.com, which no longer receives new features since 2026-09-30.": "Alibaba Cloud Model Studio（阿里雲百煉）の業務空間専用エンドポイント。例: https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com（コンソールの「業務空間管理」ページで API Host をコピー）。空欄の場合は共有ドメイン dashscope.aliyuncs.com を使用します。このドメインは 2026-09-30 以降、新機能は提供されません。"
+    "Alibaba Cloud Model Studio workspace endpoint, e.g. https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com (copy the API Host from the workspace page in the console). Leave empty to keep using the shared domain dashscope.aliyuncs.com, which no longer receives new features since 2026-09-30.": "Alibaba Cloud Model Studio（阿里雲百煉）の業務空間専用エンドポイント。例: https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com（コンソールの「業務空間管理」ページで API Host をコピー）。空欄の場合は共有ドメイン dashscope.aliyuncs.com を使用します。このドメインは 2026-09-30 以降、新機能は提供されません。",
+    "Enable only if the upstream supports Responses WebSocket. HTTP requests are unaffected when disabled.": "上流サービスが Responses WebSocket に対応している場合のみ有効にしてください。無効時も通常の HTTP リクエストは利用できます。",
+    "Enable Responses WebSocket": "Responses WebSocket を有効化"
   }
 }
