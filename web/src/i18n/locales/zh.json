@@ -7817,6 +7817,9 @@
     "Coding-plan quota monitoring is configured on the account.": "编码套餐余量监控已配置在账户上，请在账户页维护。",
     "Previous announcement": "上一条公告",
     "Next announcement": "下一条公告",
-    "Desktop widgets": "桌面组件"
+    "Desktop widgets": "桌面组件",
+    "Whale": "鲸鱼",
+    "Sound": "音效",
+    "Volume": "音量"
   }
 }

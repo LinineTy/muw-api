@@ -37,6 +37,7 @@ import { useOsBallStore } from './os-ball-store'
 import { FAB_BALL_SM, FAB_ICON_SM } from './os-ball-style'
 import { useOsNoticeStore } from './os-notice-store'
 import { useOsShellNavigate } from './os-open'
+import { OsWhaleBall } from './os-whale-ball'
 import { OsWidgetsBall } from './os-widgets-ball'
 
 /**
@@ -292,6 +293,9 @@ function RailToolsGroup({ side }: { side: 'left' | 'right' }) {
       {/* 组件开关：紧挨公告球下方（maintainer："插中间"）；公告卡不在这个菜单里，
           它归上面的铃铛管 —— 两处能关同一个东西会让人困惑 */}
       <OsWidgetsBall side={side} />
+
+      {/* 鲸鱼挂件：设置只有大小/音效/音量三行，与"组件"球同形态 */}
+      <OsWhaleBall side={side} />
 
       <ChatPresetsBall side={side} />
     </div>

@@ -36,6 +36,7 @@ import { MobileNavFab } from './mobile-nav-fab'
 import { OsDock } from './os-shell/os-dock'
 import { isSettingsUrl, type OsShellOpenWindow } from './os-shell/os-open'
 import { OsSideStrip } from './os-shell/os-side-strip'
+import { OsWhale } from './os-shell/os-whale'
 import { OsWindowManager } from './os-shell/os-window-manager'
 import { matchOsNavItem, useOsNavItems } from './os-shell/use-os-nav'
 
@@ -159,6 +160,8 @@ function OsShellDesktopHost() {
       <OsSideStrip />
       {/* 底部 Dock(整体居中、视觉分两节):[ 搜索 | 开始磁贴 ] [ 已打开窗口 ] */}
       <OsDock />
+      {/* 右下角小鲸鱼挂件(装饰件,纯手感:压扁/音效/台词气泡) */}
+      <OsWhale />
     </div>
   )
 }

@@ -7817,6 +7817,9 @@
     "Coding-plan quota monitoring is configured on the account.": "Мониторинг квоты тарифного плана настраивается в аккаунте.",
     "Previous announcement": "Предыдущее объявление",
     "Next announcement": "Следующее объявление",
-    "Desktop widgets": "Виджеты рабочего стола"
+    "Desktop widgets": "Виджеты рабочего стола",
+    "Whale": "Кит",
+    "Sound": "Звук",
+    "Volume": "Громкость"
   }
 }
