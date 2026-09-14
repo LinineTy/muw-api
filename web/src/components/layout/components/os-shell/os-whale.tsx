@@ -56,16 +56,25 @@ const TEXT_INK = '#536ba9'
 /** 一行台词的排版：字号跟着 `--whale-u` 走，气泡整体放大缩小时文字同步 */
 function lineStyle(line: WhaleLine): React.CSSProperties {
   const big = line.s === 'B'
-  // 大字（B 档）与长台词的行高各有一档，别写成嵌套三元
-  let lineHeight = big ? 1.05 : 1.15
-  if (line.w) lineHeight = 1.2
+  // 长台词（wrap）另有一档：原版把 wrap 挂在 A 档的 66u 上，可那边的长句是
+  // 「你目录里的dsh是什么…」这种；本仓的台词更长（中文 11~14 字），66u 会挤成两行、
+  // 还在气泡下缘贴边。降到 56u + 放宽到 680u，绝大多数句子一行放得下。
+  if (line.w) {
+    return {
+      fontSize: 'calc(var(--whale-u) * 56)',
+      fontWeight: 600,
+      letterSpacing: '0.06em',
+      lineHeight: 1.25,
+      whiteSpace: 'normal',
+      maxWidth: 'calc(var(--whale-u) * 680)',
+    }
+  }
   return {
     fontSize: `calc(var(--whale-u) * ${big ? 128 : 66})`,
     fontWeight: big ? 800 : 600,
     letterSpacing: big ? undefined : '0.06em',
-    lineHeight,
-    whiteSpace: line.w ? 'normal' : 'nowrap',
-    maxWidth: line.w ? 'calc(var(--whale-u) * 560)' : undefined,
+    lineHeight: big ? 1.05 : 1.15,
+    whiteSpace: 'nowrap',
   }
 }
 
