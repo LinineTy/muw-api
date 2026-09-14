@@ -27,6 +27,12 @@ export const CHANNEL_TYPE_NEW_API = 60
 export const CHANNEL_TYPE_OPENCODE_ZEN = 62
 export const CHANNEL_TYPE_TASK_PLUGIN = 63
 
+// 上游把 vLLM/SGLang 定为 62/63，与本 fork 的 OpenCode Zen(62)/TaskPlugin(63) 撞号；
+// 线上库里已有 61/62 的渠道，不能反迁，故上游这两个新类型顺延为 64/65。
+export const CHANNEL_TYPE_VLLM = 64
+
+export const CHANNEL_TYPE_SGLANG = 65
+
 export const CHANNEL_TYPES = {
   0: 'Unknown',
   1: 'OpenAI',
@@ -88,12 +94,14 @@ export const CHANNEL_TYPES = {
   61: 'SenseNova',
   62: 'OpenCode Zen',
   63: 'Task Plugin',
+  64: 'vLLM',
+  65: 'SGLang',
 } as const
 
 const CHANNEL_TYPE_DISPLAY_ORDER: number[] = [
   1, 14, 33, 24, 43, 3, 41, 48, 60, 58, 42, 34, 20, 4, 40, 27, 25, 17, 26, 15,
   46, 23, 18, 45, 31, 35, 49, 19, 47, 37, 38, 39, 11, 8, 57, 59, 22, 21, 44, 2,
-  5, 36, 50, 51, 52, 53, 54, 55, 56, 61, 62, 63,
+  5, 36, 50, 51, 52, 53, 54, 55, 56, 61, 62, 63, 65,
 ]
 
 export const CHANNEL_TYPE_OPTIONS: { value: number; label: string }[] = (() => {
@@ -605,7 +613,7 @@ export const FIELD_DESCRIPTIONS = {
 
 export const MODEL_FETCHABLE_TYPES = new Set([
   1, 4, 14, 17, 20, 23, 24, 25, 26, 27, 31, 34, 35, 40, 42, 43, 47, 48, 57, 58,
-  59, 60, 62,
+  59, 60, 62, CHANNEL_TYPE_VLLM, CHANNEL_TYPE_SGLANG,
 ])
 
 export const FIELD_PASSTHROUGH_TYPES = new Set([
@@ -615,6 +623,8 @@ export const FIELD_PASSTHROUGH_TYPES = new Set([
   58,
   59,
   CHANNEL_TYPE_NEW_API,
+  CHANNEL_TYPE_VLLM,
+  CHANNEL_TYPE_SGLANG,
 ])
 
 export const OPENAI_FIELD_PASSTHROUGH_TYPES = new Set([
@@ -623,6 +633,8 @@ export const OPENAI_FIELD_PASSTHROUGH_TYPES = new Set([
   58,
   59,
   CHANNEL_TYPE_NEW_API,
+  CHANNEL_TYPE_VLLM,
+  CHANNEL_TYPE_SGLANG,
 ])
 
 export const CLAUDE_FIELD_PASSTHROUGH_TYPES = new Set([
@@ -630,6 +642,8 @@ export const CLAUDE_FIELD_PASSTHROUGH_TYPES = new Set([
   58,
   59,
   CHANNEL_TYPE_NEW_API,
+  CHANNEL_TYPE_VLLM,
+  CHANNEL_TYPE_SGLANG,
 ])
 
 export const TYPE_TO_KEY_PROMPT: Record<number, string> = {
@@ -644,6 +658,8 @@ export const TYPE_TO_KEY_PROMPT: Record<number, string> = {
   59: 'Enter API key for this channel',
   60: 'Enter API key for this channel',
   62: 'Optional. Leave empty to use the free plan (anonymous), or fill in your OpenCode Zen API key for the paid plan',
+  64: 'vLLM API key, or EMPTY if authentication is disabled',
+  65: 'SGLang API key, or EMPTY if authentication is disabled',
 }
 
 // 上游地址填写提示（按渠道类型追加在 base_url 输入框下方；值即 i18n 英文原句）。
@@ -744,4 +760,6 @@ export const CHANNEL_PROVIDER_PRESENTATION: Partial<
   63: {
     descriptionKey: 'Route tasks through the sandboxed JavaScript plugin system',
   },
+  64: { descriptionKey: 'Connect to self-hosted models served by vLLM' },
+  65: { descriptionKey: 'Connect to self-hosted models served by SGLang' },
 }
