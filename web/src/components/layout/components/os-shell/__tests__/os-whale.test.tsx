@@ -221,4 +221,54 @@ describe('OsWhale', () => {
     })
     expect(bubbleText(container)).toBe('')
   })
+
+  test('被窗口盖住时不再吞点击（幽灵吞点击回归）', () => {
+    const { container } = render(<OsWhale />)
+    const shell = whaleShell(container)
+    const whaleBox = container.querySelector('[data-os-whale]')
+    expect(whaleBox).toBe(shell)
+
+    // 造一个"压在鲸鱼上面"的窗口元素（窗口层 zIndex 10~45 > 鲸鱼 z-0）
+    const winEl = document.createElement('div')
+    winEl.setAttribute('data-os-window', 'w1')
+    document.body.appendChild(winEl)
+
+    const doc = document as unknown as {
+      elementFromPoint?: (x: number, y: number) => Element | null
+    }
+    const original = doc.elementFromPoint
+    try {
+      // ① 该点最上层是窗口 ⇒ 放行：不出声、不张嘴（窗口里的按钮要能点到）
+      doc.elementFromPoint = () => winEl
+      played = []
+      tapWhale()
+      expect(played).toEqual([])
+      expect(bubbleText(container)).toBe('')
+
+      // ② 该点最上层是桌面/空白（body）⇒ 鲸鱼露着，照旧响应
+      doc.elementFromPoint = () => document.body
+      played = []
+      tapWhale()
+      expect(played.length).toBeGreaterThan(0)
+
+      // ③ 该点最上层是鲸鱼自己的子层（气泡展开时的 pointer-events-auto 层）⇒ 也算露着
+      const inner = container.querySelector('[data-os-whale] img') as Element
+      doc.elementFromPoint = () => inner
+      played = []
+      tapWhale()
+      expect(played.length).toBeGreaterThan(0)
+    } finally {
+      if (original) doc.elementFromPoint = original
+      else delete doc.elementFromPoint
+      winEl.remove()
+    }
+  })
+
+  test('层级 = 桌面装饰层（z-0，必须被窗口 zIndex 10~45 盖住）', () => {
+    const { container } = render(<OsWhale />)
+    const cls = whaleShell(container).className
+    expect(cls).toContain('z-0')
+    expect(cls).not.toContain('z-40')
+    expect(cls).not.toContain('z-[60]')
+  })
 })

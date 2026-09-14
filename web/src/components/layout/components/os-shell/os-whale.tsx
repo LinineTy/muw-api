@@ -28,8 +28,13 @@ import { useOsWhaleStore, WHALE_SOUND_FILES } from './os-whale-store'
  * 1. **像素级命中**（`isWhaleHit`）：把本体 PNG 画进 canvas 取 alpha，只有点到鲸鱼本身
  *    才算数 —— 挂件盒子有近一半是透明的，不做这层过滤会吃掉页面的点击。
  * 2. **命中区域吞掉 pointerdown/pointerup/click**：不然点击会穿透到下面的窗口内容
- *    （原版踩过"误打开文件"）。
+ *    （原版踩过"误打开文件"）。**但被窗口盖住的那部分必须放行** —— 见下面第 4 条。
  * 3. **压扁作用在 body 上并 `transform-origin:50% 100%`**：底部坐标不动，才像被按下去的玩偶。
+ *
+ * 第 4 条是本仓加的（原版浮在网页上，没有"窗口"这一层）：
+ * 4. **挂件属于「桌面装饰层」，被窗口盖住时不再吞点击**（`whaleIsExposed`）。层级改成
+ *    `z-0` 之后窗口会压在鲸鱼上面，而命中判定是 document 级按坐标算的 —— 不补这层
+ *    检查，被盖住的地方照样吞掉点击：窗口里的按钮看得见、点不动，还找不到原因。
  */
 const WHALE_IMAGE = '/os-whale/whale.png'
 const WHALE_GIF = '/os-whale/rua.gif'
@@ -50,6 +55,38 @@ const CLICK_SQ = 9
 const INK = '#203170'
 /** 气泡文字色 */
 const TEXT_INK = '#536ba9'
+
+/**
+ * 这一点上鲸鱼是不是"露着"的：没有任何窗口/壳控件压在它上面。
+ *
+ * 为什么需要：挂件的点击是靠 **document 级监听 + 坐标命中**吞掉的，跟"谁在最上层"
+ * 没关系 —— 层级降到 `z-0`（桌面装饰层）之后，窗口会盖在鲸鱼上面，如果还按坐标吞，
+ * 就会出现"窗口内容看得见、点不动"的幽灵吞点击（窗口里是同源 iframe，父层 capture
+ * 照样拦得住）。判据看**该点最上层的元素属于哪一层**：
+ * - 桌面层（`data-os-desktop`）或挂件自己（`data-os-whale`，气泡展开时才有货）⇒ 露着
+ * - body/html ⇒ 那里没别的东西，也算露着
+ * - 其余（窗口 iframe / 弹窗遮罩 / Dock / 侧栏球…）⇒ 被盖住，放行
+ *   ※ 全屏的"点外部关闭"层也算：Base UI 打开菜单时会给主内容 inert 并铺一层
+ *     `data-base-ui-inert` 的全屏层，这一点上最上层就不是桌面了 —— 放行的语义正好：
+ *     菜单开着时点鲸鱼，这一下该去关菜单（以前鲸鱼会把这一下吞掉、菜单卡着不关）。
+ *
+ * 注意挂件盒子是 `pointer-events:none`，所以 elementFromPoint **永远不会**返回盒子本身；
+ * 只有气泡展开时的 `pointer-events-auto` 子层会被返回，靠 `data-os-whale` 认领。
+ */
+function whaleIsExposed(point: { clientX: number; clientY: number }) {
+  // jsdom 没有 layout（elementFromPoint 不可用/不可靠）⇒ 拿不到就按"露着"处理，
+  // 保持单测里用坐标直驱交互的老口径；真实浏览器里这层检查始终生效。
+  if (typeof document.elementFromPoint !== 'function') return true
+  let top: Element | null = null
+  try {
+    top = document.elementFromPoint(point.clientX, point.clientY)
+  } catch {
+    return true
+  }
+  if (!top) return true
+  if (top === document.body || top === document.documentElement) return true
+  return Boolean(top.closest('[data-os-desktop],[data-os-whale]'))
+}
 
 /** 一行台词的排版：字号跟着 `--whale-u` 走，气泡整体放大缩小时文字同步 */
 function lineStyle(line: WhaleLine): React.CSSProperties {
@@ -236,8 +273,11 @@ export function OsWhale() {
 
   const isWhaleHit = useCallback(
     (point: { clientX: number; clientY: number }) => {
+      // ① 先看层级：被窗口（或更上层的壳控件）盖住 ⇒ 这一点不属于鲸鱼，放行
+      if (!whaleIsExposed(point)) return false
+
       const canvas = hitCanvasRef.current
-      // 画布没就绪时按"命中"处理（原版同款兜底）：宁可多吃一次点击，也别让挂件没反应
+      // ② 画布没就绪时按"命中"处理（原版同款兜底）：宁可多吃一次点击，也别让挂件没反应
       if (!canvas || !hitReadyRef.current) return true
       try {
         const rect = imageRef.current?.getBoundingClientRect()
@@ -389,12 +429,18 @@ export function OsWhale() {
   return (
     <div
       aria-hidden='true'
-      // ⚠️ 层级必须卡在「窗口之上、弹窗之下」这一段：
-      //   窗口 z-30 → 鲸鱼 z-40 → 弹窗/遮罩 z-50（dialog.tsx 里 6 处都是 z-50）
-      //   → Dock z-70 / 竖条球弹层 z-80。
-      // 原来写的 z-[60] 会让这层装饰**浮在所有弹窗和遮罩上面**（2026-09-14 review 抓到，
-      // 用「盖一层 z-50 不透明遮罩看鲸鱼像素还在不在」实测出来的）。
-      className='pointer-events-none fixed right-0 bottom-0 z-40 select-none'
+      data-os-whale=''
+      // ⚠️ 层级 = **桌面装饰层**，和磁贴/小组件同级（maintainer 2026-09-15：「鲸鱼应该是和
+      //   小组件一个等级的」）：
+      //     桌面磁贴/小组件（流内元素，无 z）→ 鲸鱼 z-0 → 窗口 zIndex 10~45
+      //     （os-windows-store.ts 的 Z_BASE=10 / Z_CAP=45）→ 弹窗/遮罩 z-50
+      //     → Dock z-70 / 竖条球弹层 z-80。
+      //   z-0 就够：窗口最低也从 10 起，必然把鲸鱼盖住；桌面内容是流内元素，鲸鱼照旧压在它上面。
+      // 沿革：z-[60]（浮在弹窗和遮罩上，2026-09-14 review 抓到）→ z-40（压在窗口上，
+      //   挡住窗口内容的点击）→ z-0（跟随桌面层，被窗口盖住）。
+      // ⚠️ 动这个值时**必须同步看命中判定**：挂件靠 document 级坐标命中吞点击，
+      //   被更高层盖住时必须放行（`whaleIsExposed`），否则被盖住的地方会幽灵吞点击。
+      className='pointer-events-none fixed right-0 bottom-0 z-0 select-none'
       style={
         {
           width: base,
