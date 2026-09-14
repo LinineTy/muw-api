@@ -7966,6 +7966,14 @@
     "Pass-through": "Truyền thẳng",
     "Pass-through help": "Trợ giúp truyền thẳng",
     "Pass-through requires native forwarding": "Truyền thẳng yêu cầu chuyển tiếp nguyên bản",
-    "Send the original request body to upstream without conversion. Only available for native forwarding routes.": "Gửi phần thân yêu cầu gốc lên upstream mà không chuyển đổi. Chỉ dùng được cho các tuyến chuyển tiếp nguyên bản."
+    "Send the original request body to upstream without conversion. Only available for native forwarding routes.": "Gửi phần thân yêu cầu gốc lên upstream mà không chuyển đổi. Chỉ dùng được cho các tuyến chuyển tiếp nguyên bản.",
+    "Auto-disable channel": "Tự động tắt kênh",
+    "Check for new upstream models": "Định kỳ tìm mô hình mới từ thượng nguồn",
+    "Detect model updates": "Phát hiện cập nhật mô hình",
+    "Disable channels on repeated failures": "Tắt kênh khi lỗi nhiều lần",
+    "Preserve the original request body": "Giữ nguyên nội dung yêu cầu gốc",
+    "Quick options": "Tùy chọn nhanh",
+    "Requires upstream WebSocket support": "Thượng nguồn phải hỗ trợ WebSocket",
+    "Responses WebSocket": "Responses WebSocket"
   }
 }
