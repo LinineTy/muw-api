@@ -9,7 +9,7 @@ import {
   type WhaleBubbleContent,
   type WhaleLine,
 } from './os-whale-lines'
-import { useOsWhaleStore } from './os-whale-store'
+import { useOsWhaleStore, WHALE_SOUND_FILES } from './os-whale-store'
 
 /**
  * OS 桌面 · 小鲸鱼挂件（右下角常驻的装饰件）
@@ -20,7 +20,7 @@ import { useOsWhaleStore } from './os-whale-store'
  * 四边吸附、左吸附镜像、汉堡菜单。留下的只有手感与嘴：
  *
  * - 鲸鱼娘本体定格右下角（原版就是 `right:0;bottom:0`）
- * - 按住压扁（底部不动）、松手回弹，带小黄鸭按压/松手音效
+ * - 按住压扁（底部不动）、松手回弹，带按压/松手音效（两套：小黄鸭 / 音效 1，见 os-whale-store.ts）
  * - 点一下张嘴说一句台词（5 秒自动收），有 rua 动图那段
  * - 大小从侧栏「鲸鱼」球调（os-whale-ball.tsx），存浏览器本地
  *
@@ -33,8 +33,6 @@ import { useOsWhaleStore } from './os-whale-store'
  */
 const WHALE_IMAGE = '/os-whale/whale.png'
 const WHALE_GIF = '/os-whale/rua.gif'
-const PRESS_SOUND = '/os-whale/press.mp3'
-const RELEASE_SOUND = '/os-whale/release.mp3'
 
 /** 气泡设计稿边长（原版 SVG viewBox 宽），所有字号按它等比换算 */
 const DESIGN = 1026
@@ -81,6 +79,7 @@ function lineStyle(line: WhaleLine): React.CSSProperties {
 export function OsWhale() {
   const scale = useOsWhaleStore((state) => state.scale)
   const volume = useOsWhaleStore((state) => state.volume)
+  const soundSet = useOsWhaleStore((state) => state.soundSet)
 
   const imageRef = useRef<HTMLImageElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -109,15 +108,22 @@ export function OsWhale() {
   const base = `clamp(122px, calc(min(250px, min(100vw, 100vh) * 0.28) * ${scale}), 625px)`
 
   // —— 音效 ——
+  // 依赖 soundSet：切音效集时重建 Audio 元素（旧的 src 置空释放），
+  // 顺带把按压/松手的状态位复位，免得切集瞬间的 onended 回调触发上一集的松手音。
   useEffect(() => {
-    const press = new Audio(PRESS_SOUND)
+    const files = WHALE_SOUND_FILES[soundSet]
+    const press = new Audio(files.press)
     press.preload = 'auto'
-    const release = new Audio(RELEASE_SOUND)
+    const release = new Audio(files.release)
     release.preload = 'auto'
     pressAudioRef.current = press
     releaseAudioRef.current = release
+    pressingRef.current = false
+    pressEndedRef.current = false
+    releasePlayedRef.current = false
     return () => {
       if (releaseTimerRef.current) window.clearTimeout(releaseTimerRef.current)
+      releaseTimerRef.current = null
       press.onended = null
       // 断开引用，防挂件卸载后音频元素还挂着
       press.src = ''
@@ -125,7 +131,7 @@ export function OsWhale() {
       pressAudioRef.current = null
       releaseAudioRef.current = null
     }
-  }, [])
+  }, [soundSet])
 
   useEffect(() => {
     if (pressAudioRef.current) pressAudioRef.current.volume = volume

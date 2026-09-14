@@ -11,14 +11,25 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Slider } from '@/components/ui/slider'
+import { cn } from '@/lib/utils'
 
 import { useOsBallStore } from './os-ball-store'
 import { FAB_BALL_SM, FAB_ICON_SM } from './os-ball-style'
 import {
   WHALE_MAX_SCALE,
   WHALE_MIN_SCALE,
+  type WhaleSoundSet,
   useOsWhaleStore,
 } from './os-whale-store'
+
+/**
+ * 音效集选项（label 是 i18n key，也就是英文原句 —— 与项目其它文案一致）。
+ * 两套对应上游汉堡菜单「行2 音效」的 select：小黄鸭（Ya1/Ya2）/ 音效 1（D1/D2）。
+ */
+const SOUND_SET_OPTIONS: { value: WhaleSoundSet; label: string }[] = [
+  { value: 'duck', label: 'Rubber duck' },
+  { value: 'fx1', label: 'Sound FX 1' },
+]
 
 function closeNavCard() {
   // 与竖条其他球一致：点开自己的弹层前先把开始面板收掉
@@ -67,9 +78,11 @@ export function OsWhaleBall({ side }: { side: 'left' | 'right' }) {
   const { t } = useTranslation()
   const scale = useOsWhaleStore((state) => state.scale)
   const soundOn = useOsWhaleStore((state) => state.soundOn)
+  const soundSet = useOsWhaleStore((state) => state.soundSet)
   const volume = useOsWhaleStore((state) => state.volume)
   const setScale = useOsWhaleStore((state) => state.setScale)
   const setSoundOn = useOsWhaleStore((state) => state.setSoundOn)
+  const setSoundSet = useOsWhaleStore((state) => state.setSoundSet)
   const setVolume = useOsWhaleStore((state) => state.setVolume)
 
   return (
@@ -116,6 +129,39 @@ export function OsWhaleBall({ side }: { side: 'left' | 'right' }) {
           >
             {t('Sound')}
           </DropdownMenuCheckboxItem>
+
+          {/* 音效集：两段式分段控件（沿用价格页 Segment 的写法）。
+              ⚠️ 这里必须用普通 button 而不是 Menu.Item —— 后者点一下就关弹层，
+              与上面的尺寸滑块一样要"点完菜单不关"（verify_whale.py 有断言）。 */}
+          <div className='flex items-center px-2 py-1.5'>
+            <div
+              role='group'
+              aria-label={t('Sound set')}
+              data-testid='whale-sound-set'
+              className='bg-muted/60 inline-flex h-7 w-full items-center rounded-lg border p-0.5'
+            >
+              {SOUND_SET_OPTIONS.map((option) => {
+                const isActive = soundSet === option.value
+                return (
+                  <button
+                    key={option.value}
+                    type='button'
+                    data-value={option.value}
+                    aria-pressed={isActive}
+                    onClick={() => setSoundSet(option.value)}
+                    className={cn(
+                      'inline-flex h-full min-w-0 flex-1 items-center justify-center rounded-md px-1 text-xs font-medium transition-all',
+                      isActive
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    <span className='truncate'>{t(option.label)}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
 
           <WhaleRow label={t('Volume')} value={`${Math.round(volume * 100)}%`}>
             <Slider
