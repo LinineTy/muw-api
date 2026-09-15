@@ -394,6 +394,12 @@ func usageSemanticFromUsage(relayInfo *relaycommon.RelayInfo, usage *dto.Usage) 
 
 func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage *dto.Usage, extraContent []string) {
 	originUsage := usage
+	// 上下文窗口校验基线：把上游真实回报的上下文记下来，供该 token+模型的下一次请求
+	// 做下界校验（本地估算的 usage 不能当基线，否则会把估算偏差固化）。
+	// 见 service/context_window_baseline.go。
+	if originUsage != nil && !common.GetContextKeyBool(ctx, constant.ContextKeyLocalCountTokens) {
+		RecordContextWindowBaseline(relayInfo, originUsage)
+	}
 	billingUsage := effectiveBillingUsage(usage)
 	if usage == nil {
 		extraContent = append(extraContent, "上游无计费信息")

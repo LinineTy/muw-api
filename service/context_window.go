@@ -69,10 +69,20 @@ func resolvePromptTokens(c *gin.Context, meta *types.TokenCountMeta, info *relay
 	return prompt
 }
 
+// resolveContextPromptTokens 在本地估算之上叠加「上游真实上下文基线」：
+// 缓存型客户端每轮重发整段上下文，上一次成功响应里上游回报的上下文是本次的下界，
+// 用它 + 本地增量可以补上估算器与上游口径之间的系统性偏差（见 context_window_baseline.go）。
+// 没有可用基线（首次请求、上游未回报 usage、客户端压缩后）时与原行为完全一致。
+func resolveContextPromptTokens(c *gin.Context, meta *types.TokenCountMeta, info *relaycommon.RelayInfo) (int, bool) {
+	local := resolvePromptTokens(c, meta, info)
+	return ContextWindowPromptEstimate(info.TokenId, info.OriginModelName, local)
+}
+
 // contextWindowError 判定输入 + 输出预留是否超限。prompt 为估算输入，
 // meta.MaxTokens 为请求的输出预算（openai/responses/claude/gemini 各 dto 已归一）。
 // skipRetry 用于模型级检查：同一模型的 context_window 对所有渠道一致，超限无需重试。
-func contextWindowError(info *relaycommon.RelayInfo, meta *types.TokenCountMeta, prompt, limit int, skipRetry bool) *types.NewAPIError {
+// fromBaseline 表示 prompt 里含上游真实上下文（仅用于错误文案区分，便于排查口径问题）。
+func contextWindowError(info *relaycommon.RelayInfo, meta *types.TokenCountMeta, prompt, limit int, skipRetry, fromBaseline bool) *types.NewAPIError {
 	maxTokens := 0
 	if meta != nil && meta.MaxTokens > 0 {
 		maxTokens = meta.MaxTokens
@@ -85,8 +95,12 @@ func contextWindowError(info *relaycommon.RelayInfo, meta *types.TokenCountMeta,
 	if skipRetry {
 		opts = append(opts, types.ErrOptionWithSkipRetry())
 	}
+	source := ""
+	if fromBaseline {
+		source = "（含上游真实上下文基线）"
+	}
 	return types.NewError(
-		fmt.Errorf("模型 %s 上下文超限：输入约 %d + 输出 %d = %d > %d", info.OriginModelName, prompt, maxTokens, total, limit),
+		fmt.Errorf("模型 %s 上下文超限：输入约 %d%s + 输出 %d = %d > %d", info.OriginModelName, prompt, source, maxTokens, total, limit),
 		types.ErrorCodeContextWindowExceeded,
 		opts...,
 	)
@@ -105,7 +119,8 @@ func CheckModelContextWindow(c *gin.Context, meta *types.TokenCountMeta, info *r
 	if !ok || limit <= 0 {
 		return nil
 	}
-	return contextWindowError(info, meta, resolvePromptTokens(c, meta, info), limit, true)
+	prompt, fromBaseline := resolveContextPromptTokens(c, meta, info)
+	return contextWindowError(info, meta, prompt, limit, true, fromBaseline)
 }
 
 // CheckChannelContextWindow 校验渠道级 context_window 覆盖（选渠道后执行）。
@@ -119,5 +134,6 @@ func CheckChannelContextWindow(c *gin.Context, meta *types.TokenCountMeta, info 
 	if !ok || limit <= 0 {
 		return nil
 	}
-	return contextWindowError(info, meta, resolvePromptTokens(c, meta, info), limit, false)
+	prompt, fromBaseline := resolveContextPromptTokens(c, meta, info)
+	return contextWindowError(info, meta, prompt, limit, false, fromBaseline)
 }
