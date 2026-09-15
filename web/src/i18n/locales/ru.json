@@ -4191,6 +4191,7 @@
     "OpenAI Compatible": "Совместимо с OpenAI",
     "OpenAI Compatible Upstream": "Поставщик, совместимый с OpenAI",
     "OpenAI Models route does not support client model rules": "Маршрут моделей OpenAI не поддерживает правила клиентских моделей",
+    "OpenAI Models route does not support pass-through": "Маршрут моделей OpenAI не поддерживает сквозную передачу",
     "OpenAI Models route is required to enable upstream model checks": "Для проверки моделей вышестоящего сервиса требуется маршрут моделей OpenAI",
     "OpenAI Models route must use native forwarding": "Маршрут моделей OpenAI должен использовать прямую передачу",
     "OpenAI Models upstream path must not contain {model}": "Путь вышестоящего сервиса для моделей OpenAI не должен содержать {model}",
@@ -7960,6 +7961,11 @@
     "vLLM status": "Состояние vLLM",
     "Waiting for two comparable samples. Counter resets restart the sampling window.": "Ожидание двух сопоставимых выборок. Сброс счётчиков начинает новый период.",
     "Waiting requests": "Запросы в очереди",
-    "Worker metrics": "Метрики рабочих процессов"
+    "Worker metrics": "Метрики рабочих процессов",
+    "Balance Query route does not support pass-through": "Маршрут запроса баланса не поддерживает сквозную передачу",
+    "Pass-through": "Сквозная передача",
+    "Pass-through help": "Справка по сквозной передаче",
+    "Pass-through requires native forwarding": "Сквозная передача требует нативной пересылки",
+    "Send the original request body to upstream without conversion. Only available for native forwarding routes.": "Отправлять исходное тело запроса вышестоящему серверу без преобразования. Доступно только для маршрутов с нативной пересылкой."
   }
 }

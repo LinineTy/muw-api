@@ -4191,6 +4191,7 @@
     "OpenAI Compatible": "兼容 OpenAI",
     "OpenAI Compatible Upstream": "OpenAI 兼容上游",
     "OpenAI Models route does not support client model rules": "OpenAI 模型路由不支持客户端模型规则",
+    "OpenAI Models route does not support pass-through": "OpenAI 模型路由不支持透传",
     "OpenAI Models route is required to enable upstream model checks": "启用上游模型检查必须配置 OpenAI 模型路由",
     "OpenAI Models route must use native forwarding": "OpenAI 模型路由必须使用原生转发",
     "OpenAI Models upstream path must not contain {model}": "OpenAI 模型上游路径不能包含 {model}",
@@ -7960,6 +7961,11 @@
     "vLLM status": "vLLM 状态",
     "Waiting for two comparable samples. Counter resets restart the sampling window.": "等待两次可比较的采样，计数重置后将重新开始统计。",
     "Waiting requests": "排队中请求",
-    "Worker metrics": "工作进程指标"
+    "Worker metrics": "工作进程指标",
+    "Balance Query route does not support pass-through": "余额查询路由不支持透传",
+    "Pass-through": "透传",
+    "Pass-through help": "透传说明",
+    "Pass-through requires native forwarding": "透传仅支持原生转发",
+    "Send the original request body to upstream without conversion. Only available for native forwarding routes.": "将原始请求体不经转换直接发送到上游。仅原生转发路由可用。"
   }
 }

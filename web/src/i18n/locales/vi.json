@@ -4191,6 +4191,7 @@
     "OpenAI Compatible": "Tương thích OpenAI",
     "OpenAI Compatible Upstream": "Thượng nguồn tương thích OpenAI",
     "OpenAI Models route does not support client model rules": "Tuyến Mô hình OpenAI không hỗ trợ quy tắc mô hình phía máy khách",
+    "OpenAI Models route does not support pass-through": "Tuyến Mô hình OpenAI không hỗ trợ truyền thẳng",
     "OpenAI Models route is required to enable upstream model checks": "Cần có tuyến Mô hình OpenAI để bật kiểm tra mô hình thượng nguồn",
     "OpenAI Models route must use native forwarding": "Tuyến Mô hình OpenAI phải dùng chuyển tiếp nguyên bản",
     "OpenAI Models upstream path must not contain {model}": "Đường dẫn thượng nguồn của Mô hình OpenAI không được chứa {model}",
@@ -7960,6 +7961,11 @@
     "vLLM status": "Trạng thái vLLM",
     "Waiting for two comparable samples. Counter resets restart the sampling window.": "Đang chờ hai mẫu có thể so sánh. Đặt lại bộ đếm sẽ bắt đầu lại khoảng lấy mẫu.",
     "Waiting requests": "Yêu cầu đang chờ",
-    "Worker metrics": "Số liệu từng worker"
+    "Worker metrics": "Số liệu từng worker",
+    "Balance Query route does not support pass-through": "Tuyến truy vấn số dư không hỗ trợ truyền thẳng",
+    "Pass-through": "Truyền thẳng",
+    "Pass-through help": "Trợ giúp truyền thẳng",
+    "Pass-through requires native forwarding": "Truyền thẳng yêu cầu chuyển tiếp nguyên bản",
+    "Send the original request body to upstream without conversion. Only available for native forwarding routes.": "Gửi phần thân yêu cầu gốc lên upstream mà không chuyển đổi. Chỉ dùng được cho các tuyến chuyển tiếp nguyên bản."
   }
 }

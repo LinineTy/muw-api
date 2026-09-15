@@ -4191,6 +4191,7 @@
     "OpenAI Compatible": "Compatible OpenAI",
     "OpenAI Compatible Upstream": "Amont compatible OpenAI",
     "OpenAI Models route does not support client model rules": "La route Modèles OpenAI ne prend pas en charge les règles de modèles clients",
+    "OpenAI Models route does not support pass-through": "La route Modèles OpenAI ne prend pas en charge la transmission directe",
     "OpenAI Models route is required to enable upstream model checks": "La route Modèles OpenAI est requise pour activer la vérification des modèles en amont",
     "OpenAI Models route must use native forwarding": "La route Modèles OpenAI doit utiliser le transfert natif",
     "OpenAI Models upstream path must not contain {model}": "Le chemin amont de la route Modèles OpenAI ne doit pas contenir {model}",
@@ -7960,6 +7961,11 @@
     "vLLM status": "État de vLLM",
     "Waiting for two comparable samples. Counter resets restart the sampling window.": "En attente de deux relevés comparables. Un compteur remis à zéro redémarre la période.",
     "Waiting requests": "Requêtes en attente",
-    "Worker metrics": "Métriques par worker"
+    "Worker metrics": "Métriques par worker",
+    "Balance Query route does not support pass-through": "La route de consultation du solde ne prend pas en charge la transmission directe",
+    "Pass-through": "Transmission directe",
+    "Pass-through help": "Aide sur la transmission directe",
+    "Pass-through requires native forwarding": "La transmission directe nécessite le transfert natif",
+    "Send the original request body to upstream without conversion. Only available for native forwarding routes.": "Envoyer le corps de la requête d'origine à l'upstream sans conversion. Disponible uniquement pour les routes en transfert natif."
   }
 }
