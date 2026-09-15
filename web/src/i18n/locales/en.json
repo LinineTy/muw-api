@@ -4191,6 +4191,7 @@
     "OpenAI Compatible": "OpenAI Compatible",
     "OpenAI Compatible Upstream": "OpenAI Compatible Upstream",
     "OpenAI Models route does not support client model rules": "OpenAI Models route does not support client model rules",
+    "OpenAI Models route does not support pass-through": "OpenAI Models route does not support pass-through",
     "OpenAI Models route is required to enable upstream model checks": "OpenAI Models route is required to enable upstream model checks",
     "OpenAI Models route must use native forwarding": "OpenAI Models route must use native forwarding",
     "OpenAI Models upstream path must not contain {model}": "OpenAI Models upstream path must not contain {model}",
@@ -7960,6 +7961,11 @@
     "vLLM status": "vLLM status",
     "Waiting for two comparable samples. Counter resets restart the sampling window.": "Waiting for two comparable samples. Counter resets restart the sampling window.",
     "Waiting requests": "Waiting requests",
-    "Worker metrics": "Worker metrics"
+    "Worker metrics": "Worker metrics",
+    "Balance Query route does not support pass-through": "Balance Query route does not support pass-through",
+    "Pass-through": "Pass-through",
+    "Pass-through help": "Pass-through help",
+    "Pass-through requires native forwarding": "Pass-through requires native forwarding",
+    "Send the original request body to upstream without conversion. Only available for native forwarding routes.": "Send the original request body to upstream without conversion. Only available for native forwarding routes."
   }
 }
