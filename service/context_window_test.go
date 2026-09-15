@@ -52,7 +52,7 @@ func TestContextWindowErrorLimit(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			meta := &types.TokenCountMeta{MaxTokens: tt.maxTokens}
-			err := contextWindowError(info, meta, tt.prompt, tt.limit, true)
+			err := contextWindowError(info, meta, tt.prompt, tt.limit, true, false)
 			if tt.wantErr {
 				require.NotNil(t, err)
 				assert.Equal(t, http.StatusBadRequest, err.StatusCode)
@@ -70,11 +70,11 @@ func TestContextWindowErrorSkipRetryFlag(t *testing.T) {
 	info := &relaycommon.RelayInfo{OriginModelName: "gpt-4o"}
 	meta := &types.TokenCountMeta{MaxTokens: 50}
 
-	withSkip := contextWindowError(info, meta, 200, 100, true)
+	withSkip := contextWindowError(info, meta, 200, 100, true, false)
 	require.NotNil(t, withSkip)
 	assert.True(t, types.IsSkipRetryError(withSkip))
 
-	withoutSkip := contextWindowError(info, meta, 200, 100, false)
+	withoutSkip := contextWindowError(info, meta, 200, 100, false, false)
 	require.NotNil(t, withoutSkip)
 	assert.False(t, types.IsSkipRetryError(withoutSkip))
 }
