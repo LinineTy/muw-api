@@ -24,6 +24,8 @@ For commercial licensing, please contact support@quantumnous.com
 export const CHANNEL_TYPE_ALIYUN = 17
 export const CHANNEL_TYPE_OLLAMA = 4
 
+export const CHANNEL_TYPE_SUB2API = 59
+
 export const CHANNEL_TYPE_NEW_API = 60
 // MERGE-DECISION: 撞号对齐 Go 侧 constant/channel.go —— SenseNova=61、OpenCodeZen=62、TaskPlugin=63。
 export const CHANNEL_TYPE_OPENCODE_ZEN = 62

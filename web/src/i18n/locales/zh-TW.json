@@ -8118,6 +8118,7 @@
     "Clean task history": "清理歷史任務",
     "Delete completed tasks matching the current filters across all pages? Active tasks and the latest run of each task type are retained for scheduling. This cannot be undone.": "清理所有分頁中符合目前篩選條件的已結束任務？進行中的任務及每種類型的最新紀錄將保留，用於任務排程。此操作無法復原。",
     "Deleted {{count}} historical system tasks": "已清理 {{count}} 筆歷史系統任務",
-    "Scheduled test options": "定期測試子選項"
+    "Scheduled test options": "定期測試子選項",
+    "For advanced custom channels this applies only to /v1/responses routes without protocol conversion.": "對於進階自訂渠道，此設定僅對無協議轉換的 /v1/responses 路由生效。"
   }
 }

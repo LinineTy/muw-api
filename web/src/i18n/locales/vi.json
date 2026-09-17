@@ -8118,6 +8118,7 @@
     "Clean task history": "Xóa lịch sử tác vụ",
     "Delete completed tasks matching the current filters across all pages? Active tasks and the latest run of each task type are retained for scheduling. This cannot be undone.": "Xóa các tác vụ đã kết thúc khớp với bộ lọc hiện tại trên tất cả các trang? Các tác vụ đang chờ hoặc đang chạy và bản ghi mới nhất của mỗi loại được giữ lại để lập lịch. Không thể hoàn tác thao tác này.",
     "Deleted {{count}} historical system tasks": "Đã xóa {{count}} tác vụ hệ thống trong lịch sử",
-    "Scheduled test options": "Tùy chọn kiểm tra định kỳ"
+    "Scheduled test options": "Tùy chọn kiểm tra định kỳ",
+    "For advanced custom channels this applies only to /v1/responses routes without protocol conversion.": "Với kênh tùy chỉnh nâng cao, điều này chỉ áp dụng cho các tuyến /v1/responses không chuyển đổi giao thức."
   }
 }
