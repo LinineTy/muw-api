@@ -8112,6 +8112,9 @@
     "Upstream connection": "Соединение с вышестоящим сервером",
     "Local check": "Локальная проверка",
     "Request policy decisions": "Решения политики запросов",
-    "Success rate excludes business rejections and includes the current partial hour.": "Доля успешных запросов не учитывает отказы по бизнес-правилам и включает текущий неполный час."
+    "Success rate excludes business rejections and includes the current partial hour.": "Доля успешных запросов не учитывает отказы по бизнес-правилам и включает текущий неполный час.",
+    "Clean task history": "Очистить историю задач",
+    "Delete completed tasks matching the current filters across all pages? Active tasks and the latest run of each task type are retained for scheduling. This cannot be undone.": "Удалить завершённые задачи, соответствующие текущим фильтрам, на всех страницах? Активные задачи и последняя запись каждого типа сохраняются для планирования. Это действие нельзя отменить.",
+    "Deleted {{count}} historical system tasks": "Удалено записей истории системных задач: {{count}}"
   }
 }

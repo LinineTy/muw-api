@@ -8112,6 +8112,9 @@
     "Upstream connection": "Kết nối thượng nguồn",
     "Local check": "Kiểm tra cục bộ",
     "Request policy decisions": "Quyết định chính sách yêu cầu",
-    "Success rate excludes business rejections and includes the current partial hour.": "Tỷ lệ thành công loại trừ các yêu cầu bị từ chối do quy tắc nghiệp vụ và bao gồm giờ hiện tại chưa kết thúc."
+    "Success rate excludes business rejections and includes the current partial hour.": "Tỷ lệ thành công loại trừ các yêu cầu bị từ chối do quy tắc nghiệp vụ và bao gồm giờ hiện tại chưa kết thúc.",
+    "Clean task history": "Xóa lịch sử tác vụ",
+    "Delete completed tasks matching the current filters across all pages? Active tasks and the latest run of each task type are retained for scheduling. This cannot be undone.": "Xóa các tác vụ đã kết thúc khớp với bộ lọc hiện tại trên tất cả các trang? Các tác vụ đang chờ hoặc đang chạy và bản ghi mới nhất của mỗi loại được giữ lại để lập lịch. Không thể hoàn tác thao tác này.",
+    "Deleted {{count}} historical system tasks": "Đã xóa {{count}} tác vụ hệ thống trong lịch sử"
   }
 }
