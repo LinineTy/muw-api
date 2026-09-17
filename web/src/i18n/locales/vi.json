@@ -7829,6 +7829,7 @@
     "New keys are appended to the end of the list; keys already present are skipped.": "Khóa mới được thêm vào cuối danh sách; khóa đã tồn tại sẽ bị bỏ qua.",
     "Append keys": "Thêm khóa",
     "{{count}} keys in total": "Tổng cộng {{count}} khóa",
-    "Saving this field replaces every existing key. Use multi-key management below to append or remove single keys.": "Lưu trường này sẽ thay thế toàn bộ khóa hiện có. Dùng phần quản lý đa khóa bên dưới để thêm hoặc xóa từng khóa."
+    "Saving this field replaces every existing key. Use multi-key management below to append or remove single keys.": "Lưu trường này sẽ thay thế toàn bộ khóa hiện có. Dùng phần quản lý đa khóa bên dưới để thêm hoặc xóa từng khóa.",
+    "build {{n}}": "bản dựng {{n}}"
   }
 }

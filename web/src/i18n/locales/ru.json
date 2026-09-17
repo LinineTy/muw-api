@@ -7829,6 +7829,7 @@
     "New keys are appended to the end of the list; keys already present are skipped.": "Новые ключи добавляются в конец списка; уже имеющиеся пропускаются.",
     "Append keys": "Добавить ключи",
     "{{count}} keys in total": "Всего ключей: {{count}}",
-    "Saving this field replaces every existing key. Use multi-key management below to append or remove single keys.": "Сохранение этого поля заменит все существующие ключи. Чтобы добавить или удалить отдельные ключи, используйте управление несколькими ключами ниже."
+    "Saving this field replaces every existing key. Use multi-key management below to append or remove single keys.": "Сохранение этого поля заменит все существующие ключи. Чтобы добавить или удалить отдельные ключи, используйте управление несколькими ключами ниже.",
+    "build {{n}}": "сборка {{n}}"
   }
 }

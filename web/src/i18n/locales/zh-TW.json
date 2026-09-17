@@ -7829,6 +7829,7 @@
     "New keys are appended to the end of the list; keys already present are skipped.": "新金鑰會追加到清單末尾；已存在的金鑰會被略過。",
     "Append keys": "追加金鑰",
     "{{count}} keys in total": "共 {{count}} 把金鑰",
-    "Saving this field replaces every existing key. Use multi-key management below to append or remove single keys.": "此處儲存會整體替換全部金鑰；僅追加或刪除單把，請用下方「多金鑰管理」。"
+    "Saving this field replaces every existing key. Use multi-key management below to append or remove single keys.": "此處儲存會整體替換全部金鑰；僅追加或刪除單把，請用下方「多金鑰管理」。",
+    "build {{n}}": "第 {{n}} 版"
   }
 }
