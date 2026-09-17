@@ -12,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/channel/openai"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	kitreasoning "github.com/QuantumNous/new-api/relaykit/relayconvert/reasoning"
 	"github.com/QuantumNous/new-api/relaykit/types"
 
 	"github.com/gin-gonic/gin"
@@ -53,6 +54,9 @@ func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *rel
 	channel.SetupApiRequestHeader(info, c, req)
 	apiKey := resolveApiKey(info)
 	req.Set("Authorization", "Bearer "+apiKey)
+	// 免费套餐的客户端校验：补齐 opencode CLI 的 UA 与 x-opencode-* 头（每次现算 id）。
+	// 付费钥匙也一起带上：这些头不含密钥，带上只会让请求更"像走 CLI"，不影响正常鉴权。
+	applyClientHeaders(req)
 	switch info.RelayFormat {
 	case types.RelayFormatClaude:
 		req.Set("x-api-key", apiKey)
@@ -69,18 +73,40 @@ func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *rel
 	return nil
 }
 
+// freeTierStreamOnlyMessage 免费套餐只收流式请求（上游硬校验），提前拦下并给出可操作提示，
+// 免得把上游那句英文 403 直接丢给客户端。
+const freeTierStreamOnlyMessage = "OpenCode Zen 免费套餐只接受流式请求：请开启 stream（渠道测试请勾选「流式测试」）"
+
+// ensureFreeTierStreaming 免费套餐 + 非流式 → 直接拒绝（客户端错误，400）。
+// 付费钥匙不拦：非流式在付费套餐上的行为我们没实测过，交给上游自己回话。
+func ensureFreeTierStreaming(info *relaycommon.RelayInfo) error {
+	if info == nil || info.IsStream || !isFreeTier(info) {
+		return nil
+	}
+	return kitreasoning.AsClientError(errors.New(freeTierStreamOnlyMessage))
+}
+
 func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.GeneralOpenAIRequest) (any, error) {
 	if request == nil {
 		return nil, errors.New("request is nil")
+	}
+	if err := ensureFreeTierStreaming(info); err != nil {
+		return nil, err
 	}
 	return request, nil
 }
 
 func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
+	if err := ensureFreeTierStreaming(info); err != nil {
+		return nil, err
+	}
 	return request, nil
 }
 
 func (a *Adaptor) ConvertEmbeddingRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.EmbeddingRequest) (any, error) {
+	if err := ensureFreeTierStreaming(info); err != nil {
+		return nil, err
+	}
 	return request, nil
 }
 
@@ -88,12 +114,18 @@ func (a *Adaptor) ConvertClaudeRequest(c *gin.Context, info *relaycommon.RelayIn
 	if request == nil {
 		return nil, errors.New("request is nil")
 	}
+	if err := ensureFreeTierStreaming(info); err != nil {
+		return nil, err
+	}
 	return request, nil
 }
 
 func (a *Adaptor) ConvertGeminiRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.GeminiChatRequest) (any, error) {
 	if request == nil {
 		return nil, errors.New("request is nil")
+	}
+	if err := ensureFreeTierStreaming(info); err != nil {
+		return nil, err
 	}
 	return request, nil
 }
