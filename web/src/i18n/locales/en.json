@@ -7823,6 +7823,12 @@
     "Volume": "Volume",
     "Sound set": "Sound set",
     "Rubber duck": "Rubber duck",
-    "Sound FX 1": "Sound FX 1"
+    "Sound FX 1": "Sound FX 1",
+    "Keys are always shown masked. Append new keys here, or enable / disable / delete a single key.": "Keys are always shown masked. Append new keys here, or enable / disable / delete a single key.",
+    "Paste one key per line to append": "Paste one key per line to append",
+    "New keys are appended to the end of the list; keys already present are skipped.": "New keys are appended to the end of the list; keys already present are skipped.",
+    "Append keys": "Append keys",
+    "{{count}} keys in total": "{{count}} keys in total",
+    "Saving this field replaces every existing key. Use multi-key management below to append or remove single keys.": "Saving this field replaces every existing key. Use multi-key management below to append or remove single keys."
   }
 }

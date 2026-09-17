@@ -7823,6 +7823,12 @@
     "Volume": "音量",
     "Sound set": "音效集",
     "Rubber duck": "小黃鴨",
-    "Sound FX 1": "音效 1"
+    "Sound FX 1": "音效 1",
+    "Keys are always shown masked. Append new keys here, or enable / disable / delete a single key.": "金鑰一律以遮罩顯示。可在此追加金鑰，或對單把金鑰啟用／停用／刪除。",
+    "Paste one key per line to append": "貼上要追加的金鑰（一行一把）",
+    "New keys are appended to the end of the list; keys already present are skipped.": "新金鑰會追加到清單末尾；已存在的金鑰會被略過。",
+    "Append keys": "追加金鑰",
+    "{{count}} keys in total": "共 {{count}} 把金鑰",
+    "Saving this field replaces every existing key. Use multi-key management below to append or remove single keys.": "此處儲存會整體替換全部金鑰；僅追加或刪除單把，請用下方「多金鑰管理」。"
   }
 }

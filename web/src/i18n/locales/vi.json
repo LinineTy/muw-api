@@ -7823,6 +7823,12 @@
     "Volume": "Âm lượng",
     "Sound set": "Bộ âm thanh",
     "Rubber duck": "Vịt con",
-    "Sound FX 1": "Âm thanh 1"
+    "Sound FX 1": "Âm thanh 1",
+    "Keys are always shown masked. Append new keys here, or enable / disable / delete a single key.": "Khóa luôn được hiển thị ở dạng che. Thêm khóa tại đây, hoặc bật / tắt / xóa từng khóa.",
+    "Paste one key per line to append": "Dán mỗi dòng một khóa để thêm",
+    "New keys are appended to the end of the list; keys already present are skipped.": "Khóa mới được thêm vào cuối danh sách; khóa đã tồn tại sẽ bị bỏ qua.",
+    "Append keys": "Thêm khóa",
+    "{{count}} keys in total": "Tổng cộng {{count}} khóa",
+    "Saving this field replaces every existing key. Use multi-key management below to append or remove single keys.": "Lưu trường này sẽ thay thế toàn bộ khóa hiện có. Dùng phần quản lý đa khóa bên dưới để thêm hoặc xóa từng khóa."
   }
 }

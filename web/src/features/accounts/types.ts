@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 // 账户类型与渠道类型共用同一套厂商编号（channels.type / accounts.type 同源）。
+import type { KeyStatus } from '@/features/channels/types'
 
 export interface AccountChannelInfo {
   is_multi_key?: boolean
@@ -150,3 +151,51 @@ export const ACCOUNT_STATUS = {
   MANUALLY_DISABLED: 2,
   AUTO_DISABLED: 3,
 } as const
+
+// ============================================================================
+// 多密钥管理（账户抽屉）：复用渠道侧 multi_key/manage，account_id 直连账户
+// ============================================================================
+
+/** 密钥状态行与服务端同构，直接复用渠道侧类型（后端只有一份 KeyStatus） */
+export type AccountMultiKeyKey = KeyStatus
+
+export type AccountMultiKeyAction =
+  | 'get_key_status'
+  | 'add_key'
+  | 'enable_key'
+  | 'disable_key'
+  | 'delete_key'
+
+export interface AccountMultiKeyManageParams {
+  account_id: number
+  action: AccountMultiKeyAction
+  key_index?: number
+  /** add_key：待追加的密钥（一行一把，服务端按换行拆开并去掉已存在的） */
+  keys?: string[]
+  page?: number
+  page_size?: number
+  status?: number
+}
+
+export interface AccountMultiKeyActionResponse {
+  success: boolean
+  message?: string
+  /** add_key 返回追加后的总把数（用于同步抽屉里的多密钥开关/计数） */
+  data?: { total?: number }
+}
+
+export interface AccountMultiKeyStatusData {
+  keys: AccountMultiKeyKey[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+  enabled_count: number
+  manual_disabled_count: number
+  auto_disabled_count: number
+}
+
+export interface AccountMultiKeyStatusResponse
+  extends AccountMultiKeyActionResponse {
+  data?: AccountMultiKeyStatusData & AccountMultiKeyActionResponse['data']
+}

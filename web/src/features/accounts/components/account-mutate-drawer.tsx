@@ -56,6 +56,7 @@ import {
   getAccountChannelRefs,
   updateAccount,
 } from '../api'
+import { AccountMultiKeyManager } from './account-multi-key-manager'
 
 const DEFAULT_DISABLE_THRESHOLD = 95
 const DEFAULT_ENABLE_THRESHOLD = 80
@@ -280,6 +281,13 @@ export function AccountMutateDrawer({
                   {t('{{count}} keys detected', { count: keyCount })}
                 </p>
               )}
+              {isEdit && (
+                <p className='text-muted-foreground text-xs'>
+                  {t(
+                    'Saving this field replaces every existing key. Use multi-key management below to append or remove single keys.'
+                  )}
+                </p>
+              )}
             </div>
             <div className='flex items-center justify-between rounded-lg border p-3'>
               <div className='space-y-0.5'>
@@ -316,6 +324,12 @@ export function AccountMutateDrawer({
                 />
               </div>
             </div>
+            {isEdit && accountId !== null && (
+              <AccountMultiKeyManager
+                accountId={accountId}
+                onKeysChanged={(total) => setIsMultiKey(total > 1)}
+              />
+            )}
             <div className='space-y-1.5'>
               <Label>{t('Base URL')}</Label>
               <Input
