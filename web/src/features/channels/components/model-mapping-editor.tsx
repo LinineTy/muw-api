@@ -16,30 +16,59 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Code, Loader2, Plus, Search, Table, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Code, ListPlus, Plus, Table, Trash2 } from 'lucide-react'
+import {
+  useEffect,
+  useEffectEvent,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 
-import { Dialog } from '@/components/dialog'
 import { JsonCodeEditor } from '@/components/json-code-editor'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { ComboboxInput } from '@/components/ui/combobox-input'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+
+type MappingField = 'from' | 'to'
+
+/**
+ * Asks the editor to open a mapping row for a model the caller already knows
+ * one side of. When a row for `from` exists its upstream field is focused;
+ * otherwise a draft row is appended and the empty side receives focus. Drafts
+ * are only written to the mapping once both names are filled in.
+ */
+export type ModelMappingDraftRequest = {
+  /** Request model name; empty when only the upstream name is known. */
+  from: string
+  /** Upstream model name; empty when only the request name is known. */
+  to: string
+  /** Field to focus; defaults to the empty side, or the upstream side of an existing row. */
+  focus?: MappingField
+  /** Changes re-trigger the request even for identical names. */
+  token: number
+}
 
 type ModelMappingEditorProps = {
   value: string
   onChange: (value: string) => void
   disabled?: boolean
-  // Returns the models available from the upstream channel (fetched on demand)
-  // for the model picker. When omitted, the picker button is hidden.
-  fetchChannelModels?: () => Promise<string[]>
-}
-
-type PickerTarget = {
-  rowId: string
-  field: 'from' | 'to'
+  sourceModelOptions?: string[]
+  targetModelOptions?: string[]
+  /** Shows the batch button; the caller owns the batch dialog. */
+  onBatchAdd?: () => void
+  /**
+   * Fires with the latest value once an edit settles: Enter, focus leaving the
+   * editor, or a row being deleted. Lets callers react per completed edit
+   * instead of per keystroke.
+   */
+  onCommit?: (value: string) => void
+  draftRequest?: ModelMappingDraftRequest | null
+  onDraftRequestHandled?: () => void
 }
 
 type MappingRow = {
@@ -49,6 +78,8 @@ type MappingRow = {
 }
 
 const DUPLICATE_MAPPING_SENTINEL = '{ "duplicate_source_models": '
+/** Show the row filter once the table is long enough to need scanning. */
+const MAPPING_FILTER_THRESHOLD = 6
 
 function getDuplicateSources(rows: MappingRow[]): string[] {
   const seen = new Set<string>()
@@ -64,41 +95,48 @@ function getDuplicateSources(rows: MappingRow[]): string[] {
     }
   }
 
-  return Array.from(duplicates)
+  return [...duplicates]
 }
 
 export function ModelMappingEditor(props: ModelMappingEditorProps) {
   const { t } = useTranslation()
+  const inputsId = useId()
   const [mode, setMode] = useState<'visual' | 'json'>('visual')
   const [rows, setRows] = useState<MappingRow[]>([])
   const [jsonValue, setJsonValue] = useState(props.value)
   const [jsonError, setJsonError] = useState<string | null>(null)
+  const [filter, setFilter] = useState('')
   const nextRowIdRef = useRef(0)
-  // Tracks the last value this editor emitted via onChange. External edits to
-  // the field (e.g. loading a channel) change props.value to something else;
-  // values we emitted ourselves should not be re-parsed back into `rows`,
-  // otherwise a row whose "from" was cleared (which serializes to `{}`) is
-  // dropped and the whole rule disappears.
-  const lastEmittedRef = useRef<string | null>(null)
+  const lastEmittedRef = useRef(props.value)
+  const pendingRowFocusRef = useRef<{
+    rowId: string
+    field: MappingField
+  } | null>(null)
   const duplicateSources = useMemo(() => getDuplicateSources(rows), [rows])
-  const [pickerOpen, setPickerOpen] = useState(false)
-  const [pickerLoading, setPickerLoading] = useState(false)
-  const [pickerModels, setPickerModels] = useState<string[]>([])
-  const [pickerKeyword, setPickerKeyword] = useState('')
-  const [pickerTarget, setPickerTarget] = useState<PickerTarget | null>(null)
-
-  const filteredPickerModels = useMemo(() => {
-    const keyword = pickerKeyword.trim().toLowerCase()
-    if (!keyword) return pickerModels
-    return pickerModels.filter((model) =>
-      model.toLowerCase().includes(keyword)
-    )
-  }, [pickerModels, pickerKeyword])
+  const sourceOptions = useMemo(
+    () =>
+      (props.sourceModelOptions ?? []).map((model) => ({
+        value: model,
+        label: model,
+      })),
+    [props.sourceModelOptions]
+  )
+  const targetOptions = useMemo(
+    () =>
+      (props.targetModelOptions ?? []).map((model) => ({
+        value: model,
+        label: model,
+      })),
+    [props.targetModelOptions]
+  )
 
   const createRowId = () => {
     nextRowIdRef.current += 1
     return `mapping-${nextRowIdRef.current}`
   }
+
+  const rowInputId = (rowId: string, field: MappingField) =>
+    `${inputsId}-${rowId}-${field}`
 
   const parseJsonToRows = (json: string): boolean => {
     try {
@@ -120,7 +158,7 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
       }
       setRows((previousRows) => {
         const remainingRows = [...previousRows]
-        return entries.map(([from, to], index) => {
+        const mapped = entries.map(([from, to], index) => {
           const toString = String(to)
           const existingIndex = remainingRows.findIndex(
             (row) =>
@@ -142,24 +180,89 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
             to: toString,
           }
         })
+        // Rows without a request name are not serialized yet; keep them so a
+        // draft survives edits to other rows.
+        const mappedIds = new Set(mapped.map((row) => row.id))
+        const drafts = previousRows.filter(
+          (row) => !row.from.trim() && !mappedIds.has(row.id)
+        )
+        return [...mapped, ...drafts]
       })
       setJsonError(null)
       return true
-    } catch (_error) {
+    } catch {
       setJsonError(t('Model mapping must be valid JSON format'))
       return false
     }
   }
 
-  // Parse JSON to rows when value changes externally
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+  const syncExternalValue = useEffectEvent(() => {
+    lastEmittedRef.current = props.value
     setJsonValue(props.value)
-    if (props.value === lastEmittedRef.current) {
-      return
-    }
     parseJsonToRows(props.value)
+  })
+
+  const commit = () => {
+    props.onCommit?.(lastEmittedRef.current)
+  }
+
+  // Only replace the draft when the external value changes, not on language changes.
+  useEffect(() => {
+    syncExternalValue()
   }, [props.value])
+
+  // A freshly added row exists one commit after the click, so focus it once
+  // its inputs are rendered.
+  const focusPendingRow = useEffectEvent(() => {
+    const pending = pendingRowFocusRef.current
+    if (!pending) return
+    const input = document.querySelector(
+      `[id="${rowInputId(pending.rowId, pending.field)}"]`
+    )
+    if (!(input instanceof HTMLInputElement)) return
+    pendingRowFocusRef.current = null
+    input.focus()
+  })
+
+  useEffect(() => {
+    focusPendingRow()
+  }, [rows])
+
+  const applyDraftRequest = useEffectEvent(() => {
+    const request = props.draftRequest
+    if (!request) return
+    const existing = request.from
+      ? rows.find((row) => row.from === request.from)
+      : undefined
+    if (existing) {
+      const input = document.querySelector(
+        `[id="${rowInputId(existing.id, request.focus ?? 'to')}"]`
+      )
+      if (input instanceof HTMLInputElement) {
+        input.focus()
+        input.scrollIntoView({ block: 'center' })
+      }
+    } else {
+      const rowId = createRowId()
+      pendingRowFocusRef.current = {
+        rowId,
+        field: request.focus ?? (request.from ? 'to' : 'from'),
+      }
+      setRows((previous) => [
+        ...previous,
+        { id: rowId, from: request.from, to: request.to },
+      ])
+    }
+    props.onDraftRequestHandled?.()
+  })
+
+  // Callers raise draft requests while closing a dialog, whose focus return
+  // runs on the next frame; wait one frame so the editor keeps the focus.
+  useEffect(() => {
+    if (!props.draftRequest) return
+    const frame = window.requestAnimationFrame(() => applyDraftRequest())
+    return () => window.cancelAnimationFrame(frame)
+  }, [props.draftRequest])
 
   const convertRowsToJson = (updatedRows: MappingRow[]): string => {
     if (updatedRows.length === 0) {
@@ -198,16 +301,18 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
       from: '',
       to: '',
     }
+    pendingRowFocusRef.current = { rowId: newRow.id, field: 'from' }
     syncRows([...rows, newRow])
   }
 
   const handleDeleteRow = (id: string) => {
     syncRows(rows.filter((row) => row.id !== id))
+    commit()
   }
 
   const handleRowChange = (
     id: string,
-    field: 'from' | 'to',
+    field: MappingField,
     newValue: string
   ) => {
     const updatedRows = rows.map((row) =>
@@ -233,6 +338,7 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
     lastEmittedRef.current = template
     props.onChange(template)
     parseJsonToRows(template)
+    commit()
   }
 
   const handleModeChange = (nextMode: string) => {
@@ -252,43 +358,29 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
     setMode('visual')
   }
 
-  const closePicker = () => {
-    setPickerOpen(false)
-    setPickerTarget(null)
-    setPickerKeyword('')
-    setPickerModels([])
-  }
-
-  const openPicker = async (rowId: string, field: 'from' | 'to') => {
-    if (!props.fetchChannelModels) return
-    setPickerTarget({ rowId, field })
-    setPickerKeyword('')
-    setPickerModels([])
-    setPickerOpen(true)
-    setPickerLoading(true)
-    try {
-      const models = await props.fetchChannelModels()
-      setPickerModels(Array.isArray(models) ? models : [])
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : t('Failed to fetch models')
-      )
-      setPickerModels([])
-    } finally {
-      setPickerLoading(false)
-    }
-  }
-
-  const pickModel = (model: string) => {
-    if (!pickerTarget) return
-    handleRowChange(pickerTarget.rowId, pickerTarget.field, model)
-    closePicker()
+  const filterKeyword = filter.trim().toLowerCase()
+  const showFilter = rows.length >= MAPPING_FILTER_THRESHOLD
+  let visibleRows = rows
+  if (showFilter && filterKeyword) {
+    visibleRows = rows.filter(
+      (row) =>
+        row.from.toLowerCase().includes(filterKeyword) ||
+        row.to.toLowerCase().includes(filterKeyword)
+    )
   }
 
   return (
-    <div className='space-y-2'>
+    <div
+      className='space-y-2'
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') commit()
+      }}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) commit()
+      }}
+    >
       <Tabs value={mode} onValueChange={handleModeChange} className='space-y-2'>
-        <div className='flex items-center justify-between gap-3'>
+        <div className='flex flex-wrap items-center justify-between gap-3'>
           <TabsList>
             <TabsTrigger value='visual'>
               <Table className='h-4 w-4' aria-hidden='true' />
@@ -299,16 +391,30 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
               {t('JSON')}
             </TabsTrigger>
           </TabsList>
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            className='h-auto p-0'
-            onClick={handleFillTemplate}
-            disabled={props.disabled}
-          >
-            {t('Fill Template')}
-          </Button>
+          <div className='flex items-center gap-3'>
+            {props.onBatchAdd && (
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                onClick={props.onBatchAdd}
+                disabled={props.disabled || Boolean(jsonError)}
+              >
+                <ListPlus aria-hidden='true' />
+                {t('Batch Add')}
+              </Button>
+            )}
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              className='h-auto p-0'
+              onClick={handleFillTemplate}
+              disabled={props.disabled}
+            >
+              {t('Fill Template')}
+            </Button>
+          </div>
         </div>
 
         {jsonError && (
@@ -330,48 +436,62 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
         <TabsContent value='visual' className='space-y-2'>
           {rows.length > 0 ? (
             <div className='space-y-2'>
+              {showFilter && (
+                <div className='space-y-1'>
+                  <Input
+                    aria-label={t('Filter mappings')}
+                    placeholder={t('Filter by model name')}
+                    value={filter}
+                    onChange={(event) => setFilter(event.target.value)}
+                  />
+                  {filterKeyword && (
+                    <p className='text-muted-foreground text-xs'>
+                      {t('Showing {{shown}} of {{total}} mappings', {
+                        shown: visibleRows.length,
+                        total: rows.length,
+                      })}
+                    </p>
+                  )}
+                </div>
+              )}
               <div className='grid grid-cols-[1fr_1fr_auto] gap-2 text-sm font-medium'>
+                {/* fork 口径：可见表头沿用本仓库的 'Request Model' / 'Upstream Model'；
+                    input 的 aria-label 仍是上游的 '... Name'（上游测试按 aria-label 取元素） */}
                 <div>{t('Request Model')}</div>
                 <div>{t('Upstream Model')}</div>
-                <div className='w-10'></div>
+                <div className='w-10' />
               </div>
-              {rows.map((row) => (
+              {visibleRows.map((row) => (
                 <div
                   key={row.id}
-                  className='grid grid-cols-[1fr_1fr_auto] items-center gap-2'
+                  className='grid grid-cols-[1fr_1fr_auto] gap-2'
                 >
-                  <Input
+                  <ComboboxInput
+                    id={rowInputId(row.id, 'from')}
+                    options={sourceOptions}
                     value={row.from}
-                    onChange={(e) =>
-                      handleRowChange(row.id, 'from', e.target.value)
+                    onValueChange={(value) =>
+                      handleRowChange(row.id, 'from', value)
                     }
                     placeholder='gpt-3.5-turbo'
+                    emptyText='No matching items'
+                    allowCustomValue
                     disabled={props.disabled}
+                    aria-label={t('Request Model Name')}
                   />
-                  <div className='relative'>
-                    <Input
-                      value={row.to}
-                      onChange={(e) =>
-                        handleRowChange(row.id, 'to', e.target.value)
-                      }
-                      placeholder='gpt-3.5-turbo-0125'
-                      disabled={props.disabled}
-                      className={props.fetchChannelModels ? 'pr-9' : undefined}
-                    />
-                    {props.fetchChannelModels && (
-                      <Button
-                        type='button'
-                        variant='ghost'
-                        size='icon-xs'
-                        onClick={() => openPicker(row.id, 'to')}
-                        disabled={props.disabled}
-                        aria-label={t('Select Model')}
-                        className='text-muted-foreground absolute right-1 inset-y-0 my-auto'
-                      >
-                        <Search className='size-3.5' aria-hidden='true' />
-                      </Button>
-                    )}
-                  </div>
+                  <ComboboxInput
+                    id={rowInputId(row.id, 'to')}
+                    options={targetOptions}
+                    value={row.to}
+                    onValueChange={(value) =>
+                      handleRowChange(row.id, 'to', value)
+                    }
+                    placeholder='gpt-3.5-turbo-0125'
+                    emptyText='No matching items'
+                    allowCustomValue
+                    disabled={props.disabled}
+                    aria-label={t('Upstream Model Name')}
+                  />
                   <Button
                     type='button'
                     variant='ghost'
@@ -385,6 +505,11 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
                   </Button>
                 </div>
               ))}
+              {visibleRows.length === 0 && (
+                <p className='text-muted-foreground py-3 text-center text-sm'>
+                  {t('No matching items')}
+                </p>
+              )}
             </div>
           ) : (
             <div className='text-muted-foreground flex h-24 items-center justify-center rounded-md border border-dashed text-sm'>
@@ -406,7 +531,6 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
           </Button>
         </TabsContent>
         <TabsContent value='json' className='space-y-2'>
-          {/* 与上游同款提示（文案 key 7 语言已齐），补回合并时丢的说明行 */}
           <p className='text-muted-foreground text-sm'>
             {t(
               'JSON keys are request model names; values are upstream model names.'
@@ -415,7 +539,7 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
           <JsonCodeEditor
             value={jsonValue}
             onChange={handleJsonChange}
-            placeholder={t('{"original-model": "replacement-model"}')}
+            placeholder='{"request-model": "upstream-model"}'
             disabled={props.disabled}
             className={jsonError ? 'border-destructive' : undefined}
             aria-invalid={Boolean(jsonError)}
@@ -423,55 +547,6 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
           />
         </TabsContent>
       </Tabs>
-
-      <Dialog
-        open={pickerOpen}
-        onOpenChange={(open) => {
-          if (!open) closePicker()
-        }}
-        title={t('Select Model')}
-        description={t('Choose a model available from the channel')}
-        contentClassName='sm:max-w-md'
-        contentHeight='auto'
-        bodyClassName='space-y-3'
-        footer={
-          <Button type='button' variant='outline' onClick={closePicker}>
-            {t('Cancel')}
-          </Button>
-        }
-      >
-        <Input
-          value={pickerKeyword}
-          onChange={(e) => setPickerKeyword(e.target.value)}
-          placeholder={t('Search models...')}
-        />
-        {pickerLoading && (
-          <div className='flex items-center justify-center py-10'>
-            <Loader2 className='text-muted-foreground h-6 w-6 animate-spin' />
-          </div>
-        )}
-        {!pickerLoading && pickerModels.length === 0 && (
-          <div className='text-muted-foreground py-8 text-center text-sm'>
-            {t('No models available')}
-          </div>
-        )}
-        {!pickerLoading && pickerModels.length > 0 && (
-          <div className='max-h-72 space-y-1 overflow-y-auto pr-1'>
-            {filteredPickerModels.map((model) => (
-              <Button
-                key={model}
-                type='button'
-                variant='ghost'
-                size='sm'
-                className='w-full justify-start font-mono'
-                onClick={() => pickModel(model)}
-              >
-                {model}
-              </Button>
-            ))}
-          </div>
-        )}
-      </Dialog>
     </div>
   )
 }
