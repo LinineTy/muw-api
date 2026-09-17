@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { ROLE } from '@/lib/roles'
 import { cn } from '@/lib/utils'
+import { formatVersionLabel } from '@/lib/version-label'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { SystemUpdateDialog } from './system-update-dialog'
@@ -56,13 +57,17 @@ function AdminSystemUpdateAction(props: SystemUpdateActionProps) {
   const compact = props.compact ?? true
   const versionPresentation = props.presentation === 'version'
   const version = update.currentVersion?.trim() || t('Unknown version')
+  // 展示用：日期制版本号美化（逻辑比较仍用原始串）
+  const versionLabel = formatVersionLabel(update.currentVersion, t) || version
   const label = update.shouldNotify
     ? t('Update available')
     : t('Check for updates')
   let description = label
   if (update.shouldNotify) {
     description = t('New version available: {{version}}', {
-      version: update.release?.tag_name,
+      version:
+        formatVersionLabel(update.release?.tag_name, t) ||
+        update.release?.tag_name,
     })
   } else if (update.snapshot?.error) {
     description = t('Failed to check for updates')
@@ -71,7 +76,7 @@ function AdminSystemUpdateAction(props: SystemUpdateActionProps) {
   if (versionPresentation) {
     const versionDescription = t(
       'System updates, current version: {{version}}',
-      { version }
+      { version: versionLabel }
     )
     description =
       update.shouldNotify || update.snapshot?.error
@@ -104,8 +109,11 @@ function AdminSystemUpdateAction(props: SystemUpdateActionProps) {
           )}
           aria-hidden='true'
         />
-        <span className='hidden max-w-32 truncate font-mono text-xs @min-[22rem]/system-brand:inline'>
-          {version}
+        <span
+          className='hidden max-w-32 truncate text-xs @min-[22rem]/system-brand:inline'
+          title={update.currentVersion ?? undefined}
+        >
+          {versionLabel}
         </span>
         {update.shouldNotify && (
           <Badge

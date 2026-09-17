@@ -7829,6 +7829,7 @@
     "New keys are appended to the end of the list; keys already present are skipped.": "新しいキーはリストの末尾に追加され、既にあるキーはスキップされます。",
     "Append keys": "キーを追加",
     "{{count}} keys in total": "合計 {{count}} 個のキー",
-    "Saving this field replaces every existing key. Use multi-key management below to append or remove single keys.": "ここで保存すると既存のキーがすべて置き換わります。追加や個別削除は下の「マルチキー管理」から行ってください。"
+    "Saving this field replaces every existing key. Use multi-key management below to append or remove single keys.": "ここで保存すると既存のキーがすべて置き換わります。追加や個別削除は下の「マルチキー管理」から行ってください。",
+    "build {{n}}": "ビルド {{n}}"
   }
 }

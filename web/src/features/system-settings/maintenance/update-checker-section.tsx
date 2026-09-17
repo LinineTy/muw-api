@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/collapsible'
 import { api } from '@/lib/api'
 import { formatTimestamp } from '@/lib/format'
+import { formatVersionLabel } from '@/lib/version-label'
 import { cn } from '@/lib/utils'
 
 import { SettingsPageActionsPortal } from '../components/settings-page-context'
@@ -86,6 +87,7 @@ function ChangelogHistoryRow({ entry }: { entry: ChangelogHistoryEntry }) {
           />
         }
       >
+        {/* 历史条目保留原始 tag：老版本的 muw.N 是连号记法，按"当天第几个"美化会误导 */}
         <span className='text-[13px] font-medium'>{entry.version}</span>
         <span className='flex items-center gap-2'>
           {entry.date && (
@@ -132,7 +134,10 @@ export function UpdateCheckerSection({
     ) === 'true'
 
   const uptime = startTime ? formatTimestamp(startTime) : t('Unknown')
-  const version = currentVersion || t('Unknown')
+  // 后端返回的原始版本号：只做兜底与 title 提示，版本比较逻辑不受展示美化影响
+  const rawVersion = currentVersion?.trim() ?? ''
+  const version = rawVersion || t('Unknown')
+  const versionLabel = formatVersionLabel(rawVersion, t) || version
 
   // 更新日志随二进制内置，拿不到时静默降级（不影响版本号与检查更新）
   useEffect(() => {
@@ -163,7 +168,9 @@ export function UpdateCheckerSection({
       if (!data.has_update) {
         toast.success(
           t('You are running the latest version ({{version}}).', {
-            version: data.current_version || version,
+            version:
+              formatVersionLabel(data.current_version || rawVersion, t) ||
+              version,
           })
         )
         return
@@ -193,7 +200,12 @@ export function UpdateCheckerSection({
               <div className='text-muted-foreground text-sm'>
                 {t('Current version')}
               </div>
-              <div className='text-lg font-semibold'>{version}</div>
+              <div
+                className='text-lg font-semibold'
+                title={rawVersion || undefined}
+              >
+                {versionLabel}
+              </div>
             </div>
             <div className='rounded-lg border p-4'>
               <div className='text-muted-foreground text-sm'>
@@ -312,7 +324,9 @@ export function UpdateCheckerSection({
         onOpenChange={setDialogOpen}
         title={
           latestTag
-            ? t('New version available: {{version}}', { version: latestTag })
+            ? t('New version available: {{version}}', {
+                version: formatVersionLabel(latestTag, t) || latestTag,
+              })
             : t('Release details')
         }
         footer={
@@ -323,10 +337,12 @@ export function UpdateCheckerSection({
       >
         <div className='space-y-2 text-sm'>
           <p>
-            {t('Current version')}: {serverVersion || version}
+            {t('Current version')}:{' '}
+            {formatVersionLabel(serverVersion || rawVersion, t) || version}
           </p>
           <p className='font-medium'>
-            {t('Latest version')}: {latestTag}
+            {t('Latest version')}:{' '}
+            {formatVersionLabel(latestTag, t) || latestTag}
           </p>
           <p className='text-muted-foreground'>
             {t('Update from the official registry.')}
