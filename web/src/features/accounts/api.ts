@@ -16,12 +16,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { api } from '@/lib/api'
+import { api, type ApiRequestConfig } from '@/lib/api'
 
 import type {
   Account,
   AccountChannelRef,
   AccountCodingPlanQuota,
+  AccountMultiKeyActionResponse,
+  AccountMultiKeyManageParams,
+  AccountMultiKeyStatusResponse,
   CreateAccountRequest,
   GetAccountsResponse,
   UpdateAccountRequest,
@@ -86,4 +89,90 @@ export async function updateAccount(
 
 export async function deleteAccount(id: number): Promise<void> {
   await api.delete(`/api/account/${id}`)
+}
+
+// ============================================================================
+// 多密钥管理（账户抽屉）：POST /api/account/multi_key/manage
+// 与渠道侧 /api/channel/multi_key/manage 同一份实现，仅把 channel_id 换成 account_id。
+// 响应里只会有脱敏预览（后端 KeyStatus.key_preview 只给前 10 位），明文须走
+// GET /api/account/:id/key（Root + 安全验证）。
+// ============================================================================
+
+const accountMultiKeyConfig = (
+  config: ApiRequestConfig = {}
+): ApiRequestConfig => ({
+  ...config,
+  skipBusinessError: true,
+  skipErrorHandler: true,
+})
+
+async function manageAccountMultiKeys(
+  params: AccountMultiKeyManageParams
+): Promise<AccountMultiKeyActionResponse> {
+  const res = await api.post(
+    '/api/account/multi_key/manage',
+    params,
+    accountMultiKeyConfig()
+  )
+  return res.data
+}
+
+export async function getAccountMultiKeyStatus(
+  accountId: number,
+  page = 1,
+  pageSize = 10,
+  status?: number
+): Promise<AccountMultiKeyStatusResponse> {
+  return manageAccountMultiKeys({
+    account_id: accountId,
+    action: 'get_key_status',
+    page,
+    page_size: pageSize,
+    status,
+  }) as Promise<AccountMultiKeyStatusResponse>
+}
+
+/** 追加一把或多把密钥（服务端拆分、去重后追加到列表末尾） */
+export async function addAccountMultiKeys(
+  accountId: number,
+  keys: string[]
+): Promise<AccountMultiKeyActionResponse> {
+  return manageAccountMultiKeys({
+    account_id: accountId,
+    action: 'add_key',
+    keys,
+  })
+}
+
+export async function enableAccountMultiKey(
+  accountId: number,
+  keyIndex: number
+): Promise<AccountMultiKeyActionResponse> {
+  return manageAccountMultiKeys({
+    account_id: accountId,
+    action: 'enable_key',
+    key_index: keyIndex,
+  })
+}
+
+export async function disableAccountMultiKey(
+  accountId: number,
+  keyIndex: number
+): Promise<AccountMultiKeyActionResponse> {
+  return manageAccountMultiKeys({
+    account_id: accountId,
+    action: 'disable_key',
+    key_index: keyIndex,
+  })
+}
+
+export async function deleteAccountMultiKey(
+  accountId: number,
+  keyIndex: number
+): Promise<AccountMultiKeyActionResponse> {
+  return manageAccountMultiKeys({
+    account_id: accountId,
+    action: 'delete_key',
+    key_index: keyIndex,
+  })
 }

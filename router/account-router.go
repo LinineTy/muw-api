@@ -56,6 +56,9 @@ func registerAccountRoutes(apiRouter *gin.RouterGroup) {
 		{method: http.MethodPost, path: "/", permission: authz.ChannelSensitiveWrite, handler: controller.AddAccount},
 		{method: http.MethodPut, path: "/", permission: authz.ChannelSensitiveWrite, handler: controller.UpdateAccount},
 		{method: http.MethodDelete, path: "/:id", permission: authz.ChannelSensitiveWrite, handler: controller.DeleteAccount},
+		// 账户侧多密钥管理（账户抽屉入口）：复用渠道同款实现（controller.ManageMultiKeys），
+		// account_id 放 body；权限与渠道侧 multi_key/manage 对齐。
+		{method: http.MethodPost, path: "/multi_key/manage", permission: authz.ChannelOperate, handler: controller.ManageMultiKeys},
 	}
 	for _, r := range routes {
 		accountRoute.Handle(r.method, r.path,

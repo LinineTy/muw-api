@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -2078,12 +2079,14 @@ func CopyChannel(c *gin.Context) {
 
 // MultiKeyManageRequest represents the request for multi-key management operations
 type MultiKeyManageRequest struct {
-	ChannelId int    `json:"channel_id"`
-	Action    string `json:"action"`              // "disable_key", "enable_key", "delete_key", "delete_disabled_keys", "get_key_status"
-	KeyIndex  *int   `json:"key_index,omitempty"` // for disable_key, enable_key, and delete_key actions
-	Page      int    `json:"page,omitempty"`      // for get_key_status pagination
-	PageSize  int    `json:"page_size,omitempty"` // for get_key_status pagination
-	Status    *int   `json:"status,omitempty"`    // for get_key_status filtering: 1=enabled, 2=manual_disabled, 3=auto_disabled, nil=all
+	ChannelId int      `json:"channel_id"`
+	AccountId int      `json:"account_id,omitempty"` // 账户维度入口（账户抽屉）：直连账户，无需渠道
+	Action    string   `json:"action"`               // "disable_key", "enable_key", "delete_key", "delete_disabled_keys", "add_key", "get_key_status"
+	KeyIndex  *int     `json:"key_index,omitempty"`  // for disable_key, enable_key, and delete_key actions
+	Keys      []string `json:"keys,omitempty"`       // for add_key: 待追加的密钥（单个元素内可按换行放多把）
+	Page      int      `json:"page,omitempty"`       // for get_key_status pagination
+	PageSize  int      `json:"page_size,omitempty"`  // for get_key_status pagination
+	Status    *int     `json:"status,omitempty"`     // for get_key_status filtering: 1=enabled, 2=manual_disabled, 3=auto_disabled, nil=all
 }
 
 // MultiKeyStatusResponse represents the response for key status query
@@ -2116,20 +2119,30 @@ func ManageMultiKeys(c *gin.Context) {
 		return
 	}
 
-	channel, err := model.GetChannelById(request.ChannelId, true)
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "渠道不存在",
-		})
-		return
-	}
-
-	// 多 key 管理目标解析：挂账户的渠道操作账户（轮询/启停状态跨渠道共享，
-	// 改 key 直接改账户 key），legacy 渠道操作渠道自身。后续读写统一走
-	// mkInfo/mkKeys/mkSetKeys/mkSave 闭包，一份逻辑双路径。
+	// 多 key 管理目标解析：account_id 直连账户（账户抽屉入口，账户可以不绑任何渠道）；
+	// 否则按渠道解析——挂账户的渠道操作账户（轮询/启停状态跨渠道共享，改 key 直接改
+	// 账户 key），legacy 渠道操作渠道自身。后续读写统一走 mkInfo/mkKeys/mkSetKeys/
+	// mkSave 闭包，一份逻辑覆盖三条入口。
+	var channel *model.Channel
 	var mkAccount *model.Account
-	if channel.Account != nil {
+	if request.AccountId > 0 {
+		mkAccount, err = model.GetAccountById(request.AccountId, true)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "账户不存在",
+			})
+			return
+		}
+	} else {
+		channel, err = model.GetChannelById(request.ChannelId, true)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "渠道不存在",
+			})
+			return
+		}
 		mkAccount = channel.Account
 	}
 	mkInfo := func() *model.ChannelInfo {
@@ -2160,15 +2173,17 @@ func ManageMultiKeys(c *gin.Context) {
 		}
 		return channel.Update()
 	}
-	lock := model.GetChannelPollingLock(channel.Id)
+	var lock *sync.Mutex
 	if mkAccount != nil {
 		lock = model.GetAccountPollingLock(mkAccount.Id)
+	} else {
+		lock = model.GetChannelPollingLock(channel.Id)
 	}
 
-	if !mkInfo().IsMultiKey {
+	if !mkInfo().IsMultiKey && !multiKeyActionAllowedOnSingleKey(request.Action) {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "该渠道不是多密钥模式",
+			"message": "当前不是多密钥模式",
 		})
 		return
 	}
@@ -2182,10 +2197,14 @@ func ManageMultiKeys(c *gin.Context) {
 	if request.Action == "get_key_status" {
 		markAuditLogged(c)
 	} else {
-		recordManageAudit(c, "channel.multi_key_manage", map[string]any{
-			"action": request.Action,
-			"id":     channel.Id,
-		})
+		auditInfo := map[string]any{"action": request.Action}
+		// 渠道入口沿用 id（审计展示口径不变）；账户入口（无渠道）记 account_id。
+		if channel != nil {
+			auditInfo["id"] = channel.Id
+		} else {
+			auditInfo["account_id"] = mkAccount.Id
+		}
+		recordManageAudit(c, "channel.multi_key_manage", auditInfo)
 	}
 
 	lock.Lock()
@@ -2300,6 +2319,62 @@ func ManageMultiKeys(c *gin.Context) {
 				ManualDisabledCount: manualDisabledCount, // Overall statistics
 				AutoDisabledCount:   autoDisabledCount,   // Overall statistics
 			},
+		})
+		return
+
+	case "add_key":
+		// 追加密钥（账户抽屉「追加密钥」入口，渠道侧同款能力）：拆分 → 去重 → 追加到末尾。
+		// 追加不动既有索引 ⇒ 状态表 / 轮询游标无需重排（新 key 在状态表里缺项 = 默认启用）；
+		// 首次追加即视为进入多密钥模式（模式未设过时按随机）。
+		existing := mkKeys()
+		incoming := parseMultiKeyInput(request.Keys)
+		if len(incoming) == 0 {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "未提供要追加的密钥",
+			})
+			return
+		}
+
+		seen := make(map[string]struct{}, len(existing)+len(incoming))
+		for _, existingKey := range existing {
+			seen[existingKey] = struct{}{}
+		}
+		addedKeys := make([]string, 0, len(incoming))
+		for _, incomingKey := range incoming {
+			if _, duplicated := seen[incomingKey]; duplicated {
+				continue
+			}
+			seen[incomingKey] = struct{}{}
+			addedKeys = append(addedKeys, incomingKey)
+		}
+		if len(addedKeys) == 0 {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "这些密钥已在列表中，未追加任何内容",
+			})
+			return
+		}
+
+		mkSetKeys(append(existing, addedKeys...))
+		if !mkInfo().IsMultiKey {
+			mkInfo().IsMultiKey = true
+		}
+		if mkInfo().MultiKeyMode == "" {
+			mkInfo().MultiKeyMode = constant.MultiKeyModeRandom
+		}
+		err = mkSave()
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+
+		model.InitChannelCache()
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": fmt.Sprintf("已追加 %d 个密钥，当前共 %d 个", len(addedKeys), len(existing)+len(addedKeys)),
+			// data.total 供前端同步「多密钥」开关与计数，省一次回查。
+			"data": gin.H{"total": len(existing) + len(addedKeys)},
 		})
 		return
 
@@ -2616,7 +2691,13 @@ func ManageMultiKeys(c *gin.Context) {
 }
 
 func multiKeyActionRequiresSensitiveWrite(action string) bool {
-	return action == "delete_key" || action == "delete_disabled_keys"
+	return action == "delete_key" || action == "delete_disabled_keys" || action == "add_key"
+}
+
+// multiKeyActionAllowedOnSingleKey 列出在"单密钥"目标上也能执行的动作：
+// get_key_status 只读（账户抽屉要能看到唯一那把），add_key 追加第 2 把即自动转入多密钥模式。
+func multiKeyActionAllowedOnSingleKey(action string) bool {
+	return action == "get_key_status" || action == "add_key"
 }
 
 // OllamaPullModel 拉取 Ollama 模型

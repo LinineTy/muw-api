@@ -7823,6 +7823,12 @@
     "Volume": "Volume",
     "Sound set": "Jeu de sons",
     "Rubber duck": "Canard en plastique",
-    "Sound FX 1": "Effet sonore 1"
+    "Sound FX 1": "Effet sonore 1",
+    "Keys are always shown masked. Append new keys here, or enable / disable / delete a single key.": "Les clés sont toujours masquées. Ajoutez-en ici, ou activez / désactivez / supprimez une clé individuelle.",
+    "Paste one key per line to append": "Collez une clé par ligne pour les ajouter",
+    "New keys are appended to the end of the list; keys already present are skipped.": "Les nouvelles clés sont ajoutées à la fin de la liste ; celles déjà présentes sont ignorées.",
+    "Append keys": "Ajouter des clés",
+    "{{count}} keys in total": "{{count}} clés au total",
+    "Saving this field replaces every existing key. Use multi-key management below to append or remove single keys.": "Enregistrer ce champ remplace toutes les clés existantes. Utilisez la gestion multi-clés ci-dessous pour en ajouter ou en supprimer individuellement."
   }
 }

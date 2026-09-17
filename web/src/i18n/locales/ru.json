@@ -7823,6 +7823,12 @@
     "Volume": "Громкость",
     "Sound set": "Набор звуков",
     "Rubber duck": "Утёнок",
-    "Sound FX 1": "Звук 1"
+    "Sound FX 1": "Звук 1",
+    "Keys are always shown masked. Append new keys here, or enable / disable / delete a single key.": "Ключи всегда отображаются маскированными. Здесь можно добавить ключи или включить / отключить / удалить отдельный ключ.",
+    "Paste one key per line to append": "Вставьте по одному ключу в строке для добавления",
+    "New keys are appended to the end of the list; keys already present are skipped.": "Новые ключи добавляются в конец списка; уже имеющиеся пропускаются.",
+    "Append keys": "Добавить ключи",
+    "{{count}} keys in total": "Всего ключей: {{count}}",
+    "Saving this field replaces every existing key. Use multi-key management below to append or remove single keys.": "Сохранение этого поля заменит все существующие ключи. Чтобы добавить или удалить отдельные ключи, используйте управление несколькими ключами ниже."
   }
 }
