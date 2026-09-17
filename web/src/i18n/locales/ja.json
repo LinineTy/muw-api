@@ -8112,6 +8112,9 @@
     "Upstream connection": "上流接続",
     "Local check": "ローカルチェック",
     "Request policy decisions": "リクエストポリシーの判断",
-    "Success rate excludes business rejections and includes the current partial hour.": "成功率は業務上の拒否を除外し、現在進行中の時間帯を含みます。"
+    "Success rate excludes business rejections and includes the current partial hour.": "成功率は業務上の拒否を除外し、現在進行中の時間帯を含みます。",
+    "Clean task history": "タスク履歴を削除",
+    "Delete completed tasks matching the current filters across all pages? Active tasks and the latest run of each task type are retained for scheduling. This cannot be undone.": "すべてのページで現在のフィルターに一致する終了済みタスクを削除しますか？実行待ち・実行中のタスクと各種類の最新の実行記録は、スケジュール管理のために保持されます。この操作は取り消せません。",
+    "Deleted {{count}} historical system tasks": "システムタスク履歴を {{count}} 件削除しました"
   }
 }
