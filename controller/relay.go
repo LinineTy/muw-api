@@ -305,7 +305,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			newAPIError = channelErr
 			break
 		}
-		addUsedChannel(c, channel.Id)
+		service.AppendUsedChannel(c, channel.Id)
 		// 渠道级上下文覆盖校验：超限记入 LastError 并继续尝试下一渠道（其他渠道可能
 		// 有更大的 context_window 覆盖）。不调 processChannelError——这是配置性拒绝，
 		// 不是渠道故障，不应禁用渠道或记录渠道错误日志。
@@ -427,12 +427,6 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true // 允许跨域
 	},
-}
-
-func addUsedChannel(c *gin.Context, channelId int) {
-	useChannel := c.GetStringSlice("use_channel")
-	useChannel = append(useChannel, fmt.Sprintf("%d", channelId))
-	c.Set("use_channel", useChannel)
 }
 
 func fastTokenCountMetaForPricing(request dto.Request) *types.TokenCountMeta {
@@ -759,7 +753,7 @@ func executeTaskSubmissionWith(
 		}
 		diagnostics.attempt(retryParam.GetRetry()+1, channel, relayInfo.LockedChannel != nil)
 
-		addUsedChannel(c, channel.Id)
+		service.AppendUsedChannel(c, channel.Id)
 		bodyStorage, bodyErr := common.GetBodyStorage(c)
 		if bodyErr != nil {
 			stage = "read_body"
