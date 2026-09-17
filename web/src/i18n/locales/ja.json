@@ -1934,6 +1934,8 @@
     "Download conversation": "Download conversation",
     "Download theme template": "Download theme template",
     "Drag {{group}} to reorder": "{{group}} をドラッグして並べ替え",
+    "Drag to move": "ドラッグして移動",
+    "Drag to resize": "ドラッグしてサイズ変更",
     "Draw": "描画",
     "Drawing": "画像生成",
     "Drawing Logs": "画像生成履歴",
