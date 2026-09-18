@@ -127,7 +127,7 @@ func WeChatAuth(c *gin.Context) {
 		common.ApiErrorLoginDenied(c, common.LoginStatusUserDisabled, i18n.MsgAuthUserBanned, user.Remark)
 		return
 	}
-	setupLogin(&user, c)
+	setupLogin(&user, nil, c)
 }
 
 type wechatBindRequest struct {
