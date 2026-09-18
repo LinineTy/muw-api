@@ -8141,6 +8141,9 @@
     "Response Model": "Modèle de réponse",
     "Response model mismatch": "Modèle de réponse différent",
     "Response model: {{model}}": "Modèle de réponse : {{model}}",
-    "The upstream returned a model name different from both the requested and upstream models. Aliases or dated versions may also cause this; this warning alone does not prove model substitution.": "Le modèle renvoyé diffère du modèle demandé et de celui transmis en amont. Un alias ou une version datée peut aussi expliquer cet écart ; cet avertissement seul ne prouve pas une substitution de modèle."
+    "The upstream returned a model name different from both the requested and upstream models. Aliases or dated versions may also cause this; this warning alone does not prove model substitution.": "Le modèle renvoyé diffère du modèle demandé et de celui transmis en amont. Un alias ou une version datée peut aussi expliquer cet écart ; cet avertissement seul ne prouve pas une substitution de modèle.",
+    "Task usage data is required to estimate this expression. Check the model's task plugin configuration.": "Les données d’utilisation des tâches sont nécessaires pour estimer le coût de cette expression. Vérifiez la configuration du plugin de tâches du modèle.",
+    "Task usage metadata is unavailable. Pricing details cannot be displayed.": "Les métadonnées d’utilisation des tâches sont indisponibles. Les détails tarifaires ne peuvent pas être affichés.",
+    "This expression cannot be expanded into a price table. View the original expression below.": "Cette expression ne peut pas être présentée sous forme de tableau tarifaire. Consultez l’expression d’origine ci-dessous."
   }
 }

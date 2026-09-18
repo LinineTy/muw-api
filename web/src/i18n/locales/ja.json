@@ -8141,6 +8141,9 @@
     "Response Model": "応答モデル",
     "Response model mismatch": "応答モデルの不一致",
     "Response model: {{model}}": "応答モデル：{{model}}",
-    "The upstream returned a model name different from both the requested and upstream models. Aliases or dated versions may also cause this; this warning alone does not prove model substitution.": "上流が返したモデル名は、リクエストモデルおよび上流に指定したモデルのいずれとも一致しません。別名や日付付きバージョンによる違いもあるため、この警告だけではモデルの置き換えを断定できません。"
+    "The upstream returned a model name different from both the requested and upstream models. Aliases or dated versions may also cause this; this warning alone does not prove model substitution.": "上流が返したモデル名は、リクエストモデルおよび上流に指定したモデルのいずれとも一致しません。別名や日付付きバージョンによる違いもあるため、この警告だけではモデルの置き換えを断定できません。",
+    "Task usage data is required to estimate this expression. Check the model's task plugin configuration.": "この式の料金を見積もるにはタスク使用量データが必要です。モデルのタスクプラグイン設定をご確認ください。",
+    "Task usage metadata is unavailable. Pricing details cannot be displayed.": "タスク使用量のフィールド定義がないため、料金の詳細を表示できません。",
+    "This expression cannot be expanded into a price table. View the original expression below.": "この式は料金表に展開できません。以下の元の式をご確認ください。"
   }
 }
