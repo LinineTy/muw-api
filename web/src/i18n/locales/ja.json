@@ -8144,6 +8144,10 @@
     "The upstream returned a model name different from both the requested and upstream models. Aliases or dated versions may also cause this; this warning alone does not prove model substitution.": "上流が返したモデル名は、リクエストモデルおよび上流に指定したモデルのいずれとも一致しません。別名や日付付きバージョンによる違いもあるため、この警告だけではモデルの置き換えを断定できません。",
     "Task usage data is required to estimate this expression. Check the model's task plugin configuration.": "この式の料金を見積もるにはタスク使用量データが必要です。モデルのタスクプラグイン設定をご確認ください。",
     "Task usage metadata is unavailable. Pricing details cannot be displayed.": "タスク使用量のフィールド定義がないため、料金の詳細を表示できません。",
-    "This expression cannot be expanded into a price table. View the original expression below.": "この式は料金表に展開できません。以下の元の式をご確認ください。"
+    "This expression cannot be expanded into a price table. View the original expression below.": "この式は料金表に展開できません。以下の元の式をご確認ください。",
+    "Connect to New API model services with support for multiple task plugins": "New API ゲートウェイのモデルサービスに接続し、複数のタスクプラグインに対応",
+    "Select the task plugins installed on the upstream gateway": "上流ゲートウェイにインストールされているタスクプラグインを選択",
+    "This channel serves the models of every selected plugin. The upstream New API gateway must have the same plugins installed.": "このチャネルは選択した各プラグインのモデルを提供します。上流の New API ゲートウェイに同じプラグインがインストールされている必要があります。",
+    "Upstream task plugins": "上流タスクプラグイン"
   }
 }

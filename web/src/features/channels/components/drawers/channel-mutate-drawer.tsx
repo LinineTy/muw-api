@@ -115,6 +115,7 @@ import {
 } from '@/components/ui/tooltip'
 import { Textarea } from '@/components/ui/textarea'
 import { SecureVerificationDialog } from '@/features/auth/secure-verification'
+import { PluginIcon } from '@/features/task-plugins/components/plugin-icon'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { useHiddenClickUnlock } from '@/hooks/use-hidden-click-unlock'
 import {
@@ -149,6 +150,7 @@ import {
   ADD_MODE_OPTIONS,
   CLAUDE_FIELD_PASSTHROUGH_TYPES,
   CHANNEL_STATUS_LABELS,
+  CHANNEL_TYPE_NEW_API,
   CHANNEL_TYPE_OLLAMA,
   CHANNEL_TYPE_BASE_URL_TIPS,
   CHANNEL_TYPE_OPTIONS,
@@ -211,6 +213,7 @@ import {
 import {
   getChannelPluginExtensions,
   supportsChannelPluginExtensions,
+  supportsNewAPIUpstream,
 } from '../../lib/channel-plugin-extensions'
 import { getChannelTypeConfig } from '../../lib/channel-type-config'
 import {
@@ -620,6 +623,7 @@ export function ChannelMutateDrawer({
   const currentStatus = formValues.status
   const currentBaseUrl = formValues.base_url
   const currentTaskPluginKey = formValues.task_plugin_key
+  const currentTaskExtendPluginKeys = formValues.task_extend_plugin_keys
   const currentKey = formValues.key
   const currentModels = formValues.models
   const currentModelMapping = formValues.model_mapping
@@ -797,10 +801,15 @@ export function ChannelMutateDrawer({
   const canHavePluginExtensions = supportsChannelPluginExtensions(currentType)
   const pluginExtensions = useMemo(() => {
     if (!canBindTaskPlugin || !taskPluginOptionsQuery.isSuccess) return []
-    return getChannelPluginExtensions(currentType, taskPluginOptionsQuery.data)
+    return getChannelPluginExtensions(
+      currentType,
+      taskPluginOptionsQuery.data,
+      currentTaskExtendPluginKeys
+    )
   }, [
     canBindTaskPlugin,
     currentType,
+    currentTaskExtendPluginKeys,
     taskPluginOptionsQuery.isSuccess,
     taskPluginOptionsQuery.data,
   ])
@@ -1433,6 +1442,46 @@ export function ChannelMutateDrawer({
       form.setValue('models', selected.join(','))
     },
     [form]
+  )
+
+  const taskPluginExtensionOptions = useMemo(
+    () =>
+      (taskPluginOptionsQuery.data ?? [])
+        .filter(supportsNewAPIUpstream)
+        .map((plugin) => ({
+          value: plugin.key,
+          label: plugin.name,
+          hint: plugin.key,
+          icon: <PluginIcon plugin={plugin} size={16} />,
+        })),
+    [taskPluginOptionsQuery.data]
+  )
+
+  // Binding an upstream plugin publishes its models like the type-61 prefill;
+  // unbinding removes the models that no remaining bound plugin declares.
+  const handleTaskExtendPluginKeysChange = useCallback(
+    (keys: string[]) => {
+      const plugins = taskPluginOptionsQuery.data ?? []
+      const declaredBy = (bound: readonly string[]) =>
+        new Set(
+          plugins
+            .filter((plugin) => bound.includes(plugin.key))
+            .flatMap((plugin) => plugin.models)
+        )
+      const previous = form.getValues('task_extend_plugin_keys') ?? []
+      const added = declaredBy(keys.filter((key) => !previous.includes(key)))
+      const kept = declaredBy(keys)
+      const dropped = declaredBy(previous.filter((key) => !keys.includes(key)))
+      const models = parseModelsString(form.getValues('models') || '').filter(
+        (model) => kept.has(model) || !dropped.has(model)
+      )
+      for (const model of added) {
+        if (!models.includes(model)) models.push(model)
+      }
+      form.setValue('task_extend_plugin_keys', keys, { shouldDirty: true })
+      form.setValue('models', models.join(','), { shouldDirty: true })
+    },
+    [form, taskPluginOptionsQuery.data]
   )
 
   const raiseMappingDraft = useCallback(
@@ -3204,6 +3253,38 @@ export function ChannelMutateDrawer({
       <ChannelModelsSection>
         <div className='space-y-5'>
           <div className='border-border/60 bg-muted/10 rounded-lg border p-4'>
+            {currentType === CHANNEL_TYPE_NEW_API &&
+              canBindTaskPlugin &&
+              taskPluginOptionsQuery.isSuccess &&
+              !showProviderPicker && (
+                <FormField
+                  control={form.control}
+                  name='task_extend_plugin_keys'
+                  render={({ field }) => (
+                    <FormItem className='mb-4'>
+                      <FormLabel>{t('Upstream task plugins')}</FormLabel>
+                      <FormControl>
+                        <MultiSelect
+                          options={taskPluginExtensionOptions}
+                          selected={field.value ?? []}
+                          onChange={handleTaskExtendPluginKeysChange}
+                          placeholder={t(
+                            'Select the task plugins installed on the upstream gateway'
+                          )}
+                          maxVisibleChips={8}
+                          disabled={!canEditSensitive}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t(
+                          'This channel serves the models of every selected plugin. The upstream New API gateway must have the same plugins installed.'
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
             <FormField
               control={form.control}
               name='models'

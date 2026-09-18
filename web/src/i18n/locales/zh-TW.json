@@ -8144,6 +8144,10 @@
     "The upstream returned a model name different from both the requested and upstream models. Aliases or dated versions may also cause this; this warning alone does not prove model substitution.": "上游回傳的模型名稱與請求模型、上游請求模型皆不一致。模型別名或日期版本也可能造成差異，不能僅憑此警示認定模型遭到替換。",
     "Task usage data is required to estimate this expression. Check the model's task plugin configuration.": "此運算式需要任務用量資料才能估算費用，請檢查模型的任務外掛設定。",
     "Task usage metadata is unavailable. Pricing details cannot be displayed.": "缺少任務用量欄位定義，暫時無法顯示價格明細。",
-    "This expression cannot be expanded into a price table. View the original expression below.": "此運算式暫不支援展開為價格表，可查看下方原始運算式。"
+    "This expression cannot be expanded into a price table. View the original expression below.": "此運算式暫不支援展開為價格表，可查看下方原始運算式。",
+    "Connect to New API model services with support for multiple task plugins": "接入 New API 閘道的模型服務，支援多個任務外掛",
+    "Select the task plugins installed on the upstream gateway": "選擇上游閘道已安裝的任務插件",
+    "This channel serves the models of every selected plugin. The upstream New API gateway must have the same plugins installed.": "此渠道將提供所選每個插件的模型。上游 New API 閘道必須安裝相同的插件。",
+    "Upstream task plugins": "上游任務插件"
   }
 }
