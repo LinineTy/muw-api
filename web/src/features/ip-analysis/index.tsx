@@ -35,16 +35,15 @@ import { formatTime } from './lib'
 
 const route = getRouteApi('/_authenticated/ip-analysis/')
 
-const DAY_OPTIONS = [
-  { value: 7, labelKey: '7 Days' },
-  { value: 30, labelKey: '30 Days' },
-  { value: 90, labelKey: '90 Days' },
-]
-
 
 export function IpAnalysis() {
   const { t } = useTranslation()
   const [days, setDays] = useState(30)
+  const DAY_OPTIONS = [
+    { value: 7, label: t('7 Days') },
+    { value: 30, label: t('30 Days') },
+    { value: 90, label: t('90 Days') },
+  ]
 
   return (
     <SectionPageLayout>
@@ -57,23 +56,23 @@ export function IpAnalysis() {
           </Badge>
         </span>
       </SectionPageLayout.Title>
+      <SectionPageLayout.Actions>
+        <Select items={DAY_OPTIONS} value={days} onValueChange={(value) => setDays(Number(value))}>
+          <SelectTrigger className='h-9'>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent alignItemWithTrigger={false}>
+            <SelectGroup>
+              {DAY_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  <span className='whitespace-nowrap'>{opt.label}</span>
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
-        <div className='flex flex-wrap items-center gap-2 pb-3'>
-          <Select value={days} onValueChange={(value) => setDays(Number(value))}>
-            <SelectTrigger className='h-9 w-32'>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent alignItemWithTrigger={false}>
-              <SelectGroup>
-                {DAY_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    <span className='whitespace-nowrap'>{t(opt.labelKey)}</span>
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </div>
 
         <Tabs defaultValue='users'>
           <TabsList>
