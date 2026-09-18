@@ -8137,6 +8137,10 @@
     "Model redirect is unavailable": "Перенаправление модели недоступно",
     "Parameter override and system prompt are unavailable": "Переопределение параметров и системный промпт недоступны",
     "Pass Through Request Headers": "Проброс заголовков запроса",
-    "Preserve upstream-specific fields when API formats match; bypasses model redirect, parameter override and format conversion": "Сохраняет поля вышестоящего сервиса при совпадении форматов API; отключает перенаправление модели, переопределение параметров и преобразование формата"
+    "Preserve upstream-specific fields when API formats match; bypasses model redirect, parameter override and format conversion": "Сохраняет поля вышестоящего сервиса при совпадении форматов API; отключает перенаправление модели, переопределение параметров и преобразование формата",
+    "Response Model": "Модель в ответе",
+    "Response model mismatch": "Несовпадение модели в ответе",
+    "Response model: {{model}}": "Модель в ответе: {{model}}",
+    "The upstream returned a model name different from both the requested and upstream models. Aliases or dated versions may also cause this; this warning alone does not prove model substitution.": "Провайдер вернул имя модели, отличное и от запрошенного, и от переданного ему. Причиной также могут быть псевдонимы или версии с датой; само по себе это предупреждение не доказывает подмену модели."
   }
 }

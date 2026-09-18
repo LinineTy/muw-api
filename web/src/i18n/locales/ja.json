@@ -8137,6 +8137,10 @@
     "Model redirect is unavailable": "モデルリダイレクトは使用できません",
     "Parameter override and system prompt are unavailable": "パラメータ上書きとシステムプロンプトは使用できません",
     "Pass Through Request Headers": "リクエストヘッダーをパススルー",
-    "Preserve upstream-specific fields when API formats match; bypasses model redirect, parameter override and format conversion": "API 形式が一致し、上流固有のフィールドを保持する必要がある場合に有効化。モデルリダイレクト、パラメーター上書き、形式変換は無効になります"
+    "Preserve upstream-specific fields when API formats match; bypasses model redirect, parameter override and format conversion": "API 形式が一致し、上流固有のフィールドを保持する必要がある場合に有効化。モデルリダイレクト、パラメーター上書き、形式変換は無効になります",
+    "Response Model": "応答モデル",
+    "Response model mismatch": "応答モデルの不一致",
+    "Response model: {{model}}": "応答モデル：{{model}}",
+    "The upstream returned a model name different from both the requested and upstream models. Aliases or dated versions may also cause this; this warning alone does not prove model substitution.": "上流が返したモデル名は、リクエストモデルおよび上流に指定したモデルのいずれとも一致しません。別名や日付付きバージョンによる違いもあるため、この警告だけではモデルの置き換えを断定できません。"
   }
 }
