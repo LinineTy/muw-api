@@ -8144,6 +8144,10 @@
     "The upstream returned a model name different from both the requested and upstream models. Aliases or dated versions may also cause this; this warning alone does not prove model substitution.": "The upstream returned a model name different from both the requested and upstream models. Aliases or dated versions may also cause this; this warning alone does not prove model substitution.",
     "Task usage data is required to estimate this expression. Check the model's task plugin configuration.": "Task usage data is required to estimate this expression. Check the model's task plugin configuration.",
     "Task usage metadata is unavailable. Pricing details cannot be displayed.": "Task usage metadata is unavailable. Pricing details cannot be displayed.",
-    "This expression cannot be expanded into a price table. View the original expression below.": "This expression cannot be expanded into a price table. View the original expression below."
+    "This expression cannot be expanded into a price table. View the original expression below.": "This expression cannot be expanded into a price table. View the original expression below.",
+    "Connect to New API model services with support for multiple task plugins": "Connect to New API model services with support for multiple task plugins",
+    "Select the task plugins installed on the upstream gateway": "Select the task plugins installed on the upstream gateway",
+    "This channel serves the models of every selected plugin. The upstream New API gateway must have the same plugins installed.": "This channel serves the models of every selected plugin. The upstream New API gateway must have the same plugins installed.",
+    "Upstream task plugins": "Upstream task plugins"
   }
 }

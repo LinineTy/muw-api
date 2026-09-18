@@ -8144,6 +8144,10 @@
     "The upstream returned a model name different from both the requested and upstream models. Aliases or dated versions may also cause this; this warning alone does not prove model substitution.": "Tên mô hình trả về khác cả mô hình được yêu cầu lẫn mô hình gửi đến nhà cung cấp. Bí danh hoặc phiên bản theo ngày cũng có thể gây ra khác biệt này; chỉ cảnh báo này chưa đủ để kết luận mô hình đã bị thay thế.",
     "Task usage data is required to estimate this expression. Check the model's task plugin configuration.": "Cần dữ liệu sử dụng tác vụ để ước tính chi phí theo biểu thức này. Hãy kiểm tra cấu hình plugin tác vụ của mô hình.",
     "Task usage metadata is unavailable. Pricing details cannot be displayed.": "Thiếu định nghĩa trường mức sử dụng tác vụ nên không thể hiển thị chi tiết giá.",
-    "This expression cannot be expanded into a price table. View the original expression below.": "Không thể trình bày biểu thức này dưới dạng bảng giá. Xem biểu thức gốc bên dưới."
+    "This expression cannot be expanded into a price table. View the original expression below.": "Không thể trình bày biểu thức này dưới dạng bảng giá. Xem biểu thức gốc bên dưới.",
+    "Connect to New API model services with support for multiple task plugins": "Kết nối dịch vụ mô hình qua New API, hỗ trợ nhiều plugin tác vụ",
+    "Select the task plugins installed on the upstream gateway": "Chọn các plugin tác vụ đã cài trên gateway thượng nguồn",
+    "This channel serves the models of every selected plugin. The upstream New API gateway must have the same plugins installed.": "Kênh này phục vụ các mô hình của mọi plugin đã chọn. Gateway New API thượng nguồn phải cài đặt cùng các plugin đó.",
+    "Upstream task plugins": "Plugin tác vụ thượng nguồn"
   }
 }
