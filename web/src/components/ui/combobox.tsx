@@ -55,7 +55,7 @@ type LegacyComboboxProps = {
    * mask class here: once the popup portals out of the masked wrapper, the
    * wrapper's CSS mask no longer reaches the option labels.
    */
-  contentClassName?: string
+  popupClassName?: string
   id?: string
   openOnFocus?: boolean
   disabled?: boolean
@@ -93,7 +93,7 @@ function Combobox(
         placeholder={props.searchPlaceholder ?? props.placeholder}
         emptyText={props.emptyText}
         className={props.className}
-        contentClassName={props.contentClassName}
+        popupClassName={props.popupClassName}
         allowCustomValue={props.allowCustomValue}
         openOnFocus={props.openOnFocus}
       />
@@ -165,7 +165,7 @@ function OptionCombobox(props: LegacyComboboxProps) {
           )}
         </ComboboxInput>
       </div>
-      <ComboboxContent anchor={anchor} className={props.contentClassName}>
+      <ComboboxContent anchor={anchor} className={props.popupClassName}>
         <ComboboxEmpty>
           {props.emptyText ?? t('No results found')}
         </ComboboxEmpty>

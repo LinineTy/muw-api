@@ -44,7 +44,7 @@ interface ComboboxInputProps {
    * (usage-log filters with "hide" toggled) pass the mask class here, because
    * the dropdown no longer lives inside the masked wrapper once it portals.
    */
-  contentClassName?: string
+  popupClassName?: string
   id?: string
   allowCustomValue?: boolean
   openOnFocus?: boolean
@@ -62,7 +62,7 @@ export function ComboboxInput({
   placeholder = 'Select or type...',
   emptyText = 'No option found.',
   className,
-  contentClassName,
+  popupClassName,
   id,
   allowCustomValue = false,
   openOnFocus = true,
@@ -304,7 +304,7 @@ export function ComboboxInput({
             }}
             className={cn(
               'bg-popover text-popover-foreground z-100 rounded-md border shadow-md',
-              contentClassName
+              popupClassName
             )}
           >
             {filteredOptions.length > 0 ? (

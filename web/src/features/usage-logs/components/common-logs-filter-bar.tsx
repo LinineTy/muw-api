@@ -353,7 +353,7 @@ export function CommonLogsFilterBar<TData>(
         placeholder={t('Group')}
         className='h-8 min-w-0 text-sm leading-5'
         // 浮层已 portal 出遮罩容器，遮罩类必须同时给到浮层内容
-        contentClassName={sensitiveInputClass}
+        popupClassName={sensitiveInputClass}
         value={filters.group || ''}
         onValueChange={(value) => handleChange('group', value ?? '')}
         onKeyDown={handleKeyDown}
