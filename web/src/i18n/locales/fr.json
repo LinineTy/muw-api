@@ -8137,6 +8137,10 @@
     "Model redirect is unavailable": "La redirection de modèle est indisponible",
     "Parameter override and system prompt are unavailable": "La surcharge des paramètres et le prompt système sont indisponibles",
     "Pass Through Request Headers": "Transmettre les en-têtes de la requête",
-    "Preserve upstream-specific fields when API formats match; bypasses model redirect, parameter override and format conversion": "Conserve les champs propres au service amont si les formats API correspondent ; désactive la redirection de modèle, la substitution de paramètres et la conversion de format"
+    "Preserve upstream-specific fields when API formats match; bypasses model redirect, parameter override and format conversion": "Conserve les champs propres au service amont si les formats API correspondent ; désactive la redirection de modèle, la substitution de paramètres et la conversion de format",
+    "Response Model": "Modèle de réponse",
+    "Response model mismatch": "Modèle de réponse différent",
+    "Response model: {{model}}": "Modèle de réponse : {{model}}",
+    "The upstream returned a model name different from both the requested and upstream models. Aliases or dated versions may also cause this; this warning alone does not prove model substitution.": "Le modèle renvoyé diffère du modèle demandé et de celui transmis en amont. Un alias ou une version datée peut aussi expliquer cet écart ; cet avertissement seul ne prouve pas une substitution de modèle."
   }
 }

@@ -8137,6 +8137,10 @@
     "Model redirect is unavailable": "Chuyển hướng mô hình không khả dụng",
     "Parameter override and system prompt are unavailable": "Ghi đè tham số và system prompt không khả dụng",
     "Pass Through Request Headers": "Chuyển tiếp header yêu cầu",
-    "Preserve upstream-specific fields when API formats match; bypasses model redirect, parameter override and format conversion": "Giữ các trường riêng của thượng nguồn khi định dạng API khớp nhau; bỏ qua chuyển hướng mô hình, ghi đè tham số và chuyển đổi định dạng"
+    "Preserve upstream-specific fields when API formats match; bypasses model redirect, parameter override and format conversion": "Giữ các trường riêng của thượng nguồn khi định dạng API khớp nhau; bỏ qua chuyển hướng mô hình, ghi đè tham số và chuyển đổi định dạng",
+    "Response Model": "Mô hình trong phản hồi",
+    "Response model mismatch": "Mô hình phản hồi không khớp",
+    "Response model: {{model}}": "Mô hình phản hồi: {{model}}",
+    "The upstream returned a model name different from both the requested and upstream models. Aliases or dated versions may also cause this; this warning alone does not prove model substitution.": "Tên mô hình trả về khác cả mô hình được yêu cầu lẫn mô hình gửi đến nhà cung cấp. Bí danh hoặc phiên bản theo ngày cũng có thể gây ra khác biệt này; chỉ cảnh báo này chưa đủ để kết luận mô hình đã bị thay thế."
   }
 }

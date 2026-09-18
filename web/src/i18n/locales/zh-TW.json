@@ -8137,6 +8137,10 @@
     "Model redirect is unavailable": "模型重新導向不可用",
     "Parameter override and system prompt are unavailable": "參數覆蓋、系統提示詞不可用",
     "Pass Through Request Headers": "透傳請求標頭",
-    "Preserve upstream-specific fields when API formats match; bypasses model redirect, parameter override and format conversion": "用戶端與上游 API 格式一致、需要保留上游擴充欄位時開啟；模型重新導向、參數覆寫和格式轉換將失效"
+    "Preserve upstream-specific fields when API formats match; bypasses model redirect, parameter override and format conversion": "用戶端與上游 API 格式一致、需要保留上游擴充欄位時開啟；模型重新導向、參數覆寫和格式轉換將失效",
+    "Response Model": "回應模型",
+    "Response model mismatch": "回應模型不一致",
+    "Response model: {{model}}": "回應模型：{{model}}",
+    "The upstream returned a model name different from both the requested and upstream models. Aliases or dated versions may also cause this; this warning alone does not prove model substitution.": "上游回傳的模型名稱與請求模型、上游請求模型皆不一致。模型別名或日期版本也可能造成差異，不能僅憑此警示認定模型遭到替換。"
   }
 }
