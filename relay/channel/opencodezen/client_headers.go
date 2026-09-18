@@ -11,15 +11,17 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 )
 
-// OpenCode Zen 网关的客户端校验（2026-09-17 逐条实测）：
+// OpenCode Zen 网关的客户端校验（2026-09-17 逐条实测；09-19 增补第三道）：
 //
-//	免费套餐只放行「看起来来自 opencode CLI」的请求，判据两条，缺一不可：
+//	免费套餐只放行「看起来来自 opencode CLI」的请求，判据三条，缺一不可：
 //	  1. 请求头：User-Agent 里的版本号 + x-opencode-client / x-opencode-project /
 //	     x-opencode-request / x-opencode-session。乱填 id（长度或字符集对不上）会被拒，
 //	     陈旧 id 也会被拒 ⇒ 每次请求现算；UA 版本号实测有下限：写 opencode/1.0.0 返回
 //	     426 UpgradeRequired（"OpenCode 1.17.0 or newer is required to use the free tier"）。
 //	  2. 请求体必须 stream:true —— 非流式一律 403 FreeTierError，与 Accept 头无关
 //	     （带 Accept: text/event-stream 的非流式请求同样 403）。
+//	  3. system 上下文必须含 opencode CLI 的真实内置提示词（子串匹配）——
+//	     见 free_tier_prompt.go，注入逻辑也在那里。
 //
 // 所以这里负责补客户端头；非流式请求由 adaptor.ensureFreeTierStreaming 提前拦下并给出人话。
 

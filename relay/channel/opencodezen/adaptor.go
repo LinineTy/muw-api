@@ -93,12 +93,18 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 	if err := ensureFreeTierStreaming(info); err != nil {
 		return nil, err
 	}
+	if isFreeTier(info) {
+		injectFreeTierPromptOpenAI(request)
+	}
 	return request, nil
 }
 
 func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
 	if err := ensureFreeTierStreaming(info); err != nil {
 		return nil, err
+	}
+	if isFreeTier(info) {
+		injectFreeTierPromptResponses(&request)
 	}
 	return request, nil
 }
@@ -117,6 +123,9 @@ func (a *Adaptor) ConvertClaudeRequest(c *gin.Context, info *relaycommon.RelayIn
 	if err := ensureFreeTierStreaming(info); err != nil {
 		return nil, err
 	}
+	if isFreeTier(info) {
+		injectFreeTierPromptClaude(request)
+	}
 	return request, nil
 }
 
@@ -126,6 +135,9 @@ func (a *Adaptor) ConvertGeminiRequest(c *gin.Context, info *relaycommon.RelayIn
 	}
 	if err := ensureFreeTierStreaming(info); err != nil {
 		return nil, err
+	}
+	if isFreeTier(info) {
+		injectFreeTierPromptGemini(request)
 	}
 	return request, nil
 }
