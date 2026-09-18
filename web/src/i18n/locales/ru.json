@@ -8141,6 +8141,9 @@
     "Response Model": "Модель в ответе",
     "Response model mismatch": "Несовпадение модели в ответе",
     "Response model: {{model}}": "Модель в ответе: {{model}}",
-    "The upstream returned a model name different from both the requested and upstream models. Aliases or dated versions may also cause this; this warning alone does not prove model substitution.": "Провайдер вернул имя модели, отличное и от запрошенного, и от переданного ему. Причиной также могут быть псевдонимы или версии с датой; само по себе это предупреждение не доказывает подмену модели."
+    "The upstream returned a model name different from both the requested and upstream models. Aliases or dated versions may also cause this; this warning alone does not prove model substitution.": "Провайдер вернул имя модели, отличное и от запрошенного, и от переданного ему. Причиной также могут быть псевдонимы или версии с датой; само по себе это предупреждение не доказывает подмену модели.",
+    "Task usage data is required to estimate this expression. Check the model's task plugin configuration.": "Для оценки стоимости по этому выражению нужны данные использования задач. Проверьте настройки плагина задач модели.",
+    "Task usage metadata is unavailable. Pricing details cannot be displayed.": "Метаданные использования задач недоступны. Не удалось отобразить подробные цены.",
+    "This expression cannot be expanded into a price table. View the original expression below.": "Это выражение нельзя представить в виде таблицы цен. Исходное выражение приведено ниже."
   }
 }

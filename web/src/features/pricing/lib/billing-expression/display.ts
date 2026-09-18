@@ -341,6 +341,7 @@ export function readTimeTokenPricing(
 }
 
 export type TaskTier = {
+  conditionText?: string
   label: string
   conditions: { field: string; value: string }[]
   constant: number

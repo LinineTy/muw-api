@@ -8141,6 +8141,9 @@
     "Response Model": "Mô hình trong phản hồi",
     "Response model mismatch": "Mô hình phản hồi không khớp",
     "Response model: {{model}}": "Mô hình phản hồi: {{model}}",
-    "The upstream returned a model name different from both the requested and upstream models. Aliases or dated versions may also cause this; this warning alone does not prove model substitution.": "Tên mô hình trả về khác cả mô hình được yêu cầu lẫn mô hình gửi đến nhà cung cấp. Bí danh hoặc phiên bản theo ngày cũng có thể gây ra khác biệt này; chỉ cảnh báo này chưa đủ để kết luận mô hình đã bị thay thế."
+    "The upstream returned a model name different from both the requested and upstream models. Aliases or dated versions may also cause this; this warning alone does not prove model substitution.": "Tên mô hình trả về khác cả mô hình được yêu cầu lẫn mô hình gửi đến nhà cung cấp. Bí danh hoặc phiên bản theo ngày cũng có thể gây ra khác biệt này; chỉ cảnh báo này chưa đủ để kết luận mô hình đã bị thay thế.",
+    "Task usage data is required to estimate this expression. Check the model's task plugin configuration.": "Cần dữ liệu sử dụng tác vụ để ước tính chi phí theo biểu thức này. Hãy kiểm tra cấu hình plugin tác vụ của mô hình.",
+    "Task usage metadata is unavailable. Pricing details cannot be displayed.": "Thiếu định nghĩa trường mức sử dụng tác vụ nên không thể hiển thị chi tiết giá.",
+    "This expression cannot be expanded into a price table. View the original expression below.": "Không thể trình bày biểu thức này dưới dạng bảng giá. Xem biểu thức gốc bên dưới."
   }
 }
