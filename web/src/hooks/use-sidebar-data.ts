@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import {
   Activity,
+  BarChart3,
   Box,
   ClipboardList,
   CreditCard,
@@ -32,6 +33,7 @@ import {
   MessageSquare,
   ImageUp,
   PlugZap,
+  Radar,
   Radio,
   Receipt,
   ServerCog,
@@ -190,6 +192,12 @@ export function useSidebarData(): SidebarData {
             requiredRole: ROLE.SUPER_ADMIN,
           },
           {
+            title: t('Operations Stats'),
+            url: '/operations-stats',
+            icon: BarChart3,
+            requiredRole: ROLE.ADMIN,
+          },
+          {
             title: t('Task Plugins'),
             url: '/task-plugins',
             icon: PlugZap,
@@ -217,6 +225,12 @@ export function useSidebarData(): SidebarData {
             title: t('Risk Control'),
             url: '/risk-control',
             icon: ShieldAlert,
+            requiredRole: ROLE.SUPER_ADMIN,
+          },
+          {
+            title: t('IP Analysis'),
+            url: '/ip-analysis',
+            icon: Radar,
             requiredRole: ROLE.SUPER_ADMIN,
           },
         ],

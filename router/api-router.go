@@ -466,6 +466,24 @@ func SetApiRouter(router *gin.Engine) {
 		dataRoute.GET("/flow", middleware.AdminAuth(), controller.GetAllFlowQuotaDates)
 		dataRoute.GET("/flow/self", middleware.UserAuth(), controller.GetUserFlowQuotaDates)
 
+		operationsStatsRoute := apiRouter.Group("/operations_stats")
+		operationsStatsRoute.Use(middleware.AdminAuth())
+		{
+			operationsStatsRoute.GET("/overview", controller.GetOperationsOverview)
+			operationsStatsRoute.GET("/trends", controller.GetOperationsTrends)
+			operationsStatsRoute.GET("/distributions", controller.GetOperationsDistributions)
+			operationsStatsRoute.GET("/rankings", controller.GetOperationsRankings)
+		}
+
+		ipAnalysisRoute := apiRouter.Group("/ip_analysis")
+		ipAnalysisRoute.Use(middleware.RootAuth())
+		{
+			ipAnalysisRoute.GET("/rank/users", controller.GetIpAnalysisUserRank)
+			ipAnalysisRoute.GET("/rank/ips", controller.GetIpAnalysisIpRank)
+			ipAnalysisRoute.GET("/user/:user_id", controller.GetIpAnalysisUserDetail)
+			ipAnalysisRoute.GET("/ip", controller.GetIpAnalysisIpDetail)
+		}
+
 		logRoute.Use(middleware.CORS(), middleware.CriticalRateLimit())
 		{
 			logRoute.GET("/token", middleware.TokenAuthReadOnly(), controller.GetLogByKey)

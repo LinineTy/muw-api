@@ -68,12 +68,14 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
     redemption: true,
     subscription: true,
     system_info: true,
+    operations_stats: true,
     setting: true,
   },
   addon: {
     enabled: true,
     image_host: true,
     risk_control: true,
+    ip_analysis: true,
   },
 }
 
@@ -133,8 +135,10 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/system-settings': { section: 'admin', module: 'setting' },
   '/system-settings/site': { section: 'admin', module: 'setting' },
   '/system-info': { section: 'admin', module: 'system_info' },
+  '/operations-stats': { section: 'admin', module: 'operations_stats' },
   '/addon': { section: 'addon', module: 'image_host' },
   '/risk-control': { section: 'addon', module: 'risk_control' },
+  '/ip-analysis': { section: 'addon', module: 'ip_analysis' },
 }
 
 /**

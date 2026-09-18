@@ -44,10 +44,12 @@ import { Route as AuthenticatedChatChatIdRouteImport } from './routes/_authentic
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
 import { Route as AuthenticatedDashboardSectionRouteImport } from './routes/_authenticated/dashboard/$section'
 import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
+import { Route as AuthenticatedIpAnalysisIndexRouteImport } from './routes/_authenticated/ip-analysis/index'
 import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authenticated/keys/index'
 import { Route as AuthenticatedModelHealthIndexRouteImport } from './routes/_authenticated/model-health/index'
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedModelsSectionRouteImport } from './routes/_authenticated/models/$section'
+import { Route as AuthenticatedOperationsStatsIndexRouteImport } from './routes/_authenticated/operations-stats/index'
 import { Route as AuthenticatedOrdersIndexRouteImport } from './routes/_authenticated/orders/index'
 import { Route as AuthenticatedPlaygroundIndexRouteImport } from './routes/_authenticated/playground/index'
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile/index'
@@ -259,6 +261,12 @@ const AuthenticatedErrorsErrorRoute =
     path: '/errors/$error',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedIpAnalysisIndexRoute =
+  AuthenticatedIpAnalysisIndexRouteImport.update({
+    id: '/ip-analysis/',
+    path: '/ip-analysis/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedKeysIndexRoute = AuthenticatedKeysIndexRouteImport.update({
   id: '/keys/',
   path: '/keys/',
@@ -280,6 +288,12 @@ const AuthenticatedModelsSectionRoute =
   AuthenticatedModelsSectionRouteImport.update({
     id: '/models/$section',
     path: '/models/$section',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedOperationsStatsIndexRoute =
+  AuthenticatedOperationsStatsIndexRouteImport.update({
+    id: '/operations-stats/',
+    path: '/operations-stats/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedOrdersIndexRoute =
@@ -503,9 +517,11 @@ export interface FileRoutesByFullPath {
   '/addon/': typeof AuthenticatedAddonIndexRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
+  '/ip-analysis/': typeof AuthenticatedIpAnalysisIndexRoute
   '/keys/': typeof AuthenticatedKeysIndexRoute
   '/model-health/': typeof AuthenticatedModelHealthIndexRoute
   '/models/': typeof AuthenticatedModelsIndexRoute
+  '/operations-stats/': typeof AuthenticatedOperationsStatsIndexRoute
   '/orders/': typeof AuthenticatedOrdersIndexRoute
   '/playground/': typeof AuthenticatedPlaygroundIndexRoute
   '/profile/': typeof AuthenticatedProfileIndexRoute
@@ -572,9 +588,11 @@ export interface FileRoutesByTo {
   '/addon': typeof AuthenticatedAddonIndexRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
+  '/ip-analysis': typeof AuthenticatedIpAnalysisIndexRoute
   '/keys': typeof AuthenticatedKeysIndexRoute
   '/model-health': typeof AuthenticatedModelHealthIndexRoute
   '/models': typeof AuthenticatedModelsIndexRoute
+  '/operations-stats': typeof AuthenticatedOperationsStatsIndexRoute
   '/orders': typeof AuthenticatedOrdersIndexRoute
   '/playground': typeof AuthenticatedPlaygroundIndexRoute
   '/profile': typeof AuthenticatedProfileIndexRoute
@@ -645,9 +663,11 @@ export interface FileRoutesById {
   '/_authenticated/addon/': typeof AuthenticatedAddonIndexRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
+  '/_authenticated/ip-analysis/': typeof AuthenticatedIpAnalysisIndexRoute
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
   '/_authenticated/model-health/': typeof AuthenticatedModelHealthIndexRoute
   '/_authenticated/models/': typeof AuthenticatedModelsIndexRoute
+  '/_authenticated/operations-stats/': typeof AuthenticatedOperationsStatsIndexRoute
   '/_authenticated/orders/': typeof AuthenticatedOrdersIndexRoute
   '/_authenticated/playground/': typeof AuthenticatedPlaygroundIndexRoute
   '/_authenticated/profile/': typeof AuthenticatedProfileIndexRoute
@@ -717,9 +737,11 @@ export interface FileRouteTypes {
     | '/addon/'
     | '/channels/'
     | '/dashboard/'
+    | '/ip-analysis/'
     | '/keys/'
     | '/model-health/'
     | '/models/'
+    | '/operations-stats/'
     | '/orders/'
     | '/playground/'
     | '/profile/'
@@ -786,9 +808,11 @@ export interface FileRouteTypes {
     | '/addon'
     | '/channels'
     | '/dashboard'
+    | '/ip-analysis'
     | '/keys'
     | '/model-health'
     | '/models'
+    | '/operations-stats'
     | '/orders'
     | '/playground'
     | '/profile'
@@ -858,9 +882,11 @@ export interface FileRouteTypes {
     | '/_authenticated/addon/'
     | '/_authenticated/channels/'
     | '/_authenticated/dashboard/'
+    | '/_authenticated/ip-analysis/'
     | '/_authenticated/keys/'
     | '/_authenticated/model-health/'
     | '/_authenticated/models/'
+    | '/_authenticated/operations-stats/'
     | '/_authenticated/orders/'
     | '/_authenticated/playground/'
     | '/_authenticated/profile/'
@@ -1159,6 +1185,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedErrorsErrorRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/ip-analysis/': {
+      id: '/_authenticated/ip-analysis/'
+      path: '/ip-analysis'
+      fullPath: '/ip-analysis/'
+      preLoaderRoute: typeof AuthenticatedIpAnalysisIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/keys/': {
       id: '/_authenticated/keys/'
       path: '/keys'
@@ -1185,6 +1218,13 @@ declare module '@tanstack/react-router' {
       path: '/models/$section'
       fullPath: '/models/$section'
       preLoaderRoute: typeof AuthenticatedModelsSectionRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/operations-stats/': {
+      id: '/_authenticated/operations-stats/'
+      path: '/operations-stats'
+      fullPath: '/operations-stats/'
+      preLoaderRoute: typeof AuthenticatedOperationsStatsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/orders/': {
@@ -1506,9 +1546,11 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAddonIndexRoute: typeof AuthenticatedAddonIndexRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
+  AuthenticatedIpAnalysisIndexRoute: typeof AuthenticatedIpAnalysisIndexRoute
   AuthenticatedKeysIndexRoute: typeof AuthenticatedKeysIndexRoute
   AuthenticatedModelHealthIndexRoute: typeof AuthenticatedModelHealthIndexRoute
   AuthenticatedModelsIndexRoute: typeof AuthenticatedModelsIndexRoute
+  AuthenticatedOperationsStatsIndexRoute: typeof AuthenticatedOperationsStatsIndexRoute
   AuthenticatedOrdersIndexRoute: typeof AuthenticatedOrdersIndexRoute
   AuthenticatedPlaygroundIndexRoute: typeof AuthenticatedPlaygroundIndexRoute
   AuthenticatedProfileIndexRoute: typeof AuthenticatedProfileIndexRoute
@@ -1539,9 +1581,12 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAddonIndexRoute: AuthenticatedAddonIndexRoute,
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
+  AuthenticatedIpAnalysisIndexRoute: AuthenticatedIpAnalysisIndexRoute,
   AuthenticatedKeysIndexRoute: AuthenticatedKeysIndexRoute,
   AuthenticatedModelHealthIndexRoute: AuthenticatedModelHealthIndexRoute,
   AuthenticatedModelsIndexRoute: AuthenticatedModelsIndexRoute,
+  AuthenticatedOperationsStatsIndexRoute:
+    AuthenticatedOperationsStatsIndexRoute,
   AuthenticatedOrdersIndexRoute: AuthenticatedOrdersIndexRoute,
   AuthenticatedPlaygroundIndexRoute: AuthenticatedPlaygroundIndexRoute,
   AuthenticatedProfileIndexRoute: AuthenticatedProfileIndexRoute,
