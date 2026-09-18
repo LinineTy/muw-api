@@ -248,7 +248,7 @@ export function Playground() {
           />
         </div>
       </div>
-      <div className={mode === 'chat' ? 'hidden' : ''}>
+      <div className={mode === 'chat' ? 'hidden' : 'flex min-h-0 flex-1 flex-col overflow-hidden'}>
         <PlaygroundImageGeneration group={config.group} models={models} />
       </div>
 
