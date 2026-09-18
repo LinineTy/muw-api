@@ -2,7 +2,8 @@ FROM oven/bun:1.4.0@sha256:5ff609364c049b54eb0ff560ec96319729a972078ef2c755d758f
 
 WORKDIR /build/web
 COPY web/package.json web/bun.lock ./
-RUN bun install --frozen-lockfile
+# muw: 构建机若直连 npmjs 拉包易截断（IntegrityCheckFailed），走 npmmirror（字节级镜像，integrity 与 lockfile 一致）
+RUN printf '[install]\nregistry = "https://registry.npmmirror.com"\n' > bunfig.toml && bun install --frozen-lockfile
 COPY ./web ./
 COPY ./VERSION /build/VERSION
 # VERSION 在 Windows 检出可能带 CRLF，注入前统一去掉 \r（否则版本号会变成
