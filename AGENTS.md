@@ -215,6 +215,7 @@ Reference implementation: `web/src/features/channels/components/drawers/channel-
 - Verify i18n UI changes with a playwright context using `locale: 'zh-CN'` (default headless locale is en-US and will mask the bug).
 - **Same-tick repeated clicks reuse stale closures.** In playwright, two `.click()` calls inside one `evaluate()` run before React re-renders, so both fire the old handler (e.g. "Add row" twice yields one row). Real users can't do this; don't mistake it for a component bug — space clicks and assert after render.
 - **Glass theme popups are translucent** (`bg-popover` over `backdrop-blur`): content under a popup shows through. Text overlap in screenshots under an open popup is expected theme behavior, not a z-index bug.
+- **Every hideable table column needs `meta.label`.** The column-visibility popup reads `columnDef.meta.label`; when the header is a render function (`<DataTableColumnHeader column={column} title={t('X')} />`) it cannot read it and falls back to the raw column id, so the popup lists `Username` / `Ip_count` / `Request_count` instead of translated names. Give every toggleable column `meta: { label: t('X') }` reusing the header's text, and set `enableHiding: false` on columns that are pure filter carriers (their `cell` renders nothing) so they never appear in the list. User-reported twice: the accounts table (2026-09-13) and the IP-analysis table (2026-09-19). Regression guard pattern: `web/src/features/accounts/components/__tests__/accounts-columns.test.tsx`.
 
 **Release discipline (single atomic release commit):**
 
