@@ -8180,6 +8180,20 @@
     "Keep upstream names; choose what users call.": "Keep upstream names; choose what users call.",
     "Upstream receives": "Upstream receives",
     "Users call": "Users call",
-    "What do you want to change?": "What do you want to change?"
+    "What do you want to change?": "What do you want to change?",
+    "Add groups in the order they should be tried.": "Add groups in the order they should be tried.",
+    "Add rule": "Add rule",
+    "Base group ratios apply until you add an override.": "Base group ratios apply until you add an override.",
+    "Delete rule": "Delete rule",
+    "Edit group settings as JSON. Changes are shared with the visual editor.": "Edit group settings as JSON. Changes are shared with the visual editor.",
+    "Group settings": "Group settings",
+    "Group visibility": "Group visibility",
+    "Manage pricing, visibility and automatic routing for your groups.": "Manage pricing, visibility and automatic routing for your groups.",
+    "No auto groups configured": "No auto groups configured",
+    "No special ratios configured": "No special ratios configured",
+    "Rules for {{group}}": "Rules for {{group}}",
+    "Save group settings": "Save group settings",
+    "Search groups by name or description": "Search groups by name or description",
+    "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.": "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom."
   }
 }

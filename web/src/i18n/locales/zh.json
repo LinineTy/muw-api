@@ -8180,6 +8180,20 @@
     "Keep upstream names; choose what users call.": "上游名称不变，设置用户调用的名称。",
     "Upstream receives": "上游收到",
     "Users call": "用户调用",
-    "What do you want to change?": "你想修改什么？"
+    "What do you want to change?": "你想修改什么？",
+    "Add groups in the order they should be tried.": "按尝试顺序添加分组。",
+    "Add rule": "添加规则",
+    "Base group ratios apply until you add an override.": "未设置覆盖规则时，使用分组基础倍率。",
+    "Delete rule": "删除规则",
+    "Edit group settings as JSON. Changes are shared with the visual editor.": "通过 JSON 编辑分组设置，修改会同步到可视化编辑器。",
+    "Group settings": "分组设置",
+    "Group visibility": "分组可见性",
+    "Manage pricing, visibility and automatic routing for your groups.": "管理分组定价、可见范围和自动路由顺序。",
+    "No auto groups configured": "尚未配置自动分组",
+    "No special ratios configured": "尚未配置特殊倍率",
+    "Rules for {{group}}": "{{group}} 的规则",
+    "Save group settings": "保存分组设置",
+    "Search groups by name or description": "搜索分组名称或描述",
+    "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.": "使用令牌设置的分组；令牌未设置分组时，使用用户分组。auto 分组会按配置顺序从上到下尝试各分组。"
   }
 }

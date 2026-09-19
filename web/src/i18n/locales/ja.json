@@ -8180,6 +8180,20 @@
     "Keep upstream names; choose what users call.": "上流の名前を保ち、ユーザーが指定する名前を設定します。",
     "Upstream receives": "上流が受信",
     "Users call": "ユーザーの指定",
-    "What do you want to change?": "何を変更しますか？"
+    "What do you want to change?": "何を変更しますか？",
+    "Add groups in the order they should be tried.": "試行する順序でグループを追加してください。",
+    "Add rule": "ルールを追加",
+    "Base group ratios apply until you add an override.": "上書きルールを追加するまでは、グループの基本倍率が適用されます。",
+    "Delete rule": "ルールを削除",
+    "Edit group settings as JSON. Changes are shared with the visual editor.": "グループ設定を JSON で編集します。変更はビジュアルエディターと同期されます。",
+    "Group settings": "グループ設定",
+    "Group visibility": "グループの表示設定",
+    "Manage pricing, visibility and automatic routing for your groups.": "グループの料金、表示範囲、自動ルーティング順序を管理します。",
+    "No auto groups configured": "自動グループが未設定です",
+    "No special ratios configured": "特別倍率が未設定です",
+    "Rules for {{group}}": "{{group}} のルール",
+    "Save group settings": "グループ設定を保存",
+    "Search groups by name or description": "グループ名または説明で検索",
+    "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.": "トークンに設定されたグループを使用します。未設定の場合はユーザーのグループを使用します。auto グループは設定されたグループを上から順に試行します。"
   }
 }

@@ -8180,6 +8180,20 @@
     "Keep upstream names; choose what users call.": "Giữ tên phía nhà cung cấp, đặt tên để người dùng gọi.",
     "Upstream receives": "Nhà cung cấp nhận",
     "Users call": "Người dùng gọi",
-    "What do you want to change?": "Bạn muốn thay đổi gì?"
+    "What do you want to change?": "Bạn muốn thay đổi gì?",
+    "Add groups in the order they should be tried.": "Thêm nhóm theo thứ tự cần thử.",
+    "Add rule": "Thêm quy tắc",
+    "Base group ratios apply until you add an override.": "Hệ số cơ bản của nhóm được áp dụng khi chưa có quy tắc ghi đè.",
+    "Delete rule": "Xóa quy tắc",
+    "Edit group settings as JSON. Changes are shared with the visual editor.": "Chỉnh sửa cài đặt nhóm bằng JSON. Thay đổi được đồng bộ với trình chỉnh sửa trực quan.",
+    "Group settings": "Cài đặt nhóm",
+    "Group visibility": "Hiển thị nhóm",
+    "Manage pricing, visibility and automatic routing for your groups.": "Quản lý giá, phạm vi hiển thị và định tuyến tự động cho các nhóm.",
+    "No auto groups configured": "Chưa cấu hình nhóm tự động",
+    "No special ratios configured": "Chưa cấu hình hệ số đặc biệt",
+    "Rules for {{group}}": "Quy tắc cho {{group}}",
+    "Save group settings": "Lưu cài đặt nhóm",
+    "Search groups by name or description": "Tìm theo tên hoặc mô tả nhóm",
+    "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.": "Sử dụng nhóm được đặt cho token. Nếu token chưa có nhóm, sử dụng nhóm của người dùng. Nhóm auto thử các nhóm đã cấu hình theo thứ tự từ trên xuống dưới."
   }
 }
