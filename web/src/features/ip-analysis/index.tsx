@@ -211,6 +211,9 @@ function UserIpTable(props: { days: number; ipVersion: string }) {
         header: ({ column }: { column: never }) => (
           <DataTableColumnHeader column={column} title={t('User')} />
         ),
+        // 「查看」（列显隐）弹层取的是 meta.label —— header 是函数时它读不到，
+        // 会退化成列 id（username / ip_count …，界面上就是 Ip_count 那种）；这里与表头同一份译文。
+        meta: { label: t('User') },
         cell: ({ row }: { row: { original: IpUserRankRow } }) => (
           <span className='font-medium'>
             {row.original.username}
@@ -225,6 +228,7 @@ function UserIpTable(props: { days: number; ipVersion: string }) {
         header: ({ column }: { column: never }) => (
           <DataTableColumnHeader column={column} title={t('IP Count')} />
         ),
+        meta: { label: t('IP Count') },
         cell: ({ row }: { row: { original: IpUserRankRow } }) => (
           <Badge
             variant={row.original.ip_count >= 10 ? 'destructive' : 'secondary'}
@@ -238,16 +242,19 @@ function UserIpTable(props: { days: number; ipVersion: string }) {
         header: ({ column }: { column: never }) => (
           <DataTableColumnHeader column={column} title={t('Requests')} />
         ),
+        meta: { label: t('Requests') },
       },
       {
         accessorKey: 'status',
         header: t('Status'),
+        meta: { label: t('Status') },
         cell: ({ row }: { row: { original: IpUserRankRow } }) =>
           row.original.status === 1 ? t('Enabled') : t('Disabled'),
       },
       {
         accessorKey: 'last_seen',
         header: t('Last Seen'),
+        meta: { label: t('Last Seen') },
         cell: ({ row }: { row: { original: IpUserRankRow } }) =>
           formatTime(row.original.last_seen),
       },
@@ -360,6 +367,7 @@ function IpUserTable(props: { days: number; ipVersion: string }) {
         header: ({ column }: { column: never }) => (
           <DataTableColumnHeader column={column} title={t('IP')} />
         ),
+        meta: { label: t('IP') },
         cell: ({ row }: { row: { original: IpRankRow } }) => (
           <span className='font-mono text-sm'>{row.original.ip}</span>
         ),
@@ -369,6 +377,7 @@ function IpUserTable(props: { days: number; ipVersion: string }) {
         header: ({ column }: { column: never }) => (
           <DataTableColumnHeader column={column} title={t('Linked Users')} />
         ),
+        meta: { label: t('Linked Users') },
         cell: ({ row }: { row: { original: IpRankRow } }) => (
           <Badge
             variant={
@@ -384,10 +393,12 @@ function IpUserTable(props: { days: number; ipVersion: string }) {
         header: ({ column }: { column: never }) => (
           <DataTableColumnHeader column={column} title={t('Requests')} />
         ),
+        meta: { label: t('Requests') },
       },
       {
         accessorKey: 'last_seen',
         header: t('Last Seen'),
+        meta: { label: t('Last Seen') },
         cell: ({ row }: { row: { original: IpRankRow } }) =>
           formatTime(row.original.last_seen),
       },
@@ -822,6 +833,7 @@ function OverlapTable(props: { days: number }) {
       {
         accessorKey: 'user_id_a',
         header: t('Account A'),
+        meta: { label: t('Account A') },
         cell: ({ row }: { row: { original: IpOverlapRow } }) => (
           <span className='text-sm'>
             {row.original.username_a}
@@ -834,12 +846,14 @@ function OverlapTable(props: { days: number }) {
       {
         accessorKey: 'active_a',
         header: t('Active Minutes A'),
+        meta: { label: t('Active Minutes A') },
         cell: ({ row }: { row: { original: IpOverlapRow } }) =>
           row.original.active_a.toLocaleString(),
       },
       {
         accessorKey: 'user_id_b',
         header: t('Account B'),
+        meta: { label: t('Account B') },
         cell: ({ row }: { row: { original: IpOverlapRow } }) => (
           <span className='text-sm'>
             {row.original.username_b}
@@ -852,24 +866,28 @@ function OverlapTable(props: { days: number }) {
       {
         accessorKey: 'active_b',
         header: t('Active Minutes B'),
+        meta: { label: t('Active Minutes B') },
         cell: ({ row }: { row: { original: IpOverlapRow } }) =>
           row.original.active_b.toLocaleString(),
       },
       {
         accessorKey: 'overlap',
         header: t('Overlap Minutes'),
+        meta: { label: t('Overlap Minutes') },
         cell: ({ row }: { row: { original: IpOverlapRow } }) =>
           row.original.overlap.toLocaleString(),
       },
       {
         accessorKey: 'expected',
         header: t('Expected'),
+        meta: { label: t('Expected') },
         cell: ({ row }: { row: { original: IpOverlapRow } }) =>
           row.original.expected.toFixed(1),
       },
       {
         accessorKey: 'ratio',
         header: t('Sync Ratio'),
+        meta: { label: t('Sync Ratio') },
         cell: ({ row }: { row: { original: IpOverlapRow } }) => (
           <Badge
             variant={row.original.ratio >= 3 ? 'destructive' : 'secondary'}
