@@ -5,40 +5,40 @@ import "time"
 
 // IpAnalysisUserRankRow 单用户的独立 IP 统计（风控视角）。
 type IpAnalysisUserRankRow struct {
-	UserId      int    `json:"user_id"`
-	Username    string `json:"username"`
-	DisplayName string `json:"display_name"`
-	Status      int    `json:"status"`
-	IpCount     int64  `json:"ip_count"`
-	RequestCnt  int64  `json:"request_count"`
-	LastSeen    int64  `json:"last_seen"`
+	UserId       int    `json:"user_id"`
+	Username     string `json:"username"`
+	DisplayName  string `json:"display_name"`
+	Status       int    `json:"status"`
+	IpCount      int64  `json:"ip_count"`
+	RequestCount int64  `json:"request_count"`
+	LastSeen     int64  `json:"last_seen"`
 }
 
 // IpAnalysisIpRankRow 单 IP 关联的账号数统计（小号集群视角）。
 type IpAnalysisIpRankRow struct {
-	Ip          string `json:"ip"`
-	UserCount   int64  `json:"user_count"`
-	RequestCnt  int64  `json:"request_count"`
-	LastSeen    int64  `json:"last_seen"`
+	Ip           string `json:"ip"`
+	UserCount    int64  `json:"user_count"`
+	RequestCount int64  `json:"request_count"`
+	LastSeen     int64  `json:"last_seen"`
 }
 
 // IpAnalysisUserIpRow 某用户的 IP 使用明细。
 type IpAnalysisUserIpRow struct {
-	Ip         string `json:"ip"`
-	RequestCnt int64  `json:"request_count"`
-	FirstSeen  int64  `json:"first_seen"`
-	LastSeen   int64  `json:"last_seen"`
+	Ip           string `json:"ip"`
+	RequestCount int64  `json:"request_count"`
+	FirstSeen    int64  `json:"first_seen"`
+	LastSeen     int64  `json:"last_seen"`
 }
 
 // IpAnalysisIpUserRow 某 IP 关联的账号明细。
 type IpAnalysisIpUserRow struct {
-	UserId      int    `json:"user_id"`
-	Username    string `json:"username"`
-	DisplayName string `json:"display_name"`
-	Status      int    `json:"status"`
-	RequestCnt  int64  `json:"request_count"`
-	FirstSeen   int64  `json:"first_seen"`
-	LastSeen    int64  `json:"last_seen"`
+	UserId       int    `json:"user_id"`
+	Username     string `json:"username"`
+	DisplayName  string `json:"display_name"`
+	Status       int    `json:"status"`
+	RequestCount int64  `json:"request_count"`
+	FirstSeen    int64  `json:"first_seen"`
+	LastSeen     int64  `json:"last_seen"`
 }
 
 func ipAnalysisSince(days int) int64 {
