@@ -76,7 +76,6 @@ export function ApiKeysPrimaryButtons({
         checked={batchMode}
         onCheckedChange={onBatchModeChange}
       />
-    <div className='flex flex-wrap gap-2'>
       <Popover>
         <PopoverTrigger render={<Button variant='outline' size='sm' />}>
           <Globe aria-hidden='true' />
