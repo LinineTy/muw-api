@@ -2,7 +2,6 @@
 package model
 
 import (
-	"fmt"
 	"math"
 	"sort"
 	"strings"
@@ -324,14 +323,20 @@ func GetIpAnalysisTrend(days, tzOffsetSeconds int, version string) ([]IpAnalysis
 	since := ipAnalysisSince(days)
 	v := ipVersionClause(version)
 
+	// ⚠️ 整除运算符用字符串拼接，不要用 fmt.Sprintf：v（IP 协议过滤）里含
+	// `LIKE '%:%'`，一旦整体作为格式串交给 fmt，`%` 会被当成动词解析成
+	// `%!:(MISSING)` 原样拼进 SQL ⇒ MySQL 1064（2026-09-19 生产事故，
+	// 只在 v4/v6 筛选下复现，"全部 IP" 完全正常）。
+	dayDiv := epochDayDivOperator()
+
 	var rows []IpAnalysisTrendRow
 	err := DB.Raw(
-		fmt.Sprintf(`SELECT ((created_at + ?) %s 86400) AS day_idx,
+		`SELECT ((created_at + ?) `+dayDiv+` 86400) AS day_idx,
 		       COUNT(DISTINCT ip) AS ips
 		FROM logs`+ipAnalysisIndexHint()+`
 		WHERE type = ? AND ip <> '' AND created_at > ?`+v+`
 		GROUP BY day_idx
-		ORDER BY day_idx`, epochDayDivOperator()),
+		ORDER BY day_idx`,
 		tzOffsetSeconds, LogTypeConsume, since,
 	).Scan(&rows).Error
 	return rows, err
