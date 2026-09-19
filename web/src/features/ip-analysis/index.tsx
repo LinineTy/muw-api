@@ -891,6 +891,19 @@ function OverlapTable(props: { days: number }) {
     globalFilterFn: () => true,
   })
 
+  const minActiveOptions = [
+    { value: 30, label: '30' },
+    { value: 100, label: '100' },
+    { value: 300, label: '300' },
+    { value: 600, label: '600' },
+  ]
+  const minOverlapOptions = [
+    { value: 10, label: '10' },
+    { value: 30, label: '30' },
+    { value: 60, label: '60' },
+    { value: 120, label: '120' },
+  ]
+
   return (
     <div className='grid gap-3'>
       <div className='flex flex-wrap items-center gap-2'>
@@ -898,18 +911,20 @@ function OverlapTable(props: { days: number }) {
           {t('Min Active Minutes')}
         </span>
         <Select
-          value={String(minActive)}
+          items={minActiveOptions}
+          value={minActive}
           onValueChange={(v) => setMinActive(Number(v))}
         >
-          <SelectTrigger className='w-auto'>
+          <SelectTrigger className='h-9'>
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent alignItemWithTrigger={false}>
             <SelectGroup>
-              <SelectItem value='30'>30</SelectItem>
-              <SelectItem value='100'>100</SelectItem>
-              <SelectItem value='300'>300</SelectItem>
-              <SelectItem value='600'>600</SelectItem>
+              {minActiveOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  <span className='whitespace-nowrap'>{opt.label}</span>
+                </SelectItem>
+              ))}
             </SelectGroup>
           </SelectContent>
         </Select>
@@ -917,18 +932,20 @@ function OverlapTable(props: { days: number }) {
           {t('Min Overlap Minutes')}
         </span>
         <Select
-          value={String(minOverlap)}
+          items={minOverlapOptions}
+          value={minOverlap}
           onValueChange={(v) => setMinOverlap(Number(v))}
         >
-          <SelectTrigger className='w-auto'>
+          <SelectTrigger className='h-9'>
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent alignItemWithTrigger={false}>
             <SelectGroup>
-              <SelectItem value='10'>10</SelectItem>
-              <SelectItem value='30'>30</SelectItem>
-              <SelectItem value='60'>60</SelectItem>
-              <SelectItem value='120'>120</SelectItem>
+              {minOverlapOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  <span className='whitespace-nowrap'>{opt.label}</span>
+                </SelectItem>
+              ))}
             </SelectGroup>
           </SelectContent>
         </Select>
