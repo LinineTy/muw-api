@@ -8194,6 +8194,7 @@
     "Rules for {{group}}": "{{group}} のルール",
     "Save group settings": "グループ設定を保存",
     "Search groups by name or description": "グループ名または説明で検索",
-    "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.": "トークンに設定されたグループを使用します。未設定の場合はユーザーのグループを使用します。auto グループは設定されたグループを上から順に試行します。"
+    "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.": "トークンに設定されたグループを使用します。未設定の場合はユーザーのグループを使用します。auto グループは設定されたグループを上から順に試行します。",
+    "Copy API URL": "API URL をコピー"
   }
 }

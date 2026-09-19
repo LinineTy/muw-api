@@ -8194,6 +8194,7 @@
     "Rules for {{group}}": "Rules for {{group}}",
     "Save group settings": "Save group settings",
     "Search groups by name or description": "Search groups by name or description",
-    "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.": "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom."
+    "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.": "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.",
+    "Copy API URL": "Copy API URL"
   }
 }

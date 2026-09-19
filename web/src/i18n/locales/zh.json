@@ -8194,6 +8194,7 @@
     "Rules for {{group}}": "{{group}} 的规则",
     "Save group settings": "保存分组设置",
     "Search groups by name or description": "搜索分组名称或描述",
-    "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.": "使用令牌设置的分组；令牌未设置分组时，使用用户分组。auto 分组会按配置顺序从上到下尝试各分组。"
+    "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.": "使用令牌设置的分组；令牌未设置分组时，使用用户分组。auto 分组会按配置顺序从上到下尝试各分组。",
+    "Copy API URL": "复制 API 地址"
   }
 }
