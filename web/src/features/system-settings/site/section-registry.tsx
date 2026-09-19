@@ -46,6 +46,11 @@ const SITE_SECTIONS = [
           Footer: settings.Footer,
           ServerAddress: settings.ServerAddress,
           TaskPublicAddress: settings.TaskPublicAddress,
+          general_setting: {
+            docs_link: settings['general_setting.docs_link'],
+          },
+          // 我方 system-info 区块不接管 legal.*（协议/隐私由站点设置自身渲染）
+
         }}
       />
     ),
