@@ -31,7 +31,8 @@ const (
 	CodingPlanProviderMiniMax    CodingPlanProvider = "minimax"    // MiniMax 国内 api.minimaxi.com
 	CodingPlanProviderMiniMaxEn  CodingPlanProvider = "minimax_en" // MiniMax 国际 api.minimax.io
 	CodingPlanProviderZenMux     CodingPlanProvider = "zenmux"
-	CodingPlanProviderVolcengine CodingPlanProvider = "volcengine" // 火山方舟(需 AK/SK 签名,暂未实现)
+	CodingPlanProviderVolcengine CodingPlanProvider = "volcengine"
+	CodingPlanProviderOpenRouter CodingPlanProvider = "openrouter" // 火山方舟(需 AK/SK 签名,暂未实现)
 	// CodingPlanProviderDisabled 显式关闭余量监控的自定义渠道(手动/自定义模式默认值):
 	// 即使 base_url 是套餐端点也不再自动绑定/探测,彻底不做监控。
 	CodingPlanProviderDisabled CodingPlanProvider = "none"
@@ -41,6 +42,7 @@ const (
 const (
 	CodingPlanTierFiveHour    = "five_hour"
 	CodingPlanTierWeeklyLimit = "weekly_limit"
+	CodingPlanTierDailyLimit  = "daily_limit"
 )
 
 var knownCodingPlanProviders = map[CodingPlanProvider]struct{}{
@@ -50,6 +52,7 @@ var knownCodingPlanProviders = map[CodingPlanProvider]struct{}{
 	CodingPlanProviderMiniMax:    {},
 	CodingPlanProviderMiniMaxEn:  {},
 	CodingPlanProviderZenMux:     {},
+	CodingPlanProviderOpenRouter: {},
 	CodingPlanProviderVolcengine: {},
 }
 
@@ -268,6 +271,8 @@ func QueryCodingPlanQuota(ctx context.Context, provider CodingPlanProvider, apiK
 		return queryCodingPlanZhipu(ctx, provider, apiKey)
 	case CodingPlanProviderKimi:
 		return queryCodingPlanKimi(ctx, apiKey)
+	case CodingPlanProviderOpenRouter:
+		return queryCodingPlanOpenRouter(ctx, apiKey)
 	case CodingPlanProviderMiniMax, CodingPlanProviderMiniMaxEn:
 		return queryCodingPlanMiniMax(ctx, provider, apiKey)
 	case CodingPlanProviderVolcengine:
@@ -777,4 +782,89 @@ func millisToRFC3339Ptr(ms int64) *string {
 	}
 	iso := millisToRFC3339(ms)
 	return &iso
+}
+
+// ── OpenRouter 免费档 (:free) ────────────────────────────────
+
+// 端点: GET https://openrouter.ai/api/v1/key,Bearer 认证。
+// 只取 free_model_daily_requests —— 免费模型($0/token)的日额度。
+// 口径要点(2026-09-19 实测,详见 openrouter免费层):
+//   - 全免费模型**共用一个桶**,不是每个模型各一份;UTC 日界重置
+//   - 档位由账号「历史累计充值」决定:<$10 → 50/天,≥$10 → 1000/天;RPM 固定 20
+//   - 免费模型不消耗 credit ⇒ 账户余额与本窗口无关,本窗口只看「次数」
+//   - 官方有 ~60s 缓存,刚发出的请求不会立刻反映到 used
+//
+// 另:key 级花费上限(即便设成 $0.001)不会拦免费模型,可放心用它锁死「只跑免费」。
+type openRouterKeyResponse struct {
+	Data struct {
+		IsFreeTier     bool    `json:"is_free_tier"`
+		Limit          float64 `json:"limit"`
+		LimitRemaining float64 `json:"limit_remaining"`
+		Usage          float64 `json:"usage"`
+		FreeModelDaily struct {
+			Used      int64 `json:"used"`
+			Limit     int64 `json:"limit"`
+			Remaining int64 `json:"remaining"`
+		} `json:"free_model_daily_requests"`
+	} `json:"data"`
+}
+
+func queryCodingPlanOpenRouter(ctx context.Context, apiKey string) (*dto.CodingPlanQuota, error) {
+	const url = "https://openrouter.ai/api/v1/key"
+	statusCode, raw, err := codingPlanGet(ctx, url, func(req *http.Request) {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	})
+	if err != nil {
+		return nil, err
+	}
+	if statusCode == http.StatusUnauthorized || statusCode == http.StatusForbidden {
+		return failedCodingPlanQuota(fmt.Sprintf("Authentication failed (HTTP %d)", statusCode)), nil
+	}
+	if statusCode < 200 || statusCode >= 300 {
+		return failedCodingPlanQuota(fmt.Sprintf("API error (HTTP %d): %s", statusCode, truncateStr(string(raw), 300))), nil
+	}
+	var body openRouterKeyResponse
+	if err := common.Unmarshal(raw, &body); err != nil {
+		return failedCodingPlanQuota(fmt.Sprintf("Failed to parse response: %s", err.Error())), nil
+	}
+
+	return openRouterQuotaFromBody(&body), nil
+}
+
+// openRouterQuotaFromBody 把 /api/v1/key 响应映射成通用余量结构。
+func openRouterQuotaFromBody(body *openRouterKeyResponse) *dto.CodingPlanQuota {
+	free := body.Data.FreeModelDaily
+	tier := dto.CodingPlanTier{
+		Name:        CodingPlanTierDailyLimit,
+		Utilization: utilizationPercent(float64(free.Limit), float64(free.Remaining)),
+		ResetsAt:    openRouterDailyResetAt(),
+	}
+	// 仅在额度有效时下发原始值(前端有原始值就优先按 已用/总量 展示,否则回退百分比)。
+	if free.Limit > 0 {
+		tier.Limit = free.Limit
+		tier.Remaining = free.Remaining
+		tier.Used = free.Used
+		if tier.Used < 0 {
+			tier.Used = 0
+		}
+	}
+
+	// is_free_tier=false ⇒ 账号买过 credits ⇒ 已进 1000/天 档。
+	level := "free tier (50/day)"
+	if !body.Data.IsFreeTier {
+		level = "$10+ lifetime credits (1000/day)"
+	}
+	return &dto.CodingPlanQuota{
+		Success:   true,
+		Level:     level,
+		Tiers:     []dto.CodingPlanTier{tier},
+		QueriedAt: nowMillis(),
+	}
+}
+
+// openRouterDailyResetAt 下一个 UTC 零点(RFC3339) —— 免费额度的重置时刻。
+func openRouterDailyResetAt() *string {
+	next := time.Now().UTC().Truncate(24 * time.Hour).Add(24 * time.Hour)
+	s := next.Format(time.RFC3339)
+	return &s
 }

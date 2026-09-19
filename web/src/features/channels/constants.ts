@@ -141,6 +141,7 @@ export const CODING_PLAN_PROVIDER_OPTIONS: {
   { value: 'minimax_en', label: 'MiniMax · International' },
   { value: 'volcengine', label: 'Volcengine Ark' },
   { value: 'zenmux', label: 'ZenMux' },
+  { value: 'openrouter', label: 'OpenRouter · Free tier' },
 ]
 
 // 手动/自定义渠道显式关闭余量监控的厂商值:即使 base_url 是套餐端点也不再自动绑定。
