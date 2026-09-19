@@ -8180,6 +8180,20 @@
     "Keep upstream names; choose what users call.": "Conservez les noms en amont et définissez ceux utilisés par vos utilisateurs.",
     "Upstream receives": "Reçu en amont",
     "Users call": "Appelé par l’utilisateur",
-    "What do you want to change?": "Que souhaitez-vous modifier ?"
+    "What do you want to change?": "Que souhaitez-vous modifier ?",
+    "Add groups in the order they should be tried.": "Ajoutez les groupes dans l’ordre des tentatives.",
+    "Add rule": "Ajouter une règle",
+    "Base group ratios apply until you add an override.": "Les coefficients de base s’appliquent en l’absence de règle spécifique.",
+    "Delete rule": "Supprimer la règle",
+    "Edit group settings as JSON. Changes are shared with the visual editor.": "Modifiez les groupes en JSON. Les changements sont synchronisés avec l’éditeur visuel.",
+    "Group settings": "Paramètres des groupes",
+    "Group visibility": "Visibilité des groupes",
+    "Manage pricing, visibility and automatic routing for your groups.": "Gérez les tarifs, la visibilité et le routage automatique des groupes.",
+    "No auto groups configured": "Aucun groupe automatique configuré",
+    "No special ratios configured": "Aucun coefficient spécial configuré",
+    "Rules for {{group}}": "Règles pour {{group}}",
+    "Save group settings": "Enregistrer les paramètres des groupes",
+    "Search groups by name or description": "Rechercher par nom ou description",
+    "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.": "Utilisez le groupe défini sur le jeton, ou celui de l’utilisateur si aucun groupe n’est défini. Le groupe auto essaie les groupes configurés de haut en bas."
   }
 }

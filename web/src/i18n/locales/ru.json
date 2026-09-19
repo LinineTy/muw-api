@@ -8180,6 +8180,20 @@
     "Keep upstream names; choose what users call.": "Сохраните имена у провайдера и задайте имена для пользователей.",
     "Upstream receives": "Провайдер получает",
     "Users call": "Пользователь вызывает",
-    "What do you want to change?": "Что вы хотите изменить?"
+    "What do you want to change?": "Что вы хотите изменить?",
+    "Add groups in the order they should be tried.": "Добавьте группы в порядке их использования.",
+    "Add rule": "Добавить правило",
+    "Base group ratios apply until you add an override.": "Без переопределений применяются базовые коэффициенты групп.",
+    "Delete rule": "Удалить правило",
+    "Edit group settings as JSON. Changes are shared with the visual editor.": "Редактируйте настройки групп в JSON. Изменения синхронизируются с визуальным редактором.",
+    "Group settings": "Настройки групп",
+    "Group visibility": "Видимость групп",
+    "Manage pricing, visibility and automatic routing for your groups.": "Управляйте тарифами, видимостью и автоматической маршрутизацией групп.",
+    "No auto groups configured": "Автоматические группы не настроены",
+    "No special ratios configured": "Особые коэффициенты не настроены",
+    "Rules for {{group}}": "Правила для {{group}}",
+    "Save group settings": "Сохранить настройки групп",
+    "Search groups by name or description": "Поиск по названию или описанию",
+    "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.": "Используется группа токена. Если она не задана, используется группа пользователя. Группа auto перебирает настроенные группы сверху вниз."
   }
 }
