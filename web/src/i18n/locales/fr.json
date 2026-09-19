@@ -7856,6 +7856,9 @@
     "User IPs": "User IPs",
     "Min IPs": "Min IPs",
     "Min Users": "Min Users",
-    "90 Days": "90 Days"
+    "90 Days": "90 Days",
+    "All IPs": "Toutes les IP",
+    "IPv4 only": "IPv4 uniquement",
+    "IPv6 only": "IPv6 uniquement"
   }
 }

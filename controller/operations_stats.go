@@ -37,13 +37,27 @@ func parsePagingParams(c *gin.Context) (page, pageSize int) {
 	return page, pageSize
 }
 
+// parseIpVersionParam 解析 ip_version（all / v4 / v6，其它值一律按 all）。
+// 供 IP 分析页过滤：IPv6 隐私扩展会高频轮换地址，只看 IPv4 才能横向比较。
+func parseIpVersionParam(c *gin.Context) string {
+	switch c.DefaultQuery("ip_version", "all") {
+	case "v4":
+		return "v4"
+	case "v6":
+		return "v6"
+	default:
+		return "all"
+	}
+}
+
 // GetIpAnalysisUserRank 用户 IP 数排行（风控）。
 func GetIpAnalysisUserRank(c *gin.Context) {
 	days := parseDaysParam(c)
 	minIps, _ := strconv.Atoi(c.DefaultQuery("min_ips", "1"))
+	version := parseIpVersionParam(c)
 	page, pageSize := parsePagingParams(c)
 
-	rows, total, err := model.GetUserIpRank(days, minIps, page, pageSize)
+	rows, total, err := model.GetUserIpRank(days, minIps, version, page, pageSize)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -71,8 +85,9 @@ func GetIpAnalysisUserDetail(c *gin.Context) {
 		return
 	}
 	days := parseDaysParam(c)
+	version := parseIpVersionParam(c)
 
-	rows, err := model.GetUserIpDetail(userId, days)
+	rows, err := model.GetUserIpDetail(userId, days, version)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -88,9 +103,10 @@ func GetIpAnalysisUserDetail(c *gin.Context) {
 func GetIpAnalysisIpRank(c *gin.Context) {
 	days := parseDaysParam(c)
 	minUsers, _ := strconv.Atoi(c.DefaultQuery("min_users", "1"))
+	version := parseIpVersionParam(c)
 	page, pageSize := parsePagingParams(c)
 
-	rows, total, err := model.GetIpUserRank(days, minUsers, page, pageSize)
+	rows, total, err := model.GetIpUserRank(days, minUsers, version, page, pageSize)
 	if err != nil {
 		common.ApiError(c, err)
 		return
