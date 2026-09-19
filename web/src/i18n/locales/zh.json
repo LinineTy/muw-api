@@ -7856,6 +7856,9 @@
     "User IPs": "用户 IP",
     "Min IPs": "最少 IP 数",
     "Min Users": "最少账号数",
-    "90 Days": "90 天"
+    "90 Days": "90 天",
+    "All IPs": "全部 IP",
+    "IPv4 only": "仅 IPv4",
+    "IPv6 only": "仅 IPv6"
   }
 }

@@ -48,18 +48,53 @@ func ipAnalysisSince(days int) int64 {
 	return time.Now().Unix() - int64(days)*86400
 }
 
+// ipAnalysisIndexHint 返回 logs 全量时间窗聚合查询的索引强制子句。
+//
+// 背景（生产实测，30 天窗口 / logs 约 23 万行）：`WHERE type = ? AND created_at > ?`
+// 之后要按 user_id（或 ip）分组，优化器因"主键/外键索引可免排序"的估算选了
+// idx_logs_user_id，实际退化成扫 229882 行、filtered 2.50% 并大规模回表：
+// 按用户分组 9.4s、按 IP 分组 25.5s。强制走 idx_created_at_type（时间范围在前）
+// 后降到 2.9s / 2.6s。
+//
+// 仅 MySQL 支持该语法；SQLite（开发栈）不支持也不需要，返回空串。
+// 不要在单用户 / 单 IP 的明细查询上加（那些走 idx_logs_user_id / idx_logs_ip
+// 是正确选择，强制时间索引反而变慢）。
+func ipAnalysisIndexHint() string {
+	if DB != nil && DB.Dialector.Name() == "mysql" {
+		return " FORCE INDEX (idx_created_at_type)"
+	}
+	return ""
+}
+
+// ipVersionClause 返回 IPv4 / IPv6 过滤子句（列名固定为 ip，不需要额外参数）。
+//
+// 用途：IPv6 在隐私扩展下会高频轮换地址，同一来源能产生几十个"独立 IP"，
+// 会让 ip_count 这类指标系统性虚高、跨用户不可比。只想比较 IPv4 行为时用 v4。
+func ipVersionClause(version string) string {
+	switch version {
+	case "v4":
+		return " AND ip NOT LIKE '%:%'"
+	case "v6":
+		return " AND ip LIKE '%:%'"
+	default:
+		return ""
+	}
+}
+
 // GetUserIpRank 统计每个用户的独立 IP 数，按 IP 数降序分页。
-func GetUserIpRank(days, minIps, page, pageSize int) ([]IpAnalysisUserRankRow, int64, error) {
+// version 为 ""/all 时统计全部，v4 / v6 只统计对应协议的地址。
+func GetUserIpRank(days, minIps int, version string, page, pageSize int) ([]IpAnalysisUserRankRow, int64, error) {
 	since := ipAnalysisSince(days)
 	if minIps < 1 {
 		minIps = 1
 	}
+	v := ipVersionClause(version)
 
 	var total int64
 	err := DB.Raw(
 		`SELECT COUNT(*) FROM (
-			SELECT user_id FROM logs
-			WHERE type = ? AND ip <> '' AND created_at > ?
+			SELECT user_id FROM logs`+ipAnalysisIndexHint()+`
+			WHERE type = ? AND ip <> '' AND created_at > ?`+v+`
 			GROUP BY user_id HAVING COUNT(DISTINCT ip) >= ?
 		) t`,
 		LogTypeConsume, since, minIps,
@@ -78,9 +113,9 @@ func GetUserIpRank(days, minIps, page, pageSize int) ([]IpAnalysisUserRankRow, i
 		       COUNT(DISTINCT l.ip) AS ip_count,
 		       COUNT(*) AS request_count,
 		       MAX(l.created_at) AS last_seen
-		FROM logs l
+		FROM logs l`+ipAnalysisIndexHint()+`
 		LEFT JOIN users u ON u.id = l.user_id
-		WHERE l.type = ? AND l.ip <> '' AND l.created_at > ?
+		WHERE l.type = ? AND l.ip <> '' AND l.created_at > ?`+v+`
 		GROUP BY l.user_id
 		HAVING ip_count >= ?
 		ORDER BY ip_count DESC, request_count DESC
@@ -91,8 +126,9 @@ func GetUserIpRank(days, minIps, page, pageSize int) ([]IpAnalysisUserRankRow, i
 }
 
 // GetUserIpDetail 返回某用户在时间范围内的 IP 使用明细。
-func GetUserIpDetail(userId, days int) ([]IpAnalysisUserIpRow, error) {
+func GetUserIpDetail(userId, days int, version string) ([]IpAnalysisUserIpRow, error) {
 	since := ipAnalysisSince(days)
+	v := ipVersionClause(version)
 	var rows []IpAnalysisUserIpRow
 	err := DB.Raw(
 		`SELECT ip,
@@ -100,7 +136,7 @@ func GetUserIpDetail(userId, days int) ([]IpAnalysisUserIpRow, error) {
 		       MIN(created_at) AS first_seen,
 		       MAX(created_at) AS last_seen
 		FROM logs
-		WHERE type = ? AND user_id = ? AND ip <> '' AND created_at > ?
+		WHERE type = ? AND user_id = ? AND ip <> '' AND created_at > ?`+v+`
 		GROUP BY ip
 		ORDER BY request_count DESC`,
 		LogTypeConsume, userId, since,
@@ -109,17 +145,18 @@ func GetUserIpDetail(userId, days int) ([]IpAnalysisUserIpRow, error) {
 }
 
 // GetIpUserRank 统计每个 IP 关联的账号数，按账号数降序分页。
-func GetIpUserRank(days, minUsers, page, pageSize int) ([]IpAnalysisIpRankRow, int64, error) {
+func GetIpUserRank(days, minUsers int, version string, page, pageSize int) ([]IpAnalysisIpRankRow, int64, error) {
 	since := ipAnalysisSince(days)
 	if minUsers < 1 {
 		minUsers = 1
 	}
+	v := ipVersionClause(version)
 
 	var total int64
 	err := DB.Raw(
 		`SELECT COUNT(*) FROM (
-			SELECT ip FROM logs
-			WHERE type = ? AND ip <> '' AND created_at > ?
+			SELECT ip FROM logs`+ipAnalysisIndexHint()+`
+			WHERE type = ? AND ip <> '' AND created_at > ?`+v+`
 			GROUP BY ip HAVING COUNT(DISTINCT user_id) >= ?
 		) t`,
 		LogTypeConsume, since, minUsers,
@@ -135,8 +172,8 @@ func GetIpUserRank(days, minUsers, page, pageSize int) ([]IpAnalysisIpRankRow, i
 		       COUNT(DISTINCT user_id) AS user_count,
 		       COUNT(*) AS request_count,
 		       MAX(created_at) AS last_seen
-		FROM logs
-		WHERE type = ? AND ip <> '' AND created_at > ?
+		FROM logs`+ipAnalysisIndexHint()+`
+		WHERE type = ? AND ip <> '' AND created_at > ?`+v+`
 		GROUP BY ip
 		HAVING user_count >= ?
 		ORDER BY user_count DESC, request_count DESC

@@ -12,6 +12,7 @@ import type {
 export async function getIpUserRank(params: {
   days: number
   min_ips: number
+  ip_version: string
   page: number
   page_size: number
 }): Promise<{ success: boolean; message?: string; data?: Paged<IpUserRankRow> }> {
@@ -22,6 +23,7 @@ export async function getIpUserRank(params: {
 export async function getIpRank(params: {
   days: number
   min_users: number
+  ip_version: string
   page: number
   page_size: number
 }): Promise<{ success: boolean; message?: string; data?: Paged<IpRankRow> }> {
@@ -32,6 +34,7 @@ export async function getIpRank(params: {
 export async function getUserIpDetail(params: {
   user_id: number
   days: number
+  ip_version: string
 }): Promise<{
   success: boolean
   message?: string
@@ -39,7 +42,7 @@ export async function getUserIpDetail(params: {
 }> {
   const res = await api.get(
     `/api/ip_analysis/user/${params.user_id}`,
-    { params: { days: params.days } }
+    { params: { days: params.days, ip_version: params.ip_version } }
   )
   return res.data
 }

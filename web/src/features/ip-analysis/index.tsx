@@ -39,10 +39,16 @@ const route = getRouteApi('/_authenticated/ip-analysis/')
 export function IpAnalysis() {
   const { t } = useTranslation()
   const [days, setDays] = useState(30)
+  const [ipVersion, setIpVersion] = useState('all')
   const DAY_OPTIONS = [
     { value: 7, label: t('7 Days') },
     { value: 30, label: t('30 Days') },
     { value: 90, label: t('90 Days') },
+  ]
+  const IP_VERSION_OPTIONS = [
+    { value: 'all', label: t('All IPs') },
+    { value: 'v4', label: t('IPv4 only') },
+    { value: 'v6', label: t('IPv6 only') },
   ]
 
   return (
@@ -71,6 +77,24 @@ export function IpAnalysis() {
             </SelectGroup>
           </SelectContent>
         </Select>
+        <Select
+          items={IP_VERSION_OPTIONS}
+          value={ipVersion}
+          onValueChange={(value) => setIpVersion(String(value))}
+        >
+          <SelectTrigger className='h-9'>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent alignItemWithTrigger={false}>
+            <SelectGroup>
+              {IP_VERSION_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  <span className='whitespace-nowrap'>{opt.label}</span>
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
 
@@ -80,10 +104,10 @@ export function IpAnalysis() {
             <TabsTrigger value='ips'>{t('By IP')}</TabsTrigger>
           </TabsList>
           <TabsContent value='users'>
-            <UserIpTable days={days} />
+            <UserIpTable days={days} ipVersion={ipVersion} />
           </TabsContent>
           <TabsContent value='ips'>
-            <IpUserTable days={days} />
+            <IpUserTable days={days} ipVersion={ipVersion} />
           </TabsContent>
         </Tabs>
       </SectionPageLayout.Content>
@@ -91,7 +115,7 @@ export function IpAnalysis() {
   )
 }
 
-function UserIpTable(props: { days: number }) {
+function UserIpTable(props: { days: number; ipVersion: string }) {
   const { t } = useTranslation()
   const [detailUserId, setDetailUserId] = useState<number | null>(null)
 
@@ -111,11 +135,18 @@ function UserIpTable(props: { days: number }) {
   const minIps = Number(globalFilter?.trim()) || 1
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['ip-analysis-users', props.days, minIps, pagination.pageIndex],
+    queryKey: [
+      'ip-analysis-users',
+      props.days,
+      props.ipVersion,
+      minIps,
+      pagination.pageIndex,
+    ],
     queryFn: () =>
       getIpUserRank({
         days: props.days,
         min_ips: minIps,
+        ip_version: props.ipVersion,
         page: pagination.pageIndex + 1,
         page_size: pagination.pageSize,
       }),
@@ -216,13 +247,14 @@ function UserIpTable(props: { days: number }) {
       <UserIpDetailDialog
         userId={detailUserId}
         days={props.days}
+        ipVersion={props.ipVersion}
         onClose={() => setDetailUserId(null)}
       />
     </>
   )
 }
 
-function IpUserTable(props: { days: number }) {
+function IpUserTable(props: { days: number; ipVersion: string }) {
   const { t } = useTranslation()
 
   const {
@@ -241,11 +273,18 @@ function IpUserTable(props: { days: number }) {
   const minUsers = Number(globalFilter?.trim()) || 1
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['ip-analysis-ips', props.days, minUsers, pagination.pageIndex],
+    queryKey: [
+      'ip-analysis-ips',
+      props.days,
+      props.ipVersion,
+      minUsers,
+      pagination.pageIndex,
+    ],
     queryFn: () =>
       getIpRank({
         days: props.days,
         min_users: minUsers,
+        ip_version: props.ipVersion,
         page: pagination.pageIndex + 1,
         page_size: pagination.pageSize,
       }),
@@ -326,15 +365,25 @@ function IpUserTable(props: { days: number }) {
 function UserIpDetailDialog(props: {
   userId: number | null
   days: number
+  ipVersion: string
   onClose: () => void
 }) {
   const { t } = useTranslation()
   const open = props.userId !== null
 
   const { data, isLoading } = useQuery({
-    queryKey: ['ip-analysis-user-detail', props.userId, props.days],
+    queryKey: [
+      'ip-analysis-user-detail',
+      props.userId,
+      props.days,
+      props.ipVersion,
+    ],
     queryFn: () =>
-      getUserIpDetail({ user_id: props.userId as number, days: props.days }),
+      getUserIpDetail({
+        user_id: props.userId as number,
+        days: props.days,
+        ip_version: props.ipVersion,
+      }),
     enabled: open,
   })
 
