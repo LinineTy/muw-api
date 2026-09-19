@@ -8194,6 +8194,7 @@
     "Rules for {{group}}": "Quy tắc cho {{group}}",
     "Save group settings": "Lưu cài đặt nhóm",
     "Search groups by name or description": "Tìm theo tên hoặc mô tả nhóm",
-    "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.": "Sử dụng nhóm được đặt cho token. Nếu token chưa có nhóm, sử dụng nhóm của người dùng. Nhóm auto thử các nhóm đã cấu hình theo thứ tự từ trên xuống dưới."
+    "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.": "Sử dụng nhóm được đặt cho token. Nếu token chưa có nhóm, sử dụng nhóm của người dùng. Nhóm auto thử các nhóm đã cấu hình theo thứ tự từ trên xuống dưới.",
+    "Copy API URL": "Sao chép URL API"
   }
 }

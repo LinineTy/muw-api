@@ -8194,6 +8194,7 @@
     "Rules for {{group}}": "Правила для {{group}}",
     "Save group settings": "Сохранить настройки групп",
     "Search groups by name or description": "Поиск по названию или описанию",
-    "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.": "Используется группа токена. Если она не задана, используется группа пользователя. Группа auto перебирает настроенные группы сверху вниз."
+    "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.": "Используется группа токена. Если она не задана, используется группа пользователя. Группа auto перебирает настроенные группы сверху вниз.",
+    "Copy API URL": "Копировать URL API"
   }
 }

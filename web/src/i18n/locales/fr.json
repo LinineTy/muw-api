@@ -8194,6 +8194,7 @@
     "Rules for {{group}}": "Règles pour {{group}}",
     "Save group settings": "Enregistrer les paramètres des groupes",
     "Search groups by name or description": "Rechercher par nom ou description",
-    "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.": "Utilisez le groupe défini sur le jeton, ou celui de l’utilisateur si aucun groupe n’est défini. Le groupe auto essaie les groupes configurés de haut en bas."
+    "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.": "Utilisez le groupe défini sur le jeton, ou celui de l’utilisateur si aucun groupe n’est défini. Le groupe auto essaie les groupes configurés de haut en bas.",
+    "Copy API URL": "Copier l’URL API"
   }
 }
