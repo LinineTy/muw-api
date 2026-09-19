@@ -149,3 +149,37 @@ func TestEpochDayDivOperatorUsesSlashOnSQLite(t *testing.T) {
 	// 只要返回非空运算符即可,真正的语义验证由上面的聚合测试覆盖。
 	assert.Contains(t, []string{"/", "DIV"}, epochDayDivOperator())
 }
+
+// 总览:2026-09-19 生产事故的直接回归。
+// 现象=页面卡片全 0,但库里数据正常。两个独立原因:
+//  1. NewUsers7d/Active7d 没标 gorm:"column:" ⇒ GORM 默认 NamingStrategy 生成
+//     new_users7d/active7d(数字后缀前不加下划线),与 SQL 别名 new_users_7d/active_7d 对不上,静默扫成 0;
+//  2. TOTAL USERS / NEW USERS TODAY 也变 0 —— 第二段 SQL 的 Scan 到同一个 struct 时
+//     把第一段已填好的字段清零了。必须各扫一个独立 struct 再合并。
+func TestGetOperationsOverviewMapsAllColumns(t *testing.T) {
+	db := openOperationsStatsTestDB(t)
+	now := time.Now().Unix()
+
+	// 今天注册的 1 个 + 10 天前注册且被封禁的 1 个。
+	require.NoError(t, db.Create(&User{
+		Username: "newer", AffCode: "o1", CreatedAt: now - 3600, Status: 1,
+	}).Error)
+	require.NoError(t, db.Create(&User{
+		Username: "older", AffCode: "o2", CreatedAt: now - 10*86400, Status: 2,
+	}).Error)
+	require.NoError(t, db.Create(&Log{
+		UserId: 1, Type: LogTypeConsume, CreatedAt: now - 1800, Quota: 50,
+	}).Error)
+
+	o, err := GetOperationsOverview()
+	require.NoError(t, err)
+
+	assert.EqualValues(t, 2, o.TotalUsers, "TotalUsers 为 0 = 第二段 Scan 把第一段结果清零了")
+	assert.EqualValues(t, 1, o.NewUsersToday)
+	assert.EqualValues(t, 1, o.NewUsers7d, "恒 0 = 字段 DBName 是 new_users7d 而非 SQL 别名 new_users_7d")
+	assert.EqualValues(t, 1, o.DisabledUsers)
+	assert.EqualValues(t, 1, o.ActiveToday)
+	assert.EqualValues(t, 1, o.Active7d, "恒 0 同上,active_7d / active7d")
+	assert.EqualValues(t, 1, o.RequestsToday)
+	assert.EqualValues(t, 50, o.QuotaToday)
+}
