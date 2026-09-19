@@ -176,3 +176,14 @@ export async function deleteAccountMultiKey(
     key_index: keyIndex,
   })
 }
+
+/**
+ * 查询账户在上游的余额并落库（余额归账户，多渠道共享一份）。
+ * 分发复用渠道侧的余额查询实现，与账户 base_url 无关。
+ */
+export async function updateAccountBalance(
+  id: number
+): Promise<{ balance: number }> {
+  const res = await api.get(`/api/account/${id}/balance`)
+  return res.data.data
+}

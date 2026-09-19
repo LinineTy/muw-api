@@ -529,3 +529,51 @@ func GetAccountCodingPlanQuota(c *gin.Context) {
 	}
 	common.ApiSuccess(c, quota)
 }
+
+// ── 账户余额 ────────────────────────────────────────────────
+
+// UpdateAccountBalance 查询账户在上游的余额并落库到 accounts 表。
+// 复用渠道侧的分发逻辑：账户与渠道的凭证字段同构，这里构造一个**不落库**的临时
+// channel 交给 updateStandardChannelBalance，避免把十几种上游的余额查询各写一份。
+func UpdateAccountBalance(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiErrorMsg(c, "Invalid account id")
+		return
+	}
+	account, err := model.GetAccountById(id, true)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if account.ChannelInfo.IsMultiKey {
+		common.ApiErrorMsg(c, "多密钥账户不支持余额查询")
+		return
+	}
+	balance, err := updateAccountBalanceFromUpstream(account)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"balance": balance})
+}
+
+// updateAccountBalanceFromUpstream 调上游查余额，成功后写回 accounts 表。
+func updateAccountBalanceFromUpstream(account *model.Account) (float64, error) {
+	probe := &model.Channel{
+		Id:          account.Id,
+		Type:        account.Type,
+		Key:         account.Key,
+		Name:        account.Name,
+		BaseURL:     account.BaseURL,
+		Other:       account.Other,
+		Setting:     account.Setting,
+		OtherInfo:   account.OtherInfo,
+		ChannelInfo: account.ChannelInfo,
+		// 关键：挂上账户，让 probe.UpdateBalance() 按「余额归账户」写回 accounts 表。
+		// 不挂的话它会退回按 probe.Id 写 channels 表 —— 而这里带的是账户 id，
+		// 会误伤同 id 的渠道记录。
+		Account: account,
+	}
+	return updateStandardChannelBalance(probe)
+}

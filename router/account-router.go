@@ -53,6 +53,8 @@ func registerAccountRoutes(apiRouter *gin.RouterGroup) {
 		{method: http.MethodGet, path: "/:id", permission: authz.ChannelRead, handler: controller.GetAccount},
 		{method: http.MethodGet, path: "/:id/channels", permission: authz.ChannelRead, handler: controller.ListAccountChannelRefs},
 		{method: http.MethodGet, path: "/:id/coding_plan/quota", permission: authz.ChannelRead, handler: controller.GetAccountCodingPlanQuota},
+		// 账户余额：查上游并落库（写操作，权限与渠道侧 update_balance 对齐）。
+		{method: http.MethodGet, path: "/:id/balance", permission: authz.ChannelOperate, handler: controller.UpdateAccountBalance},
 		{method: http.MethodPost, path: "/", permission: authz.ChannelSensitiveWrite, handler: controller.AddAccount},
 		{method: http.MethodPut, path: "/", permission: authz.ChannelSensitiveWrite, handler: controller.UpdateAccount},
 		{method: http.MethodDelete, path: "/:id", permission: authz.ChannelSensitiveWrite, handler: controller.DeleteAccount},
