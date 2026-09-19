@@ -7866,6 +7866,17 @@
     "Shared IPs": "Shared IPs",
     "High-risk Users": "High-risk Users",
     "IPv6 Share": "IPv6 Share",
+    "Time Overlap": "Time Overlap",
+    "Account A": "Account A",
+    "Active Minutes": "Active Minutes",
+    "Account B": "Account B",
+    "Overlap Minutes": "Overlap Minutes",
+    "Expected": "Expected",
+    "Sync Ratio": "Sync Ratio",
+    "Min Active Minutes": "Min Active Minutes",
+    "Active Minutes A": "Active Minutes A",
+    "Active Minutes B": "Active Minutes B",
+    "Ratio = actual overlapping minutes ÷ expected (activeA × activeB ÷ window)": "Ratio = actual overlapping minutes ÷ expected (activeA × activeB ÷ window)",
     "Distinct IPs Trend": "Distinct IPs Trend"
   }
 }

@@ -4,6 +4,7 @@ package model
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"time"
 )
@@ -334,4 +335,159 @@ func GetIpAnalysisTrend(days, tzOffsetSeconds int, version string) ([]IpAnalysis
 		tzOffsetSeconds, LogTypeConsume, since,
 	).Scan(&rows).Error
 	return rows, err
+}
+
+// IpOverlapRow 一对账号的时段重合统计。
+type IpOverlapRow struct {
+	UserIdA   int     `json:"user_id_a"`
+	UsernameA string  `json:"username_a"`
+	ActiveA   int64   `json:"active_a"`
+	UserIdB   int     `json:"user_id_b"`
+	UsernameB string  `json:"username_b"`
+	ActiveB   int64   `json:"active_b"`
+	Overlap   int64   `json:"overlap"`
+	Expected  float64 `json:"expected"`
+	Ratio     float64 `json:"ratio"`
+}
+
+// GetIpOverlapPairs 找出「同时活跃度显著高于随机期望」的账号对。
+//
+// 判据：实测重合分钟数 ÷ 随机期望，其中期望 = activeA × activeB ÷ 窗口总分钟数。
+// 两个独立用户在同一分钟同时活跃是低概率事件，实测显著超出期望即说明两号背后
+// 是同一批人。
+//
+// 刻意不用 IP：代理轮换与 CDN 会让 IP 维度严重失真（同一出口池被成百账号共用），
+// 而时间维度不受这两者影响。
+//
+// 实现上只做一次库查询取出 (user_id, 分钟序号) 去重对，其余全在内存算；
+// 先按活跃分钟数筛掉轻量用户，否则两两配对量过大且噪声高。
+func GetIpOverlapPairs(days, minActiveMinutes, limit int) ([]IpOverlapRow, error) {
+	if days <= 0 {
+		days = 30
+	}
+	if minActiveMinutes < 1 {
+		minActiveMinutes = 1
+	}
+	if limit < 1 || limit > 200 {
+		limit = 50
+	}
+
+	since := time.Now().Unix() - int64(days)*86400
+	windowMinutes := float64(days) * 1440
+
+	// 字段名与 SQL 别名严格一致，否则 GORM 静默扫零（见 gorm查询排查.skill）。
+	var pairs []struct {
+		UserId int   `json:"user_id"`
+		Minute int64 `json:"minute"`
+	}
+	err := DB.Raw(
+		`SELECT user_id, (created_at / 60) AS minute
+		 FROM logs
+		 WHERE type = ? AND created_at > ?
+		 GROUP BY user_id, minute`,
+		LogTypeConsume, since,
+	).Scan(&pairs).Error
+	if err != nil {
+		return nil, err
+	}
+
+	active := make(map[int]int64)
+	for _, p := range pairs {
+		active[p.UserId]++
+	}
+	qualified := make(map[int]bool, len(active))
+	for uid, n := range active {
+		if n >= int64(minActiveMinutes) {
+			qualified[uid] = true
+		}
+	}
+	if len(qualified) < 2 {
+		return []IpOverlapRow{}, nil
+	}
+
+	// 按分钟归集合格用户，再对每分钟内的用户两两累计重合次数。
+	byMinute := make(map[int64][]int)
+	for _, p := range pairs {
+		if qualified[p.UserId] {
+			byMinute[p.Minute] = append(byMinute[p.Minute], p.UserId)
+		}
+	}
+
+	type pairKey struct{ a, b int }
+	overlap := make(map[pairKey]int64)
+	for _, users := range byMinute {
+		for i := 0; i < len(users); i++ {
+			for j := i + 1; j < len(users); j++ {
+				a, b := users[i], users[j]
+				if a > b {
+					a, b = b, a
+				}
+				overlap[pairKey{a, b}]++
+			}
+		}
+	}
+
+	// 只保留显著高于期望的对子（重合还不如随机的说明两号没关系）。
+	rows := make([]IpOverlapRow, 0, len(overlap))
+	for k, ov := range overlap {
+		expected := float64(active[k.a]) * float64(active[k.b]) / windowMinutes
+		if expected <= 0 || float64(ov) <= expected {
+			continue
+		}
+		rows = append(rows, IpOverlapRow{
+			UserIdA: k.a, ActiveA: active[k.a],
+			UserIdB: k.b, ActiveB: active[k.b],
+			Overlap:  ov,
+			Expected: math.Round(expected*10) / 10,
+			Ratio:    math.Round(float64(ov)/expected*10) / 10,
+		})
+	}
+	if len(rows) == 0 {
+		return []IpOverlapRow{}, nil
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].Ratio != rows[j].Ratio {
+			return rows[i].Ratio > rows[j].Ratio
+		}
+		return rows[i].Overlap > rows[j].Overlap
+	})
+	if len(rows) > limit {
+		rows = rows[:limit]
+	}
+
+	// 补账号名。
+	ids := make([]int, 0, len(rows)*2)
+	seen := make(map[int]bool, len(rows)*2)
+	for _, r := range rows {
+		for _, id := range []int{r.UserIdA, r.UserIdB} {
+			if !seen[id] {
+				seen[id] = true
+				ids = append(ids, id)
+			}
+		}
+	}
+	var users []struct {
+		Id          int    `json:"id"`
+		Username    string `json:"username"`
+		DisplayName string `json:"display_name"`
+	}
+	if err := DB.Table("users").
+		Select("id, username, display_name").
+		Where("id IN ?", ids).
+		Scan(&users).Error; err != nil {
+		return nil, err
+	}
+	names := make(map[int]string, len(users))
+	for _, u := range users {
+		n := u.Username
+		if u.DisplayName != "" && u.DisplayName != u.Username {
+			n = u.Username + " (" + u.DisplayName + ")"
+		}
+		names[u.Id] = n
+	}
+	for i := range rows {
+		rows[i].UsernameA = names[rows[i].UserIdA]
+		rows[i].UsernameB = names[rows[i].UserIdB]
+	}
+	return rows, nil
 }

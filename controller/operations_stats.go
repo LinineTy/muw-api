@@ -251,3 +251,21 @@ func GetIpAnalysisTrend(c *gin.Context) {
 		"data":    rows,
 	})
 }
+
+// GetIpAnalysisOverlap 时段重合检测：列出同时活跃度显著超出随机期望的账号对。
+func GetIpAnalysisOverlap(c *gin.Context) {
+	days := parseDaysParam(c)
+	minActive, _ := strconv.Atoi(c.DefaultQuery("min_active_minutes", "100"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+
+	rows, err := model.GetIpOverlapPairs(days, minActive, limit)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    rows,
+	})
+}
