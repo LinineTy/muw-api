@@ -361,12 +361,15 @@ type IpOverlapRow struct {
 //
 // 实现上只做一次库查询取出 (user_id, 分钟序号) 去重对，其余全在内存算；
 // 先按活跃分钟数筛掉轻量用户，否则两两配对量过大且噪声高。
-func GetIpOverlapPairs(days, minActiveMinutes, limit int) ([]IpOverlapRow, error) {
+func GetIpOverlapPairs(days, minActiveMinutes, minOverlap, limit int) ([]IpOverlapRow, error) {
 	if days <= 0 {
 		days = 30
 	}
 	if minActiveMinutes < 1 {
 		minActiveMinutes = 1
+	}
+	if minOverlap < 1 {
+		minOverlap = 1
 	}
 	if limit < 1 || limit > 200 {
 		limit = 50
@@ -375,25 +378,44 @@ func GetIpOverlapPairs(days, minActiveMinutes, limit int) ([]IpOverlapRow, error
 	since := time.Now().Unix() - int64(days)*86400
 	windowMinutes := float64(days) * 1440
 
-	// 字段名与 SQL 别名严格一致，否则 GORM 静默扫零（见 gorm查询排查.skill）。
-	var pairs []struct {
-		UserId int   `json:"user_id"`
-		Minute int64 `json:"minute"`
-	}
-	err := DB.Raw(
-		`SELECT user_id, (created_at / 60) AS minute
-		 FROM logs
-		 WHERE type = ? AND created_at > ?
-		 GROUP BY user_id, minute`,
+	// 注意两点，都是踩过的坑：
+	//  1. 不要用 GORM 的 Scan 拉大结果集——同样的 SQL 用 Scan 收 9.8 万行会挂死
+	//     （>60s 不返回），换成 Rows() 手动遍历只要 1.4s。行数可能上万，必须手动。
+	//  2. 不要在 SQL 里做「分钟」换算再 GROUP BY：MySQL 的 / 是小数除法，
+	//     `created_at / 60` 得到 DECIMAL，分组几乎失效（去重率 18% vs 正确做法 62%）；
+	//     而 SQLite 的 / 是整数除法，两个方言语义还不一致。改成取原始 created_at
+	//     回 Go 里除，跨方言行为统一。
+	rows, err := DB.Raw(
+		`SELECT user_id, created_at FROM logs WHERE type = ? AND created_at > ?`,
 		LogTypeConsume, since,
-	).Scan(&pairs).Error
+	).Rows()
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 
-	active := make(map[int]int64)
-	for _, p := range pairs {
-		active[p.UserId]++
+	// user -> 该用户活跃的分钟序号集合（顺便天然去重，active 就是集合大小）。
+	minuteSets := make(map[int]map[int64]struct{})
+	for rows.Next() {
+		var uid int
+		var ts int64
+		if err := rows.Scan(&uid, &ts); err != nil {
+			return nil, err
+		}
+		set, ok := minuteSets[uid]
+		if !ok {
+			set = make(map[int64]struct{})
+			minuteSets[uid] = set
+		}
+		set[ts/60] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	active := make(map[int]int64, len(minuteSets))
+	for uid, set := range minuteSets {
+		active[uid] = int64(len(set))
 	}
 	qualified := make(map[int]bool, len(active))
 	for uid, n := range active {
@@ -407,9 +429,12 @@ func GetIpOverlapPairs(days, minActiveMinutes, limit int) ([]IpOverlapRow, error
 
 	// 按分钟归集合格用户，再对每分钟内的用户两两累计重合次数。
 	byMinute := make(map[int64][]int)
-	for _, p := range pairs {
-		if qualified[p.UserId] {
-			byMinute[p.Minute] = append(byMinute[p.Minute], p.UserId)
+	for uid, set := range minuteSets {
+		if !qualified[uid] {
+			continue
+		}
+		for m := range set {
+			byMinute[m] = append(byMinute[m], uid)
 		}
 	}
 
@@ -428,13 +453,20 @@ func GetIpOverlapPairs(days, minActiveMinutes, limit int) ([]IpOverlapRow, error
 	}
 
 	// 只保留显著高于期望的对子（重合还不如随机的说明两号没关系）。
-	rows := make([]IpOverlapRow, 0, len(overlap))
+	//
+	// 光看倍数会让小样本虚高：活跃 122 分钟 × 341 分钟的两个用户碰巧同分钟 25 次，
+	// 期望只有 1 分钟，倍数 26 —— 排到真实可疑对前面去。所以另设一道重合分钟下限，
+	// 把「偶发撞车」和「长期同步」分开。
+	result := make([]IpOverlapRow, 0, len(overlap))
 	for k, ov := range overlap {
 		expected := float64(active[k.a]) * float64(active[k.b]) / windowMinutes
 		if expected <= 0 || float64(ov) <= expected {
 			continue
 		}
-		rows = append(rows, IpOverlapRow{
+		if ov < int64(minOverlap) {
+			continue
+		}
+		result = append(result, IpOverlapRow{
 			UserIdA: k.a, ActiveA: active[k.a],
 			UserIdB: k.b, ActiveB: active[k.b],
 			Overlap:  ov,
@@ -442,23 +474,23 @@ func GetIpOverlapPairs(days, minActiveMinutes, limit int) ([]IpOverlapRow, error
 			Ratio:    math.Round(float64(ov)/expected*10) / 10,
 		})
 	}
-	if len(rows) == 0 {
+	if len(result) == 0 {
 		return []IpOverlapRow{}, nil
 	}
-	sort.Slice(rows, func(i, j int) bool {
-		if rows[i].Ratio != rows[j].Ratio {
-			return rows[i].Ratio > rows[j].Ratio
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Ratio != result[j].Ratio {
+			return result[i].Ratio > result[j].Ratio
 		}
-		return rows[i].Overlap > rows[j].Overlap
+		return result[i].Overlap > result[j].Overlap
 	})
-	if len(rows) > limit {
-		rows = rows[:limit]
+	if len(result) > limit {
+		result = result[:limit]
 	}
 
 	// 补账号名。
-	ids := make([]int, 0, len(rows)*2)
-	seen := make(map[int]bool, len(rows)*2)
-	for _, r := range rows {
+	ids := make([]int, 0, len(result)*2)
+	seen := make(map[int]bool, len(result)*2)
+	for _, r := range result {
 		for _, id := range []int{r.UserIdA, r.UserIdB} {
 			if !seen[id] {
 				seen[id] = true
@@ -485,9 +517,9 @@ func GetIpOverlapPairs(days, minActiveMinutes, limit int) ([]IpOverlapRow, error
 		}
 		names[u.Id] = n
 	}
-	for i := range rows {
-		rows[i].UsernameA = names[rows[i].UserIdA]
-		rows[i].UsernameB = names[rows[i].UserIdB]
+	for i := range result {
+		result[i].UsernameA = names[result[i].UserIdA]
+		result[i].UsernameB = names[result[i].UserIdB]
 	}
-	return rows, nil
+	return result, nil
 }

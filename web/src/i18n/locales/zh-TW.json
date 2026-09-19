@@ -7874,6 +7874,7 @@
     "Expected": "隨機期望",
     "Sync Ratio": "同步倍數",
     "Min Active Minutes": "最少活躍分鐘",
+    "Min Overlap Minutes": "最少重合分鐘",
     "Active Minutes A": "活躍分鐘 A",
     "Active Minutes B": "活躍分鐘 B",
     "Ratio = actual overlapping minutes ÷ expected (activeA × activeB ÷ window)": "倍數 = 實測重合分鐘 ÷ 隨機期望（活躍A × 活躍B ÷ 視窗分鐘數）",

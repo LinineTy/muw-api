@@ -7874,6 +7874,7 @@
     "Expected": "Kỳ vọng",
     "Sync Ratio": "Tỷ lệ đồng bộ",
     "Min Active Minutes": "Phút hoạt động tối thiểu",
+    "Min Overlap Minutes": "Phút trùng tối thiểu",
     "Active Minutes A": "Phút hoạt động A",
     "Active Minutes B": "Phút hoạt động B",
     "Ratio = actual overlapping minutes ÷ expected (activeA × activeB ÷ window)": "Tỷ lệ = phút trùng thực tế ÷ kỳ vọng (A × B ÷ khoảng thời gian)",
