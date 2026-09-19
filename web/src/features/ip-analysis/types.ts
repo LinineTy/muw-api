@@ -39,3 +39,26 @@ export interface Paged<T> {
   page: number
   page_size: number
 }
+
+/** 用户 IP 数分布的一个分桶（bucket 是后端固定的五档之一）。 */
+export interface IpAnalysisBucketRow {
+  bucket: string
+  users: number
+}
+
+/** 风控看板概览指标。 */
+export interface IpAnalysisOverview {
+  total_ips: number
+  total_users: number
+  avg_ips_per_user: number
+  shared_ips: number
+  risky_users: number
+  v6_percent: number
+  distribution: IpAnalysisBucketRow[]
+}
+
+/** 单日独立 IP 数（day_idx 语义同运营趋势）。 */
+export interface IpAnalysisTrendRow {
+  day_idx: number
+  ips: number
+}

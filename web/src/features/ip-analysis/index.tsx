@@ -1,7 +1,17 @@
 // @muw-owned
 import { useQuery } from '@tanstack/react-query'
-import { Radar } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { VChart } from '@visactor/react-vchart'
+import {
+  Activity,
+  BarChart3,
+  Eye,
+  Globe,
+  Loader2,
+  Radar,
+  Share2,
+  ShieldAlert,
+} from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
@@ -11,12 +21,14 @@ import {
   useDataTable,
 } from '@/components/data-table'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { IconBadge } from '@/components/ui/icon-badge'
 import {
   Select,
   SelectContent,
@@ -25,13 +37,44 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { getRouteApi } from '@tanstack/react-router'
+import { useTheme } from '@/context/theme-provider'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
+import { VCHART_OPTION } from '@/lib/vchart'
 
-import { getIpRank, getIpUserRank, getUserIpDetail } from './api'
-import type { IpRankRow, IpUserRankRow, UserIpDetailRow } from './types'
-import { formatTime } from './lib'
+import {
+  getIpOverview,
+  getIpRank,
+  getIpTrend,
+  getIpUserDetail,
+  getIpUserRank,
+  getUserIpDetail,
+} from './api'
+import type {
+  IpAnalysisOverview,
+  IpAnalysisTrendRow,
+  IpRankRow,
+  IpUserDetailRow,
+  IpUserRankRow,
+  UserIpDetailRow,
+} from './types'
+import {
+  buildBarSpec,
+  buildTrendLineSpec,
+  dayIdxToDate,
+  formatTime,
+} from './lib'
+
+let themeManagerPromise: Promise<
+  (typeof import('@visactor/vchart'))['ThemeManager']
+> | null = null
 
 const route = getRouteApi('/_authenticated/ip-analysis/')
 
@@ -98,7 +141,9 @@ export function IpAnalysis() {
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
 
-        <Tabs defaultValue='users'>
+        <IpOverviewSection days={days} ipVersion={ipVersion} />
+
+        <Tabs defaultValue='users' className='mt-4'>
           <TabsList>
             <TabsTrigger value='users'>{t('By User')}</TabsTrigger>
             <TabsTrigger value='ips'>{t('By IP')}</TabsTrigger>
@@ -204,13 +249,23 @@ function UserIpTable(props: { days: number; ipVersion: string }) {
         id: 'actions',
         header: t('Actions'),
         cell: ({ row }: { row: { original: IpUserRankRow } }) => (
-          <button
-            type='button'
-            className='text-primary hover:underline'
-            onClick={() => setDetailUserId(row.original.user_id)}
-          >
-            {t('View IPs')}
-          </button>
+          <div className='-ml-1.5 flex items-center gap-1'>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant='ghost'
+                    size='icon-sm'
+                    onClick={() => setDetailUserId(row.original.user_id)}
+                    aria-label={t('View IPs')}
+                  />
+                }
+              >
+                <Eye />
+              </TooltipTrigger>
+              <TooltipContent>{t('View IPs')}</TooltipContent>
+            </Tooltip>
+          </div>
         ),
       },
     ],
@@ -256,6 +311,7 @@ function UserIpTable(props: { days: number; ipVersion: string }) {
 
 function IpUserTable(props: { days: number; ipVersion: string }) {
   const { t } = useTranslation()
+  const [detailIp, setDetailIp] = useState<string | null>(null)
 
   const {
     globalFilter,
@@ -329,6 +385,29 @@ function IpUserTable(props: { days: number; ipVersion: string }) {
         cell: ({ row }: { row: { original: IpRankRow } }) =>
           formatTime(row.original.last_seen),
       },
+      {
+        id: 'actions',
+        header: t('Actions'),
+        cell: ({ row }: { row: { original: IpRankRow } }) => (
+          <div className='-ml-1.5 flex items-center gap-1'>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant='ghost'
+                    size='icon-sm'
+                    onClick={() => setDetailIp(row.original.ip)}
+                    aria-label={t('Linked Users')}
+                  />
+                }
+              >
+                <Eye />
+              </TooltipTrigger>
+              <TooltipContent>{t('Linked Users')}</TooltipContent>
+            </Tooltip>
+          </div>
+        ),
+      },
     ],
     [t]
   )
@@ -348,17 +427,24 @@ function IpUserTable(props: { days: number; ipVersion: string }) {
   })
 
   return (
-    <DataTablePage
-      table={table.table}
-      columns={columns as never}
-      isLoading={isLoading}
-      isFetching={isFetching}
-      emptyTitle={t('No data')}
-      toolbarProps={{
-        searchPlaceholder: t('Min Users'),
-        searchDebounceMs: 500,
-      }}
-    />
+    <>
+      <DataTablePage
+        table={table.table}
+        columns={columns as never}
+        isLoading={isLoading}
+        isFetching={isFetching}
+        emptyTitle={t('No data')}
+        toolbarProps={{
+          searchPlaceholder: t('Min Users'),
+          searchDebounceMs: 500,
+        }}
+      />
+      <IpAccountDetailDialog
+        ip={detailIp}
+        days={props.days}
+        onClose={() => setDetailIp(null)}
+      />
+    </>
   )
 }
 
@@ -421,6 +507,270 @@ function UserIpDetailDialog(props: {
                     className='flex items-center justify-between gap-2 rounded-md border px-3 py-1.5 text-sm'
                   >
                     <span className='font-mono'>{r.ip}</span>
+                    <span className='text-muted-foreground shrink-0 text-xs tabular-nums'>
+                      {r.request_count} · {formatTime(r.last_seen)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function requireData<T>(res: {
+  success: boolean
+  message?: string
+  data?: T
+}): T {
+  if (!res.success || res.data === undefined) {
+    throw new Error(res.message ?? 'request failed')
+  }
+  return res.data
+}
+
+/** 图表卡片容器（与运营统计页同款高度与留白）。 */
+function ChartCard(props: { isLoading: boolean; children: React.ReactNode }) {
+  return (
+    <div className='overflow-hidden rounded-lg border'>
+      <div className='h-[300px] p-1.5 sm:h-80 sm:p-2'>
+        {(() => {
+          if (props.isLoading) {
+            return (
+              <div className='flex h-full items-center justify-center'>
+                <Loader2 className='text-muted-foreground size-5 animate-spin' />
+              </div>
+            )
+          }
+          return props.children
+        })()}
+      </div>
+    </div>
+  )
+}
+
+/** 风控看板概览：指标卡片 + 用户 IP 数分布 + 每日独立 IP 趋势。 */
+function IpOverviewSection(props: { days: number; ipVersion: string }) {
+  const { t } = useTranslation()
+  const { resolvedTheme } = useTheme()
+  const themeManagerRef = useRef<
+    (typeof import('@visactor/vchart'))['ThemeManager'] | null
+  >(null)
+  const [themeReady, setThemeReady] = useState(false)
+
+  useEffect(() => {
+    const updateTheme = async () => {
+      setThemeReady(false)
+      if (!themeManagerPromise) {
+        themeManagerPromise = import('@visactor/vchart').then(
+          (m) => m.ThemeManager
+        )
+      }
+      const ThemeManager = await themeManagerPromise
+      themeManagerRef.current = ThemeManager
+      ThemeManager.setCurrentTheme(resolvedTheme === 'dark' ? 'dark' : 'light')
+      setThemeReady(true)
+    }
+    void updateTheme()
+  }, [resolvedTheme])
+
+  const tzOffsetSeconds = -new Date().getTimezoneOffset() * 60
+
+  const overviewQuery = useQuery({
+    queryKey: ['ip-analysis-overview', props.days, props.ipVersion],
+    queryFn: async () =>
+      requireData<IpAnalysisOverview>(
+        await getIpOverview({
+          days: props.days,
+          ip_version: props.ipVersion,
+        })
+      ),
+    staleTime: 60_000,
+  })
+  const trendQuery = useQuery({
+    queryKey: ['ip-analysis-trend', props.days, props.ipVersion],
+    queryFn: async () =>
+      requireData<IpAnalysisTrendRow[]>(
+        await getIpTrend({
+          days: props.days,
+          ip_version: props.ipVersion,
+          tz_offset: tzOffsetSeconds,
+        })
+      ),
+    staleTime: 60_000,
+  })
+
+  const overview = overviewQuery.data
+
+  const cards = [
+    {
+      labelKey: 'Distinct IPs',
+      value: overview ? overview.total_ips.toLocaleString() : undefined,
+      icon: Globe,
+      tone: 'info' as const,
+    },
+    {
+      labelKey: 'Active Users',
+      value: overview ? String(overview.total_users) : undefined,
+      icon: Activity,
+      tone: 'success' as const,
+    },
+    {
+      labelKey: 'Avg IPs per User',
+      value: overview ? overview.avg_ips_per_user.toFixed(1) : undefined,
+      icon: BarChart3,
+      tone: 'info' as const,
+    },
+    {
+      labelKey: 'Shared IPs',
+      value: overview ? overview.shared_ips.toLocaleString() : undefined,
+      icon: Share2,
+      tone: 'warning' as const,
+    },
+    {
+      labelKey: 'High-risk Users',
+      value: overview ? String(overview.risky_users) : undefined,
+      icon: ShieldAlert,
+      tone: 'destructive' as const,
+    },
+    {
+      labelKey: 'IPv6 Share',
+      value: overview ? `${overview.v6_percent}%` : undefined,
+      icon: Radar,
+      tone: 'info' as const,
+    },
+  ]
+
+  const distSpec = useMemo(() => {
+    const rows = overview?.distribution ?? []
+    if (rows.length === 0) return null
+    return buildBarSpec(
+      rows.map((r) => r.bucket),
+      rows.map((r) => r.users),
+      t('Users by IP Count'),
+      t('Users')
+    )
+  }, [overview, t])
+
+  const trendSpec = useMemo(() => {
+    const rows = trendQuery.data ?? []
+    if (rows.length === 0) return null
+    return buildTrendLineSpec(
+      rows.map((r) => dayIdxToDate(r.day_idx, tzOffsetSeconds)),
+      rows.map((r) => r.ips),
+      t('Distinct IPs Trend')
+    )
+  }, [trendQuery.data, t, tzOffsetSeconds])
+
+  return (
+    <div className='grid gap-3'>
+      <div className='grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6'>
+        {cards.map((card) => (
+          <div key={card.labelKey} className='rounded-lg border p-3 sm:p-4'>
+            <div className='flex items-center gap-2'>
+              <IconBadge tone={card.tone} size='sm'>
+                <card.icon />
+              </IconBadge>
+              <div className='text-muted-foreground text-xs'>
+                {t(card.labelKey)}
+              </div>
+            </div>
+            <div className='mt-2 text-xl font-semibold tabular-nums'>
+              {card.value ?? <Skeleton className='h-6 w-16' />}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className='grid gap-3 lg:grid-cols-2'>
+        <ChartCard isLoading={!themeReady || overviewQuery.isLoading}>
+          {distSpec && (
+            <VChart
+              key={`ip-dist-${resolvedTheme}`}
+              spec={{
+                ...distSpec,
+                theme: resolvedTheme === 'dark' ? 'dark' : 'light',
+                background: 'transparent',
+              }}
+              option={VCHART_OPTION}
+            />
+          )}
+        </ChartCard>
+        <ChartCard isLoading={!themeReady || trendQuery.isLoading}>
+          {trendSpec && (
+            <VChart
+              key={`ip-trend-${resolvedTheme}`}
+              spec={{
+                ...trendSpec,
+                theme: resolvedTheme === 'dark' ? 'dark' : 'light',
+                background: 'transparent',
+              }}
+              option={VCHART_OPTION}
+            />
+          )}
+        </ChartCard>
+      </div>
+    </div>
+  )
+}
+
+/** 单 IP 关联账号明细弹窗（小号集群排查的最后一跳）。 */
+function IpAccountDetailDialog(props: {
+  ip: string | null
+  days: number
+  onClose: () => void
+}) {
+  const { t } = useTranslation()
+  const open = props.ip !== null
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['ip-analysis-ip-detail', props.ip, props.days],
+    queryFn: () =>
+      getIpUserDetail({ ip: props.ip as string, days: props.days }),
+    enabled: open,
+  })
+
+  const rows: IpUserDetailRow[] = data?.data ?? []
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => !next && props.onClose()}>
+      <DialogContent className='max-w-xl'>
+        <DialogHeader>
+          <DialogTitle>
+            {t('Linked Users')}
+            {' · '}
+            <span className='font-mono text-sm'>{props.ip}</span>
+          </DialogTitle>
+        </DialogHeader>
+        <div className='max-h-[50vh] overflow-y-auto'>
+          {(() => {
+            if (isLoading) {
+              return (
+                <div className='text-muted-foreground py-6 text-center text-sm'>
+                  {t('Loading...')}
+                </div>
+              )
+            }
+            if (rows.length === 0) {
+              return (
+                <div className='text-muted-foreground py-6 text-center text-sm'>
+                  {t('No data')}
+                </div>
+              )
+            }
+            return (
+              <div className='grid gap-1'>
+                {rows.map((r) => (
+                  <div
+                    key={r.user_id}
+                    className='flex items-center justify-between gap-2 rounded-md border px-3 py-1.5 text-sm'
+                  >
+                    <span className='font-medium'>
+                      {r.username}
+                      {r.display_name ? ` (${r.display_name})` : ''}
+                    </span>
                     <span className='text-muted-foreground shrink-0 text-xs tabular-nums'>
                       {r.request_count} · {formatTime(r.last_seen)}
                     </span>

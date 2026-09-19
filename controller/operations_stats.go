@@ -211,3 +211,43 @@ func GetOperationsRankings(c *gin.Context) {
 		"data":    data,
 	})
 }
+
+// GetIpAnalysisOverview 风控看板概览（指标卡片 + 用户 IP 数分布）。
+func GetIpAnalysisOverview(c *gin.Context) {
+	days := parseDaysParam(c)
+	version := parseIpVersionParam(c)
+
+	data, err := model.GetIpAnalysisOverview(days, version)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    data,
+	})
+}
+
+// GetIpAnalysisTrend 每日独立 IP 数趋势。
+func GetIpAnalysisTrend(c *gin.Context) {
+	days := parseDaysParam(c)
+	version := parseIpVersionParam(c)
+	tzOffsetSeconds, _ := strconv.Atoi(c.DefaultQuery("tz_offset", "0"))
+	// 与运营趋势同一套兼容处理：前端传 -getTimezoneOffset()（东八区 28800），
+	// 老格式直接传 getTimezoneOffset()（东八区 -480 分钟）。
+	if tzOffsetSeconds < 0 {
+		tzOffsetSeconds = tzOffsetSeconds * 60
+	}
+
+	rows, err := model.GetIpAnalysisTrend(days, tzOffsetSeconds, version)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    rows,
+	})
+}

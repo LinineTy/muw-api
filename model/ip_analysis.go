@@ -1,7 +1,12 @@
 // @muw-owned
 package model
 
-import "time"
+import (
+	"fmt"
+	"math"
+	"strings"
+	"time"
+)
 
 // IpAnalysisUserRankRow 单用户的独立 IP 统计（风控视角）。
 type IpAnalysisUserRankRow struct {
@@ -40,6 +45,10 @@ type IpAnalysisIpUserRow struct {
 	FirstSeen    int64  `json:"first_seen"`
 	LastSeen     int64  `json:"last_seen"`
 }
+
+// riskyIpThreshold 单用户独立 IP 数达到该值即视为异常。
+// 与表格的「IP 数」标红阈值、分布图的 11-20 / 20+ 分桶保持同一口径。
+const riskyIpThreshold = 10
 
 func ipAnalysisSince(days int) int64 {
 	if days <= 0 {
@@ -201,6 +210,128 @@ func GetIpDetail(ip string, days int) ([]IpAnalysisIpUserRow, error) {
 		GROUP BY l.user_id
 		ORDER BY request_count DESC`,
 		LogTypeConsume, ip, since,
+	).Scan(&rows).Error
+	return rows, err
+}
+
+// IpAnalysisBucketRow 用户 IP 数分布里的一个分桶。
+type IpAnalysisBucketRow struct {
+	Bucket string `json:"bucket"`
+	Users  int64  `json:"users"`
+}
+
+// IpAnalysisOverview 风控看板概览。
+type IpAnalysisOverview struct {
+	TotalIps      int64                 `json:"total_ips"`
+	TotalUsers    int64                 `json:"total_users"`
+	AvgIpsPerUser float64               `json:"avg_ips_per_user"`
+	SharedIps     int64                 `json:"shared_ips"`
+	RiskyUsers    int64                 `json:"risky_users"`
+	V6Percent     float64               `json:"v6_percent"`
+	Distribution  []IpAnalysisBucketRow `json:"distribution"`
+}
+
+// GetIpAnalysisOverview 汇总风控看板所需的各项指标。
+//
+// 实现要点：先一次查出窗口内去重后的 (user_id, ip) 对，再在内存里聚合出全部指标。
+// 这样只有一次库扫描。若把每个指标各写成一条子查询，MySQL 上要跑五六次全表聚合
+// （单次 2~3 秒，性能背景见 ipAnalysisIndexHint），页面会被拖垮。
+// 数据规模：30 天窗口生产约数万对，内存聚合可忽略不计。
+func GetIpAnalysisOverview(days int, version string) (*IpAnalysisOverview, error) {
+	since := ipAnalysisSince(days)
+	v := ipVersionClause(version)
+
+	// 字段名要与 SQL 别名严格一致，否则 GORM 静默扫成零值（2026-09-19 请求数恒 0 的教训）。
+	var pairs []struct {
+		UserId int    `json:"user_id"`
+		Ip     string `json:"ip"`
+	}
+	err := DB.Raw(
+		`SELECT user_id, ip FROM logs`+ipAnalysisIndexHint()+`
+		 WHERE type = ? AND ip <> '' AND created_at > ?`+v+`
+		 GROUP BY user_id, ip`,
+		LogTypeConsume, since,
+	).Scan(&pairs).Error
+	if err != nil {
+		return nil, err
+	}
+
+	userIps := make(map[int]int, 1024)
+	ipUsers := make(map[string]int, 1024)
+	v6Pairs := 0
+	for _, p := range pairs {
+		userIps[p.UserId]++
+		ipUsers[p.Ip]++
+		if strings.Contains(p.Ip, ":") {
+			v6Pairs++
+		}
+	}
+
+	ov := &IpAnalysisOverview{
+		TotalIps:   int64(len(ipUsers)),
+		TotalUsers: int64(len(userIps)),
+	}
+	for _, c := range userIps {
+		if c >= riskyIpThreshold {
+			ov.RiskyUsers++
+		}
+	}
+	for _, u := range ipUsers {
+		if u >= 2 {
+			ov.SharedIps++
+		}
+	}
+	if len(userIps) > 0 {
+		ov.AvgIpsPerUser = math.Round(float64(len(pairs))/float64(len(userIps))*100) / 100
+	}
+	if len(pairs) > 0 {
+		ov.V6Percent = math.Round(float64(v6Pairs)/float64(len(pairs))*1000) / 10
+	}
+
+	// 分桶固定返回五档（含 0），前端直接照数组画柱状图，与 ipBadgeThreshold 的
+	// "≥10 个 IP 标红"保持同一套口径。
+	for _, b := range []struct {
+		name string
+		lo   int
+		hi   int
+	}{
+		{"1", 1, 1},
+		{"2-5", 2, 5},
+		{"6-10", 6, 10},
+		{"11-20", 11, 20},
+		{"20+", 21, math.MaxInt32},
+	} {
+		var n int64
+		for _, c := range userIps {
+			if c >= b.lo && c <= b.hi {
+				n++
+			}
+		}
+		ov.Distribution = append(ov.Distribution, IpAnalysisBucketRow{Bucket: b.name, Users: n})
+	}
+	return ov, nil
+}
+
+// IpAnalysisTrendRow 单日独立 IP 数（day_idx 语义同运营趋势，前端还原成日期）。
+type IpAnalysisTrendRow struct {
+	DayIdx int64 `json:"day_idx" gorm:"column:day_idx"`
+	Ips    int64 `json:"ips" gorm:"column:ips"`
+}
+
+// GetIpAnalysisTrend 按天统计窗口内的独立 IP 数。
+func GetIpAnalysisTrend(days, tzOffsetSeconds int, version string) ([]IpAnalysisTrendRow, error) {
+	since := ipAnalysisSince(days)
+	v := ipVersionClause(version)
+
+	var rows []IpAnalysisTrendRow
+	err := DB.Raw(
+		fmt.Sprintf(`SELECT ((created_at + ?) %s 86400) AS day_idx,
+		       COUNT(DISTINCT ip) AS ips
+		FROM logs`+ipAnalysisIndexHint()+`
+		WHERE type = ? AND ip <> '' AND created_at > ?`+v+`
+		GROUP BY day_idx
+		ORDER BY day_idx`, epochDayDivOperator()),
+		tzOffsetSeconds, LogTypeConsume, since,
 	).Scan(&rows).Error
 	return rows, err
 }

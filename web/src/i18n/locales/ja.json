@@ -7859,6 +7859,13 @@
     "90 Days": "90 Days",
     "All IPs": "すべての IP",
     "IPv4 only": "IPv4 のみ",
-    "IPv6 only": "IPv6 のみ"
+    "IPv6 only": "IPv6 のみ",
+    "Users by IP Count": "IP 数別ユーザー数",
+    "Distinct IPs": "独立 IP 数",
+    "Avg IPs per User": "ユーザーあたり IP 数",
+    "Shared IPs": "共有 IP",
+    "High-risk Users": "要注意ユーザー",
+    "IPv6 Share": "IPv6 比率",
+    "Distinct IPs Trend": "独立 IP の推移"
   }
 }

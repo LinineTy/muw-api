@@ -2,6 +2,8 @@
 import { api } from '@/lib/http-client'
 
 import type {
+  IpAnalysisOverview,
+  IpAnalysisTrendRow,
   IpRankRow,
   IpUserDetailRow,
   IpUserRankRow,
@@ -56,5 +58,30 @@ export async function getIpUserDetail(params: {
   data?: IpUserDetailRow[]
 }> {
   const res = await api.get('/api/ip_analysis/ip', { params })
+  return res.data
+}
+
+export async function getIpOverview(params: {
+  days: number
+  ip_version: string
+}): Promise<{
+  success: boolean
+  message?: string
+  data?: IpAnalysisOverview
+}> {
+  const res = await api.get('/api/ip_analysis/overview', { params })
+  return res.data
+}
+
+export async function getIpTrend(params: {
+  days: number
+  ip_version: string
+  tz_offset: number
+}): Promise<{
+  success: boolean
+  message?: string
+  data?: IpAnalysisTrendRow[]
+}> {
+  const res = await api.get('/api/ip_analysis/trend', { params })
   return res.data
 }
