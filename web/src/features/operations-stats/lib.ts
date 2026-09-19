@@ -48,28 +48,28 @@ const PIE_COLORS = [
   '#9a60b4',
 ]
 
-/** 环形图 spec（注册来源 / 分组分布共用）。 */
+/** 环形图 spec（注册来源 / 分组分布共用）。
+ * ⚠️ 写法必须照 VChart 2.x 的规矩（2026-09-19 踩坑修正，此前饼图整块不渲染）：
+ *  - data 要 `[{ id, values }]`，直接给裸数组 `[...]` 画不出来（折线那类用 `{ values }` 是对的）
+ *  - 扇区配色走顶层 `color: { type: 'ordinal', range }`，
+ *    写在数据项的 `style.fill` 上不生效
+ */
 export function buildPieSpec(
   data: { name: string; value: number }[],
   title: string
 ): object {
   return {
     type: 'pie',
-    title: {
-      text: title,
-      textStyle: { fontSize: 13 },
-    },
-    data: data.map((d, i) => ({
-      ...d,
-      style: { fill: PIE_COLORS[i % PIE_COLORS.length] },
-    })),
-    outerRadius: 0.75,
+    title: { visible: true, text: title, textStyle: { fontSize: 13 } },
+    data: [{ id: 'pieData', values: data }],
+    outerRadius: 0.8,
     innerRadius: 0.5,
+    padAngle: 0.6,
     valueField: 'value',
     categoryField: 'name',
     legends: { visible: true, orient: 'right' },
     label: { visible: false },
-    tooltip: { mark: { visible: true } },
+    color: { type: 'ordinal', range: PIE_COLORS },
   }
 }
 
