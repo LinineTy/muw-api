@@ -8166,6 +8166,20 @@
     "The server returned the following result. Unselected models remain pending.": "以下为服务器返回的处理结果，未勾选的模型仍保留为待处理项。",
     "Unable to confirm the update result": "无法确认更新结果",
     "Update completed": "更新完成",
-    "Update results": "更新结果"
+    "Update results": "更新结果",
+    "1. Select models users call": "1. 选择用户调用的模型",
+    "1. Select upstream models": "1. 选择上游模型",
+    "2. Set names users call": "2. 设置用户调用的名称",
+    "2. Set upstream model names": "2. 设置发给上游的名称",
+    "3. Review mappings": "3. 确认映射结果",
+    "Change upstream model names": "修改发给上游的模型名",
+    "Create aliases for users": "给上游模型起别名",
+    "Enter a rule to preview mappings.": "填写规则后，这里会显示具体映射。",
+    "Example: users call gpt-4o; upstream receives gpt-4o-all.": "例如：用户调用 gpt-4o，上游收到 gpt-4o-all。",
+    "Keep the names users call; change what is sent upstream.": "用户调用的名称不变，只修改发给上游的名称。",
+    "Keep upstream names; choose what users call.": "上游名称不变，设置用户调用的名称。",
+    "Upstream receives": "上游收到",
+    "Users call": "用户调用",
+    "What do you want to change?": "你想修改什么？"
   }
 }
