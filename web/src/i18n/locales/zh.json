@@ -8148,6 +8148,24 @@
     "Connect to New API model services with support for multiple task plugins": "接入 New API 网关的模型服务，支持多个任务插件",
     "Select the task plugins installed on the upstream gateway": "选择上游网关已安装的任务插件",
     "This channel serves the models of every selected plugin. The upstream New API gateway must have the same plugins installed.": "此渠道将提供所选每个插件的模型。上游 New API 网关必须安装相同的插件。",
-    "Upstream task plugins": "上游任务插件"
+    "Upstream task plugins": "上游任务插件",
+    "Add {{added}} models and remove {{removed}} models": "新增 {{added}} 个模型，移除 {{removed}} 个模型",
+    "Added models": "已新增模型",
+    "Apply selected changes": "确认应用所选变更",
+    "Checking upstream models. Channel models will only change after confirmation.": "正在检查上游模型，确认后才会修改渠道模型。",
+    "Confirm model changes": "确认模型变更",
+    "Preview upstream model changes": "预览上游模型变更",
+    "Refresh preview": "重新检测",
+    "Refresh the preview before trying again; some changes may already have been saved.": "部分变更可能已保存，请重新检测后再操作。",
+    "Removed models": "已移除模型",
+    "Removed models will no longer be available through this channel. Select removals explicitly.": "移除后将无法通过此渠道调用这些模型，请手动勾选需要移除的项。",
+    "Review selected changes": "核对所选变更",
+    "Review the model changes before applying. Unselected models stay unchanged and will not be ignored.": "请先核对模型变更。未勾选的模型保持不变，也不会加入忽略列表。",
+    "Still pending addition": "仍待新增",
+    "Still pending removal": "仍待移除",
+    "The server returned the following result. Unselected models remain pending.": "以下为服务器返回的处理结果，未勾选的模型仍保留为待处理项。",
+    "Unable to confirm the update result": "无法确认更新结果",
+    "Update completed": "更新完成",
+    "Update results": "更新结果"
   }
 }
