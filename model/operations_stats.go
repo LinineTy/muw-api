@@ -9,24 +9,28 @@ import (
 )
 
 // OperationsOverview 运营总览卡片指标。
+// ⚠️ 每个字段都必须显式标 gorm:"column:"：
+//  1. GORM 的 Scan 按 DBName 匹配列，不读 json tag；
+//  2. 对带数字后缀的字段，默认 NamingStrategy 生成的名字不带下划线
+//     （NewUsers7d -> new_users7d），与 SQL 里的 new_users_7d 对不上，会静默扫成 0。
 type OperationsOverview struct {
-	TotalUsers    int64 `json:"total_users"`
-	NewUsersToday int64 `json:"new_users_today"`
-	NewUsers7d    int64 `json:"new_users_7d"`
-	ActiveToday   int64 `json:"active_today"`
-	Active7d      int64 `json:"active_7d"`
-	RequestsToday int64 `json:"requests_today"`
-	QuotaToday    int64 `json:"quota_today"`
-	DisabledUsers int64 `json:"disabled_users"`
+	TotalUsers    int64 `json:"total_users" gorm:"column:total_users"`
+	NewUsersToday int64 `json:"new_users_today" gorm:"column:new_users_today"`
+	NewUsers7d    int64 `json:"new_users_7d" gorm:"column:new_users_7d"`
+	ActiveToday   int64 `json:"active_today" gorm:"column:active_today"`
+	Active7d      int64 `json:"active_7d" gorm:"column:active_7d"`
+	RequestsToday int64 `json:"requests_today" gorm:"column:requests_today"`
+	QuotaToday    int64 `json:"quota_today" gorm:"column:quota_today"`
+	DisabledUsers int64 `json:"disabled_users" gorm:"column:disabled_users"`
 }
 
 // OperationsTrendRow 单日趋势（day_idx 为时区平移后的 epoch 天序号）。
 type OperationsTrendRow struct {
-	DayIdx      int64 `json:"day_idx"`
-	NewUsers    int64 `json:"new_users"`
-	ActiveUsers int64 `json:"active_users"`
-	Requests    int64 `json:"requests"`
-	Quota       int64 `json:"quota"`
+	DayIdx      int64 `json:"day_idx" gorm:"column:day_idx"`
+	NewUsers    int64 `json:"new_users" gorm:"column:new_users"`
+	ActiveUsers int64 `json:"active_users" gorm:"column:active_users"`
+	Requests    int64 `json:"requests" gorm:"column:requests"`
+	Quota       int64 `json:"quota" gorm:"column:quota"`
 }
 
 // DistributionRow 通用分布行。
@@ -39,8 +43,8 @@ type DistributionRow struct {
 
 // TrustLevelRow 信任等级分布行。
 type TrustLevelRow struct {
-	Level int   `json:"level"`
-	Count int64 `json:"count"`
+	Level int   `json:"level" gorm:"column:level"`
+	Count int64 `json:"count" gorm:"column:count"`
 }
 
 // RankingRow 模型/渠道用量排行行。
@@ -86,11 +90,14 @@ func dayStartUnix() int64 {
 }
 
 // GetOperationsOverview 运营总览指标。
+// ⚠️ 两段 SQL 必须各扫一个独立 struct：连续两次 Scan 到同一 struct 时，
+// 后一次会把前一次已填好的字段清零（实测 SQLite/MySQL 均如此），
+// 表现是"总用户数/今日新增"恒为 0 而"今日请求"正常，排查时极易误判成 SQL 问题。
 func GetOperationsOverview() (*OperationsOverview, error) {
 	today := dayStartUnix()
 	sevenDaysAgo := today - 7*86400
 
-	o := &OperationsOverview{}
+	userStats := &OperationsOverview{}
 	if err := DB.Raw(
 		`SELECT
 			COUNT(*) AS total_users,
@@ -99,10 +106,11 @@ func GetOperationsOverview() (*OperationsOverview, error) {
 			SUM(CASE WHEN status = 2 THEN 1 ELSE 0 END) AS disabled_users
 		FROM users WHERE deleted_at IS NULL`,
 		today, sevenDaysAgo,
-	).Scan(o).Error; err != nil {
+	).Scan(userStats).Error; err != nil {
 		return nil, err
 	}
 
+	activityStats := &OperationsOverview{}
 	if err := DB.Raw(
 		`SELECT
 			COUNT(DISTINCT CASE WHEN created_at >= ? THEN user_id END) AS active_today,
@@ -111,10 +119,15 @@ func GetOperationsOverview() (*OperationsOverview, error) {
 			COALESCE(SUM(CASE WHEN created_at >= ? THEN quota ELSE 0 END), 0) AS quota_today
 		FROM logs WHERE type = ?`,
 		today, sevenDaysAgo, today, today, LogTypeConsume,
-	).Scan(o).Error; err != nil {
+	).Scan(activityStats).Error; err != nil {
 		return nil, err
 	}
-	return o, nil
+
+	userStats.ActiveToday = activityStats.ActiveToday
+	userStats.Active7d = activityStats.Active7d
+	userStats.RequestsToday = activityStats.RequestsToday
+	userStats.QuotaToday = activityStats.QuotaToday
+	return userStats, nil
 }
 
 // GetOperationsTrends 按天聚合新增用户 / 活跃用户 / 请求量 / 消耗。
