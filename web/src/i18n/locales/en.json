@@ -7859,6 +7859,13 @@
     "90 Days": "90 Days",
     "All IPs": "All IPs",
     "IPv4 only": "IPv4 only",
-    "IPv6 only": "IPv6 only"
+    "IPv6 only": "IPv6 only",
+    "Users by IP Count": "Users by IP Count",
+    "Distinct IPs": "Distinct IPs",
+    "Avg IPs per User": "Avg IPs per User",
+    "Shared IPs": "Shared IPs",
+    "High-risk Users": "High-risk Users",
+    "IPv6 Share": "IPv6 Share",
+    "Distinct IPs Trend": "Distinct IPs Trend"
   }
 }

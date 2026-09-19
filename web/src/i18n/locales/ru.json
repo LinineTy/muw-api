@@ -7859,6 +7859,13 @@
     "90 Days": "90 Days",
     "All IPs": "Все IP",
     "IPv4 only": "Только IPv4",
-    "IPv6 only": "Только IPv6"
+    "IPv6 only": "Только IPv6",
+    "Users by IP Count": "Пользователи по числу IP",
+    "Distinct IPs": "Уникальные IP",
+    "Avg IPs per User": "IP на пользователя",
+    "Shared IPs": "Общие IP",
+    "High-risk Users": "Подозрительные пользователи",
+    "IPv6 Share": "Доля IPv6",
+    "Distinct IPs Trend": "Динамика уникальных IP"
   }
 }

@@ -7859,6 +7859,13 @@
     "90 Days": "90 天",
     "All IPs": "全部 IP",
     "IPv4 only": "僅 IPv4",
-    "IPv6 only": "僅 IPv6"
+    "IPv6 only": "僅 IPv6",
+    "Users by IP Count": "按 IP 數分布",
+    "Distinct IPs": "獨立 IP 數",
+    "Avg IPs per User": "人均 IP 數",
+    "Shared IPs": "共享 IP 數",
+    "High-risk Users": "高危使用者",
+    "IPv6 Share": "IPv6 佔比",
+    "Distinct IPs Trend": "獨立 IP 趨勢"
   }
 }

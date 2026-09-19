@@ -482,6 +482,8 @@ func SetApiRouter(router *gin.Engine) {
 			ipAnalysisRoute.GET("/rank/ips", controller.GetIpAnalysisIpRank)
 			ipAnalysisRoute.GET("/user/:user_id", controller.GetIpAnalysisUserDetail)
 			ipAnalysisRoute.GET("/ip", controller.GetIpAnalysisIpDetail)
+			ipAnalysisRoute.GET("/overview", controller.GetIpAnalysisOverview)
+			ipAnalysisRoute.GET("/trend", controller.GetIpAnalysisTrend)
 		}
 
 		logRoute.Use(middleware.CORS(), middleware.CriticalRateLimit())

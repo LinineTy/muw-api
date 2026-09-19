@@ -7859,6 +7859,13 @@
     "90 Days": "90 Days",
     "All IPs": "Tất cả IP",
     "IPv4 only": "Chỉ IPv4",
-    "IPv6 only": "Chỉ IPv6"
+    "IPv6 only": "Chỉ IPv6",
+    "Users by IP Count": "Người dùng theo số IP",
+    "Distinct IPs": "IP riêng biệt",
+    "Avg IPs per User": "IP mỗi người dùng",
+    "Shared IPs": "IP dùng chung",
+    "High-risk Users": "Người dùng rủi ro",
+    "IPv6 Share": "Tỷ lệ IPv6",
+    "Distinct IPs Trend": "Xu hướng IP riêng biệt"
   }
 }
