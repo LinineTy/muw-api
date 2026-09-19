@@ -1,7 +1,12 @@
 // @muw-owned
 package model
 
-import "time"
+import (
+	"fmt"
+	"time"
+
+	"github.com/QuantumNous/new-api/common"
+)
 
 // OperationsOverview 运营总览卡片指标。
 type OperationsOverview struct {
@@ -25,8 +30,10 @@ type OperationsTrendRow struct {
 }
 
 // DistributionRow 通用分布行。
+// 列别名用 row_key 而非 key:`key` 是 MySQL 保留字,DB.Raw 原样透传不会被引号化,
+// 直接写 AS key 会报 Error 1064。改别名后各方言通用(不依赖反引号/双引号)。
 type DistributionRow struct {
-	Key   string `json:"key"`
+	Key   string `json:"key" gorm:"column:row_key"`
 	Count int64  `json:"count"`
 }
 
@@ -37,12 +44,14 @@ type TrustLevelRow struct {
 }
 
 // RankingRow 模型/渠道用量排行行。
+// Count 必须显式标 column:requests —— GORM 的 Scan 按字段名(snake_case)匹配列,
+// 不读 json tag,而 SQL 里这一列的别名是 requests,不加 tag 会恒扫成 0。
 type RankingRow struct {
-	Key    string `json:"key"`
-	Name   string `json:"name"`
-	Count  int64  `json:"requests"`
-	Quota  int64  `json:"quota"`
-	Users  int64  `json:"users"`
+	Key   string `json:"key" gorm:"column:row_key"`
+	Name  string `json:"name"`
+	Count int64  `json:"requests" gorm:"column:requests"`
+	Quota int64  `json:"quota"`
+	Users int64  `json:"users"`
 }
 
 // OperationsRankings 模型与渠道排行。
@@ -56,6 +65,19 @@ type OperationsDistributions struct {
 	Sources     []DistributionRow `json:"sources"`
 	TrustLevels []TrustLevelRow   `json:"trust_levels"`
 	Groups      []DistributionRow `json:"groups"`
+}
+
+// epochDayDivOperator 返回「整数除法」运算符,让 day_idx 在各方言下都得到整数。
+// MySQL 的 `/` 是浮点除法(返回 20607.0392,驱动给 []byte,扫进 int64 直接失败),
+// 必须用 DIV;SQLite 与 PostgreSQL 对两个整数相除本就是整除。
+func epochDayDivOperator() string {
+	switch {
+	case common.UsingMainDatabase(common.DatabaseTypePostgreSQL),
+		common.UsingMainDatabase(common.DatabaseTypeSQLite):
+		return "/"
+	default:
+		return "DIV"
+	}
 }
 
 func dayStartUnix() int64 {
@@ -97,7 +119,9 @@ func GetOperationsOverview() (*OperationsOverview, error) {
 
 // GetOperationsTrends 按天聚合新增用户 / 活跃用户 / 请求量 / 消耗。
 // tzOffsetSeconds 为前端传入的本地时区偏移，保证"一天"按用户本地日切。
-// day_idx = (created_at + tz) / 86400，前端还原为日期字符串。
+// day_idx = (created_at + tz) 整除 86400，前端还原为日期字符串。
+// ⚠️ 整除必须走方言分支（见 epochDayDivOperator）：MySQL 的 `/` 是浮点除法，
+// 会返回 20607.0392 这种值，驱动给回 []byte，扫进 int64 直接失败。
 func GetOperationsTrends(days, tzOffsetSeconds int) ([]OperationsTrendRow, error) {
 	if days <= 0 {
 		days = 30
@@ -105,11 +129,13 @@ func GetOperationsTrends(days, tzOffsetSeconds int) ([]OperationsTrendRow, error
 	since := time.Now().Unix() - int64(days)*86400
 	shift := int64(tzOffsetSeconds)
 
+	dayDiv := epochDayDivOperator()
+
 	var newUsers []OperationsTrendRow
 	if err := DB.Raw(
-		`SELECT ((created_at + ?) / 86400) AS day_idx, COUNT(*) AS new_users
+		fmt.Sprintf(`SELECT ((created_at + ?) %s 86400) AS day_idx, COUNT(*) AS new_users
 		FROM users WHERE deleted_at IS NULL AND created_at > ?
-		GROUP BY day_idx`,
+		GROUP BY day_idx`, dayDiv),
 		shift, since,
 	).Scan(&newUsers).Error; err != nil {
 		return nil, err
@@ -117,12 +143,12 @@ func GetOperationsTrends(days, tzOffsetSeconds int) ([]OperationsTrendRow, error
 
 	var activity []OperationsTrendRow
 	if err := DB.Raw(
-		`SELECT ((created_at + ?) / 86400) AS day_idx,
+		fmt.Sprintf(`SELECT ((created_at + ?) %s 86400) AS day_idx,
 		       COUNT(DISTINCT user_id) AS active_users,
 		       COUNT(*) AS requests,
 		       COALESCE(SUM(quota), 0) AS quota
 		FROM logs WHERE type = ? AND created_at > ?
-		GROUP BY day_idx`,
+		GROUP BY day_idx`, dayDiv),
 		shift, LogTypeConsume, since,
 	).Scan(&activity).Error; err != nil {
 		return nil, err
@@ -175,9 +201,9 @@ func GetOperationsDistributions() (*OperationsDistributions, error) {
 			WHEN telegram_id <> '' THEN 'telegram'
 			WHEN oidc_id <> '' THEN 'oidc'
 			ELSE 'email'
-		END AS key, COUNT(*) AS count
+		END AS row_key, COUNT(*) AS count
 		FROM users WHERE deleted_at IS NULL
-		GROUP BY key`,
+		GROUP BY row_key`,
 	).Scan(&d.Sources).Error
 	if err != nil {
 		return nil, err
@@ -192,7 +218,7 @@ func GetOperationsDistributions() (*OperationsDistributions, error) {
 	}
 
 	if err := DB.Raw(
-		"SELECT `group` AS key, COUNT(*) AS count FROM users WHERE deleted_at IS NULL GROUP BY `group`",
+		"SELECT `group` AS row_key, COUNT(*) AS count FROM users WHERE deleted_at IS NULL GROUP BY `group`",
 	).Scan(&d.Groups).Error; err != nil {
 		return nil, err
 	}
@@ -208,7 +234,7 @@ func GetOperationsRankings(days int) (*OperationsRankings, error) {
 	r := &OperationsRankings{}
 
 	err := DB.Raw(
-		`SELECT model_name AS key, model_name AS name,
+		`SELECT model_name AS row_key, model_name AS name,
 		       COUNT(*) AS requests,
 		       COALESCE(SUM(quota), 0) AS quota,
 		       COUNT(DISTINCT user_id) AS users
@@ -224,7 +250,7 @@ func GetOperationsRankings(days int) (*OperationsRankings, error) {
 	}
 
 	err = DB.Raw(
-		`SELECT l.channel_id AS key,
+		`SELECT l.channel_id AS row_key,
 		       COALESCE(MAX(c.name), '') AS name,
 		       COUNT(*) AS requests,
 		       COALESCE(SUM(l.quota), 0) AS quota,
