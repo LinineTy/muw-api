@@ -8148,6 +8148,24 @@
     "Connect to New API model services with support for multiple task plugins": "New API ゲートウェイのモデルサービスに接続し、複数のタスクプラグインに対応",
     "Select the task plugins installed on the upstream gateway": "上流ゲートウェイにインストールされているタスクプラグインを選択",
     "This channel serves the models of every selected plugin. The upstream New API gateway must have the same plugins installed.": "このチャネルは選択した各プラグインのモデルを提供します。上流の New API ゲートウェイに同じプラグインがインストールされている必要があります。",
-    "Upstream task plugins": "上流タスクプラグイン"
+    "Upstream task plugins": "上流タスクプラグイン",
+    "Add {{added}} models and remove {{removed}} models": "{{added}} 個のモデルを追加、{{removed}} 個を削除",
+    "Added models": "追加したモデル",
+    "Apply selected changes": "選択した変更を適用",
+    "Checking upstream models. Channel models will only change after confirmation.": "上流モデルを確認しています。チャネルのモデルは確認後にのみ変更されます。",
+    "Confirm model changes": "モデルの変更を確認",
+    "Preview upstream model changes": "上流モデルの変更をプレビュー",
+    "Refresh preview": "再確認",
+    "Refresh the preview before trying again; some changes may already have been saved.": "一部の変更が保存済みの可能性があります。再確認してからやり直してください。",
+    "Removed models": "削除したモデル",
+    "Removed models will no longer be available through this channel. Select removals explicitly.": "削除したモデルはこのチャネルで利用できなくなります。削除するモデルを明示的に選択してください。",
+    "Review selected changes": "選択した変更を確認",
+    "Review the model changes before applying. Unselected models stay unchanged and will not be ignored.": "適用前に変更を確認してください。未選択のモデルは変更されず、無視リストにも追加されません。",
+    "Still pending addition": "追加待ち",
+    "Still pending removal": "削除待ち",
+    "The server returned the following result. Unselected models remain pending.": "サーバーから返された処理結果です。未選択のモデルは保留のままです。",
+    "Unable to confirm the update result": "更新結果を確認できません",
+    "Update completed": "更新が完了しました",
+    "Update results": "更新結果"
   }
 }
