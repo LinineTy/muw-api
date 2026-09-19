@@ -62,3 +62,16 @@ export interface IpAnalysisTrendRow {
   day_idx: number
   ips: number
 }
+
+/** 一对账号的时段重合统计（判据见后端 GetIpOverlapPairs 注释）。 */
+export interface IpOverlapRow {
+  user_id_a: number
+  username_a: string
+  active_a: number
+  user_id_b: number
+  username_b: string
+  active_b: number
+  overlap: number
+  expected: number
+  ratio: number
+}

@@ -50,6 +50,7 @@ import { useTableUrlState } from '@/hooks/use-table-url-state'
 import { VCHART_OPTION } from '@/lib/vchart'
 
 import {
+  getIpOverlap,
   getIpOverview,
   getIpRank,
   getIpTrend,
@@ -60,6 +61,7 @@ import {
 import type {
   IpAnalysisOverview,
   IpAnalysisTrendRow,
+  IpOverlapRow,
   IpRankRow,
   IpUserDetailRow,
   IpUserRankRow,
@@ -147,12 +149,16 @@ export function IpAnalysis() {
           <TabsList>
             <TabsTrigger value='users'>{t('By User')}</TabsTrigger>
             <TabsTrigger value='ips'>{t('By IP')}</TabsTrigger>
+            <TabsTrigger value='overlap'>{t('Time Overlap')}</TabsTrigger>
           </TabsList>
           <TabsContent value='users'>
             <UserIpTable days={days} ipVersion={ipVersion} />
           </TabsContent>
           <TabsContent value='ips'>
             <IpUserTable days={days} ipVersion={ipVersion} />
+          </TabsContent>
+          <TabsContent value='overlap'>
+            <OverlapTable days={days} />
           </TabsContent>
         </Tabs>
       </SectionPageLayout.Content>
@@ -782,5 +788,143 @@ function IpAccountDetailDialog(props: {
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** 时段重合检测：列出"同时活跃度显著超出随机期望"的账号对。
+ *
+ * 判据是 实测重合分钟 ÷ 随机期望，不看 IP —— 代理轮换与 CDN 会让 IP 维度失真，
+ * 而两个独立用户在同一分钟同时发起请求属于低概率事件，时间维度不受影响。
+ */
+function OverlapTable(props: { days: number }) {
+  const { t } = useTranslation()
+  const [minActive, setMinActive] = useState(100)
+
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ['ip-analysis-overlap', props.days, minActive],
+    queryFn: async () =>
+      requireData<IpOverlapRow[]>(
+        await getIpOverlap({
+          days: props.days,
+          min_active_minutes: minActive,
+          limit: 50,
+        })
+      ),
+    staleTime: 120_000,
+  })
+
+  const rows = useMemo(() => data ?? [], [data])
+
+  const columns = useMemo(
+    () => [
+      {
+        accessorKey: 'user_id_a',
+        header: t('Account A'),
+        cell: ({ row }: { row: { original: IpOverlapRow } }) => (
+          <span className='text-sm'>
+            {row.original.username_a}
+            <span className='text-muted-foreground ml-1 text-xs'>
+              #{row.original.user_id_a}
+            </span>
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'active_a',
+        header: t('Active Minutes A'),
+        cell: ({ row }: { row: { original: IpOverlapRow } }) =>
+          row.original.active_a.toLocaleString(),
+      },
+      {
+        accessorKey: 'user_id_b',
+        header: t('Account B'),
+        cell: ({ row }: { row: { original: IpOverlapRow } }) => (
+          <span className='text-sm'>
+            {row.original.username_b}
+            <span className='text-muted-foreground ml-1 text-xs'>
+              #{row.original.user_id_b}
+            </span>
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'active_b',
+        header: t('Active Minutes B'),
+        cell: ({ row }: { row: { original: IpOverlapRow } }) =>
+          row.original.active_b.toLocaleString(),
+      },
+      {
+        accessorKey: 'overlap',
+        header: t('Overlap Minutes'),
+        cell: ({ row }: { row: { original: IpOverlapRow } }) =>
+          row.original.overlap.toLocaleString(),
+      },
+      {
+        accessorKey: 'expected',
+        header: t('Expected'),
+        cell: ({ row }: { row: { original: IpOverlapRow } }) =>
+          row.original.expected.toFixed(1),
+      },
+      {
+        accessorKey: 'ratio',
+        header: t('Sync Ratio'),
+        cell: ({ row }: { row: { original: IpOverlapRow } }) => (
+          <Badge
+            variant={row.original.ratio >= 3 ? 'destructive' : 'secondary'}
+          >
+            {row.original.ratio.toFixed(1)}×
+          </Badge>
+        ),
+      },
+    ],
+    [t]
+  )
+
+  const pagination = useMemo(() => ({ pageIndex: 0, pageSize: 50 }), [])
+  const table = useDataTable({
+    data: rows,
+    columns: columns as never,
+    totalCount: rows.length,
+    pagination,
+    globalFilterFn: () => true,
+  })
+
+  return (
+    <div className='grid gap-3'>
+      <div className='flex flex-wrap items-center gap-2'>
+        <span className='text-muted-foreground text-sm'>
+          {t('Min Active Minutes')}
+        </span>
+        <Select
+          value={String(minActive)}
+          onValueChange={(v) => setMinActive(Number(v))}
+        >
+          <SelectTrigger className='w-auto'>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value='30'>30</SelectItem>
+              <SelectItem value='100'>100</SelectItem>
+              <SelectItem value='300'>300</SelectItem>
+              <SelectItem value='600'>600</SelectItem>
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+        <span className='text-muted-foreground text-xs'>
+          {t(
+            'Ratio = actual overlapping minutes ÷ expected (activeA × activeB ÷ window)'
+          )}
+        </span>
+      </div>
+      <DataTablePage
+        table={table.table}
+        columns={columns as never}
+        isLoading={isLoading}
+        isFetching={isFetching}
+        emptyTitle={t('No data')}
+        paginationInFooter={false}
+      />
+    </div>
   )
 }

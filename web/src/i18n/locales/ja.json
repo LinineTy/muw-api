@@ -7866,6 +7866,17 @@
     "Shared IPs": "共有 IP",
     "High-risk Users": "要注意ユーザー",
     "IPv6 Share": "IPv6 比率",
+    "Time Overlap": "時間帯の重複",
+    "Account A": "アカウント A",
+    "Active Minutes": "アクティブ分数",
+    "Account B": "アカウント B",
+    "Overlap Minutes": "重複分数",
+    "Expected": "期待値",
+    "Sync Ratio": "同期倍率",
+    "Min Active Minutes": "最小アクティブ分数",
+    "Active Minutes A": "アクティブ分数 A",
+    "Active Minutes B": "アクティブ分数 B",
+    "Ratio = actual overlapping minutes ÷ expected (activeA × activeB ÷ window)": "倍率 = 実際の重複分数 ÷ 期待値（A の分数 × B の分数 ÷ 集計期間）",
     "Distinct IPs Trend": "独立 IP の推移"
   }
 }

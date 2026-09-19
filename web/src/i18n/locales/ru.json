@@ -7866,6 +7866,17 @@
     "Shared IPs": "Общие IP",
     "High-risk Users": "Подозрительные пользователи",
     "IPv6 Share": "Доля IPv6",
+    "Time Overlap": "Совпадение по времени",
+    "Account A": "Аккаунт A",
+    "Active Minutes": "Активных минут",
+    "Account B": "Аккаунт B",
+    "Overlap Minutes": "Совпавших минут",
+    "Expected": "Ожидаемо",
+    "Sync Ratio": "Коэффициент синхронности",
+    "Min Active Minutes": "Минимум активных минут",
+    "Active Minutes A": "Активных минут A",
+    "Active Minutes B": "Активных минут B",
+    "Ratio = actual overlapping minutes ÷ expected (activeA × activeB ÷ window)": "Коэффициент = совпавшие минуты ÷ ожидаемое (A × B ÷ окно)",
     "Distinct IPs Trend": "Динамика уникальных IP"
   }
 }

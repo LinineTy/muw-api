@@ -4,6 +4,7 @@ import { api } from '@/lib/http-client'
 import type {
   IpAnalysisOverview,
   IpAnalysisTrendRow,
+  IpOverlapRow,
   IpRankRow,
   IpUserDetailRow,
   IpUserRankRow,
@@ -83,5 +84,18 @@ export async function getIpTrend(params: {
   data?: IpAnalysisTrendRow[]
 }> {
   const res = await api.get('/api/ip_analysis/trend', { params })
+  return res.data
+}
+
+export async function getIpOverlap(params: {
+  days: number
+  min_active_minutes: number
+  limit: number
+}): Promise<{
+  success: boolean
+  message?: string
+  data?: IpOverlapRow[]
+}> {
+  const res = await api.get('/api/ip_analysis/overlap', { params })
   return res.data
 }
