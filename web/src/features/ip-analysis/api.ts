@@ -90,6 +90,7 @@ export async function getIpTrend(params: {
 export async function getIpOverlap(params: {
   days: number
   min_active_minutes: number
+  min_overlap: number
   limit: number
 }): Promise<{
   success: boolean

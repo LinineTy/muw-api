@@ -799,14 +799,16 @@ function IpAccountDetailDialog(props: {
 function OverlapTable(props: { days: number }) {
   const { t } = useTranslation()
   const [minActive, setMinActive] = useState(100)
+  const [minOverlap, setMinOverlap] = useState(30)
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['ip-analysis-overlap', props.days, minActive],
+    queryKey: ['ip-analysis-overlap', props.days, minActive, minOverlap],
     queryFn: async () =>
       requireData<IpOverlapRow[]>(
         await getIpOverlap({
           days: props.days,
           min_active_minutes: minActive,
+          min_overlap: minOverlap,
           limit: 50,
         })
       ),
@@ -908,6 +910,25 @@ function OverlapTable(props: { days: number }) {
               <SelectItem value='100'>100</SelectItem>
               <SelectItem value='300'>300</SelectItem>
               <SelectItem value='600'>600</SelectItem>
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+        <span className='text-muted-foreground ml-2 text-sm'>
+          {t('Min Overlap Minutes')}
+        </span>
+        <Select
+          value={String(minOverlap)}
+          onValueChange={(v) => setMinOverlap(Number(v))}
+        >
+          <SelectTrigger className='w-auto'>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value='10'>10</SelectItem>
+              <SelectItem value='30'>30</SelectItem>
+              <SelectItem value='60'>60</SelectItem>
+              <SelectItem value='120'>120</SelectItem>
             </SelectGroup>
           </SelectContent>
         </Select>

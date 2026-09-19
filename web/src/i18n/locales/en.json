@@ -7874,6 +7874,7 @@
     "Expected": "Expected",
     "Sync Ratio": "Sync Ratio",
     "Min Active Minutes": "Min Active Minutes",
+    "Min Overlap Minutes": "Min Overlap Minutes",
     "Active Minutes A": "Active Minutes A",
     "Active Minutes B": "Active Minutes B",
     "Ratio = actual overlapping minutes ÷ expected (activeA × activeB ÷ window)": "Ratio = actual overlapping minutes ÷ expected (activeA × activeB ÷ window)",

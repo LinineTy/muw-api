@@ -256,9 +256,10 @@ func GetIpAnalysisTrend(c *gin.Context) {
 func GetIpAnalysisOverlap(c *gin.Context) {
 	days := parseDaysParam(c)
 	minActive, _ := strconv.Atoi(c.DefaultQuery("min_active_minutes", "100"))
+	minOverlap, _ := strconv.Atoi(c.DefaultQuery("min_overlap", "30"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 
-	rows, err := model.GetIpOverlapPairs(days, minActive, limit)
+	rows, err := model.GetIpOverlapPairs(days, minActive, minOverlap, limit)
 	if err != nil {
 		common.ApiError(c, err)
 		return

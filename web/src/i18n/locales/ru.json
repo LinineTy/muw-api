@@ -7874,6 +7874,7 @@
     "Expected": "Ожидаемо",
     "Sync Ratio": "Коэффициент синхронности",
     "Min Active Minutes": "Минимум активных минут",
+    "Min Overlap Minutes": "Минимум совпавших минут",
     "Active Minutes A": "Активных минут A",
     "Active Minutes B": "Активных минут B",
     "Ratio = actual overlapping minutes ÷ expected (activeA × activeB ÷ window)": "Коэффициент = совпавшие минуты ÷ ожидаемое (A × B ÷ окно)",

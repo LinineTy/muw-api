@@ -7874,6 +7874,7 @@
     "Expected": "Attendu",
     "Sync Ratio": "Ratio de synchronisation",
     "Min Active Minutes": "Minutes actives minimum",
+    "Min Overlap Minutes": "Minutes communes minimum",
     "Active Minutes A": "Minutes actives A",
     "Active Minutes B": "Minutes actives B",
     "Ratio = actual overlapping minutes ÷ expected (activeA × activeB ÷ window)": "Ratio = minutes communes ÷ attendu (actif A × actif B ÷ fenêtre)",
