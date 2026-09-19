@@ -8166,6 +8166,20 @@
     "The server returned the following result. Unselected models remain pending.": "Dưới đây là kết quả do máy chủ trả về. Mô hình không được chọn vẫn chờ xử lý.",
     "Unable to confirm the update result": "Không thể xác nhận kết quả cập nhật",
     "Update completed": "Cập nhật hoàn tất",
-    "Update results": "Kết quả cập nhật"
+    "Update results": "Kết quả cập nhật",
+    "1. Select models users call": "1. Chọn mô hình người dùng gọi",
+    "1. Select upstream models": "1. Chọn mô hình phía nhà cung cấp",
+    "2. Set names users call": "2. Đặt tên để người dùng gọi",
+    "2. Set upstream model names": "2. Đặt tên gửi lên nhà cung cấp",
+    "3. Review mappings": "3. Kiểm tra ánh xạ",
+    "Change upstream model names": "Đổi tên mô hình gửi lên nhà cung cấp",
+    "Create aliases for users": "Tạo bí danh cho người dùng",
+    "Enter a rule to preview mappings.": "Nhập quy tắc để xem trước ánh xạ.",
+    "Example: users call gpt-4o; upstream receives gpt-4o-all.": "Ví dụ: người dùng gọi gpt-4o, nhà cung cấp nhận gpt-4o-all.",
+    "Keep the names users call; change what is sent upstream.": "Giữ tên người dùng gọi, đổi tên gửi lên nhà cung cấp.",
+    "Keep upstream names; choose what users call.": "Giữ tên phía nhà cung cấp, đặt tên để người dùng gọi.",
+    "Upstream receives": "Nhà cung cấp nhận",
+    "Users call": "Người dùng gọi",
+    "What do you want to change?": "Bạn muốn thay đổi gì?"
   }
 }

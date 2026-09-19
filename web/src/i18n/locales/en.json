@@ -8166,6 +8166,20 @@
     "The server returned the following result. Unselected models remain pending.": "The server returned the following result. Unselected models remain pending.",
     "Unable to confirm the update result": "Unable to confirm the update result",
     "Update completed": "Update completed",
-    "Update results": "Update results"
+    "Update results": "Update results",
+    "1. Select models users call": "1. Select models users call",
+    "1. Select upstream models": "1. Select upstream models",
+    "2. Set names users call": "2. Set names users call",
+    "2. Set upstream model names": "2. Set upstream model names",
+    "3. Review mappings": "3. Review mappings",
+    "Change upstream model names": "Change upstream model names",
+    "Create aliases for users": "Create aliases for users",
+    "Enter a rule to preview mappings.": "Enter a rule to preview mappings.",
+    "Example: users call gpt-4o; upstream receives gpt-4o-all.": "Example: users call gpt-4o; upstream receives gpt-4o-all.",
+    "Keep the names users call; change what is sent upstream.": "Keep the names users call; change what is sent upstream.",
+    "Keep upstream names; choose what users call.": "Keep upstream names; choose what users call.",
+    "Upstream receives": "Upstream receives",
+    "Users call": "Users call",
+    "What do you want to change?": "What do you want to change?"
   }
 }

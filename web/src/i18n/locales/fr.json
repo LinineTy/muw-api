@@ -8166,6 +8166,20 @@
     "The server returned the following result. Unselected models remain pending.": "Voici le résultat renvoyé par le serveur. Les modèles non sélectionnés restent en attente.",
     "Unable to confirm the update result": "Impossible de confirmer le résultat",
     "Update completed": "Mise à jour terminée",
-    "Update results": "Résultats de la mise à jour"
+    "Update results": "Résultats de la mise à jour",
+    "1. Select models users call": "1. Sélectionner les modèles appelés",
+    "1. Select upstream models": "1. Sélectionner les modèles en amont",
+    "2. Set names users call": "2. Définir les noms pour les utilisateurs",
+    "2. Set upstream model names": "2. Définir les noms envoyés en amont",
+    "3. Review mappings": "3. Vérifier les correspondances",
+    "Change upstream model names": "Modifier les noms envoyés en amont",
+    "Create aliases for users": "Créer des alias pour les utilisateurs",
+    "Enter a rule to preview mappings.": "Renseignez une règle pour voir les correspondances.",
+    "Example: users call gpt-4o; upstream receives gpt-4o-all.": "Exemple : l’utilisateur appelle gpt-4o ; le fournisseur reçoit gpt-4o-all.",
+    "Keep the names users call; change what is sent upstream.": "Conservez les noms utilisés par vos utilisateurs et modifiez ceux envoyés en amont.",
+    "Keep upstream names; choose what users call.": "Conservez les noms en amont et définissez ceux utilisés par vos utilisateurs.",
+    "Upstream receives": "Reçu en amont",
+    "Users call": "Appelé par l’utilisateur",
+    "What do you want to change?": "Que souhaitez-vous modifier ?"
   }
 }

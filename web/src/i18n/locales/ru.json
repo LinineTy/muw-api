@@ -8166,6 +8166,20 @@
     "The server returned the following result. Unselected models remain pending.": "Ниже результат, полученный от сервера. Невыбранные модели остаются в ожидании обработки.",
     "Unable to confirm the update result": "Не удалось подтвердить результат обновления",
     "Update completed": "Обновление завершено",
-    "Update results": "Результаты обновления"
+    "Update results": "Результаты обновления",
+    "1. Select models users call": "1. Выберите модели для пользователей",
+    "1. Select upstream models": "1. Выберите модели провайдера",
+    "2. Set names users call": "2. Задайте имена для пользователей",
+    "2. Set upstream model names": "2. Задайте имена для провайдера",
+    "3. Review mappings": "3. Проверьте сопоставления",
+    "Change upstream model names": "Изменить имена моделей для провайдера",
+    "Create aliases for users": "Создать псевдонимы для пользователей",
+    "Enter a rule to preview mappings.": "Введите правило для просмотра сопоставлений.",
+    "Example: users call gpt-4o; upstream receives gpt-4o-all.": "Пример: пользователь вызывает gpt-4o, провайдер получает gpt-4o-all.",
+    "Keep the names users call; change what is sent upstream.": "Сохраните имена для пользователей и измените имена, отправляемые провайдеру.",
+    "Keep upstream names; choose what users call.": "Сохраните имена у провайдера и задайте имена для пользователей.",
+    "Upstream receives": "Провайдер получает",
+    "Users call": "Пользователь вызывает",
+    "What do you want to change?": "Что вы хотите изменить?"
   }
 }
