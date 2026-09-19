@@ -34,6 +34,7 @@ import { formatCurrencyUSD } from '@/lib/format'
 
 import { isCodingPlanMonitored } from '../constants'
 import { ACCOUNT_STATUS, type AccountListItem } from '../types'
+import { BalanceRefreshButton } from './balance-refresh-button'
 import { CodingPlanQuotaCell } from './coding-plan-quota-cell'
 
 function typeLabel(type: number): string {
@@ -219,6 +220,7 @@ export function useAccountsColumns(options: {
           const referenced = row.original.channel_count > 0
           return (
             <div className='flex justify-end gap-1'>
+              <BalanceRefreshButton account={row.original.account} />
               <TooltipProvider delay={100}>
                 <Tooltip>
                   <TooltipTrigger
