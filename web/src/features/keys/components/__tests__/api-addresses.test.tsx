@@ -53,7 +53,8 @@ function renderAddresses(status: StatusData) {
   return render(
     <QueryClientProvider client={client}>
       <ApiKeysProvider>
-        <ApiKeysPrimaryButtons />
+        {/* 我方自研：批量操作开关为必填 props */}
+        <ApiKeysPrimaryButtons batchMode={false} onBatchModeChange={() => {}} />
       </ApiKeysProvider>
     </QueryClientProvider>
   )
