@@ -143,13 +143,20 @@ describe('SwitchPlanDialog', () => {
     vi.useRealTimers()
   })
 
-  function renderDialog() {
+  const meteor = makePlan({
+    id: 19,
+    title: 'Meteor',
+    price_amount: 0,
+    priority: 1,
+  })
+
+  function renderDialog(plan: SubscriptionPlan = meteor) {
     const onOpenChange = vi.fn()
     const utils = render(
       <SwitchPlanDialog
         open
         onOpenChange={onOpenChange}
-        plan={makePlan({ id: 19, title: 'Meteor', price_amount: 0, priority: 1 })}
+        plan={plan}
         oldSub={makeSub()}
         oldPlan={makePlan()}
       />
@@ -202,6 +209,22 @@ describe('SwitchPlanDialog', () => {
     expect(paySubscriptionBalance).toHaveBeenCalledWith({ plan_id: 19 })
     expect(onOpenChange).toHaveBeenCalledWith(false)
     expect(refresh).toHaveBeenCalled()
+  })
+
+  test('标题固定「更换套餐」+ 方向徽标，档位方向不写进标题', () => {
+    renderDialog()
+    expect(screen.getByText('Switch Plan')).toBeTruthy()
+    expect(screen.getByText('Downgrade')).toBeTruthy()
+    expect(screen.queryByText('Downgrade Plan')).toBeNull()
+  })
+
+  test('升级方向显示 Upgrade 徽标', () => {
+    renderDialog(
+      makePlan({ id: 30, title: 'Supernova', price_amount: 50, priority: 9 })
+    )
+    expect(screen.getByText('Switch Plan')).toBeTruthy()
+    expect(screen.getByText('Upgrade')).toBeTruthy()
+    expect(screen.queryByText('Upgrade Plan')).toBeNull()
   })
 
   test('关闭后重开回到第一步，不残留上一次的确认步', async () => {
