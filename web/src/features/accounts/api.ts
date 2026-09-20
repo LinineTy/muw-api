@@ -20,6 +20,7 @@ import { api, type ApiRequestConfig } from '@/lib/api'
 
 import type {
   Account,
+  AccountBalanceResponse,
   AccountChannelRef,
   AccountCodingPlanQuota,
   AccountMultiKeyActionResponse,
@@ -180,10 +181,16 @@ export async function deleteAccountMultiKey(
 /**
  * 查询账户在上游的余额并落库（余额归账户，多渠道共享一份）。
  * 分发复用渠道侧的余额查询实现，与账户 base_url 无关。
+ *
+ * 返回**完整响应体**而非 `res.data.data`：上游不支持余额查询的账户类型
+ * （如 Zhipu GLM，后端 `updateStandardChannelBalance` 走 default 分支）会回
+ * HTTP 200 + `success:false` + 无 data，直接取 `data.data.balance` 会抛
+ * 「can't access property "balance", data is undefined」。调用方按 success 分支，
+ * 与渠道侧 updateChannelBalance 同款写法。
  */
 export async function updateAccountBalance(
   id: number
-): Promise<{ balance: number }> {
+): Promise<AccountBalanceResponse> {
   const res = await api.get(`/api/account/${id}/balance`)
-  return res.data.data
+  return res.data
 }
