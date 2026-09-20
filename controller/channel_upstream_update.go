@@ -407,38 +407,44 @@ func fetchChannelUpstreamModelIDs(channel *model.Channel) ([]string, error) {
 	}
 
 	var url string
-	switch channel.Type {
-	case constant.ChannelTypeAli:
-		url = fmt.Sprintf("%s/compatible-mode/v1/models", baseURL)
-	case constant.ChannelTypeZhipu_v4:
-		if plan, ok := constant.ChannelSpecialBases[baseURL]; ok && plan.OpenAIBaseURL != "" {
-			url = fmt.Sprintf("%s/models", plan.OpenAIBaseURL)
-		} else {
-			url = fmt.Sprintf("%s/api/paas/v4/models", baseURL)
-		}
-	case constant.ChannelTypeVolcEngine:
-		// 火山方舟 OpenAI 兼容 API 根路径是 /api/v3（chat/embeddings 均为
-		// {base}/api/v3/...，见 relay/channel/volcengine 的 GetRequestURL），
-		// 不存在 /v1/models 端点。原拼接会导致「获取模型列表」固定 404 失败。
-		if plan, ok := constant.ChannelSpecialBases[baseURL]; ok && plan.OpenAIBaseURL != "" {
-			url = fmt.Sprintf("%s/v1/models", plan.OpenAIBaseURL)
-		} else {
-			url = fmt.Sprintf("%s/api/v3/models", baseURL)
-		}
-	case constant.ChannelTypeMoonshot:
-		if plan, ok := constant.ChannelSpecialBases[baseURL]; ok && plan.OpenAIBaseURL != "" {
-			url = fmt.Sprintf("%s/models", plan.OpenAIBaseURL)
-		} else {
+	// 套餐 / Claude 端点先归一化：这些 base_url（符号键、`.../api/anthropic`、
+	// `.../v1/messages`）上没有 `/v1/models`，按渠道类型的老逻辑拼会固定 404。
+	if openAIBase, ok := constant.ResolveUpstreamModelsBaseURL(baseURL); ok {
+		url = fmt.Sprintf("%s/models", openAIBase)
+	} else {
+		switch channel.Type {
+		case constant.ChannelTypeAli:
+			url = fmt.Sprintf("%s/compatible-mode/v1/models", baseURL)
+		case constant.ChannelTypeZhipu_v4:
+			if plan, ok := constant.ChannelSpecialBases[baseURL]; ok && plan.OpenAIBaseURL != "" {
+				url = fmt.Sprintf("%s/models", plan.OpenAIBaseURL)
+			} else {
+				url = fmt.Sprintf("%s/api/paas/v4/models", baseURL)
+			}
+		case constant.ChannelTypeVolcEngine:
+			// 火山方舟 OpenAI 兼容 API 根路径是 /api/v3（chat/embeddings 均为
+			// {base}/api/v3/...，见 relay/channel/volcengine 的 GetRequestURL），
+			// 不存在 /v1/models 端点。原拼接会导致「获取模型列表」固定 404 失败。
+			if plan, ok := constant.ChannelSpecialBases[baseURL]; ok && plan.OpenAIBaseURL != "" {
+				url = fmt.Sprintf("%s/v1/models", plan.OpenAIBaseURL)
+			} else {
+				url = fmt.Sprintf("%s/api/v3/models", baseURL)
+			}
+		case constant.ChannelTypeMoonshot:
+			if plan, ok := constant.ChannelSpecialBases[baseURL]; ok && plan.OpenAIBaseURL != "" {
+				url = fmt.Sprintf("%s/models", plan.OpenAIBaseURL)
+			} else {
+				url = fmt.Sprintf("%s/v1/models", baseURL)
+			}
+		case constant.ChannelTypeMiniMax:
+			if plan, ok := constant.ChannelSpecialBases[baseURL]; ok && plan.OpenAIBaseURL != "" {
+				url = fmt.Sprintf("%s/models", plan.OpenAIBaseURL)
+			} else {
+				url = fmt.Sprintf("%s/v1/models", baseURL)
+			}
+		default:
 			url = fmt.Sprintf("%s/v1/models", baseURL)
 		}
-	case constant.ChannelTypeMiniMax:
-		if plan, ok := constant.ChannelSpecialBases[baseURL]; ok && plan.OpenAIBaseURL != "" {
-			url = fmt.Sprintf("%s/models", plan.OpenAIBaseURL)
-		} else {
-			url = fmt.Sprintf("%s/v1/models", baseURL)
-		}
-	default:
-		url = fmt.Sprintf("%s/v1/models", baseURL)
 	}
 
 	key, _, apiErr := channel.GetNextEnabledKey()
@@ -601,55 +607,37 @@ func shouldSendUpstreamModelUpdateNotification(now int64, changedChannels int, f
 
 func buildUpstreamModelUpdateTaskNotificationContent(
 	checkedChannels int,
-	changedChannels int,
-	detectedAddModels int,
+	removedChannelCount int,
 	detectedRemoveModels int,
-	autoAddedModels int,
 	failedChannelIDs []int,
 	channelSummaries []upstreamModelUpdateChannelSummary,
-	addModelSamples []string,
 	removeModelSamples []string,
 ) string {
 	var builder strings.Builder
 	failedChannels := len(failedChannelIDs)
 	builder.WriteString(fmt.Sprintf(
-		"上游模型巡检摘要：检测渠道 %d 个，发现变更 %d 个，新增 %d 个，删除 %d 个，自动同步新增 %d 个，失败 %d 个。",
+		"上游模型巡检摘要：检测渠道 %d 个，其中 %d 个渠道有模型下架（共 %d 个），失败 %d 个。",
 		checkedChannels,
-		changedChannels,
-		detectedAddModels,
+		removedChannelCount,
 		detectedRemoveModels,
-		autoAddedModels,
 		failedChannels,
 	))
 
 	if len(channelSummaries) > 0 {
 		displayCount := min(len(channelSummaries), channelUpstreamModelUpdateNotifyMaxChannelDetails)
-		builder.WriteString(fmt.Sprintf("\n\n变更渠道明细（展示 %d/%d）：", displayCount, len(channelSummaries)))
+		builder.WriteString(fmt.Sprintf("\n\n下架渠道明细（展示 %d/%d）：", displayCount, len(channelSummaries)))
 		for _, summary := range channelSummaries[:displayCount] {
-			builder.WriteString(fmt.Sprintf("\n- %s (+%d / -%d)", summary.ChannelName, summary.AddCount, summary.RemoveCount))
+			builder.WriteString(fmt.Sprintf("\n- %s（-%d）", summary.ChannelName, summary.RemoveCount))
 		}
 		if len(channelSummaries) > displayCount {
 			builder.WriteString(fmt.Sprintf("\n- 其余 %d 个渠道已省略", len(channelSummaries)-displayCount))
 		}
 	}
 
-	normalizedAddModelSamples := normalizeModelNames(addModelSamples)
-	if len(normalizedAddModelSamples) > 0 {
-		displayCount := min(len(normalizedAddModelSamples), channelUpstreamModelUpdateNotifyMaxModelDetails)
-		builder.WriteString(fmt.Sprintf("\n\n新增模型示例（展示 %d/%d）：%s",
-			displayCount,
-			len(normalizedAddModelSamples),
-			strings.Join(normalizedAddModelSamples[:displayCount], ", "),
-		))
-		if len(normalizedAddModelSamples) > displayCount {
-			builder.WriteString(fmt.Sprintf("（其余 %d 个已省略）", len(normalizedAddModelSamples)-displayCount))
-		}
-	}
-
 	normalizedRemoveModelSamples := normalizeModelNames(removeModelSamples)
 	if len(normalizedRemoveModelSamples) > 0 {
 		displayCount := min(len(normalizedRemoveModelSamples), channelUpstreamModelUpdateNotifyMaxModelDetails)
-		builder.WriteString(fmt.Sprintf("\n\n删除模型示例（展示 %d/%d）：%s",
+		builder.WriteString(fmt.Sprintf("\n\n下架模型示例（展示 %d/%d）：%s",
 			displayCount,
 			len(normalizedRemoveModelSamples),
 			strings.Join(normalizedRemoveModelSamples[:displayCount], ", "),
@@ -699,11 +687,12 @@ func runChannelUpstreamModelUpdateTaskOnce(ctx context.Context, force bool, allo
 	failedChannels := 0
 	failedChannelIDs := make([]int, 0)
 	changedChannels := 0
+	// 有「已配模型消失」的渠道数 —— 通知只围绕它（新增不进通知，见下）
+	removedChannelCount := 0
 	detectedAddModels := 0
 	detectedRemoveModels := 0
 	autoAddedModels := 0
 	channelSummaries := make([]upstreamModelUpdateChannelSummary, 0)
-	addModelSamples := make([]string, 0)
 	removeModelSamples := make([]string, 0)
 	refreshNeeded := false
 
@@ -774,13 +763,17 @@ scanLoop:
 			detectedRemoveModels += currentRemoveCount
 			if currentAddCount > 0 || currentRemoveCount > 0 {
 				changedChannels++
+			}
+			// 通知只讲「已配模型消失」：我们是"一个渠道一个模型"，而上游动辄几百个，
+			// 新增恒为几百（Qwen 系 255、OpenRouter 445）—— 那是配置现状不是异常，
+			// 进通知就是纯噪音。新增仍照常写进台账（summary / 日志），只是不进通知。
+			if currentRemoveCount > 0 {
+				removedChannelCount++
 				channelSummaries = append(channelSummaries, upstreamModelUpdateChannelSummary{
 					ChannelName: channel.Name,
-					AddCount:    currentAddCount,
 					RemoveCount: currentRemoveCount,
 				})
 			}
-			addModelSamples = mergeModelNames(addModelSamples, currentAddModels)
 			removeModelSamples = mergeModelNames(removeModelSamples, currentRemoveModels)
 			if modelsChanged {
 				refreshNeeded = true
@@ -833,12 +826,13 @@ scanLoop:
 			autoAddedModels,
 		))
 	}
-	if changedChannels > 0 || failedChannels > 0 {
+	// 触发条件只看「模型消失」和「检查失败」—— 新增不触发通知（见循环里的说明）
+	if removedChannelCount > 0 || failedChannels > 0 {
 		now := common.GetTimestamp()
-		if !shouldSendUpstreamModelUpdateNotification(now, changedChannels, failedChannels) {
+		if !shouldSendUpstreamModelUpdateNotification(now, removedChannelCount, failedChannels) {
 			common.SysLog(fmt.Sprintf(
-				"upstream model update notification skipped in 24h window: changed_channels=%d failed_channels=%d",
-				changedChannels,
+				"upstream model update notification skipped in 24h window: removed_channels=%d failed_channels=%d",
+				removedChannelCount,
 				failedChannels,
 			))
 			return summary
@@ -847,13 +841,10 @@ scanLoop:
 			"上游模型巡检通知",
 			buildUpstreamModelUpdateTaskNotificationContent(
 				checkedChannels,
-				changedChannels,
-				detectedAddModels,
+				removedChannelCount,
 				detectedRemoveModels,
-				autoAddedModels,
 				failedChannelIDs,
 				channelSummaries,
-				addModelSamples,
 				removeModelSamples,
 			),
 		)
