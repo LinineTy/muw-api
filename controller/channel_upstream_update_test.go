@@ -520,6 +520,22 @@ func TestCollectPendingUpstreamModelChangesFromModels_WithModelMapping(t *testin
 	require.Equal(t, []string{"stale-model"}, pendingRemoveModels)
 }
 
+func TestCollectPendingUpstreamModelChangesFromModels_WithModelMappingTargetGone(t *testing.T) {
+	// 映射目标从上游消失：别名本身不在上游目录里是正常的，但目标也没了
+	// ⇒ 这条配置已经转发不出去，要报下架。
+	pendingAddModels, pendingRemoveModels := collectPendingUpstreamModelChangesFromModels(
+		[]string{"glm-5.3-flash", "gpt-4o"},
+		[]string{"gpt-4o", "gpt-4.1"},
+		nil,
+		map[string]string{
+			"glm-5.3-flash": "ZhipuAI/GLM-5.3-Flash",
+		},
+	)
+
+	require.Equal(t, []string{"gpt-4.1"}, pendingAddModels)
+	require.Equal(t, []string{"glm-5.3-flash"}, pendingRemoveModels)
+}
+
 func TestCollectPendingUpstreamModelChangesFromModels_WithIgnoredRegexPatterns(t *testing.T) {
 	pendingAddModels, pendingRemoveModels := collectPendingUpstreamModelChangesFromModels(
 		[]string{"gpt-4o"},
