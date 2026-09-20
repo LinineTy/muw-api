@@ -4065,6 +4065,7 @@
     "Notification Email": "通知メール",
     "Notification Method": "通知方法",
     "Notifications": "通知",
+    "No notifications yet": "通知はまだありません",
     "Now a user whose user group is vip creates tokens with different groups and makes one call with each:": "ここで、ユーザーグループが vip のユーザーが異なるグループのトークンを作成し、それぞれ1回ずつ呼び出します：",
     "Nucleus sampling probability mass": "核サンプリングの累積確率",
     "Number": "数値",

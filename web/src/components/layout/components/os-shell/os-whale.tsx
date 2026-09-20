@@ -22,7 +22,7 @@ import { useOsWhaleStore, WHALE_SOUND_FILES } from './os-whale-store'
  * - 鲸鱼娘本体定格右下角（原版就是 `right:0;bottom:0`）
  * - 按住压扁（底部不动）、松手回弹，带按压/松手音效（两套：小黄鸭 / 音效 1，见 os-whale-store.ts）
  * - 点一下张嘴说一句台词（5 秒自动收），有 rua 动图那段
- * - 大小从侧栏「鲸鱼」球调（os-whale-ball.tsx），存浏览器本地
+ * - 大小从侧栏「偏好设置」弹窗调（os-preferences-dialog.tsx），存浏览器本地
  *
  * 三条必须照抄原版的地方，别顺手"优化"掉：
  * 1. **像素级命中**（`isWhaleHit`）：把本体 PNG 画进 canvas 取 alpha，只有点到鲸鱼本身
