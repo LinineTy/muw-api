@@ -7861,6 +7861,7 @@
     "All IPs": "全部 IP",
     "IPv4 only": "仅 IPv4",
     "IPv6 only": "仅 IPv6",
+    "Merge IPv6 by /64": "IPv6 按 /64 归并",
     "Users by IP Count": "按 IP 数分布",
     "Distinct IPs": "独立 IP 数",
     "Avg IPs per User": "人均 IP 数",

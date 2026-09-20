@@ -7861,6 +7861,7 @@
     "All IPs": "Toutes les IP",
     "IPv4 only": "IPv4 uniquement",
     "IPv6 only": "IPv6 uniquement",
+    "Merge IPv6 by /64": "Fusionner l'IPv6 par /64",
     "Users by IP Count": "Utilisateurs par nombre d'IP",
     "Distinct IPs": "IP distinctes",
     "Avg IPs per User": "IP par utilisateur",
