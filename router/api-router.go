@@ -121,6 +121,11 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.POST("/aff_transfer", middleware.UserCriticalRateLimit("aff-transfer"), controller.TransferAffQuota)
 				selfRoute.PUT("/setting", controller.UpdateUserSetting)
 
+				// 站内消息（自研）：网页「消息」窗口。只读自己的，userId 取会话。
+				selfRoute.GET("/notifications", controller.GetUserNotifications)
+				selfRoute.POST("/notifications/read", controller.MarkUserNotificationsRead)
+				selfRoute.POST("/notifications/read_all", controller.MarkAllUserNotificationsRead)
+
 				// 2FA routes
 				selfRoute.GET("/2fa/status", controller.Get2FAStatus)
 				selfRoute.POST("/2fa/setup", middleware.UserCriticalRateLimit("security-verification"), middleware.DisableCache(), controller.Setup2FA)

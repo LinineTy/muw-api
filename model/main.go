@@ -366,6 +366,11 @@ func migrateDB() error {
 	if err := ensureModelsContextWindowColumn(DB); err != nil {
 		return err
 	}
+	// user_notifications 表(站内消息,自研):新表,存量库走"跳过 AutoMigrate"路径,
+	// 必须在这里幂等建表,否则消息接口报 no such table。
+	if err := ensureUserNotificationTable(DB); err != nil {
+		return err
+	}
 	// redemptions.is_trap 列(钓鱼邀请码标记):已有表上的新列,已最新版本库走"跳过
 	// AutoMigrate"路径,必须在这里幂等补齐,否则读写该列会报 no such column。
 	if err := ensureRedemptionTrapColumn(DB); err != nil {
@@ -602,6 +607,7 @@ func autoMigrateAll() error {
 		&CreditMarkerSuggestion{},
 		&CreditMarkerAnalysisLog{},
 		&CreditMarkerAnalyzedLog{},
+		&UserNotification{},
 	)
 	if err != nil {
 		return err
@@ -1242,6 +1248,15 @@ func ensureChannelModelSettingsTable(db *gorm.DB) error {
 		return nil
 	}
 	return db.Migrator().CreateTable(&ChannelModelSetting{})
+}
+
+// ensureUserNotificationTable 幂等建 user_notifications 表（站内消息）。理由同
+// ensureChannelModelSettingsTable：已最新版本库走跳过路径，需显式补表。
+func ensureUserNotificationTable(db *gorm.DB) error {
+	if db.Migrator().HasTable(&UserNotification{}) {
+		return nil
+	}
+	return db.Migrator().CreateTable(&UserNotification{})
 }
 
 // ensureAccountsTable 幂等建 accounts 表（凭证与渠道解耦）。理由同
