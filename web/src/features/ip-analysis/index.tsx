@@ -15,6 +15,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
+import { CopyButton } from '@/components/copy-button'
 import {
   DataTableColumnHeader,
   DataTablePage,
@@ -494,13 +495,20 @@ function UserIpDetailDialog(props: {
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && props.onClose()}>
-      <DialogContent className='max-w-xl'>
+      {/*
+        宽度必须用 sm: 变体覆盖：DialogContent 基础样式里带了 `sm:max-w-sm`（384px），
+        它是媒体查询规则、在 CSS 顺序上压过裸的 `max-w-xl`——之前写 `max-w-xl`
+        实际不生效，弹窗一直只有 384px，长 IPv6 行撑到 452px → 列表出现横向滚动，
+        滚动后每行开头被推出视口（2026-09-20 maintainer截图里"IP 少了前 10 个字符"）。
+      */}
+      <DialogContent className='sm:max-w-2xl'>
         <DialogHeader>
           <DialogTitle>
             {t('User IPs')} · UID {props.userId}
           </DialogTitle>
         </DialogHeader>
-        <div className='max-h-[50vh] overflow-y-auto'>
+        {/* overflow-x-hidden：即便有超宽内容也禁止横向滚动（滚动会让整行开头不可见） */}
+        <div className='max-h-[50vh] overflow-x-hidden overflow-y-auto'>
           {(() => {
             if (isLoading) {
               return (
@@ -523,10 +531,20 @@ function UserIpDetailDialog(props: {
                     key={r.ip}
                     className='flex items-center justify-between gap-2 rounded-md border px-3 py-1.5 text-sm'
                   >
-                    <span className='font-mono'>{r.ip}</span>
-                    <span className='text-muted-foreground shrink-0 text-xs tabular-nums'>
-                      {r.request_count} · {formatTime(r.last_seen)}
+                    {/* min-w-0 + 换行：IPv6 可以折行显示，不再把行撑宽 */}
+                    <span className='min-w-0 font-mono break-all'>
+                      {r.ip}
                     </span>
+                    <div className='flex shrink-0 items-center gap-1'>
+                      <span className='text-muted-foreground text-xs tabular-nums'>
+                        {r.request_count} · {formatTime(r.last_seen)}
+                      </span>
+                      <CopyButton
+                        value={r.ip}
+                        size='icon-sm'
+                        tooltip={t('Copy to clipboard')}
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -753,15 +771,15 @@ function IpAccountDetailDialog(props: {
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && props.onClose()}>
-      <DialogContent className='max-w-xl'>
+      <DialogContent className='sm:max-w-xl'>
         <DialogHeader>
           <DialogTitle>
             {t('Linked Users')}
             {' · '}
-            <span className='font-mono text-sm'>{props.ip}</span>
+            <span className='font-mono text-sm break-all'>{props.ip}</span>
           </DialogTitle>
         </DialogHeader>
-        <div className='max-h-[50vh] overflow-y-auto'>
+        <div className='max-h-[50vh] overflow-x-hidden overflow-y-auto'>
           {(() => {
             if (isLoading) {
               return (

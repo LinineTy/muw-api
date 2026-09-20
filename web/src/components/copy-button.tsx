@@ -35,7 +35,8 @@ interface CopyButtonProps {
   className?: string
   iconClassName?: string
   variant?: 'ghost' | 'outline' | 'default' | 'secondary' | 'destructive'
-  size?: 'default' | 'sm' | 'lg' | 'icon'
+  // icon-sm：表格/列表行内操作按钮的全局档位（见 repo AGENTS.md Frontend Rules）
+  size?: 'default' | 'sm' | 'lg' | 'icon' | 'icon-sm'
   tooltip?: string
   successTooltip?: string
   'aria-label'?: string
