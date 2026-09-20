@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 // @muw-owned
 import {
   Bell,
+  Component,
   ExternalLink,
   Globe,
   Link2,
@@ -29,16 +30,19 @@ import {
   resolveChatUrl,
   type ChatPreset,
 } from '@/features/chat/lib/chat-links'
+import {
+  NotificationsDialog,
+  useUserNotifications,
+} from '@/features/notifications/components/notifications-dialog'
+import { useIsAdmin } from '@/hooks/use-admin'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 import { cn } from '@/lib/utils'
 
 import { SystemBrand } from '../system-brand'
 import { useOsBallStore } from './os-ball-store'
 import { FAB_BALL_SM, FAB_ICON_SM } from './os-ball-style'
-import { useOsNoticeStore } from './os-notice-store'
 import { useOsShellNavigate } from './os-open'
-import { OsWhaleBall } from './os-whale-ball'
-import { OsWidgetsBall } from './os-widgets-ball'
+import { OsPreferencesDialog } from './os-preferences-dialog'
 
 /**
  * OS 桌面壳 · 左侧细竖条(原底部左右两簇合并而来):
@@ -282,20 +286,17 @@ function RailSystemGroup({ side }: { side: 'left' | 'right' }) {
   )
 }
 
-/** 下坨:快速导航 / 公告 / 组件开关 / 第三方接入(工具项) */
+/** 下坨:快速导航 / 消息 / 偏好设置(组件·鲸鱼) / 第三方接入(工具项) */
 function RailToolsGroup({ side }: { side: 'left' | 'right' }) {
   return (
     <div className='flex flex-col items-center gap-0.5'>
       <NavJumpGroup side={side} />
 
-      <OsNoticeBall />
+      <OsNotificationsBall />
 
-      {/* 组件开关：紧挨公告球下方（maintainer："插中间"）；公告卡不在这个菜单里，
-          它归上面的铃铛管 —— 两处能关同一个东西会让人困惑 */}
-      <OsWidgetsBall side={side} />
-
-      {/* 鲸鱼挂件：设置只有大小/音效/音量三行，与"组件"球同形态 */}
-      <OsWhaleBall side={side} />
+      {/* 组件 + 鲸鱼合并成一个弹窗入口（2026-09-20 maintainer：边栏少一颗球、功能放一起）。
+          公告卡开关也在这个弹窗里 —— 它本来就是桌面组件之一 */}
+      <OsPreferencesBall />
 
       <ChatPresetsBall side={side} />
     </div>
@@ -303,30 +304,72 @@ function RailToolsGroup({ side }: { side: 'left' | 'right' }) {
 }
 
 /**
- * 时间线公告入口（原来的铃铛位置，外观不变）。
- * 功能改为：点一下展开/收起桌面右上角的公告堆叠卡 ——
- * 卡片上的 × 会把它整个隐藏，恢复显示就靠这里；未读不靠角标，
- * 改由「有新公告自动展开」承担。
+ * 消息球（原公告铃铛的位置，外观不变）。
+ *
+ * 功能换成**站内消息**：点开消息弹窗（上游模型巡检等管理端通知），带未读红点。
+ * 公告卡的展开/收起已并入「偏好设置」弹窗，两处能关同一个东西只会让人困惑。
+ * 目前只有管理员会收到站内消息，所以对非管理员不渲染这颗球。
  */
-function OsNoticeBall() {
+function OsNotificationsBall() {
   const { t } = useTranslation()
-  const collapsed = useOsNoticeStore((state) => state.collapsed)
-  const toggleNotice = useOsNoticeStore((state) => state.toggle)
+  const isAdmin = useIsAdmin()
+  const [open, setOpen] = useState(false)
+  const { data } = useUserNotifications()
+  const unread = data?.unread ?? 0
+
+  if (!isAdmin) return null
 
   return (
-    <button
-      type='button'
-      aria-label={t('System Announcements')}
-      title={t('System Announcements')}
-      data-state={collapsed ? 'closed' : 'open'}
-      onClick={() => {
-        closeNavCard()
-        toggleNotice()
-      }}
-      className={FAB_BALL_SM}
-    >
-      <Bell className={FAB_ICON_SM} aria-hidden='true' />
-    </button>
+    <>
+      <button
+        type='button'
+        aria-label={t('Notifications')}
+        title={t('Notifications')}
+        data-state={open ? 'open' : 'closed'}
+        onClick={() => {
+          closeNavCard()
+          setOpen(true)
+        }}
+        className={cn(FAB_BALL_SM, 'relative')}
+      >
+        <Bell className={FAB_ICON_SM} aria-hidden='true' />
+        {unread > 0 && (
+          <span
+            data-testid='notifications-unread-badge'
+            className='bg-destructive absolute top-0.5 right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-medium text-white tabular-nums'
+          >
+            {unread > 99 ? '99+' : unread}
+          </span>
+        )}
+      </button>
+      <NotificationsDialog open={open} onOpenChange={setOpen} />
+    </>
+  )
+}
+
+/** 偏好设置球:桌面组件显隐 + 鲸鱼挂件，合并后的唯一入口 */
+function OsPreferencesBall() {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+
+  return (
+    <>
+      <button
+        type='button'
+        aria-label={t('Preferences')}
+        title={t('Preferences')}
+        data-state={open ? 'open' : 'closed'}
+        onClick={() => {
+          closeNavCard()
+          setOpen(true)
+        }}
+        className={FAB_BALL_SM}
+      >
+        {/* 沿用原「组件」球的 Component 图标：用户对这个入口的认知就是"桌面上的东西" */}
+        <Component className={FAB_ICON_SM} aria-hidden='true' />
+      </button>
+      <OsPreferencesDialog open={open} onOpenChange={setOpen} />
+    </>
   )
 }
 

@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Bell, Loader2, Mail, Server, Webhook } from 'lucide-react'
+import { Bell, Inbox, Loader2, Mail, Server, Webhook } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -46,6 +46,8 @@ const NOTIFICATION_ICONS: Record<NotifyType, typeof Mail> = {
   webhook: Webhook,
   bark: Bell,
   gotify: Server,
+  // 站内消息：卡片图标用收件箱（Bell 已被 Bark 占了）
+  web: Inbox,
 }
 
 // ============================================================================
@@ -119,7 +121,7 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
           variant='outline'
           size='lg'
           spacing={2}
-          className='grid w-full grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3'
+          className='grid w-full grid-cols-2 gap-2 sm:grid-cols-5 sm:gap-3'
         >
           {NOTIFICATION_METHODS.map((method) => {
             const Icon = NOTIFICATION_ICONS[method.value]
