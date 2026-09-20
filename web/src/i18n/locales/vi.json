@@ -8200,6 +8200,11 @@
     "Connect to Doubao Seedance video and Seedream image generation through Volcengine Ark": "Kết nối tạo video Doubao Seedance và tạo ảnh Seedream qua Volcengine Ark",
     "Result not retained": "Kết quả không được lưu",
     "Sync": "Đồng bộ",
-    "The result was returned in the API response and was not saved as an artifact": "Kết quả đã được trả về trong phản hồi API và không được lưu làm sản phẩm"
+    "The result was returned in the API response and was not saved as an artifact": "Kết quả đã được trả về trong phản hồi API và không được lưu làm sản phẩm",
+    "{{selected}} of {{total}} changed fields selected": "Đã chọn {{selected}} / {{total}} trường thay đổi",
+    "Clear field selection": "Bỏ chọn các trường",
+    "Existing models: select fields to replace their current values with the values on the right. Unselected fields stay unchanged.": "Mô hình hiện có: chọn các trường để thay giá trị hiện tại bằng giá trị bên phải. Các trường không được chọn sẽ giữ nguyên.",
+    "New models: all metadata shown below will be imported automatically. No selection is needed.": "Mô hình mới: toàn bộ siêu dữ liệu bên dưới sẽ được nhập tự động, không cần chọn.",
+    "Select all changed fields": "Chọn tất cả trường thay đổi"
   }
 }
