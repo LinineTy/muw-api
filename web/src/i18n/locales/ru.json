@@ -8195,6 +8195,11 @@
     "Save group settings": "Сохранить настройки групп",
     "Search groups by name or description": "Поиск по названию или описанию",
     "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.": "Используется группа токена. Если она не задана, используется группа пользователя. Группа auto перебирает настроенные группы сверху вниз.",
-    "Copy API URL": "Копировать URL API"
+    "Copy API URL": "Копировать URL API",
+    "Doubao": "Doubao",
+    "Connect to Doubao Seedance video and Seedream image generation through Volcengine Ark": "Подключение генерации видео Doubao Seedance и изображений Seedream через Volcengine Ark",
+    "Result not retained": "Результат не сохранён",
+    "Sync": "Синхронный",
+    "The result was returned in the API response and was not saved as an artifact": "Результат был возвращён в ответе API и не сохранён как артефакт"
   }
 }

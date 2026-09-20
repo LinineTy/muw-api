@@ -105,7 +105,7 @@ export function getChannelTypeIcon(type: number): string {
     62: 'OpenCode', // OpenCode Zen
     36: 'Suno', // SunoAPI
     55: 'OpenAI', // Sora
-    54: 'Doubao', // DoubaoVideo
+    54: 'Doubao', // Doubao
     56: 'Replicate', // Replicate
 
     // Tools & Platforms
