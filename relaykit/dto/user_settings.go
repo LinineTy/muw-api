@@ -25,3 +25,14 @@ var (
 	NotifyTypeGotify  = "gotify"  // Gotify 推送
 	NotifyTypeWeb     = "web"     // 站内消息（网页「消息」窗口，自研）
 )
+
+// IsValidNotifyType 报告 typ 是否为受支持的额度预警/通知方式。
+// 白名单的唯一来源：新增方式时只需改这里，避免各入口的手写校验漏加。
+func IsValidNotifyType(typ string) bool {
+	switch typ {
+	case NotifyTypeEmail, NotifyTypeWebhook, NotifyTypeBark, NotifyTypeGotify, NotifyTypeWeb:
+		return true
+	default:
+		return false
+	}
+}
