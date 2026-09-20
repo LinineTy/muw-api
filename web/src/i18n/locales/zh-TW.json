@@ -7862,6 +7862,7 @@
     "IPv4 only": "僅 IPv4",
     "IPv6 only": "僅 IPv6",
     "Merge IPv6 by /64": "IPv6 依 /64 合併",
+    "IP Location": "歸屬地",
     "Users by IP Count": "按 IP 數分布",
     "Distinct IPs": "獨立 IP 數",
     "Avg IPs per User": "人均 IP 數",

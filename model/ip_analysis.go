@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/QuantumNous/new-api/pkg/ipgeo"
 )
 
 // IpAnalysisUserRankRow 单用户的独立 IP 统计（风控视角）。
@@ -26,6 +28,8 @@ type IpAnalysisIpRankRow struct {
 	UserCount    int64  `json:"user_count"`
 	RequestCount int64  `json:"request_count"`
 	LastSeen     int64  `json:"last_seen"`
+	// Location 离线归属地（形如 "中国 浙江省 杭州市 移动"）；库不可用时为空串。
+	Location string `json:"location"`
 }
 
 // IpAnalysisUserIpRow 某用户的 IP 使用明细。
@@ -34,6 +38,8 @@ type IpAnalysisUserIpRow struct {
 	RequestCount int64  `json:"request_count"`
 	FirstSeen    int64  `json:"first_seen"`
 	LastSeen     int64  `json:"last_seen"`
+	// Location 离线归属地；归并模式下取该 /64 下任一地址的归属地。
+	Location string `json:"location"`
 }
 
 // IpAnalysisIpUserRow 某 IP 关联的账号明细。
@@ -343,11 +349,22 @@ func GetUserIpDetail(userId, days int, version string, mergeV6 bool) ([]IpAnalys
 		ORDER BY request_count DESC`,
 		LogTypeConsume, userId, since,
 	).Scan(&rows).Error
-	if err != nil || !mergeV6 {
+	if err != nil {
 		return rows, err
+	}
+	fillIpLocations(rows)
+	if !mergeV6 {
+		return rows, nil
 	}
 	// 明细只有几十行，直接内存归并（IP 数比 /64 前缀数多得多）
 	return mergeUserIpDetail(rows), nil
+}
+
+// fillIpLocations 给明细行补离线归属地（库不可用时留空，不影响其它字段）。
+func fillIpLocations(rows []IpAnalysisUserIpRow) {
+	for i := range rows {
+		rows[i].Location = ipgeo.Lookup(rows[i].Ip)
+	}
 }
 
 // mergeUserIpDetail 把同一用户下同 /64 的明细行合并成一行。
@@ -363,6 +380,7 @@ func mergeUserIpDetail(rows []IpAnalysisUserIpRow) []IpAnalysisUserIpRow {
 				RequestCount: r.RequestCount,
 				FirstSeen:    r.FirstSeen,
 				LastSeen:     r.LastSeen,
+				Location:     r.Location,
 			}
 			continue
 		}
@@ -424,7 +442,15 @@ func GetIpUserRank(days, minUsers int, version string, mergeV6 bool, page, pageS
 		LIMIT ? OFFSET ?`,
 		LogTypeConsume, since, minUsers, pageSize, offset,
 	).Scan(&rows).Error
+	fillIpRankLocations(rows)
 	return rows, total, err
+}
+
+// fillIpRankLocations 给 IP 排行行补离线归属地（库不可用时留空）。
+func fillIpRankLocations(rows []IpAnalysisIpRankRow) {
+	for i := range rows {
+		rows[i].Location = ipgeo.Lookup(rows[i].Ip)
+	}
 }
 
 // getIpUserRankMerged /64 归并版 IP 排行：同 /64 的地址合成一行，
@@ -439,6 +465,8 @@ func getIpUserRankMerged(since int64, minUsers int, versionClause string, page, 
 		users    map[int]struct{}
 		requests int64
 		lastSeen int64
+		// sample 该前缀下任取一个地址：归并后的行要拿它查归属地（前缀串本身查不了）
+		sample string
 	}
 	byKey := make(map[string]*keyAgg, 1024)
 	for i := range pairs {
@@ -446,7 +474,7 @@ func getIpUserRankMerged(since int64, minUsers int, versionClause string, page, 
 		key := ipMergeKey(p.Ip, true)
 		a, ok := byKey[key]
 		if !ok {
-			a = &keyAgg{users: make(map[int]struct{}, 4)}
+			a = &keyAgg{users: make(map[int]struct{}, 4), sample: p.Ip}
 			byKey[key] = a
 		}
 		a.users[p.UserId] = struct{}{}
@@ -466,6 +494,7 @@ func getIpUserRankMerged(since int64, minUsers int, versionClause string, page, 
 			UserCount:    int64(len(a.users)),
 			RequestCount: a.requests,
 			LastSeen:     a.lastSeen,
+			Location:     ipgeo.Lookup(a.sample),
 		})
 	}
 	sort.SliceStable(rows, func(i, j int) bool {

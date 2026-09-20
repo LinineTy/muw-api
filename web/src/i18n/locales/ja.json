@@ -7862,6 +7862,7 @@
     "IPv4 only": "IPv4 のみ",
     "IPv6 only": "IPv6 のみ",
     "Merge IPv6 by /64": "IPv6 を /64 で統合",
+    "IP Location": "IP の所在地",
     "Users by IP Count": "IP 数別ユーザー数",
     "Distinct IPs": "独立 IP 数",
     "Avg IPs per User": "ユーザーあたり IP 数",
