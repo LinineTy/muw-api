@@ -1,11 +1,18 @@
 // @muw-owned
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { getUserNotifications, markAllNotificationsRead } from '../../api'
+import {
+  getUserNotifications,
+  markAllNotificationsRead,
+  markNotificationsRead,
+} from '../../api'
 import type { UserNotificationPage } from '../../types'
-import { NotificationsDialog } from '../notifications-dialog'
+import {
+  NotificationsDialog,
+  USER_NOTIFICATIONS_QUERY_KEY,
+} from '../notifications-dialog'
 
 vi.mock('../../api', () => ({
   getUserNotifications: vi.fn(),
@@ -47,17 +54,23 @@ function renderDialog() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
-  return render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <NotificationsDialog open onOpenChange={() => {}} />
     </QueryClientProvider>
   )
+  return { queryClient, ...view }
 }
+
+const unreadRows = () => document.querySelectorAll('[data-unread="true"]')
+const cachedPage = (queryClient: QueryClient) =>
+  queryClient.getQueryData<UserNotificationPage>(USER_NOTIFICATIONS_QUERY_KEY)
 
 describe('NotificationsDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(markAllNotificationsRead).mockResolvedValue(1)
+    vi.mocked(markNotificationsRead).mockResolvedValue(1)
   })
 
   it('逐条渲染标题与正文', async () => {
@@ -72,24 +85,63 @@ describe('NotificationsDialog', () => {
     expect(screen.getByText('旧的一条（已读）')).toBeInTheDocument()
   })
 
-  it('打开时把未读标为已读，且未读条目仍高亮', async () => {
+  it('打开时不清空未读：不调全部已读，未读行仍高亮', async () => {
     vi.mocked(getUserNotifications).mockResolvedValue(page)
 
-    renderDialog()
+    const { queryClient } = renderDialog()
 
-    // 打开即标记已读（角标清零）
+    // 列表渲染出来就说明数据到位了
+    await screen.findByText('旧的一条（已读）')
+    expect(markAllNotificationsRead).not.toHaveBeenCalled()
+    expect(unreadRows()).toHaveLength(1)
+    expect(cachedPage(queryClient)?.unread).toBe(1)
+  })
+
+  it('点单条「标为已读」：只标这一条，未读数 -1', async () => {
+    vi.mocked(getUserNotifications).mockResolvedValue(page)
+
+    const { queryClient } = renderDialog()
+
+    fireEvent.click(await screen.findByTestId('notification-mark-read-2'))
+
+    await waitFor(() =>
+      expect(markNotificationsRead).toHaveBeenCalledWith([2])
+    )
+    expect(markAllNotificationsRead).not.toHaveBeenCalled()
+    // 该条不再是未读、高亮消失，角标跟着 -1
+    await waitFor(() => expect(unreadRows()).toHaveLength(0))
+    expect(cachedPage(queryClient)?.unread).toBe(0)
+  })
+
+  it('点「全部已读」：调全部已读接口，所有行取消高亮、未读归零', async () => {
+    vi.mocked(getUserNotifications).mockResolvedValue(page)
+
+    const { queryClient } = renderDialog()
+
+    fireEvent.click(await screen.findByTestId('notifications-mark-all'))
+
     await waitFor(() =>
       expect(markAllNotificationsRead).toHaveBeenCalledTimes(1)
     )
-    // 高亮按打开那一刻的快照：第 2 条标了 data-unread，已读的第 1 条没有
+    expect(markNotificationsRead).not.toHaveBeenCalled()
+    await waitFor(() => expect(unreadRows()).toHaveLength(0))
+    expect(cachedPage(queryClient)?.unread).toBe(0)
+  })
+
+  it('标记失败：把缓存拉回服务端真实状态（重拉列表）', async () => {
+    vi.mocked(getUserNotifications).mockResolvedValue(page)
+    vi.mocked(markNotificationsRead).mockRejectedValue(new Error('boom'))
+
+    renderDialog()
+
+    fireEvent.click(await screen.findByTestId('notification-mark-read-2'))
+
     await waitFor(() =>
-      expect(
-        document.querySelectorAll('[data-unread="true"]')
-      ).toHaveLength(1)
+      expect(getUserNotifications).toHaveBeenCalledTimes(2)
     )
   })
 
-  it('没有消息时给空态，不调标记已读', async () => {
+  it('没有消息时给空态，不调任何已读接口', async () => {
     vi.mocked(getUserNotifications).mockResolvedValue({
       items: [],
       total: 0,
@@ -102,5 +154,6 @@ describe('NotificationsDialog', () => {
 
     expect(await screen.findByText('No notifications yet')).toBeInTheDocument()
     expect(markAllNotificationsRead).not.toHaveBeenCalled()
+    expect(markNotificationsRead).not.toHaveBeenCalled()
   })
 })
