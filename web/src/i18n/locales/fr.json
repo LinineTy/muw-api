@@ -8205,6 +8205,12 @@
     "Clear field selection": "Tout désélectionner",
     "Existing models: select fields to replace their current values with the values on the right. Unselected fields stay unchanged.": "Modèles existants : sélectionnez les champs à remplacer par les valeurs de droite. Les autres restent inchangés.",
     "New models: all metadata shown below will be imported automatically. No selection is needed.": "Nouveaux modèles : toutes les métadonnées ci-dessous seront importées automatiquement. Aucune sélection nécessaire.",
-    "Select all changed fields": "Tout sélectionner"
+    "Select all changed fields": "Tout sélectionner",
+    "Input pre-consume multiplier": "Multiplicateur de pré-débit des entrées",
+    "Must be greater than 0": "Doit être supérieur à 0",
+    "Must be greater than or equal to 0": "Doit être supérieur ou égal à 0",
+    "Reserve the estimated input cost multiplied by this value, without estimating output tokens. Defaults to 1; positive decimals such as 0.5 and 1.5 are supported. Final charges use actual usage. Per-request and task prices are unaffected.": "Réserve le coût estimé des entrées multiplié par cette valeur, sans estimer les tokens de sortie. Valeur par défaut : 1. Les décimales positives, comme 0,5 et 1,5, sont acceptées. La facturation finale utilise la consommation réelle. Les tarifs par requête et par tâche restent inchangés.",
+    "Skip pre-consumption when the wallet balance and limited API key balance both exceed this amount. Set to 0 to always pre-consume. Subscriptions and asynchronous tasks always reserve quota.": "Aucun pré-débit si le solde du portefeuille et celui de la clé API à quota limité dépassent ce montant. La valeur 0 impose le pré-débit. Les abonnements et tâches asynchrones réservent toujours un quota.",
+    "Wallet pre-consume bypass threshold (USD)": "Seuil sans pré-débit du portefeuille (USD)"
   }
 }

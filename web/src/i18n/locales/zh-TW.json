@@ -8205,6 +8205,12 @@
     "Clear field selection": "取消全選",
     "Existing models: select fields to replace their current values with the values on the right. Unselected fields stay unchanged.": "已有模型：勾選要更新的欄位，目前內容會被右側內容取代；未勾選的保持不變。",
     "New models: all metadata shown below will be imported automatically. No selection is needed.": "新模型：將自動匯入下方顯示的全部資料，無需勾選。",
-    "Select all changed fields": "全選變更欄位"
+    "Select all changed fields": "全選變更欄位",
+    "Input pre-consume multiplier": "輸入預扣倍率",
+    "Must be greater than 0": "必須大於 0",
+    "Must be greater than or equal to 0": "必須大於或等於 0",
+    "Reserve the estimated input cost multiplied by this value, without estimating output tokens. Defaults to 1; positive decimals such as 0.5 and 1.5 are supported. Final charges use actual usage. Per-request and task prices are unaffected.": "按預估輸入費用乘以此倍率預扣，不預估輸出 token。預設為 1，支援 0.5、1.5 等正小數。最終按實際用量結算，按次和任務計費不受影響。",
+    "Skip pre-consumption when the wallet balance and limited API key balance both exceed this amount. Set to 0 to always pre-consume. Subscriptions and asynchronous tasks always reserve quota.": "錢包餘額和有限額的 API 權杖餘額都超過此金額時，略過預扣。設為 0 則一律預扣。訂閱和非同步任務一律預留額度。",
+    "Wallet pre-consume bypass threshold (USD)": "錢包免預扣門檻（美元）"
   }
 }
