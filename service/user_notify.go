@@ -35,6 +35,8 @@ func NotifyUpstreamModelUpdateWatchers(subject string, content string) {
 	sentCount := 0
 	for _, user := range users {
 		userSetting := user.GetSetting()
+		// 个人开关决定「要不要收这类通知」；通道（email/webhook/bark/gotify/**web 站内**）
+		// 决定「从哪收」——选了 web 就落在网页「消息」窗口里（见 NotifyUser）。
 		if !userSetting.UpstreamModelUpdateNotifyEnabled {
 			continue
 		}
@@ -100,6 +102,9 @@ func NotifyUser(userId int, userEmail string, userSetting dto.UserSetting, data 
 			return nil
 		}
 		return sendGotifyNotify(gotifyUrl, gotifyToken, userSetting.GotifyPriority, data)
+	case dto.NotifyTypeWeb:
+		// 站内消息：落库即可，网页端「消息」窗口会拉取 —— 没有「缺什么配置」的失败场景
+		return model.CreateUserNotification(userId, data.Type, data.Title, data.Content)
 	}
 	return nil
 }
