@@ -8195,6 +8195,11 @@
     "Save group settings": "Lưu cài đặt nhóm",
     "Search groups by name or description": "Tìm theo tên hoặc mô tả nhóm",
     "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.": "Sử dụng nhóm được đặt cho token. Nếu token chưa có nhóm, sử dụng nhóm của người dùng. Nhóm auto thử các nhóm đã cấu hình theo thứ tự từ trên xuống dưới.",
-    "Copy API URL": "Sao chép URL API"
+    "Copy API URL": "Sao chép URL API",
+    "Doubao": "Doubao",
+    "Connect to Doubao Seedance video and Seedream image generation through Volcengine Ark": "Kết nối tạo video Doubao Seedance và tạo ảnh Seedream qua Volcengine Ark",
+    "Result not retained": "Kết quả không được lưu",
+    "Sync": "Đồng bộ",
+    "The result was returned in the API response and was not saved as an artifact": "Kết quả đã được trả về trong phản hồi API và không được lưu làm sản phẩm"
   }
 }

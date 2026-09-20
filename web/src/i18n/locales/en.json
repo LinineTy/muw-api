@@ -8195,6 +8195,11 @@
     "Save group settings": "Save group settings",
     "Search groups by name or description": "Search groups by name or description",
     "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.": "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.",
-    "Copy API URL": "Copy API URL"
+    "Copy API URL": "Copy API URL",
+    "Doubao": "Doubao",
+    "Connect to Doubao Seedance video and Seedream image generation through Volcengine Ark": "Connect to Doubao Seedance video and Seedream image generation through Volcengine Ark",
+    "Result not retained": "Result not retained",
+    "Sync": "Sync",
+    "The result was returned in the API response and was not saved as an artifact": "The result was returned in the API response and was not saved as an artifact"
   }
 }

@@ -8195,6 +8195,11 @@
     "Save group settings": "儲存分組設定",
     "Search groups by name or description": "搜尋分組名稱或描述",
     "Use the group set on the token. If the token has no group, use the user group. The auto group tries the configured groups from top to bottom.": "使用權杖設定的分組；權杖未設定分組時，使用使用者分組。auto 分組會依設定順序由上到下嘗試各分組。",
-    "Copy API URL": "複製 API 位址"
+    "Copy API URL": "複製 API 位址",
+    "Doubao": "Doubao",
+    "Connect to Doubao Seedance video and Seedream image generation through Volcengine Ark": "透過火山方舟接入豆包 Seedance 影片生成與 Seedream 圖片生成",
+    "Result not retained": "結果未保留",
+    "Sync": "同步",
+    "The result was returned in the API response and was not saved as an artifact": "結果已在介面回應中返回，未保存為製品"
   }
 }
