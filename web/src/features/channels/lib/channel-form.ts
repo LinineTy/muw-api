@@ -489,7 +489,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   claude_beta_query: false,
   disable_task_polling_sleep: false,
   sensenova_remove_watermark: false,
-  upstream_model_update_check_enabled: false,
+  upstream_model_update_check_enabled: true,
   upstream_model_update_auto_sync_enabled: false,
   upstream_model_update_ignored_models: '',
   advanced_custom: '',
