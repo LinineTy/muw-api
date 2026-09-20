@@ -8200,6 +8200,11 @@
     "Connect to Doubao Seedance video and Seedream image generation through Volcengine Ark": "Подключение генерации видео Doubao Seedance и изображений Seedream через Volcengine Ark",
     "Result not retained": "Результат не сохранён",
     "Sync": "Синхронный",
-    "The result was returned in the API response and was not saved as an artifact": "Результат был возвращён в ответе API и не сохранён как артефакт"
+    "The result was returned in the API response and was not saved as an artifact": "Результат был возвращён в ответе API и не сохранён как артефакт",
+    "{{selected}} of {{total}} changed fields selected": "Выбрано изменённых полей: {{selected}} из {{total}}",
+    "Clear field selection": "Снять выделение полей",
+    "Existing models: select fields to replace their current values with the values on the right. Unselected fields stay unchanged.": "Существующие модели: выберите поля, текущие значения которых нужно заменить значениями справа. Остальные поля останутся без изменений.",
+    "New models: all metadata shown below will be imported automatically. No selection is needed.": "Новые модели: все показанные ниже метаданные будут импортированы автоматически. Выбирать поля не нужно.",
+    "Select all changed fields": "Выбрать все изменённые поля"
   }
 }

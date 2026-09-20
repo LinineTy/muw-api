@@ -8200,6 +8200,11 @@
     "Connect to Doubao Seedance video and Seedream image generation through Volcengine Ark": "Connecter la génération de vidéos Doubao Seedance et d'images Seedream via Volcengine Ark",
     "Result not retained": "Résultat non conservé",
     "Sync": "Synchrone",
-    "The result was returned in the API response and was not saved as an artifact": "Le résultat a été renvoyé dans la réponse de l'API et n'a pas été enregistré comme artefact"
+    "The result was returned in the API response and was not saved as an artifact": "Le résultat a été renvoyé dans la réponse de l'API et n'a pas été enregistré comme artefact",
+    "{{selected}} of {{total}} changed fields selected": "{{selected}} / {{total}} champs modifiés sélectionnés",
+    "Clear field selection": "Tout désélectionner",
+    "Existing models: select fields to replace their current values with the values on the right. Unselected fields stay unchanged.": "Modèles existants : sélectionnez les champs à remplacer par les valeurs de droite. Les autres restent inchangés.",
+    "New models: all metadata shown below will be imported automatically. No selection is needed.": "Nouveaux modèles : toutes les métadonnées ci-dessous seront importées automatiquement. Aucune sélection nécessaire.",
+    "Select all changed fields": "Tout sélectionner"
   }
 }

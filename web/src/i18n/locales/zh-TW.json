@@ -8200,6 +8200,11 @@
     "Connect to Doubao Seedance video and Seedream image generation through Volcengine Ark": "透過火山方舟接入豆包 Seedance 影片生成與 Seedream 圖片生成",
     "Result not retained": "結果未保留",
     "Sync": "同步",
-    "The result was returned in the API response and was not saved as an artifact": "結果已在介面回應中返回，未保存為製品"
+    "The result was returned in the API response and was not saved as an artifact": "結果已在介面回應中返回，未保存為製品",
+    "{{selected}} of {{total}} changed fields selected": "已勾選 {{selected}} / {{total}} 個變更欄位",
+    "Clear field selection": "取消全選",
+    "Existing models: select fields to replace their current values with the values on the right. Unselected fields stay unchanged.": "已有模型：勾選要更新的欄位，目前內容會被右側內容取代；未勾選的保持不變。",
+    "New models: all metadata shown below will be imported automatically. No selection is needed.": "新模型：將自動匯入下方顯示的全部資料，無需勾選。",
+    "Select all changed fields": "全選變更欄位"
   }
 }
