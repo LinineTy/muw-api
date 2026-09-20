@@ -23,7 +23,6 @@ import (
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/oauth"
-	"github.com/QuantumNous/new-api/pkg/ipgeo"
 	"github.com/QuantumNous/new-api/pkg/jsplugin"
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
 	"github.com/QuantumNous/new-api/relay"
@@ -63,8 +62,9 @@ func main() {
 		return
 	}
 
-	// 离线归属地库（IP 分析页用）：文件在本地就同步载入，缺失则后台下载
-	ipgeo.Start()
+	// 离线归属地库（IP 分析页用）：配置取自数据库选项（设置页可改），
+	// 本地已有就立刻可用，缺失则后台拉取；之后每天检查一次上游是否有新数据
+	controller.InitIpGeo()
 
 	common.SysLog("New API " + common.Version + " started")
 	if os.Getenv("GIN_MODE") != "debug" {

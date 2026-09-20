@@ -26,6 +26,7 @@ import { PerformanceSection } from '../maintenance/performance-section'
 import { UpdateCheckerSection } from '../maintenance/update-checker-section'
 import type { OperationsSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
+import { IpGeoSection } from './ip-geo-section'
 import { VisualFallbackSection } from './visual-fallback-section'
 
 const OPERATIONS_SECTIONS = [
@@ -141,6 +142,12 @@ const OPERATIONS_SECTIONS = [
         }}
       />
     ),
+  },
+  {
+    // 离线 IP 归属地：数据源与开关落库，更新走热加载（无需重启容器）
+    id: 'ip-geo',
+    titleKey: 'IP Geolocation',
+    build: () => <IpGeoSection />,
   },
   {
     id: 'visual-fallback',

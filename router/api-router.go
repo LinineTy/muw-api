@@ -492,6 +492,14 @@ func SetApiRouter(router *gin.Engine) {
 			ipAnalysisRoute.GET("/overlap", controller.GetIpAnalysisOverlap)
 		}
 
+		// 离线归属地库：状态与"立即更新"给管理员（其它管理员也能点），改配置仅 Root
+		ipGeoRoute := apiRouter.Group("/ip_geo")
+		{
+			ipGeoRoute.GET("/status", middleware.AdminAuth(), controller.GetIpGeoStatus)
+			ipGeoRoute.POST("/update", middleware.AdminAuth(), controller.UpdateIpGeoDatabase)
+			ipGeoRoute.PUT("/config", middleware.RootAuth(), controller.UpdateIpGeoConfig)
+		}
+
 		logRoute.Use(middleware.CORS(), middleware.CriticalRateLimit())
 		{
 			logRoute.GET("/token", middleware.TokenAuthReadOnly(), controller.GetLogByKey)
