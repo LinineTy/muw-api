@@ -191,8 +191,9 @@ var (
 // config 从环境变量取配置（每次调用都读，方便测试里改）：
 //
 //	IP_GEO_DISABLE=1          整体关闭（不加载、不下载，查询一律返回空）
-//	IP_GEO_DB_PATH_V4/_V6     本地文件路径，默认 ./data/ip2region_v4.xdb 等
-//	IP_GEO_DB_URL_V4/_V6      文件缺失时的下载源（显式配置才下载，见下）
+//	IP_GEO_DB_PATH_V4/_V6     本地文件路径，默认 ./ip2region_v4.xdb 等
+//	IP_GEO_DB_URL_V4/_V6      文件缺失时的下载源（显式配置才下载，见下）；
+//	                          不配也行——把 xdb 文件直接放到上面的路径即可
 //
 // ⚠️ 下载源必须显式配置，没有默认值：默认带 URL 会让"任何一次 Lookup"都可能去网上拉
 // 十几 MB 文件，落盘位置还取决于进程的工作目录（跑单元测试时就把数据文件写进了
@@ -209,7 +210,9 @@ func dbPath(v6 bool) string {
 	if p := strings.TrimSpace(os.Getenv(key)); p != "" {
 		return p
 	}
-	return filepath.Join("data", name)
+	// 相对进程工作目录，不套 data/ 子目录：生产容器 WORKDIR 就是 /data
+	// （官方/1Panel compose 的 `./data:/data` 挂载点），套一层会落到 /data/data/。
+	return name
 }
 
 func dbURL(v6 bool) string {
