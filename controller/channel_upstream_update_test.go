@@ -545,19 +545,13 @@ func TestBuildUpstreamModelUpdateTaskNotificationContent_OmitOverflowDetails(t *
 	content := buildUpstreamModelUpdateTaskNotificationContent(
 		24,
 		12,
-		56,
 		21,
-		9,
 		[]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
 		channelSummaries,
 		[]string{
-			"gpt-4.1", "gpt-4.1-mini", "o3", "o4-mini", "gemini-2.5-pro", "claude-3.7-sonnet",
-			"qwen-max", "deepseek-r1", "llama-3.3-70b", "mistral-large", "command-r-plus", "doubao-pro-32k",
-			"hunyuan-large",
-		},
-		[]string{
 			"gpt-3.5-turbo", "claude-2.1", "gemini-1.5-pro", "mixtral-8x7b", "qwen-plus", "glm-4",
-			"yi-large", "moonshot-v1", "doubao-lite",
+			"yi-large", "moonshot-v1", "doubao-lite", "llama-2-70b", "command-r", "baichuan-13b",
+			"internlm-20b",
 		},
 	)
 
@@ -603,4 +597,31 @@ func TestDetectAllChannelUpstreamModelUpdatesRejectsExistingActiveTask(t *testin
 	require.Equal(t, http.StatusConflict, recorder.Code)
 	require.Contains(t, recorder.Body.String(), existing.TaskID)
 	require.Contains(t, recorder.Body.String(), "已有模型更新任务正在运行或等待中")
+}
+
+// 套餐/Claude 端点（`…/v1/messages`）上的检测必须打标准 OpenAI 路径 ——
+// 首轮巡检里 MiniMax×2、GLM×2 四个渠道固定 404 就是没做这层归一化。
+func TestFetchChannelUpstreamModelIDsNormalizesClaudeEndpointBaseURL(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"object":"list","data":[{"id":"glm-5.3"}]}`))
+	}))
+	defer srv.Close()
+
+	baseURL := srv.URL + "/v1/messages"
+	channel := &model.Channel{
+		Id:      1,
+		Type:    constant.ChannelTypeZhipu_v4,
+		BaseURL: &baseURL,
+		Key:     "sk-test-key",
+		Models:  "glm-5.3",
+		Group:   "default",
+	}
+
+	models, err := fetchChannelUpstreamModelIDs(channel)
+	require.NoError(t, err)
+	require.Equal(t, []string{"glm-5.3"}, models)
+	require.Equal(t, "/v1/models", gotPath, "应剥掉 /v1/messages 后按标准 OpenAI 路径探测")
 }

@@ -1,5 +1,7 @@
 package constant
 
+import "strings"
+
 const (
 	ChannelTypeUnknown        = 0
 	ChannelTypeOpenAI         = 1
@@ -61,8 +63,8 @@ const (
 	ChannelTypeOpenCodeZen    = 62
 	// Upstream assigned 61 to TaskPlugin; this fork already uses 61/62 for
 	// SenseNova/OpenCodeZen, so TaskPlugin is renumbered to the next free slot.
-	ChannelTypeTaskPlugin     = 63
-	ChannelTypeDummy          // this one is only for count, do not add any channel after this
+	ChannelTypeTaskPlugin = 63
+	ChannelTypeDummy      // this one is only for count, do not add any channel after this
 
 )
 
@@ -255,4 +257,43 @@ var ChannelSpecialBases = map[string]ChannelSpecialBase{
 		ClaudeBaseURL: "https://ark.cn-beijing.volces.com/api/coding",
 		OpenAIBaseURL: "https://ark.cn-beijing.volces.com/api/coding/v3",
 	},
+}
+
+// ResolveUpstreamModelsBaseURL 解析「上游模型列表探测」该打的 OpenAI 风格基址。
+//
+// 为什么需要它：套餐渠道的 base_url 有两种形态 —— 符号键（`glm-coding-plan`），
+// 或套餐专用的 Claude 端点（`.../api/anthropic`、`.../v1/messages`）。模型列表只在
+// OpenAI 端点上提供，直接拿这种 base_url 拼 `/v1/models` 必然 404
+// （首轮巡检里 MiniMax / GLM 四个渠道的实际失败原因）。
+//
+// 三种情形：
+//  1. 符号键 → 套餐表里的 OpenAIBaseURL
+//  2. 套餐专用 Claude 端点 → 同一个套餐的 OpenAIBaseURL
+//  3. 自定义 Claude 端点（如自建中转）→ 剥掉 `/v1/messages` 后的根，按标准路径探测
+//
+// 返回 ok=false 表示"这不是套餐/Claude 端点"，调用方继续按渠道类型的老逻辑走。
+func ResolveUpstreamModelsBaseURL(baseURL string) (string, bool) {
+	base := strings.TrimSpace(baseURL)
+	if base == "" {
+		return "", false
+	}
+	if plan, ok := ChannelSpecialBases[base]; ok && plan.OpenAIBaseURL != "" {
+		return plan.OpenAIBaseURL, true
+	}
+	// 只剥 `/messages`（不是 `/v1/messages`）—— 后者会把 `/v1` 一起带走，
+	// 拼出来就是 `…/models`，而 OpenAI 端点在 `…/v1/models`。
+	trimmed := strings.TrimSuffix(strings.TrimSuffix(base, "/"), "/messages")
+	for _, plan := range ChannelSpecialBases {
+		if plan.ClaudeBaseURL == "" || plan.OpenAIBaseURL == "" {
+			continue
+		}
+		if trimmed == plan.ClaudeBaseURL || strings.HasPrefix(trimmed, plan.ClaudeBaseURL+"/") {
+			return plan.OpenAIBaseURL, true
+		}
+	}
+	// 自定义中转：只认「确实剥掉了 Claude 端点后缀」这一种，避免误伤普通渠道
+	if trimmed != base {
+		return trimmed, true
+	}
+	return "", false
 }
