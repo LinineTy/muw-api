@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Dialog } from '@/components/dialog'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { useSystemConfig } from '@/hooks/use-system-config'
@@ -105,12 +106,13 @@ export function SwitchPlanDialog(props: Props) {
 
   const chargeQuota = payAmount ? Math.ceil(diff * quotaPerUnit) : 0
   const available = Math.max(0, Number(userQuota || 0))
-  // 方向文案单一来源（弹窗标题用）。
+  // 标题固定「更换套餐」，方向只作徽标：档位方向不等于钱的方向
+  // （降级也可能补差额），标题写「降级套餐」会把两件事混成一件。
   const directionLabel = isUpgrade
-    ? t('Upgrade Plan')
+    ? t('Upgrade')
     : isDowngrade
-      ? t('Downgrade Plan')
-      : t('Switch Plan')
+      ? t('Downgrade')
+      : ''
   const amountLabel = payAmount
     ? t('Amount to Pay')
     : refundAmount
@@ -152,7 +154,17 @@ export function SwitchPlanDialog(props: Props) {
       title={
         <>
           <ArrowLeftRight className='h-5 w-5' />
-          {directionLabel}
+          {t('Switch Plan')}
+          {directionLabel ? (
+            <Badge variant='secondary'>
+              {isUpgrade ? (
+                <TrendingUp aria-hidden='true' />
+              ) : (
+                <TrendingDown aria-hidden='true' />
+              )}
+              {directionLabel}
+            </Badge>
+          ) : null}
         </>
       }
       contentClassName='max-sm:w-[calc(100vw-1.5rem)] sm:max-w-md'
