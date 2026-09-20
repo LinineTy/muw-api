@@ -1,15 +1,24 @@
 // @muw-owned
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Inbox } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Check, CheckCheck, Inbox } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '@/components/dialog'
+import { Button } from '@/components/ui/button'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { useIsAdmin } from '@/hooks/use-admin'
 import { formatTimestampToDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
-import { getUserNotifications, markAllNotificationsRead } from '../api'
+import {
+  getUserNotifications,
+  markAllNotificationsRead,
+  markNotificationsRead,
+} from '../api'
 import type { UserNotificationItem, UserNotificationPage } from '../types'
 
 export const USER_NOTIFICATIONS_QUERY_KEY = ['user-notifications']
@@ -32,13 +41,41 @@ export function useUserNotifications() {
   })
 }
 
+/**
+ * 标为已读的本地乐观更新：命中的未读条目补上 read_at，角标按**真正被翻成已读的条数**递减。
+ *
+ * 服务端的 `unread` 是"全部未读"（不受分页影响），所以只能减本页真正变化的条数 ——
+ * 用 ids.length 直接减，重复点已读的行会把角标算多。
+ */
+function applyMarkedRead(
+  old: UserNotificationPage | undefined,
+  ids: number[]
+): UserNotificationPage | undefined {
+  if (!old || ids.length === 0) return old
+  const idSet = new Set(ids)
+  const now = Math.floor(Date.now() / 1000)
+  let touched = 0
+  const items = old.items.map((item) => {
+    if (item.read_at !== 0 || !idSet.has(item.id)) return item
+    touched += 1
+    return { ...item, read_at: now }
+  })
+  if (touched === 0) return old
+  return { ...old, unread: Math.max(0, old.unread - touched), items }
+}
+
 function NotificationRow({
   item,
-  unread,
+  marking,
+  onMarkRead,
 }: {
   item: UserNotificationItem
-  unread: boolean
+  marking: boolean
+  onMarkRead: (id: number) => void
 }) {
+  const { t } = useTranslation()
+  const unread = item.read_at === 0
+
   return (
     <div
       data-unread={unread ? 'true' : undefined}
@@ -60,6 +97,26 @@ function NotificationRow({
         <span className='text-muted-foreground shrink-0 text-xs tabular-nums'>
           {formatTimestampToDate(item.created_at, 'seconds')}
         </span>
+        {unread && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type='button'
+                  variant='ghost'
+                  size='icon-sm'
+                  disabled={marking}
+                  onClick={() => onMarkRead(item.id)}
+                  aria-label={t('Mark as read')}
+                  data-testid={`notification-mark-read-${item.id}`}
+                />
+              }
+            >
+              <Check className='size-3.5' />
+            </TooltipTrigger>
+            <TooltipContent>{t('Mark as read')}</TooltipContent>
+          </Tooltip>
+        )}
       </div>
       {/* 后端正文是纯文本台账（带换行），按 pre-wrap 原样展示，不解析 HTML */}
       <p className='text-muted-foreground text-xs whitespace-pre-wrap'>
@@ -73,8 +130,10 @@ function NotificationRow({
  * 站内消息弹窗。入口是左侧细条的铃铛球（原「公告卡开关」位置 —— 公告开关已经
  * 并入「组件 / 鲸鱼」弹窗，两处能关同一个东西只会让人困惑过）。
  *
- * 打开即把未读标为已读（角标立刻清零），但**列表高亮按打开那一刻的快照**渲染：
- * 若标记完再重新拉列表，用户就分不清哪几条是刚到的。
+ * 已读策略（2026-09-21 maintainer定）：**打开不再把未读一次清空**——一点开角标就没了，
+ * 分不清新到的是哪条、也看不到"读一条少一条"。现在每条未读行右侧有「标为已读」，
+ * 点一下该条已读、角标 -1；要一次清完用列表上方的「全部已读」。
+ * 角标与列表共用同一份缓存，两边永远同步。
  */
 export function NotificationsDialog({
   open,
@@ -86,36 +145,44 @@ export function NotificationsDialog({
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { data, isLoading } = useUserNotifications()
-  const [unreadIds, setUnreadIds] = useState<number[]>([])
-  const markedRef = useRef(false)
-
-  useEffect(() => {
-    if (!open) {
-      // 关掉后允许下次打开再走一遍标记流程
-      markedRef.current = false
-      return
-    }
-    if (markedRef.current || !data) return
-    const ids = data.items
-      .filter((item) => item.read_at === 0)
-      .map((item) => item.id)
-    if (ids.length === 0) return
-    markedRef.current = true
-    setUnreadIds(ids)
-    void markAllNotificationsRead()
-      .then(() => {
-        // 只把未读数清零，不重拉列表 —— 否则高亮会立刻消失
-        queryClient.setQueryData<UserNotificationPage>(
-          USER_NOTIFICATIONS_QUERY_KEY,
-          (old) => (old ? { ...old, unread: 0 } : old)
-        )
-      })
-      .catch(() => {
-        // 标记失败不影响阅读，角标保持未读，下次打开再试
-      })
-  }, [open, data, queryClient])
-
   const items = data?.items ?? []
+  const unread = data?.unread ?? 0
+
+  // 标记失败（网络 / 服务端拒绝）就把缓存拉回服务端真实状态：角标宁可回到未读，
+  // 也不能少算了却没人知道
+  const resync = () =>
+    queryClient.invalidateQueries({ queryKey: USER_NOTIFICATIONS_QUERY_KEY })
+
+  const markRead = useMutation({
+    mutationFn: (ids: number[]) => markNotificationsRead(ids),
+    onMutate: (ids) => {
+      queryClient.setQueryData<UserNotificationPage>(
+        USER_NOTIFICATIONS_QUERY_KEY,
+        (old) => applyMarkedRead(old, ids)
+      )
+    },
+    onError: resync,
+  })
+
+  const markAll = useMutation({
+    mutationFn: markAllNotificationsRead,
+    onMutate: () => {
+      queryClient.setQueryData<UserNotificationPage>(
+        USER_NOTIFICATIONS_QUERY_KEY,
+        (old) => {
+          if (!old) return old
+          const marked =
+            applyMarkedRead(
+              old,
+              old.items.map((item) => item.id)
+            ) ?? old
+          // 服务端清的是全部未读（不止本页），角标直接归零
+          return { ...marked, unread: 0 }
+        }
+      )
+    },
+    onError: resync,
+  })
 
   return (
     <Dialog
@@ -134,11 +201,29 @@ export function NotificationsDialog({
         </div>
       ) : (
         <div className='flex flex-col gap-2' data-testid='notifications-list'>
+          {unread > 0 && (
+            <div className='flex justify-end'>
+              <Button
+                type='button'
+                variant='ghost'
+                size='sm'
+                className='text-muted-foreground hover:text-foreground'
+                disabled={markAll.isPending}
+                onClick={() => markAll.mutate()}
+                aria-label={t('Mark all as read')}
+                data-testid='notifications-mark-all'
+              >
+                <CheckCheck className='size-3.5' />
+                {t('Mark all as read')}
+              </Button>
+            </div>
+          )}
           {items.map((item) => (
             <NotificationRow
               key={item.id}
               item={item}
-              unread={unreadIds.includes(item.id)}
+              marking={markRead.isPending}
+              onMarkRead={(id) => markRead.mutate([id])}
             />
           ))}
         </div>

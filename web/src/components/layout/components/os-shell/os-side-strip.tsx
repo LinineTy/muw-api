@@ -306,7 +306,8 @@ function RailToolsGroup({ side }: { side: 'left' | 'right' }) {
 /**
  * 消息球（原公告铃铛的位置，外观不变）。
  *
- * 功能换成**站内消息**：点开消息弹窗（上游模型巡检等管理端通知），带未读红点。
+ * 功能换成**站内消息**：点开消息弹窗（上游模型巡检等管理端通知），带未读角标。
+ * 角标是"还剩几条未读"，只在**逐条标为已读**时递减（打开弹窗不清空，2026-09-21 maintainer定）。
  * 公告卡的展开/收起已并入「偏好设置」弹窗，两处能关同一个东西只会让人困惑。
  * 目前只有管理员会收到站内消息，所以对非管理员不渲染这颗球。
  */
@@ -336,7 +337,7 @@ function OsNotificationsBall() {
         {unread > 0 && (
           <span
             data-testid='notifications-unread-badge'
-            className='bg-destructive absolute top-0.5 right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-medium text-white tabular-nums'
+            className='bg-destructive absolute top-0.5 right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] leading-none font-medium text-white tabular-nums'
           >
             {unread > 99 ? '99+' : unread}
           </span>
