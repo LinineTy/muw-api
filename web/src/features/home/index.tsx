@@ -20,6 +20,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { AnnouncementDialog } from '@/components/announcement-dialog'
+import { AppLoading } from '@/components/app-loading'
 import { PublicLayout } from '@/components/layout'
 import { Footer } from '@/components/layout/components/footer'
 import { RichContent } from '@/components/rich-content'
@@ -67,8 +68,8 @@ export function Home() {
     if (!isLoaded) {
       return (
         <PublicLayout showMainContainer={false}>
-          <main className='flex min-h-screen items-center justify-center'>
-            <div className='text-muted-foreground'>{t('Loading...')}</div>
+          <main className='flex min-h-screen items-center justify-center px-6'>
+            <AppLoading />
           </main>
         </PublicLayout>
       )
@@ -100,7 +101,10 @@ export function Home() {
 
       if (isFullDocument) {
         return (
-          <PublicLayout showMainContainer={false} headerScrolled={themeScrolled}>
+          <PublicLayout
+            showMainContainer={false}
+            headerScrolled={themeScrolled}
+          >
             {/*
               完整 HTML 文档(导入的营销页主题或手填的完整页面)用 iframe srcdoc 渲染,
               见 ThemeSrcdocFrame:独立文档上下文 + sandbox 隔离 + 顶栏滚动联动。

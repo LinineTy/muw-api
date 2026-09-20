@@ -854,3 +854,55 @@ html.os-in-window [data-slot='sidebar-gap'] {
 .os-tabs-stack > div[inert] {
   visibility: hidden;
 }
+
+/* muw-owned: 加载占位视觉(站点名逐字上浮 + 轻微呼吸)。
+   与 index.html 内联的 #app-loading 同套视觉(那份为打包产物之前服务),
+   以及 src/components/app-loading.tsx(React 侧)。改一处记得同步。 */
+.app-loading-brand {
+  max-width: 100%;
+  text-align: center;
+  font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+  font-size: clamp(18px, 3.6vw, 22px);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--primary);
+  animation: app-loading-pulse 2.4s ease-in-out 1.4s infinite;
+}
+
+.app-loading-letter {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(6px);
+  filter: blur(4px);
+  animation: app-loading-rise 0.42s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes app-loading-rise {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes app-loading-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-loading-brand,
+  .app-loading-letter {
+    animation: none;
+  }
+  .app-loading-letter {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}

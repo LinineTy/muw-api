@@ -17,36 +17,179 @@
     <meta name="theme-color" content="#fff" />
     <!--umami-->
     <!--Google Analytics-->
+
+    <!-- muw-owned: 首屏加载占位（打包产物之前就要能画出来，所以样式内联）。
+         与 src/styles/index.css 的 .app-loading-* / 组件 src/components/app-loading.tsx
+         同一套视觉，时序常量也在 routes/__root.tsx —— 改一处要同步另外两处。
+         站点名逐字上浮（自带 150ms 延迟，缓存命中时不闪），画完后轻微呼吸；
+         路由进入 idle 后由 routes/__root.tsx 淡出撤下。 -->
+    <style>
+      #app-loading {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 24px;
+        background: var(--background, #fafafa);
+        opacity: 0;
+        animation: app-loading-appear 0.3s ease-out 0.15s forwards;
+      }
+      #app-loading.app-loading-leave {
+        animation: app-loading-vanish 0.24s ease-out forwards;
+      }
+      @keyframes app-loading-appear {
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes app-loading-vanish {
+        to {
+          opacity: 0;
+        }
+      }
+      #app-loading .brand {
+        max-width: 100%;
+        text-align: center;
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+        font-size: clamp(18px, 3.6vw, 22px);
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--primary, #3ea4ec);
+        animation: app-loading-pulse 2.4s ease-in-out 1.4s infinite;
+      }
+      #app-loading .brand span {
+        display: inline-block;
+        opacity: 0;
+        transform: translateY(6px);
+        filter: blur(4px);
+        animation: app-loading-rise 0.42s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      }
+      @keyframes app-loading-rise {
+        to {
+          opacity: 1;
+          transform: translateY(0);
+          filter: blur(0);
+        }
+      }
+      @keyframes app-loading-pulse {
+        0%,
+        100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.02);
+        }
+      }
+      /* os 窗体里不盖实体底：窗口本身透明，只给滚动圆（见下方脚本） */
+      html.os-in-window #app-loading {
+        display: none;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #app-loading {
+          animation: none;
+          opacity: 1;
+        }
+        #app-loading .brand,
+        #app-loading .brand span {
+          animation: none;
+        }
+        #app-loading .brand span {
+          opacity: 1;
+          transform: none;
+          filter: none;
+        }
+      }
+    </style>
   </head>
 
   <body>
     <div id="root" translate="no" class="notranslate"></div>
-    <!-- muw-owned: os-window boot spinner (self!==top); must stay AFTER #root -->
+    <!-- muw-owned: 占位元素必须是 #root 的兄弟节点、且在 #root 之后 ——
+         写进 #root 会让窗口 iframe 里 React 静默不 mount；写在 #root 之前
+         getElementById('root') 还是 null。两条都踩过，别动顺序。 -->
+    <div id="app-loading" aria-hidden="true"><span class="brand"></span></div>
     <script>
-      if (window.self !== window.top) {
-        document.documentElement.classList.add('os-in-window')
-        document.documentElement.style.background = 'transparent'
-        document.body.style.background = 'transparent'
-        var spinColor = '#888a'
+      ;(function () {
+        var splash = document.getElementById('app-loading')
+
+        // ── os 窗体（iframe 里的站点）：窗口由壳透明叠在桌面上，不能盖实体底，
+        //    只给一个跟随壳主题色的滚动圆 ──
+        if (window.self !== window.top) {
+          document.documentElement.classList.add('os-in-window')
+          document.documentElement.style.background = 'transparent'
+          document.body.style.background = 'transparent'
+          if (splash) splash.remove()
+          var spinColor = '#888a'
+          try {
+            var _p = window.parent
+            var _c = _p
+              .getComputedStyle(_p.document.body)
+              .getPropertyValue('--primary')
+            if (_c) spinColor = _c.trim()
+          } catch (e) {}
+          var _boot = document.createElement('div')
+          _boot.id = 'boot-loading'
+          _boot.innerHTML =
+            '<style>#boot-loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2147483647}#boot-loading svg{animation:boot-spin 0.9s linear infinite}@keyframes boot-spin{to{transform:rotate(360deg)}}</style>' +
+            '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="' +
+            spinColor +
+            '" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9" stroke-opacity="0.15"/><path d="M21 12a9 9 0 0 0-9-9" stroke-opacity="0.75"/></svg>'
+          document.body.appendChild(_boot)
+          new MutationObserver(function (_m, obs) {
+            var _r = document.getElementById('root')
+            if (_r && _r.childElementCount > 0) {
+              obs.disconnect()
+              _boot.remove()
+            }
+          }).observe(document.getElementById('root'), { childList: true })
+          return
+        }
+
+        // ── 顶级文档：先把明暗落到 <html> 上（首屏不能等 React，与
+        //    ThemeProvider 的 cookie 名/规则保持一致，避免深色用户闪白底）──
+        if (!splash) return
         try {
-          var _p = window.parent
-          var _c = _p.getComputedStyle(_p.document.body).getPropertyValue('--primary')
-          if (_c) spinColor = _c.trim()
-        } catch (e) {}
-        var _boot = document.createElement('div')
-        _boot.id = 'boot-loading'
-        _boot.innerHTML =
-          '<style>#boot-loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2147483647}#boot-loading svg{animation:boot-spin 0.9s linear infinite}@keyframes boot-spin{to{transform:rotate(360deg)}}</style>' +
-          '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="' + spinColor + '" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9" stroke-opacity="0.15"/><path d="M21 12a9 9 0 0 0-9-9" stroke-opacity="0.75"/></svg>'
-        document.body.appendChild(_boot)
-        new MutationObserver(function (_m, obs) {
-          var _r = document.getElementById('root')
-          if (_r && _r.childElementCount > 0) {
-            obs.disconnect()
-            _boot.remove()
+          var themeMatch = document.cookie.match(
+            /(?:^|;\s*)vite-ui-theme=(dark|light|system)/
+          )
+          var themePref = themeMatch ? themeMatch[1] : 'system'
+          if (
+            themePref === 'dark' ||
+            (themePref === 'system' &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches)
+          ) {
+            document.documentElement.classList.add('dark')
           }
-        }).observe(document.getElementById('root'), { childList: true })
-      }
+        } catch (e) {}
+
+        // 站点名：打包时拿不到后台配置，先读上次 /api/status 的缓存，再退到页面标题
+        var cachedName = ''
+        try {
+          cachedName =
+            JSON.parse(localStorage.getItem('status') || '{}').system_name || ''
+        } catch (e) {}
+        var brandName = cachedName || document.title || 'Muw API'
+        var brandWrap = splash.querySelector('.brand')
+        Array.from(brandName).forEach(function (char, index) {
+          var span = document.createElement('span')
+          span.textContent = char === ' ' ? '\u00a0' : char
+          span.style.animationDelay = 150 + index * 40 + 'ms'
+          brandWrap.appendChild(span)
+        })
+
+        // 兜底：正常由 routes/__root.tsx 在路由 idle 后撤下；挂载前就卡住
+        // （接口/chunk 挂死）时这里无条件淡出，别让它永久糊住页面
+        window.setTimeout(function () {
+          var stuck = document.getElementById('app-loading')
+          if (!stuck) return
+          stuck.classList.add('app-loading-leave')
+          window.setTimeout(function () {
+            stuck.remove()
+          }, 240)
+        }, 10000)
+      })()
     </script>
   </body>
 </html>
