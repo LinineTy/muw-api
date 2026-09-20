@@ -352,7 +352,10 @@ function IpUserTable(props: {
   mergeV6: boolean
 }) {
   const { t } = useTranslation()
-  const [detailIp, setDetailIp] = useState<string | null>(null)
+  const [detailIp, setDetailIp] = useState<{
+    ip: string
+    location?: string
+  } | null>(null)
 
   const {
     globalFilter,
@@ -403,6 +406,18 @@ function IpUserTable(props: {
         ),
       },
       {
+        accessorKey: 'location',
+        header: ({ column }: { column: never }) => (
+          <DataTableColumnHeader column={column} title={t('IP Location')} />
+        ),
+        meta: { label: t('IP Location') },
+        cell: ({ row }: { row: { original: IpRankRow } }) => (
+          <span className='text-muted-foreground text-xs'>
+            {row.original.location || '-'}
+          </span>
+        ),
+      },
+      {
         accessorKey: 'user_count',
         header: ({ column }: { column: never }) => (
           <DataTableColumnHeader column={column} title={t('Linked Users')} />
@@ -443,7 +458,12 @@ function IpUserTable(props: {
                   <Button
                     variant='ghost'
                     size='icon-sm'
-                    onClick={() => setDetailIp(row.original.ip)}
+                    onClick={() =>
+                      setDetailIp({
+                        ip: row.original.ip,
+                        location: row.original.location,
+                      })
+                    }
                     aria-label={t('Linked Users')}
                   />
                 }
@@ -487,7 +507,8 @@ function IpUserTable(props: {
         }}
       />
       <IpAccountDetailDialog
-        ip={detailIp}
+        ip={detailIp?.ip ?? null}
+        location={detailIp?.location}
         days={props.days}
         mergeV6={props.mergeV6}
         onClose={() => setDetailIp(null)}
@@ -565,8 +586,13 @@ function UserIpDetailDialog(props: {
                     className='flex items-center justify-between gap-2 rounded-md border px-3 py-1.5 text-sm'
                   >
                     {/* min-w-0 + 换行：IPv6 可以折行显示，不再把行撑宽 */}
-                    <span className='min-w-0 font-mono break-all'>
+                    <span className='flex min-w-0 flex-wrap items-baseline gap-x-2 font-mono break-all'>
                       {r.ip}
+                      {r.location ? (
+                        <span className='text-muted-foreground text-xs'>
+                          {r.location}
+                        </span>
+                      ) : null}
                     </span>
                     <div className='flex shrink-0 items-center gap-1'>
                       <span className='text-muted-foreground text-xs tabular-nums'>
@@ -793,6 +819,7 @@ function IpOverviewSection(props: {
 /** 单 IP 关联账号明细弹窗（小号集群排查的最后一跳）。 */
 function IpAccountDetailDialog(props: {
   ip: string | null
+  location?: string
   days: number
   mergeV6: boolean
   onClose: () => void
@@ -821,6 +848,11 @@ function IpAccountDetailDialog(props: {
             {t('Linked Users')}
             {' · '}
             <span className='font-mono text-sm break-all'>{props.ip}</span>
+            {props.location ? (
+              <span className='text-muted-foreground ml-1 text-xs font-normal'>
+                {props.location}
+              </span>
+            ) : null}
           </DialogTitle>
         </DialogHeader>
         <div className='max-h-[50vh] overflow-x-hidden overflow-y-auto'>

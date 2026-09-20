@@ -76,3 +76,6 @@ notes.md
 notes-dev.md
 OSWHALE_TODO.md
 OPENROUTER_QUOTA_TODO.md
+
+# 离线归属地数据文件（十几 MB，运行时按需下载，不进仓库）
+ip2region_*.xdb

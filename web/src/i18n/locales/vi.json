@@ -7862,6 +7862,7 @@
     "IPv4 only": "Chỉ IPv4",
     "IPv6 only": "Chỉ IPv6",
     "Merge IPv6 by /64": "Gộp IPv6 theo /64",
+    "IP Location": "Vị trí IP",
     "Users by IP Count": "Người dùng theo số IP",
     "Distinct IPs": "IP riêng biệt",
     "Avg IPs per User": "IP mỗi người dùng",

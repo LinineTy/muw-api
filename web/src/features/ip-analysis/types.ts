@@ -14,6 +14,8 @@ export interface IpRankRow {
   user_count: number
   request_count: number
   last_seen: number
+  /** 离线归属地（形如 "中国 浙江省 杭州市 移动"）；库不可用时为空串 */
+  location?: string
 }
 
 export interface UserIpDetailRow {
@@ -21,6 +23,8 @@ export interface UserIpDetailRow {
   request_count: number
   first_seen: number
   last_seen: number
+  /** 离线归属地；归并模式下是该 /64 前缀的归属地 */
+  location?: string
 }
 
 export interface IpUserDetailRow {

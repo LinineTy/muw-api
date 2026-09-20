@@ -7862,6 +7862,7 @@
     "IPv4 only": "Только IPv4",
     "IPv6 only": "Только IPv6",
     "Merge IPv6 by /64": "Объединять IPv6 по /64",
+    "IP Location": "Местоположение IP",
     "Users by IP Count": "Пользователи по числу IP",
     "Distinct IPs": "Уникальные IP",
     "Avg IPs per User": "IP на пользователя",
