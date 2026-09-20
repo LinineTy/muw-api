@@ -4,6 +4,7 @@ package controller
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -50,14 +51,29 @@ func parseIpVersionParam(c *gin.Context) string {
 	}
 }
 
+// parseMergeV6Param 解析 merge_v6（1/true 为开）：把 IPv6 归并到 /64 统计。
+//
+// 背景：IPv6 隐私扩展下同一来源会高频轮换地址，"独立 IP 数"这类指标会系统性虚高
+// （一个 /64 能撑出几十个"独立 IP"）。归并口径更接近真实来源数，但会让历史数据不
+// 可比，所以做成显式开关（默认关）。判定逻辑见 model.ipMergeKey。
+func parseMergeV6Param(c *gin.Context) bool {
+	switch strings.ToLower(c.DefaultQuery("merge_v6", "0")) {
+	case "1", "true", "yes":
+		return true
+	default:
+		return false
+	}
+}
+
 // GetIpAnalysisUserRank 用户 IP 数排行（风控）。
 func GetIpAnalysisUserRank(c *gin.Context) {
 	days := parseDaysParam(c)
 	minIps, _ := strconv.Atoi(c.DefaultQuery("min_ips", "1"))
 	version := parseIpVersionParam(c)
+	mergeV6 := parseMergeV6Param(c)
 	page, pageSize := parsePagingParams(c)
 
-	rows, total, err := model.GetUserIpRank(days, minIps, version, page, pageSize)
+	rows, total, err := model.GetUserIpRank(days, minIps, version, mergeV6, page, pageSize)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -86,8 +102,9 @@ func GetIpAnalysisUserDetail(c *gin.Context) {
 	}
 	days := parseDaysParam(c)
 	version := parseIpVersionParam(c)
+	mergeV6 := parseMergeV6Param(c)
 
-	rows, err := model.GetUserIpDetail(userId, days, version)
+	rows, err := model.GetUserIpDetail(userId, days, version, mergeV6)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -104,9 +121,10 @@ func GetIpAnalysisIpRank(c *gin.Context) {
 	days := parseDaysParam(c)
 	minUsers, _ := strconv.Atoi(c.DefaultQuery("min_users", "1"))
 	version := parseIpVersionParam(c)
+	mergeV6 := parseMergeV6Param(c)
 	page, pageSize := parsePagingParams(c)
 
-	rows, total, err := model.GetIpUserRank(days, minUsers, version, page, pageSize)
+	rows, total, err := model.GetIpUserRank(days, minUsers, version, mergeV6, page, pageSize)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -134,8 +152,9 @@ func GetIpAnalysisIpDetail(c *gin.Context) {
 		return
 	}
 	days := parseDaysParam(c)
+	mergeV6 := parseMergeV6Param(c)
 
-	rows, err := model.GetIpDetail(ip, days)
+	rows, err := model.GetIpDetail(ip, days, mergeV6)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -216,8 +235,9 @@ func GetOperationsRankings(c *gin.Context) {
 func GetIpAnalysisOverview(c *gin.Context) {
 	days := parseDaysParam(c)
 	version := parseIpVersionParam(c)
+	mergeV6 := parseMergeV6Param(c)
 
-	data, err := model.GetIpAnalysisOverview(days, version)
+	data, err := model.GetIpAnalysisOverview(days, version, mergeV6)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -233,6 +253,7 @@ func GetIpAnalysisOverview(c *gin.Context) {
 func GetIpAnalysisTrend(c *gin.Context) {
 	days := parseDaysParam(c)
 	version := parseIpVersionParam(c)
+	mergeV6 := parseMergeV6Param(c)
 	tzOffsetSeconds, _ := strconv.Atoi(c.DefaultQuery("tz_offset", "0"))
 	// 与运营趋势同一套兼容处理：前端传 -getTimezoneOffset()（东八区 28800），
 	// 老格式直接传 getTimezoneOffset()（东八区 -480 分钟）。
@@ -240,7 +261,7 @@ func GetIpAnalysisTrend(c *gin.Context) {
 		tzOffsetSeconds = tzOffsetSeconds * 60
 	}
 
-	rows, err := model.GetIpAnalysisTrend(days, tzOffsetSeconds, version)
+	rows, err := model.GetIpAnalysisTrend(days, tzOffsetSeconds, version, mergeV6)
 	if err != nil {
 		common.ApiError(c, err)
 		return

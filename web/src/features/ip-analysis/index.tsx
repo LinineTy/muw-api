@@ -39,6 +39,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Tooltip,
@@ -86,6 +87,9 @@ export function IpAnalysis() {
   const { t } = useTranslation()
   const [days, setDays] = useState(30)
   const [ipVersion, setIpVersion] = useState('all')
+  // IPv6 归并到 /64：隐私扩展下一个用户会轮换出几十个地址，
+  // 归并后"IP 数"才接近真实来源数（默认关，保持与历史数据可比）。
+  const [mergeV6, setMergeV6] = useState(false)
   const DAY_OPTIONS = [
     { value: 7, label: t('7 Days') },
     { value: 30, label: t('30 Days') },
@@ -109,6 +113,14 @@ export function IpAnalysis() {
         </span>
       </SectionPageLayout.Title>
       <SectionPageLayout.Actions>
+        <label className='text-muted-foreground flex cursor-pointer items-center gap-2 text-sm whitespace-nowrap'>
+          <Switch
+            checked={mergeV6}
+            onCheckedChange={setMergeV6}
+            size='sm'
+          />
+          {t('Merge IPv6 by /64')}
+        </label>
         <Select items={DAY_OPTIONS} value={days} onValueChange={(value) => setDays(Number(value))}>
           <SelectTrigger className='h-9'>
             <SelectValue />
@@ -144,7 +156,11 @@ export function IpAnalysis() {
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
 
-        <IpOverviewSection days={days} ipVersion={ipVersion} />
+        <IpOverviewSection
+          days={days}
+          ipVersion={ipVersion}
+          mergeV6={mergeV6}
+        />
 
         <Tabs defaultValue='users' className='mt-4'>
           <TabsList>
@@ -153,10 +169,10 @@ export function IpAnalysis() {
             <TabsTrigger value='overlap'>{t('Time Overlap')}</TabsTrigger>
           </TabsList>
           <TabsContent value='users'>
-            <UserIpTable days={days} ipVersion={ipVersion} />
+            <UserIpTable days={days} ipVersion={ipVersion} mergeV6={mergeV6} />
           </TabsContent>
           <TabsContent value='ips'>
-            <IpUserTable days={days} ipVersion={ipVersion} />
+            <IpUserTable days={days} ipVersion={ipVersion} mergeV6={mergeV6} />
           </TabsContent>
           <TabsContent value='overlap'>
             <OverlapTable days={days} />
@@ -167,7 +183,11 @@ export function IpAnalysis() {
   )
 }
 
-function UserIpTable(props: { days: number; ipVersion: string }) {
+function UserIpTable(props: {
+  days: number
+  ipVersion: string
+  mergeV6: boolean
+}) {
   const { t } = useTranslation()
   const [detailUserId, setDetailUserId] = useState<number | null>(null)
 
@@ -191,6 +211,7 @@ function UserIpTable(props: { days: number; ipVersion: string }) {
       'ip-analysis-users',
       props.days,
       props.ipVersion,
+      props.mergeV6,
       minIps,
       pagination.pageIndex,
     ],
@@ -199,6 +220,7 @@ function UserIpTable(props: { days: number; ipVersion: string }) {
         days: props.days,
         min_ips: minIps,
         ip_version: props.ipVersion,
+        merge_v6: props.mergeV6 ? 1 : 0,
         page: pagination.pageIndex + 1,
         page_size: pagination.pageSize,
       }),
@@ -317,13 +339,18 @@ function UserIpTable(props: { days: number; ipVersion: string }) {
         userId={detailUserId}
         days={props.days}
         ipVersion={props.ipVersion}
+        mergeV6={props.mergeV6}
         onClose={() => setDetailUserId(null)}
       />
     </>
   )
 }
 
-function IpUserTable(props: { days: number; ipVersion: string }) {
+function IpUserTable(props: {
+  days: number
+  ipVersion: string
+  mergeV6: boolean
+}) {
   const { t } = useTranslation()
   const [detailIp, setDetailIp] = useState<string | null>(null)
 
@@ -347,6 +374,7 @@ function IpUserTable(props: { days: number; ipVersion: string }) {
       'ip-analysis-ips',
       props.days,
       props.ipVersion,
+      props.mergeV6,
       minUsers,
       pagination.pageIndex,
     ],
@@ -355,6 +383,7 @@ function IpUserTable(props: { days: number; ipVersion: string }) {
         days: props.days,
         min_users: minUsers,
         ip_version: props.ipVersion,
+        merge_v6: props.mergeV6 ? 1 : 0,
         page: pagination.pageIndex + 1,
         page_size: pagination.pageSize,
       }),
@@ -460,6 +489,7 @@ function IpUserTable(props: { days: number; ipVersion: string }) {
       <IpAccountDetailDialog
         ip={detailIp}
         days={props.days}
+        mergeV6={props.mergeV6}
         onClose={() => setDetailIp(null)}
       />
     </>
@@ -470,6 +500,7 @@ function UserIpDetailDialog(props: {
   userId: number | null
   days: number
   ipVersion: string
+  mergeV6: boolean
   onClose: () => void
 }) {
   const { t } = useTranslation()
@@ -481,12 +512,14 @@ function UserIpDetailDialog(props: {
       props.userId,
       props.days,
       props.ipVersion,
+      props.mergeV6,
     ],
     queryFn: () =>
       getUserIpDetail({
         user_id: props.userId as number,
         days: props.days,
         ip_version: props.ipVersion,
+        merge_v6: props.mergeV6 ? 1 : 0,
       }),
     enabled: open,
   })
@@ -588,7 +621,11 @@ function ChartCard(props: { isLoading: boolean; children: React.ReactNode }) {
 }
 
 /** 风控看板概览：指标卡片 + 用户 IP 数分布 + 每日独立 IP 趋势。 */
-function IpOverviewSection(props: { days: number; ipVersion: string }) {
+function IpOverviewSection(props: {
+  days: number
+  ipVersion: string
+  mergeV6: boolean
+}) {
   const { t } = useTranslation()
   const { resolvedTheme } = useTheme()
   const themeManagerRef = useRef<
@@ -615,24 +652,26 @@ function IpOverviewSection(props: { days: number; ipVersion: string }) {
   const tzOffsetSeconds = -new Date().getTimezoneOffset() * 60
 
   const overviewQuery = useQuery({
-    queryKey: ['ip-analysis-overview', props.days, props.ipVersion],
+    queryKey: ['ip-analysis-overview', props.days, props.ipVersion, props.mergeV6],
     queryFn: async () =>
       requireData<IpAnalysisOverview>(
         await getIpOverview({
           days: props.days,
           ip_version: props.ipVersion,
+          merge_v6: props.mergeV6 ? 1 : 0,
         })
       ),
     staleTime: 60_000,
   })
   const trendQuery = useQuery({
-    queryKey: ['ip-analysis-trend', props.days, props.ipVersion],
+    queryKey: ['ip-analysis-trend', props.days, props.ipVersion, props.mergeV6],
     queryFn: async () =>
       requireData<IpAnalysisTrendRow[]>(
         await getIpTrend({
           days: props.days,
           ip_version: props.ipVersion,
           tz_offset: tzOffsetSeconds,
+          merge_v6: props.mergeV6 ? 1 : 0,
         })
       ),
     staleTime: 60_000,
@@ -755,15 +794,20 @@ function IpOverviewSection(props: { days: number; ipVersion: string }) {
 function IpAccountDetailDialog(props: {
   ip: string | null
   days: number
+  mergeV6: boolean
   onClose: () => void
 }) {
   const { t } = useTranslation()
   const open = props.ip !== null
 
   const { data, isLoading } = useQuery({
-    queryKey: ['ip-analysis-ip-detail', props.ip, props.days],
+    queryKey: ['ip-analysis-ip-detail', props.ip, props.days, props.mergeV6],
     queryFn: () =>
-      getIpUserDetail({ ip: props.ip as string, days: props.days }),
+      getIpUserDetail({
+        ip: props.ip as string,
+        days: props.days,
+        merge_v6: props.mergeV6 ? 1 : 0,
+      }),
     enabled: open,
   })
 
