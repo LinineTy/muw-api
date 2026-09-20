@@ -103,7 +103,11 @@ import {
 import { NumericSpinnerInput } from './numeric-spinner-input'
 
 /**
- * Upstream update tags (+N / -N) shown on channel name for model-fetchable channels
+ * Upstream update tag (-N) shown on channel name for model-fetchable channels.
+ *
+ * 只提示「已配模型下架」：一渠道一模型 vs 上游动辄几百个，新增恒为几百
+ * （2026-09-20 首轮巡检单渠道 255~445 个），挂在列表上就是噪音。
+ * 待新增仍在行操作菜单里可查、可应用，不再占据列表列。
  */
 function UpstreamUpdateTags({ channel }: { channel: Channel }) {
   const { upstream, setCurrentRow } = useChannels()
@@ -116,52 +120,30 @@ function UpstreamUpdateTags({ channel }: { channel: Channel }) {
     return null
   }
 
-  const addCount = meta.pendingAddModels.length
   const removeCount = meta.pendingRemoveModels.length
-  if (addCount === 0 && removeCount === 0) {
+  if (removeCount === 0) {
     return null
   }
 
   return (
     <div className='flex items-center gap-0.5'>
-      {addCount > 0 && (
-        <StatusBadge
-          label={`+${addCount}`}
-          variant='success'
-          size='sm'
-          copyable={false}
-          className='cursor-pointer'
-          onClick={(e: React.MouseEvent) => {
-            e.stopPropagation()
-            setCurrentRow(channel)
-            upstream.openModal(
-              channel,
-              meta.pendingAddModels,
-              meta.pendingRemoveModels,
-              'add'
-            )
-          }}
-        />
-      )}
-      {removeCount > 0 && (
-        <StatusBadge
-          label={`-${removeCount}`}
-          variant='danger'
-          size='sm'
-          copyable={false}
-          className='cursor-pointer'
-          onClick={(e: React.MouseEvent) => {
-            e.stopPropagation()
-            setCurrentRow(channel)
-            upstream.openModal(
-              channel,
-              meta.pendingAddModels,
-              meta.pendingRemoveModels,
-              'remove'
-            )
-          }}
-        />
-      )}
+      <StatusBadge
+        label={`-${removeCount}`}
+        variant='danger'
+        size='sm'
+        copyable={false}
+        className='cursor-pointer'
+        onClick={(e: React.MouseEvent) => {
+          e.stopPropagation()
+          setCurrentRow(channel)
+          upstream.openModal(
+            channel,
+            meta.pendingAddModels,
+            meta.pendingRemoveModels,
+            'remove'
+          )
+        }}
+      />
     </div>
   )
 }
