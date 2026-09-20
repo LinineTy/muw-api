@@ -8205,6 +8205,12 @@
     "Clear field selection": "Снять выделение полей",
     "Existing models: select fields to replace their current values with the values on the right. Unselected fields stay unchanged.": "Существующие модели: выберите поля, текущие значения которых нужно заменить значениями справа. Остальные поля останутся без изменений.",
     "New models: all metadata shown below will be imported automatically. No selection is needed.": "Новые модели: все показанные ниже метаданные будут импортированы автоматически. Выбирать поля не нужно.",
-    "Select all changed fields": "Выбрать все изменённые поля"
+    "Select all changed fields": "Выбрать все изменённые поля",
+    "Input pre-consume multiplier": "Множитель предсписания за ввод",
+    "Must be greater than 0": "Значение должно быть больше 0",
+    "Must be greater than or equal to 0": "Значение должно быть не меньше 0",
+    "Reserve the estimated input cost multiplied by this value, without estimating output tokens. Defaults to 1; positive decimals such as 0.5 and 1.5 are supported. Final charges use actual usage. Per-request and task prices are unaffected.": "Резервируется оценочная стоимость ввода, умноженная на это значение, без оценки выходных токенов. По умолчанию 1; допустимы положительные дроби, например 0,5 и 1,5. Итоговая плата зависит от фактического использования. Тарифы за запрос и за задачу не меняются.",
+    "Skip pre-consumption when the wallet balance and limited API key balance both exceed this amount. Set to 0 to always pre-consume. Subscriptions and asynchronous tasks always reserve quota.": "Предсписание пропускается, если баланс кошелька и остаток лимита API-ключа превышают эту сумму. Значение 0 включает предсписание всегда. Для подписок и асинхронных задач квота резервируется всегда.",
+    "Wallet pre-consume bypass threshold (USD)": "Порог кошелька без предсписания (USD)"
   }
 }

@@ -8205,6 +8205,12 @@
     "Clear field selection": "項目の選択を解除",
     "Existing models: select fields to replace their current values with the values on the right. Unselected fields stay unchanged.": "既存モデル：更新する項目を選ぶと、現在の値が右側の値に置き換わります。未選択の項目は変更されません。",
     "New models: all metadata shown below will be imported automatically. No selection is needed.": "新規モデル：以下のすべての情報を自動で取り込みます。選択は不要です。",
-    "Select all changed fields": "変更項目をすべて選択"
+    "Select all changed fields": "変更項目をすべて選択",
+    "Input pre-consume multiplier": "入力の事前引き落とし倍率",
+    "Must be greater than 0": "0 より大きい値にしてください",
+    "Must be greater than or equal to 0": "0 以上にしてください",
+    "Reserve the estimated input cost multiplied by this value, without estimating output tokens. Defaults to 1; positive decimals such as 0.5 and 1.5 are supported. Final charges use actual usage. Per-request and task prices are unaffected.": "推定入力料金にこの倍率を掛けた額を確保し、出力トークンは推定しません。既定値は 1 で、0.5 や 1.5 などの正の小数を指定できます。最終料金は実際の使用量で精算します。リクエスト単位とタスクの料金には影響しません。",
+    "Skip pre-consumption when the wallet balance and limited API key balance both exceed this amount. Set to 0 to always pre-consume. Subscriptions and asynchronous tasks always reserve quota.": "ウォレット残高と上限付き API キーの残高が両方ともこの金額を超える場合、事前引き落としを省略します。0 にすると常に事前引き落としを行います。サブスクリプションと非同期タスクでは常にクォータを確保します。",
+    "Wallet pre-consume bypass threshold (USD)": "ウォレットの事前引き落とし省略額（USD）"
   }
 }
