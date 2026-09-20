@@ -80,6 +80,17 @@ export interface AccountCodingPlanQuota {
   queried_at: number
 }
 
+/**
+ * 账户余额查询响应。上游不支持余额查询的账户类型（如 Zhipu GLM）后端回
+ * HTTP 200 + `success:false`，此时**没有 data** —— 所以调用方必须先判 success，
+ * 不能直接取 `data.balance`。
+ */
+export interface AccountBalanceResponse {
+  success: boolean
+  message?: string
+  data?: { balance: number }
+}
+
 // 账户列表筛选下拉的计数（类型/状态分布 + 被引用数 + 监控数）
 export interface AccountFacets {
   type: Record<string, number>

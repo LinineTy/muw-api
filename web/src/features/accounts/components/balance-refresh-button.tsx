@@ -31,15 +31,22 @@ export function BalanceRefreshButton({ account }: { account: Account }) {
   const [isUpdating, setIsUpdating] = useState(false)
 
   const handleUpdate = async () => {
+    if (isUpdating) return
     setIsUpdating(true)
     try {
-      const data = await updateAccountBalance(account.id)
-      toast.success(
-        t('Balance updated: {{balance}}', {
-          balance: formatCurrencyUSD(data.balance),
-        })
-      )
-      void queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      const response = await updateAccountBalance(account.id)
+      // 业务失败（上游不支持余额查询的账户类型等）也是 HTTP 200 + success:false，
+      // 此时没有 data —— 必须判 success 再取值，否则弹的是 JS TypeError 而不是原因。
+      if (response.success && response.data?.balance !== undefined) {
+        toast.success(
+          t('Balance updated: {{balance}}', {
+            balance: formatCurrencyUSD(response.data.balance),
+          })
+        )
+        void queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      } else {
+        handleServerError(response, t('Failed to update balance'))
+      }
     } catch (error: unknown) {
       handleServerError(error, t('Failed to update balance'))
     } finally {
