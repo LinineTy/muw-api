@@ -196,10 +196,8 @@ func collectPendingUpstreamModelChangesFromModels(
 
 	normalizedIgnoredModels := normalizeModelNames(ignoredModels)
 
-	redirectSourceSet := make(map[string]struct{}, len(modelMapping))
 	redirectTargetSet := make(map[string]struct{}, len(modelMapping))
-	for source, target := range modelMapping {
-		redirectSourceSet[source] = struct{}{}
+	for _, target := range modelMapping {
 		redirectTargetSet[target] = struct{}{}
 	}
 
@@ -227,10 +225,13 @@ func collectPendingUpstreamModelChangesFromModels(
 		return true
 	})
 	pendingRemove := lo.Filter(localModels, func(modelName string, _ int) bool {
-		// Redirect source models are virtual aliases and should not be removed
-		// only because they are absent from upstream model list.
-		if _, ok := redirectSourceSet[modelName]; ok {
-			return false
+		// 走 model_mapping 的模型，渠道里配的往往是「虚拟别名」：别名只在本渠道内
+		// 有意义，本来就不在上游目录里，缺席不能当作下架证据。但它是否还有效要看
+		// 映射目标 —— 目标仍在上游 ⇒ 别名照样能转发，不算下架；目标也从上游消失 ⇒
+		// 这条映射已经转发不出去（上游把目标撤了，别名留着也是死的），必须报出来。
+		if target, ok := modelMapping[modelName]; ok {
+			_, targetAvailable := upstreamSet[target]
+			return !targetAvailable
 		}
 		_, ok := upstreamSet[modelName]
 		return !ok
