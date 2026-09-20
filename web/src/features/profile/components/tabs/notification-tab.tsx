@@ -16,7 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Bell, Inbox, Loader2, Mail, Server, Webhook } from 'lucide-react'
+import {
+  Bell,
+  Loader2,
+  Mail,
+  MessageSquareText,
+  Server,
+  Webhook,
+} from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -46,8 +53,9 @@ const NOTIFICATION_ICONS: Record<NotifyType, typeof Mail> = {
   webhook: Webhook,
   bark: Bell,
   gotify: Server,
-  // 站内消息：卡片图标用收件箱（Bell 已被 Bark 占了）
-  web: Inbox,
+  // 站内消息：用「消息气泡」。原先是收件箱（Inbox）——小尺寸下和邮箱的 Mail 信封
+  // 太像，五个选项里两个几乎分不出来（2026-09-21 maintainer）
+  web: MessageSquareText,
 }
 
 // ============================================================================
