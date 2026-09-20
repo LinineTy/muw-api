@@ -1,15 +1,17 @@
 // @muw-owned
 // Package ipgeo 提供离线的 IP 归属地查询。
 //
-// 数据源用 ip2region 的 xdb（v2/v3 结构，见 https://github.com/lionsoul2014/ip2region）：
-// 免注册、可直接下载、包含 IPv4/IPv6 的国家/省市/运营商，且是纯数据文件，查询不出网。
+// 数据源用 ip2region 的 xdb（结构 3，见 https://github.com/lionsoul2014/ip2region）：
+// 免注册、有公开直链、包含 IPv4/IPv6 的国家/省市/运营商，纯数据文件，查询不出网。
 //
-// 为什么不用 mmdb（GeoLite2 等）：GeoLite2 / IP2Location 免费档需要注册换 license key，
-// 我们拿不到可自动化的下载源；xdb 有公开直链，容器起来自己拉一次就能用。
+// 为什么不用 mmdb（GeoLite2 等）：GeoLite2 / IP2Location 免费档要注册换 license key，
+// 拿不到可自动化的下载源。
 //
-// 这里自己实现了 xdb 的读取（没有引入第三方绑定）：格式本身是公开的数据格式，
-// 实现只有百来行，省掉一个跨上游同步时必然冲突的依赖。读取路径用 ReadAt（pread），
-// 无文件偏移状态，天然并发安全。
+// 这里自己实现了 xdb 的读取（没有引入第三方绑定）：格式是公开的数据格式，实现百来行，
+// 省掉一个跨上游同步必会冲突的依赖。读取用 ReadAt（pread），无文件偏移状态、天然并发安全。
+//
+// 配置不读环境变量、不读数据库：由调用方（controller）把数据库选项转成 Config 调 Apply 注入，
+// 包本身保持可测。热更新（下载新库并在进程内换掉旧库）走 Update，不需要重启进程。
 package ipgeo
 
 import (
@@ -40,7 +42,14 @@ const (
 
 	structure3 = 3
 
-	downloadTTL = 5 * time.Minute
+	// 默认数据源：ip2region 官方仓库的 v4/v6 数据文件（约 11MB / 37MB）
+	defaultV4URL  = "https://raw.githubusercontent.com/lionsoul2014/ip2region/master/data/ip2region_v4.xdb"
+	defaultV6URL  = "https://raw.githubusercontent.com/lionsoul2014/ip2region/master/data/ip2region_v6.xdb"
+	defaultV4File = "ip2region_v4.xdb"
+	defaultV6File = "ip2region_v6.xdb"
+
+	// 下载/探测超时；数据文件 48MB 级别，给足 5 分钟
+	httpTimeout = 5 * time.Minute
 )
 
 // xdb 一个已打开的 xdb 数据文件（向量索引常驻内存，段/数据按需 pread）。
@@ -50,10 +59,11 @@ type xdb struct {
 	vectorIndex  []byte
 	segmentSize  int
 	ipv6         bool
+	builtAt      int64 // 库头里的 createdAt：数据本身的构建时间
 	bufferPoolIn sync.Pool
 }
 
-// Open 打开一个 xdb 文件（读取并校验头、载入向量索引）。
+// openXdb 打开一个 xdb 文件（校验头、载入向量索引）。
 func openXdb(path string) (*xdb, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -88,12 +98,18 @@ func openXdb(path string) (*xdb, error) {
 		vectorIndex: vectorIndex,
 		segmentSize: segSize,
 		ipv6:        ipv6,
+		builtAt:     int64(binary.LittleEndian.Uint32(header[4:8])),
 	}
 	d.bufferPoolIn.New = func() any { return make([]byte, segSize) }
 	return d, nil
 }
 
-func (d *xdb) Close() error { return d.file.Close() }
+func (d *xdb) Close() error {
+	if d == nil || d.file == nil {
+		return nil
+	}
+	return d.file.Close()
+}
 
 // Lookup 查一个 IP 的归属地；未命中返回空串。
 func (d *xdb) Lookup(ip net.IP) (string, error) {
@@ -177,151 +193,368 @@ func compareUint32(a, b uint32) int {
 	}
 }
 
-// ---- 进程级单例 ----
+// ---- 配置 ----
+
+// Config 运行期配置（由数据库选项转换而来）。
+type Config struct {
+	Enabled bool
+	URLv4   string
+	URLv6   string
+	// PathV4 / PathV6 数据文件落盘位置；相对路径按进程工作目录解释
+	// （生产容器 WORKDIR 就是 /data，即 compose 里挂出来的宿主 data 目录）。
+	PathV4 string
+	PathV6 string
+}
+
+// DefaultConfig 内置默认值：启用、用官方数据源、落在工作目录下。
+func DefaultConfig() Config {
+	return Config{
+		Enabled: true,
+		URLv4:   defaultV4URL,
+		URLv6:   defaultV6URL,
+		PathV4:  defaultV4File,
+		PathV6:  defaultV6File,
+	}
+}
+
+func (c Config) withDefaults() Config {
+	d := DefaultConfig()
+	if strings.TrimSpace(c.URLv4) == "" {
+		c.URLv4 = d.URLv4
+	}
+	if strings.TrimSpace(c.URLv6) == "" {
+		c.URLv6 = d.URLv6
+	}
+	if strings.TrimSpace(c.PathV4) == "" {
+		c.PathV4 = d.PathV4
+	}
+	if strings.TrimSpace(c.PathV6) == "" {
+		c.PathV6 = d.PathV6
+	}
+	return c
+}
+
+// ---- 进程级状态 ----
 
 var (
-	mu      sync.RWMutex
-	v4db    *xdb
-	v6db    *xdb
-	loaded  bool
-	loadErr error
-	once    sync.Once
+	// mu 保护下面所有状态：Lookup 全程持读锁，热更新持写锁，
+	// 保证换库瞬间不会有请求用到已被替换/关闭的旧句柄。
+	mu sync.RWMutex
+
+	cfg         Config
+	applied     bool
+	loaded      bool
+	v4db        *xdb
+	v6db        *xdb
+	lastErr     error
+	lastCheckAt int64
+	lastLoadAt  int64
+	loading     bool
+	autoOnce    sync.Once
+
+	// updateMu 串行化更新任务（下载耗时长，多个请求同时点"立即更新"时排队而不是互相踩）
+	updateMu sync.Mutex
 )
 
-// config 从环境变量取配置（每次调用都读，方便测试里改）：
-//
-//	IP_GEO_DISABLE=1          整体关闭（不加载、不下载，查询一律返回空）
-//	IP_GEO_DB_PATH_V4/_V6     本地文件路径，默认 ./ip2region_v4.xdb 等
-//	IP_GEO_DB_URL_V4/_V6      文件缺失时的下载源（显式配置才下载，见下）；
-//	                          不配也行——把 xdb 文件直接放到上面的路径即可
-//
-// ⚠️ 下载源必须显式配置，没有默认值：默认带 URL 会让"任何一次 Lookup"都可能去网上拉
-// 十几 MB 文件，落盘位置还取决于进程的工作目录（跑单元测试时就把数据文件写进了
-// 仓库目录，2026-09-20 实际踩到）。生产用 IP_GEO_DB_URL_V4/_V6 指向
-// `https://raw.githubusercontent.com/lionsoul2014/ip2region/master/data/ip2region_v4.xdb`
-// 与 ..._v6.xdb 即可（v4 约 11MB、v6 约 37MB，容器起来拉一次，之后纯本地查询）。
-func dbPath(v6 bool) string {
-	key := "IP_GEO_DB_PATH_V4"
-	name := "ip2region_v4.xdb"
-	if v6 {
-		key = "IP_GEO_DB_PATH_V6"
-		name = "ip2region_v6.xdb"
-	}
-	if p := strings.TrimSpace(os.Getenv(key)); p != "" {
-		return p
-	}
-	// 相对进程工作目录，不套 data/ 子目录：生产容器 WORKDIR 就是 /data
-	// （官方/1Panel compose 的 `./data:/data` 挂载点），套一层会落到 /data/data/。
-	return name
+// DBStatus 单个数据文件的状态（设置页展示用）。
+type DBStatus struct {
+	Ready     bool   `json:"ready"`
+	Path      string `json:"path"`
+	Size      int64  `json:"size"`
+	BuiltAt   int64  `json:"built_at"`   // 数据本身的构建时间（xdb 头 createdAt）
+	UpdatedAt int64  `json:"updated_at"` // 文件最后写入时间（≈上次更新时间）
+	Error     string `json:"error,omitempty"`
 }
 
-func dbURL(v6 bool) string {
-	if v6 {
-		return strings.TrimSpace(os.Getenv("IP_GEO_DB_URL_V6"))
+// Status 归属地模块整体状态。
+type Status struct {
+	Enabled      bool     `json:"enabled"`
+	URLv4        string   `json:"url_v4"`
+	URLv6        string   `json:"url_v6"`
+	V4           DBStatus `json:"v4"`
+	V6           DBStatus `json:"v6"`
+	LastError    string   `json:"last_error,omitempty"`
+	LastCheckAt  int64    `json:"last_check_at"`
+	LastLoadedAt int64    `json:"last_loaded_at"`
+}
+
+// Apply 应用配置（设置页保存、启动初始化都走这里），并立刻生效：
+// 启用时同步载入本地已有文件；缺文件则后台拉一次（不阻塞启动）。
+func Apply(next Config) Status {
+	next = next.withDefaults()
+
+	mu.Lock()
+	cfg = next
+	applied = true
+	needFetch := next.Enabled
+	if next.Enabled {
+		replaceDBLocked(false, loadIfExists(next.PathV4, false))
+		replaceDBLocked(true, loadIfExists(next.PathV6, false))
+		// 两个文件都在就没必要联网；缺哪个补哪个
+		needFetch = v4db == nil || v6db == nil
+	} else {
+		replaceDBLocked(false, nil)
+		replaceDBLocked(true, nil)
 	}
-	return strings.TrimSpace(os.Getenv("IP_GEO_DB_URL_V4"))
-}
+	st := statusLocked()
+	mu.Unlock()
 
-func disabled() bool {
-	return strings.TrimSpace(os.Getenv("IP_GEO_DISABLE")) == "1"
-}
-
-// Start 启动时预热：文件已在本地就同步载入（查到就有值，避免首屏查不到），
-// 缺文件（要下载十几 MB）才丢到后台，避免拖慢启动。
-func Start() {
-	once.Do(func() {
-		if disabled() {
-			loaded = true
-			return
-		}
-		missing := false
-		for _, v6 := range []bool{false, true} {
-			if _, err := os.Stat(dbPath(v6)); err != nil && dbURL(v6) != "" {
-				missing = true
+	if needFetch {
+		go func() {
+			if _, err := Update(""); err != nil {
+				log.Printf("[ipgeo] 归属地库拉取失败（继续用本地旧库或空库）：%v", err)
 			}
+		}()
+	}
+	logStatus(st)
+	return st
+}
+
+// ApplyDefault 用内置默认配置初始化（启动时若数据库没有相关选项）。
+func ApplyDefault() Status { return Apply(DefaultConfig()) }
+
+// loadIfExists 文件存在就打开，不存在返回 nil（不联网、不报错）。
+func loadIfExists(path string, logErr bool) *xdb {
+	db, err := openXdb(path)
+	if err != nil {
+		if logErr && !os.IsNotExist(err) {
+			log.Printf("[ipgeo] 打开 %s 失败：%v", path, err)
 		}
-		if missing {
-			log.Printf("[ipgeo] 归属地库缺失，后台下载中（期间查询返回空）")
-			loadAsync()
-			return
-		}
-		v4, v6, err := load()
+		return nil
+	}
+	return db
+}
+
+// replaceDBLocked 换库句柄（调用方需持有写锁）。旧句柄延迟关闭：
+// 已经拿到旧指针的调用方可能还在读，交给 GC 前先让它跑完——写锁保证了不会有新调用拿旧的。
+func replaceDBLocked(v6 bool, next *xdb) {
+	var old *xdb
+	if v6 {
+		old, v6db = v6db, next
+	} else {
+		old, v4db = v4db, next
+	}
+	if old != nil && old != next {
+		go func() {
+			time.Sleep(2 * time.Second)
+			_ = old.Close()
+		}()
+	}
+}
+
+// fileExists 判断数据文件是否在本地。
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Size() > 0
+}
+
+func statusLocked() Status {
+	st := Status{
+		Enabled:      cfg.Enabled,
+		URLv4:        cfg.URLv4,
+		URLv6:        cfg.URLv6,
+		LastCheckAt:  lastCheckAt,
+		LastLoadedAt: lastLoadAt,
+	}
+	if lastErr != nil {
+		st.LastError = lastErr.Error()
+	}
+	st.V4 = dbStatusLocked(v4db, cfg.PathV4)
+	st.V6 = dbStatusLocked(v6db, cfg.PathV6)
+	return st
+}
+
+func dbStatusLocked(db *xdb, path string) DBStatus {
+	out := DBStatus{Path: path}
+	if info, err := os.Stat(path); err == nil {
+		out.Size = info.Size()
+		out.UpdatedAt = info.ModTime().Unix()
+	}
+	if db != nil {
+		out.Ready = true
+		out.BuiltAt = db.builtAt
+	} else if _, err := os.Stat(path); err == nil {
+		out.Error = "文件存在但无法解析（可能不完整），建议重新更新"
+	}
+	return out
+}
+
+// GetStatus 返回当前状态（设置页展示）。
+func GetStatus() Status {
+	mu.RLock()
+	defer mu.RUnlock()
+	return statusLocked()
+}
+
+func logStatus(st Status) {
+	if !st.Enabled {
+		log.Printf("[ipgeo] 归属地查询已关闭")
+		return
+	}
+	log.Printf("[ipgeo] 归属地库：v4=%v(构建 %s) v6=%v(构建 %s)",
+		st.V4.Ready, formatBuiltAt(st.V4.BuiltAt), st.V6.Ready, formatBuiltAt(st.V6.BuiltAt))
+}
+
+func formatBuiltAt(ts int64) string {
+	if ts <= 0 {
+		return "-"
+	}
+	return time.Unix(ts, 0).Format("2006-01-02")
+}
+
+// Update 拉取并热加载归属地库。scope：
+//
+//	""/"missing"  只补缺失的一侧（手动"立即更新"、库存缺失时的自动补齐都用它）
+//	"all"         两侧都重新拉（每日检查发现上游有新版时用）
+//	"v4"/"v6"     只拉指定一侧
+//
+// 分两阶段：下载/校验不持锁（几十 MB，不能让查询等它），只有"改名 + 换句柄"持写锁。
+// 所以更新期间查询照常可用，换的一瞬间才是原子的。
+func Update(scope string) (Status, error) {
+	// 同一时刻只允许一个更新任务（避免多个请求同时写同一个临时文件）。
+	// 拿不到锁就立刻告知"正在更新中"，不让管理员对着转圈等几分钟。
+	if !updateMu.TryLock() {
 		mu.Lock()
-		v4db, v6db, loadErr, loaded = v4, v6, err, true
+		st := statusLocked()
 		mu.Unlock()
-		if err != nil {
-			log.Printf("[ipgeo] 归属地库不可用（查询返回空）：%v", err)
-			return
-		}
-		log.Printf("[ipgeo] 归属地库就绪：v4=%v v6=%v", v4 != nil, v6 != nil)
-	})
-}
+		return st, fmt.Errorf("已有更新任务正在进行中，请稍候")
+	}
+	defer updateMu.Unlock()
 
-// loadAsync 后台载入（首次部署需要下载数据文件时走这条路）。
-func loadAsync() {
-	go func() {
-		v4, v6, err := load()
+	// 1) 决定要拉哪些（短暂持锁）
+	mu.RLock()
+	c, ok := cfg, applied
+	v4, v6 := v4db, v6db
+	mu.RUnlock()
+	if !ok {
+		c = DefaultConfig()
+	}
+	if !c.Enabled {
 		mu.Lock()
-		defer mu.Unlock()
-		v4db, v6db, loadErr, loaded = v4, v6, err, true
-		if err != nil {
-			log.Printf("[ipgeo] 归属地库不可用（查询返回空）：%v", err)
-			return
-		}
-		log.Printf("[ipgeo] 归属地库就绪：v4=%v v6=%v", v4 != nil, v6 != nil)
-	}()
-}
+		lastErr = fmt.Errorf("归属地查询已关闭")
+		st := statusLocked()
+		mu.Unlock()
+		return st, lastErr
+	}
+	doV4, doV6 := false, false
+	switch scope {
+	case "v4":
+		doV4 = true
+	case "v6":
+		doV6 = true
+	case "all":
+		doV4, doV6 = true, true
+	default:
+		// 句柄没了、或磁盘上的文件没了，都算"缺"
+		doV4 = v4 == nil || !fileExists(c.PathV4)
+		doV6 = v6 == nil || !fileExists(c.PathV6)
+	}
+	if !doV4 && !doV6 {
+		mu.Lock()
+		lastCheckAt = time.Now().Unix()
+		lastErr = nil
+		st := statusLocked()
+		mu.Unlock()
+		return st, nil
+	}
 
-// ensureLoaded 首次查询时载入数据库；失败只记一次日志，之后一律返回空（不重试、不阻塞请求）。
-func ensureLoaded() {
-	once.Do(func() {
-		if disabled() {
-			loaded = true
-			return
-		}
-		// 兜底路径（Start 没被调用时）：同样丢后台，不能卡住第一个请求
-		loadAsync()
-	})
-}
-
-func load() (*xdb, *xdb, error) {
-	var v4, v6 *xdb
-	var errs []string
-	for _, target := range []struct {
+	// 2) 下载 + 校验（不持锁）
+	type task struct {
+		tmp  string
+		path string
 		v6   bool
-		slot **xdb
-	}{{false, &v4}, {true, &v6}} {
-		path := dbPath(target.v6)
-		if _, statErr := os.Stat(path); statErr != nil {
-			url := dbURL(target.v6)
-			if url == "" {
-				errs = append(errs, fmt.Sprintf("%s 不存在且未配置下载源", path))
-				continue
-			}
-			if dlErr := download(path, url); dlErr != nil {
-				errs = append(errs, fmt.Sprintf("下载 %s 失败: %v", filepath.Base(path), dlErr))
-				continue
-			}
-		}
-		db, openErr := openXdb(path)
-		if openErr != nil {
-			errs = append(errs, fmt.Sprintf("打开 %s 失败: %v", path, openErr))
-			continue
-		}
-		*target.slot = db
 	}
+	var tasks []task
+	var errs []string
+	if doV4 {
+		tmp, err := fetchAndValidate(c.URLv4, c.PathV4, false)
+		if err != nil {
+			errs = append(errs, "IPv4: "+err.Error())
+		} else {
+			tasks = append(tasks, task{tmp: tmp, path: c.PathV4, v6: false})
+		}
+	}
+	if doV6 {
+		tmp, err := fetchAndValidate(c.URLv6, c.PathV6, true)
+		if err != nil {
+			errs = append(errs, "IPv6: "+err.Error())
+		} else {
+			tasks = append(tasks, task{tmp: tmp, path: c.PathV6, v6: true})
+		}
+	}
+
+	// 3) 落盘 + 换句柄（持写锁，快）
+	mu.Lock()
+	for _, tk := range tasks {
+		if err := commitFetchedLocked(tk.tmp, tk.path, tk.v6); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+	lastCheckAt = time.Now().Unix()
 	if len(errs) > 0 {
-		return v4, v6, fmt.Errorf("%s", strings.Join(errs, "；"))
+		lastErr = fmt.Errorf("%s", strings.Join(errs, "；"))
+	} else {
+		lastErr = nil
+		lastLoadAt = time.Now().Unix()
 	}
-	return v4, v6, nil
+	st := statusLocked()
+	mu.Unlock()
+
+	if lastErr != nil {
+		log.Printf("[ipgeo] 归属地库更新失败（继续用现有库）：%v", lastErr)
+	} else if len(tasks) > 0 {
+		logStatus(st)
+	}
+	return st, lastErr
 }
 
-// download 下载缺失的 xdb 到本地（先写临时文件再原子改名，失败不留下半截文件）。
-func download(path, url string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
+// fetchAndValidate 下载到 `<path>.download` 并校验（结构版本、IP 协议），
+// 返回临时文件路径；**不持锁、不动现有库**。失败时清掉临时文件。
+func fetchAndValidate(url, path string, ipv6 bool) (string, error) {
+	url = strings.TrimSpace(url)
+	if url == "" {
+		return "", fmt.Errorf("未配置数据源地址")
 	}
-	client := &http.Client{Timeout: downloadTTL}
+	tmp := path + ".download"
+	if err := download(tmp, url); err != nil {
+		return "", err
+	}
+	probe, err := openXdb(tmp)
+	if err != nil {
+		_ = os.Remove(tmp)
+		return "", fmt.Errorf("文件校验失败: %w", err)
+	}
+	wrongProtocol := probe.ipv6 != ipv6
+	_ = probe.Close()
+	if wrongProtocol {
+		_ = os.Remove(tmp)
+		want := "IPv4"
+		if ipv6 {
+			want = "IPv6"
+		}
+		return "", fmt.Errorf("数据源给的不是 %s 数据文件", want)
+	}
+	return tmp, nil
+}
+
+// commitFetchedLocked 原子落盘并换库句柄（调用方持写锁）。
+// 任何一步失败都不动现有库：宁可显示旧数据，也不能因为网络问题变成没归属地。
+func commitFetchedLocked(tmp, path string, ipv6 bool) error {
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("落盘失败: %w", err)
+	}
+	db, err := openXdb(path)
+	if err != nil {
+		return fmt.Errorf("重新打开失败: %w", err)
+	}
+	replaceDBLocked(ipv6, db)
+	return nil
+}
+
+// download 下载到指定路径（先写临时后缀，成功才落）。
+func download(path, url string) error {
+	client := &http.Client{Timeout: httpTimeout}
 	resp, err := client.Get(url)
 	if err != nil {
 		return err
@@ -330,48 +563,157 @@ func download(path, url string) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
-	tmp := path + ".tmp"
-	f, err := os.Create(tmp)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	f, err := os.Create(path)
 	if err != nil {
 		return err
 	}
 	if _, err := io.Copy(f, resp.Body); err != nil {
 		_ = f.Close()
-		_ = os.Remove(tmp)
+		_ = os.Remove(path)
 		return err
 	}
 	if err := f.Close(); err != nil {
-		_ = os.Remove(tmp)
+		_ = os.Remove(path)
 		return err
 	}
-	return os.Rename(tmp, path)
+	return nil
 }
 
-// Lookup 查一个 IP 的归属地（形如 "中国 浙江省 杭州市 电信"）。
-// 库未就绪、IP 非法、未命中都返回空串——调用方按"没有归属信息"展示即可。
-func Lookup(ip string) string {
-	if ip == "" {
+// CheckForUpdate 比上游与本地：只做 HEAD，发现本地缺失或大小/时间不同就判定该侧需要更新。
+// 分别返回 v4/v6 是否需要更新（供每日自动检查与"立即更新"用，本身不下载）。
+func CheckForUpdate() (needV4 bool, needV6 bool, err error) {
+	mu.RLock()
+	c, ok := cfg, applied
+	mu.RUnlock()
+	if !ok || !c.Enabled {
+		return false, false, nil
+	}
+	var errs []string
+	check := func(url, path string, need *bool) {
+		if strings.TrimSpace(url) == "" {
+			return
+		}
+		info, statErr := os.Stat(path)
+		if statErr != nil {
+			// 本地没有（或读不到）数据文件，直接判为需要更新，别去比对了
+			*need = true
+			return
+		}
+		size, modified, err := remoteMeta(url)
+		if err != nil {
+			errs = append(errs, err.Error())
+			return
+		}
+		if (size > 0 && size != info.Size()) || (modified > 0 && modified > info.ModTime().Unix()) {
+			*need = true
+		}
+	}
+	check(c.URLv4, c.PathV4, &needV4)
+	check(c.URLv6, c.PathV6, &needV6)
+	if len(errs) > 0 {
+		return needV4, needV6, fmt.Errorf("%s", strings.Join(errs, "；"))
+	}
+	return needV4, needV6, nil
+}
+
+// UpdateNeeded 把"哪几侧需要更新"转成 Update 的 scope 参数；都不需要时返回 ""。
+func UpdateNeeded(needV4, needV6 bool) string {
+	switch {
+	case needV4 && needV6:
+		return "all"
+	case needV4:
+		return "v4"
+	case needV6:
+		return "v6"
+	default:
 		return ""
 	}
-	ensureLoaded()
-	return lookupLoaded(ip)
 }
 
-// lookupLoaded 用已载入的库查询（不触发加载），便于单测直接塞库。
-func lookupLoaded(ip string) string {
+// remoteMeta 用 HEAD 拿上游文件大小与 Last-Modified。
+func remoteMeta(url string) (size int64, modified int64, err error) {
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, err := http.NewRequest(http.MethodHead, url, nil)
+	if err != nil {
+		return 0, 0, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 0, 0, fmt.Errorf("探测 %s: HTTP %d", url, resp.StatusCode)
+	}
+	if lm := resp.Header.Get("Last-Modified"); lm != "" {
+		if t, perr := http.ParseTime(lm); perr == nil {
+			modified = t.Unix()
+		}
+	}
+	return resp.ContentLength, modified, nil
+}
+
+// StartAutoCheck 每 interval 检查一次上游是否有新数据，有就自动热更新。
+// 首次检查：库里还缺文件就 1 分钟后立刻补，否则等一个 interval（避开启动高峰）。
+func StartAutoCheck(interval time.Duration) {
+	if interval <= 0 {
+		interval = 24 * time.Hour
+	}
+	autoOnce.Do(func() {
+		go func() {
+			mu.RLock()
+			missing := applied && cfg.Enabled && (v4db == nil || v6db == nil)
+			mu.RUnlock()
+			first := interval
+			if missing {
+				first = time.Minute
+			}
+			timer := time.NewTimer(first)
+			defer timer.Stop()
+			for {
+				<-timer.C
+				runAutoCheck()
+				timer.Reset(interval)
+			}
+		}()
+	})
+}
+
+func runAutoCheck() {
+	needV4, needV6, err := CheckForUpdate()
+	if err != nil {
+		log.Printf("[ipgeo] 检查归属地库更新出错：%v", err)
+	}
+	scope := UpdateNeeded(needV4, needV6)
+	if scope == "" {
+		return
+	}
+	if _, err := Update(scope); err != nil {
+		log.Printf("[ipgeo] 自动更新归属地库失败：%v", err)
+	}
+}
+
+// Lookup 查一个 IP 的归属地（形如 "中国 浙江省 杭州市 移动"）。
+// 未配置、未启用、库未就绪、IP 非法、未命中都返回空串——调用方按"没有归属信息"展示。
+func Lookup(ip string) string {
+	if strings.TrimSpace(ip) == "" {
+		return ""
+	}
 	mu.RLock()
-	v4, v6 := v4db, v6db
-	mu.RUnlock()
-	if v4 == nil && v6 == nil {
+	defer mu.RUnlock()
+	if !applied || !cfg.Enabled {
 		return ""
 	}
 	parsed := net.ParseIP(ip)
 	if parsed == nil {
 		return ""
 	}
-	db := v4
+	db := v4db
 	if parsed.To4() == nil {
-		db = v6
+		db = v6db
 	}
 	if db == nil {
 		return ""
