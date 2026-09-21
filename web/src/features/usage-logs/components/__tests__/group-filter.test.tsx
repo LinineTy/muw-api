@@ -225,9 +225,11 @@ it('keeps the compact input and masks the dropdown together with other sensitive
   await userEvent.click(screen.getByRole('button', { name: /^Hide$/ }))
   await userEvent.click(input)
   const option = await screen.findByRole('option', { name: 'premium' })
+  // 浮层 portal 出遮罩容器后，遮罩改由浮层内容自带；触发框与选项都必须落在
+  // 「带遮罩类的元素」里，任何一个漏掉都算敏感值泄漏。
   const maskedField = input.closest('.\\[-webkit-text-security\\:disc\\]')
   expect(maskedField).not.toBeNull()
-  expect(maskedField).toContainElement(option)
+  expect(option.closest('.\\[-webkit-text-security\\:disc\\]')).not.toBeNull()
   await userEvent.keyboard('{Escape}')
   expect(input).toHaveAttribute('aria-expanded', 'false')
   await userEvent.tab()

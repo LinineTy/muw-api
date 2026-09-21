@@ -94,6 +94,14 @@
 
 - 移除 Stripe / Creem / Waffo 等第三方支付渠道与 io.net 模型部署，仅保留自用支付链路（余额 / epay）
 
+## 与上游的有意分歧
+
+- 本 fork **有意删除**的文件（上游仍在维护）与**保留自己实现**的文件（上游在同文件有改动），
+  全部记在 [`docs/upstream-sync-v3-decisions.md`](./docs/upstream-sync-v3-decisions.md)；
+  上游同步时先对照该文件，不要因为"上游有/上游改了"就自动采纳。
+- 渠道编号在本 fork 与上游不一致（62/63 = OpenCode Zen / Task Plugin，vLLM / SGLang 顺延 64/65），
+  详见该文件第二节的对照表。
+
 ## 构建与部署
 
 本 fork 构建、部署方式与上游一致，详见上游 [README.md](./README.md)。

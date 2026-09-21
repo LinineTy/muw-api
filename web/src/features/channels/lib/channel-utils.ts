@@ -54,6 +54,8 @@ export function getChannelTypeIcon(type: number): string {
     58: 'NewAPI', // Advanced Custom
     59: 'Sub2API', // Sub2API
     60: 'NewAPI', // New API
+    64: 'Vllm', // vLLM
+    65: 'SGLang', // SGLang
     3: 'Azure', // Azure
 
     // Anthropic
@@ -103,7 +105,7 @@ export function getChannelTypeIcon(type: number): string {
     62: 'OpenCode', // OpenCode Zen
     36: 'Suno', // SunoAPI
     55: 'OpenAI', // Sora
-    54: 'Doubao', // DoubaoVideo
+    54: 'Doubao', // Doubao
     56: 'Replicate', // Replicate
 
     // Tools & Platforms
