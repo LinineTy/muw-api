@@ -64,6 +64,10 @@ const (
 	// Upstream assigned 61 to TaskPlugin; this fork already uses 61/62 for
 	// SenseNova/OpenCodeZen, so TaskPlugin is renumbered to the next free slot.
 	ChannelTypeTaskPlugin = 63
+	// 上游新增 vLLM(62)/SGLang(63) 与本 fork 的 62/63 撞号。fork 侧编号已随线上库落地
+	// （SenseNova/OpenCodeZen 渠道在库），不可反向迁移，故把上游这两个新类型顺延到 64/65。
+	ChannelTypeVLLM       = 64
+	ChannelTypeSGLang     = 65
 	ChannelTypeDummy      // this one is only for count, do not add any channel after this
 
 )
@@ -135,6 +139,8 @@ var ChannelBaseURLs = []string{
 	"https://token.sensenova.cn",                //61
 	"https://opencode.ai/zen",                   //62
 	"",                                          //63 (Task Plugin)
+	"",                                          //64 (vLLM)
+	"",                                          //65 (SGLang)
 }
 
 func GetChannelBaseURL(channelType int) string {
@@ -208,7 +214,7 @@ var ChannelTypeNames = map[int]string{
 	ChannelTypeJimeng:         "Jimeng",
 	ChannelTypeVidu:           "Vidu",
 	ChannelTypeSubmodel:       "Submodel",
-	ChannelTypeDoubaoVideo:    "DoubaoVideo",
+	ChannelTypeDoubaoVideo:    "Doubao",
 	ChannelTypeSora:           "Sora",
 	ChannelTypeReplicate:      "Replicate",
 	ChannelTypeCodex:          "ChatGPT Subscription (Codex)",
@@ -218,6 +224,8 @@ var ChannelTypeNames = map[int]string{
 	ChannelTypeSenseNova:      "SenseNova",
 	ChannelTypeOpenCodeZen:    "OpenCode Zen",
 	ChannelTypeTaskPlugin:     "Task Plugin",
+	ChannelTypeVLLM:           "vLLM",
+	ChannelTypeSGLang:         "SGLang",
 }
 
 func GetChannelTypeName(channelType int) string {
@@ -296,4 +304,15 @@ func ResolveUpstreamModelsBaseURL(baseURL string) (string, bool) {
 		return trimmed, true
 	}
 	return "", false
+}
+
+// IsAdvancedCustomChannel includes named channels backed by route presets.
+func IsAdvancedCustomChannel(channelType int) bool {
+	switch channelType {
+	case ChannelTypeAdvancedCustom, ChannelTypeVLLM, ChannelTypeSGLang:
+		return true
+	default:
+		return false
+	}
+
 }

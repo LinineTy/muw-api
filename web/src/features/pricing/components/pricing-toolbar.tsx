@@ -191,7 +191,7 @@ export function PricingToolbar(props: PricingToolbarProps) {
           )}
         </Button>
 
-        <DropdownMenu>
+        <DropdownMenu modal={false}>
           <DropdownMenuTrigger
             render={
               <Button
