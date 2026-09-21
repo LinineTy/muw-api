@@ -8217,6 +8217,8 @@
     "Later": "後で",
     "Plugin activation failed": "プラグインの有効化に失敗しました",
     "Plugin saved, activation required": "プラグインを保存しました。有効化が必要です",
-    "This version is saved but not active. Activate it to replace the current version, or activate it later from the Versions tab.": "このバージョンは保存済みですが、まだ有効ではありません。有効化すると現在のバージョンを置き換えます。後で「バージョン」タブから有効化することもできます。"
+    "This version is saved but not active. Activate it to replace the current version, or activate it later from the Versions tab.": "このバージョンは保存済みですが、まだ有効ではありません。有効化すると現在のバージョンを置き換えます。後で「バージョン」タブから有効化することもできます。",
+    "Plugin source exceeds the 8 MiB limit.": "プラグインのソースが 8 MiB の上限を超えています。",
+    "Single .js file, up to 8 MiB. Its source is shown below before upload.": "単一の .js ファイル、最大 8 MiB。アップロード前に下部でソースを確認できます。"
   }
 }

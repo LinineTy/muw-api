@@ -8217,6 +8217,8 @@
     "Later": "Позже",
     "Plugin activation failed": "Не удалось активировать плагин",
     "Plugin saved, activation required": "Плагин сохранён, требуется активация",
-    "This version is saved but not active. Activate it to replace the current version, or activate it later from the Versions tab.": "Эта версия сохранена, но не активна. Активируйте её, чтобы заменить текущую версию, или сделайте это позже на вкладке «Версии»."
+    "This version is saved but not active. Activate it to replace the current version, or activate it later from the Versions tab.": "Эта версия сохранена, но не активна. Активируйте её, чтобы заменить текущую версию, или сделайте это позже на вкладке «Версии».",
+    "Plugin source exceeds the 8 MiB limit.": "Код плагина превышает лимит 8 МиБ.",
+    "Single .js file, up to 8 MiB. Its source is shown below before upload.": "Один файл .js размером до 8 МиБ. Его исходный код показан ниже перед загрузкой."
   }
 }

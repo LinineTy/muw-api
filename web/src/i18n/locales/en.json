@@ -8217,6 +8217,8 @@
     "Later": "Later",
     "Plugin activation failed": "Plugin activation failed",
     "Plugin saved, activation required": "Plugin saved, activation required",
-    "This version is saved but not active. Activate it to replace the current version, or activate it later from the Versions tab.": "This version is saved but not active. Activate it to replace the current version, or activate it later from the Versions tab."
+    "This version is saved but not active. Activate it to replace the current version, or activate it later from the Versions tab.": "This version is saved but not active. Activate it to replace the current version, or activate it later from the Versions tab.",
+    "Plugin source exceeds the 8 MiB limit.": "Plugin source exceeds the 8 MiB limit.",
+    "Single .js file, up to 8 MiB. Its source is shown below before upload.": "Single .js file, up to 8 MiB. Its source is shown below before upload."
   }
 }
