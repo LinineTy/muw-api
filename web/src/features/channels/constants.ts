@@ -21,6 +21,7 @@ For commercial licensing, please contact support@quantumnous.com
 // All label/name values are i18n keys; use t(value) when displaying.
 // ============================================================================
 
+export const CHANNEL_TYPE_ALIYUN = 17
 export const CHANNEL_TYPE_NEW_API = 60
 // MERGE-DECISION: 撞号对齐 Go 侧 constant/channel.go —— SenseNova=61、OpenCodeZen=62、TaskPlugin=63。
 export const CHANNEL_TYPE_OPENCODE_ZEN = 62
@@ -643,6 +644,11 @@ export const TYPE_TO_KEY_PROMPT: Record<number, string> = {
   59: 'Enter API key for this channel',
   60: 'Enter API key for this channel',
   62: 'Optional. Leave empty to use the free plan (anonymous), or fill in your OpenCode Zen API key for the paid plan',
+}
+
+// 上游地址填写提示（按渠道类型追加在 base_url 输入框下方；值即 i18n 英文原句）。
+export const CHANNEL_TYPE_BASE_URL_TIPS: Record<number, string> = {
+  17: 'Alibaba Cloud Model Studio workspace endpoint, e.g. https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com (copy the API Host from the workspace page in the console). Leave empty to keep using the shared domain dashscope.aliyuncs.com, which no longer receives new features since 2026-09-30.',
 }
 
 export const CHANNEL_TYPE_WARNINGS: Record<number, string> = {

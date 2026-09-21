@@ -44,6 +44,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import {
+  CHANNEL_TYPE_BASE_URL_TIPS,
   CHANNEL_TYPE_OPTIONS,
   CODING_PLAN_PROVIDER_DISABLED,
   CODING_PLAN_PROVIDER_OPTIONS,
@@ -214,6 +215,9 @@ export function AccountMutateDrawer({
     .map((k) => k.trim())
     .filter(Boolean).length
 
+  // 上游地址提示（按账户类型）：阿里百炼专属域名这类「没有通用默认值」的厂商靠它引导填写。
+  const baseUrlTip = CHANNEL_TYPE_BASE_URL_TIPS[type]
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className='flex w-full flex-col gap-4 sm:max-w-lg'>
@@ -337,6 +341,11 @@ export function AccountMutateDrawer({
                 onChange={(e) => setBaseURL(e.target.value)}
                 placeholder={t('Optional, overrides the provider default')}
               />
+              {baseUrlTip && (
+                <p className='text-muted-foreground text-xs leading-relaxed'>
+                  {t(baseUrlTip)}
+                </p>
+              )}
             </div>
             <div className='space-y-1.5'>
               <Label>{t('Remark')}</Label>
