@@ -228,7 +228,7 @@ export function ComboboxInput({
     (filteredOptions.length > 0 || (allowCustomValue && searchValue.trim()))
 
   return (
-    <div ref={containerRef} className='relative'>
+    <div ref={containerRef} className='relative flex items-center'>
       <Input
         ref={inputRef}
         id={id}
@@ -289,6 +289,10 @@ export function ComboboxInput({
         }}
         className={cn('pr-9', className)}
       />
+      {/* 指示器按包裹层居中（top-1/2）。包裹层必须 flex items-center：
+          上游把调用方（如模型重定向行 grid grid-cols-[1fr_1fr_auto]）的 items-center 去掉后，
+          输入框（h-8）会被行高（h-10 的删除按钮）拉成 stretch，包裹层 40px 而输入框只有 32px，
+          指示器随即比输入框中心低 4px（2026-09-22 实测）。 */}
       <ChevronsUpDown className='pointer-events-none absolute top-1/2 right-3 size-4 shrink-0 -translate-y-1/2 opacity-50' />
 
       {showDropdown &&
