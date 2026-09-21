@@ -39,6 +39,12 @@ interface ComboboxInputProps {
   placeholder?: string
   emptyText?: string
   className?: string
+  /**
+   * Class applied to the portaled dropdown. Callers that mask sensitive values
+   * (usage-log filters with "hide" toggled) pass the mask class here, because
+   * the dropdown no longer lives inside the masked wrapper once it portals.
+   */
+  contentClassName?: string
   id?: string
   allowCustomValue?: boolean
   openOnFocus?: boolean
@@ -56,6 +62,7 @@ export function ComboboxInput({
   placeholder = 'Select or type...',
   emptyText = 'No option found.',
   className,
+  contentClassName,
   id,
   allowCustomValue = false,
   openOnFocus = true,
@@ -295,7 +302,10 @@ export function ComboboxInput({
               left: dropdown.left,
               width: dropdown.width,
             }}
-            className='bg-popover text-popover-foreground z-100 rounded-md border shadow-md'
+            className={cn(
+              'bg-popover text-popover-foreground z-100 rounded-md border shadow-md',
+              contentClassName
+            )}
           >
             {filteredOptions.length > 0 ? (
               <ul
