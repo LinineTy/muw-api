@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -33,6 +35,9 @@ const (
 	CodingPlanProviderZenMux     CodingPlanProvider = "zenmux"
 	CodingPlanProviderVolcengine CodingPlanProvider = "volcengine"
 	CodingPlanProviderOpenRouter CodingPlanProvider = "openrouter" // 火山方舟(需 AK/SK 签名,暂未实现)
+	// CodingPlanProviderCommandCode Command Code(commandcode.ai)。GOAT/Pro/Max 等订阅套餐
+	// 按 credits 计费,三档窗口 = 任意 5 小时 / 任意 7 天 / 每月。
+	CodingPlanProviderCommandCode CodingPlanProvider = "commandcode"
 	// CodingPlanProviderDisabled 显式关闭余量监控的自定义渠道(手动/自定义模式默认值):
 	// 即使 base_url 是套餐端点也不再自动绑定/探测,彻底不做监控。
 	CodingPlanProviderDisabled CodingPlanProvider = "none"
@@ -40,20 +45,22 @@ const (
 
 // tier 名称:窗口标识,前端据此展示。
 const (
-	CodingPlanTierFiveHour    = "five_hour"
-	CodingPlanTierWeeklyLimit = "weekly_limit"
-	CodingPlanTierDailyLimit  = "daily_limit"
+	CodingPlanTierFiveHour     = "five_hour"
+	CodingPlanTierWeeklyLimit  = "weekly_limit"
+	CodingPlanTierMonthlyLimit = "monthly_limit"
+	CodingPlanTierDailyLimit   = "daily_limit"
 )
 
 var knownCodingPlanProviders = map[CodingPlanProvider]struct{}{
-	CodingPlanProviderZhipu:      {},
-	CodingPlanProviderZhipuEn:    {},
-	CodingPlanProviderKimi:       {},
-	CodingPlanProviderMiniMax:    {},
-	CodingPlanProviderMiniMaxEn:  {},
-	CodingPlanProviderZenMux:     {},
-	CodingPlanProviderOpenRouter: {},
-	CodingPlanProviderVolcengine: {},
+	CodingPlanProviderZhipu:       {},
+	CodingPlanProviderZhipuEn:     {},
+	CodingPlanProviderKimi:        {},
+	CodingPlanProviderMiniMax:     {},
+	CodingPlanProviderMiniMaxEn:   {},
+	CodingPlanProviderZenMux:      {},
+	CodingPlanProviderOpenRouter:  {},
+	CodingPlanProviderVolcengine:  {},
+	CodingPlanProviderCommandCode: {},
 }
 
 // IsKnownCodingPlanProvider 判断 provider 是否在已知厂商集合内。
@@ -96,6 +103,10 @@ func DetectCodingPlanProvider(baseUrl string) (CodingPlanProvider, bool) {
 		return CodingPlanProviderZenMux, true
 	case strings.Contains(url, "volces.com/api/coding"):
 		return CodingPlanProviderVolcengine, true
+	// commandcode.ai 的推理端点是 api.commandcode.ai/provider[/v1](OpenAI 与 Anthropic
+	// 两套都在同一 host 下),base_url 里认域名即可。
+	case strings.Contains(url, "commandcode.ai"):
+		return CodingPlanProviderCommandCode, true
 	default:
 		return "", false
 	}
@@ -275,6 +286,8 @@ func QueryCodingPlanQuota(ctx context.Context, provider CodingPlanProvider, apiK
 		return queryCodingPlanOpenRouter(ctx, apiKey)
 	case CodingPlanProviderMiniMax, CodingPlanProviderMiniMaxEn:
 		return queryCodingPlanMiniMax(ctx, provider, apiKey)
+	case CodingPlanProviderCommandCode:
+		return queryCodingPlanCommandCode(ctx, apiKey)
 	case CodingPlanProviderVolcengine:
 		return failedCodingPlanQuota("Volcengine coding plan quota is not implemented yet"), nil
 	case CodingPlanProviderZenMux:
@@ -680,6 +693,239 @@ func queryCodingPlanMiniMax(ctx context.Context, provider CodingPlanProvider, ap
 	return &dto.CodingPlanQuota{
 		Success:   true,
 		Tiers:     parseMiniMaxTiers(&body),
+		QueriedAt: nowMillis(),
+	}, nil
+}
+
+// ── Command Code (commandcode.ai) ────────────────────────────
+
+// 端点(官方 CLI 里用到的路由;/alpha/whoami 正是它校验 API key 的那条接口):
+//
+//	GET https://api.commandcode.ai/alpha/whoami?limits=1
+//	GET https://api.commandcode.ai/alpha/billing/credits
+//	GET https://api.commandcode.ai/alpha/billing/subscriptions
+//
+// 鉴权:Authorization: Bearer <API key —— 与推理共用同一把>。
+//
+// 口径(2026-09-21 实测 GOAT 套餐):
+//   - 额度单位是 credits,绝大多数模型 1 credit = $1
+//   - 三档窗口:任意 5 小时 / 任意 7 天 / 每月(官方 Usage Limits 页)
+//   - credits 响应只给 5 小时与周窗口的 used/cap/resetAt(另有 limited/exceeded 标记);
+//     月度窗口要自己算:上限 = 套餐月额度(planId 查表),已用 = 上限 - credits.monthlyCredits,
+//     重置时间取订阅的 currentPeriodEnd
+//   - 额外充值额度(purchasedCredits/freeCredits)不受窗口限制,本卡不展示
+//
+// 与其它厂商不同:套餐等级与月度重置时间只在 subscriptions 里,所以这里要打两个接口;
+// 订阅查不到只影响月度窗口,不影响本次查询成败。
+const (
+	commandCodeAPIHost           = "https://api.commandcode.ai"
+	commandCodeWhoamiPath        = "/alpha/whoami"
+	commandCodeCreditsPath       = "/alpha/billing/credits"
+	commandCodeSubscriptionsPath = "/alpha/billing/subscriptions"
+)
+
+// commandCodePlanMonthlyCredits 套餐 → 每月额度(credits)。取自官方 CLI 内置表
+// (command-code dist/cli.mjs 的 PLAN_TOTAL_CREDITS);未知套餐不出月度窗口。
+var commandCodePlanMonthlyCredits = map[string]float64{
+	"individual-go":       10,
+	"individual-goat":     70,
+	"individual-pro":      30,
+	"individual-pro-v1":   80,
+	"individual-provider": 15,
+	"individual-max":      150,
+	"individual-ultra":    300,
+	"teams-pro":           40,
+}
+
+// commandCodePlanLabels 套餐 → 展示名(余量卡上的等级徽标),同样取自官方 CLI。
+var commandCodePlanLabels = map[string]string{
+	"individual-go":       "Go",
+	"individual-goat":     "GOAT",
+	"individual-pro":      "Pro",
+	"individual-pro-v1":   "Pro",
+	"individual-provider": "Provider",
+	"individual-max":      "Max",
+	"individual-ultra":    "Ultra",
+	"teams-pro":           "Teams Pro",
+}
+
+type commandCodeCredits struct {
+	MonthlyCredits   json.Number `json:"monthlyCredits"`
+	PurchasedCredits json.Number `json:"purchasedCredits"`
+	FreeCredits      json.Number `json:"freeCredits"`
+}
+
+type commandCodeWindow struct {
+	Used    json.Number `json:"used"`
+	Cap     json.Number `json:"cap"`
+	ResetAt json.Number `json:"resetAt"`
+}
+
+type commandCodeWindowLimits struct {
+	FiveHour *commandCodeWindow `json:"fiveHour"`
+	Weekly   *commandCodeWindow `json:"weekly"`
+}
+
+type commandCodeCreditsResponse struct {
+	Credits      *commandCodeCredits      `json:"credits"`
+	WindowLimits *commandCodeWindowLimits `json:"windowLimits"`
+}
+
+type commandCodeWhoamiResponse struct {
+	Org *struct {
+		ID string `json:"id"`
+	} `json:"org"`
+}
+
+type commandCodeSubscriptionResponse struct {
+	Data *struct {
+		PlanID           string `json:"planId"`
+		Status           string `json:"status"`
+		CurrentPeriodEnd string `json:"currentPeriodEnd"`
+	} `json:"data"`
+}
+
+// parseCommandCodeTiers 组装三档窗口;缺哪一档就不出哪一档。
+// 额度是小数 credits,而 DTO 的原始数值只有整数字段 ⇒ 四舍五入(百分比走浮点,不失真)。
+func parseCommandCodeTiers(body *commandCodeCreditsResponse, planID string, periodEnd string) []dto.CodingPlanTier {
+	if body == nil || body.Credits == nil {
+		return nil
+	}
+	tiers := make([]dto.CodingPlanTier, 0, 3)
+
+	appendWindow := func(name string, w *commandCodeWindow) {
+		if w == nil {
+			return
+		}
+		capacity := jsonNumF64(w.Cap, 0)
+		used := jsonNumF64(w.Used, 0)
+		if capacity <= 0 || used < 0 {
+			return
+		}
+		remaining := capacity - used
+		if remaining < 0 {
+			remaining = 0
+		}
+		limit := int64(math.Round(capacity))
+		rem := int64(math.Round(remaining))
+		tiers = append(tiers, dto.CodingPlanTier{
+			Name:        name,
+			Utilization: utilizationPercent(capacity, remaining),
+			ResetsAt:    millisToRFC3339Ptr(jsonNumInt64(w.ResetAt, 0)),
+			Limit:       limit,
+			Remaining:   rem,
+			Used:        limit - rem,
+		})
+	}
+	if body.WindowLimits != nil {
+		appendWindow(CodingPlanTierFiveHour, body.WindowLimits.FiveHour)
+		appendWindow(CodingPlanTierWeeklyLimit, body.WindowLimits.Weekly)
+	}
+
+	// 月度窗口:上游不给,用套餐月额度 + 剩余 monthlyCredits 反推。
+	if capacity, ok := commandCodePlanMonthlyCredits[strings.TrimSpace(planID)]; ok && capacity > 0 {
+		remaining := jsonNumF64(body.Credits.MonthlyCredits, 0)
+		if remaining < 0 {
+			remaining = 0
+		}
+		if remaining > capacity {
+			// 促销加成 / 额外额度不计入本窗口,按满额处理
+			remaining = capacity
+		}
+		limit := int64(math.Round(capacity))
+		rem := int64(math.Round(remaining))
+		tier := dto.CodingPlanTier{
+			Name:        CodingPlanTierMonthlyLimit,
+			Utilization: utilizationPercent(capacity, remaining),
+			Limit:       limit,
+			Remaining:   rem,
+			Used:        limit - rem,
+		}
+		if iso := strings.TrimSpace(periodEnd); iso != "" {
+			tier.ResetsAt = &iso
+		}
+		tiers = append(tiers, tier)
+	}
+	return tiers
+}
+
+// commandCodeFetch 打一个 /alpha 接口并做统一错误映射:
+// 瞬时错误(网络/超时/读体中断)返回 err;确定性失败返回 failed(此时 raw 为 nil)。
+func commandCodeFetch(ctx context.Context, host, path, apiKey string) ([]byte, *dto.CodingPlanQuota, error) {
+	statusCode, raw, err := codingPlanGet(ctx, host+path, func(req *http.Request) {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		req.Header.Set("Content-Type", "application/json")
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	if statusCode == http.StatusUnauthorized || statusCode == http.StatusForbidden {
+		return nil, failedCodingPlanQuota(fmt.Sprintf("Authentication failed (HTTP %d)", statusCode)), nil
+	}
+	if statusCode < 200 || statusCode >= 300 {
+		return nil, failedCodingPlanQuota(fmt.Sprintf("API error (HTTP %d): %s", statusCode, truncateStr(string(raw), 300))), nil
+	}
+	return raw, nil, nil
+}
+
+func queryCodingPlanCommandCode(ctx context.Context, apiKey string) (*dto.CodingPlanQuota, error) {
+	return queryCodingPlanCommandCodeAt(ctx, commandCodeAPIHost, apiKey)
+}
+
+// queryCodingPlanCommandCodeAt 拆出 host 便于用本地 server 测试请求形状。
+func queryCodingPlanCommandCodeAt(ctx context.Context, host string, apiKey string) (*dto.CodingPlanQuota, error) {
+	// 1) whoami:有组织时额度按 orgId 查(官方 CLI 同款行为,个人号 org 为 null)
+	rawWhoami, failed, err := commandCodeFetch(ctx, host, commandCodeWhoamiPath+"?limits=1", apiKey)
+	if err != nil || failed != nil {
+		return failed, err
+	}
+	var whoami commandCodeWhoamiResponse
+	if err := common.Unmarshal(rawWhoami, &whoami); err != nil {
+		return failedCodingPlanQuota(fmt.Sprintf("Failed to parse response: %s", err.Error())), nil
+	}
+	orgID := ""
+	if whoami.Org != nil {
+		orgID = strings.TrimSpace(whoami.Org.ID)
+	}
+	scoped := func(path string) string {
+		if orgID == "" {
+			return path
+		}
+		return path + "?orgId=" + url.QueryEscape(orgID)
+	}
+
+	// 2) 额度与三档窗口
+	rawCredits, failed, err := commandCodeFetch(ctx, host, scoped(commandCodeCreditsPath), apiKey)
+	if err != nil || failed != nil {
+		return failed, err
+	}
+	var body commandCodeCreditsResponse
+	if err := common.Unmarshal(rawCredits, &body); err != nil {
+		return failedCodingPlanQuota(fmt.Sprintf("Failed to parse response: %s", err.Error())), nil
+	}
+	if body.Credits == nil {
+		return failedCodingPlanQuota("Missing 'credits' field in response"), nil
+	}
+
+	// 3) 订阅:只补套餐等级与月度重置时间,查不到就不出月度窗口(不影响本次成败)
+	planID, periodEnd := "", ""
+	if rawSubs, failedSubs, errSubs := commandCodeFetch(ctx, host, scoped(commandCodeSubscriptionsPath), apiKey); errSubs == nil && failedSubs == nil {
+		var subs commandCodeSubscriptionResponse
+		if common.Unmarshal(rawSubs, &subs) == nil && subs.Data != nil &&
+			strings.EqualFold(strings.TrimSpace(subs.Data.Status), "active") {
+			planID = strings.TrimSpace(subs.Data.PlanID)
+			periodEnd = strings.TrimSpace(subs.Data.CurrentPeriodEnd)
+		}
+	}
+
+	level := strings.TrimSpace(planID)
+	if label, ok := commandCodePlanLabels[level]; ok {
+		level = label
+	}
+	return &dto.CodingPlanQuota{
+		Success:   true,
+		Level:     level,
+		Tiers:     parseCommandCodeTiers(&body, planID, periodEnd),
 		QueriedAt: nowMillis(),
 	}, nil
 }
