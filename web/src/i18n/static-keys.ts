@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+// NOTE(fork): 上游此列表存在重复键（如 'User updated successfully' 相邻重复两次），
+// 本 fork 保留首次出现、删掉重复项；上游下次同步若再带回重复，去掉即可。
 // Static translation keys that don't get picked up by the t('...') regex.
 // These cover dynamic labels (e.g. constants, configs) that are passed into t at runtime.
 export const STATIC_I18N_KEYS = [
@@ -270,7 +272,6 @@ export const STATIC_I18N_KEYS = [
   'Deleted',
   'User created successfully',
   'User updated successfully',
-  'User updated successfully',
   'Failed to load users',
   'Failed to search users',
   'Failed to create user',
@@ -280,9 +281,7 @@ export const STATIC_I18N_KEYS = [
 
   // Redemption codes
   'Unused',
-  'Disabled',
   'Used',
-  'Expired',
   'Redemption code(s) created successfully',
   'Redemption code updated successfully',
   'Redemption code deleted successfully',
@@ -626,7 +625,6 @@ export const STATIC_I18N_KEYS = [
   'Please select a subscription plan',
   'Added successfully',
   'Has been invalidated',
-  'Deleted',
   'Validity',
   'Actions',
 
@@ -722,7 +720,6 @@ export const STATIC_I18N_KEYS = [
   'OpenAI Models route is required to enable upstream model checks',
 
   // Dashboard flow stages (labels/descriptions passed to t at runtime)
-  'User',
   'Node',
   'Token',
   'Group',
