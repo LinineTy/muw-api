@@ -100,7 +100,7 @@ export function parseTaskResult() { return {}; }
 		t.Run(tc.name, func(t *testing.T) {
 			setting := tc.setting
 			channel := &model.Channel{Type: constant.ChannelTypeNewAPI, BaseURL: &baseURL, Setting: &setting}
-			err := validateChannel(channel, false)
+			err := validateChannel(channel, false, false)
 			if tc.wantErr == "" {
 				require.NoError(t, err)
 				return
@@ -111,5 +111,5 @@ export function parseTaskResult() { return {}; }
 
 	setting := `{"task_extend_plugin_keys":["gateway-ext-a"]}`
 	channel := &model.Channel{Type: constant.ChannelTypeOpenAI, Setting: &setting}
-	require.ErrorContains(t, validateChannel(channel, false), "only supported on New API channels")
+	require.ErrorContains(t, validateChannel(channel, false, false), "only supported on New API channels")
 }

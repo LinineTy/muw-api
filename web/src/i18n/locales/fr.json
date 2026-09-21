@@ -6970,7 +6970,7 @@
     "Welcome back, {{name}}": "Welcome back, {{name}}",
     "Welcome to our New API...": "Bienvenue sur notre New API...",
     "Well-Known URL": "URL bien connue",
-    "Well-Known URL must start with http:// or https://": "L'URL bien connue doit commencer par http:// ou https://",
+    "Well-Known URL must start with http:// or https://": "L’URL Well-Known doit commencer par http:// ou https://",
     "What is new in this version": "What is new in this version",
     "What would you like to know?": "Que voulez-vous savoir ?",
     "When a request contains images but the target model does not support vision, each image is described by the vision fallback model and the description is sent to the target model instead.": "When a request contains images but the target model does not support vision, each image is described by the vision fallback model and the description is sent to the target model instead.",

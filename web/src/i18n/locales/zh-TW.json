@@ -6970,7 +6970,7 @@
     "Welcome back, {{name}}": "歡迎回來，{{name}}",
     "Welcome to our New API...": "歡迎使用我們的 New API...",
     "Well-Known URL": "Well-Known URL",
-    "Well-Known URL must start with http:// or https://": "知名 URL 必須以 http:// 或 https:// 開頭",
+    "Well-Known URL must start with http:// or https://": "Well-Known URL 必須以 http:// 或 https:// 開頭",
     "What is new in this version": "這個版本更新了什麼",
     "What would you like to know?": "您想了解什麼？",
     "When a request contains images but the target model does not support vision, each image is described by the vision fallback model and the description is sent to the target model instead.": "當請求包含圖片但目標模型不支援視覺時，每張圖片會先由視覺兜底模型轉為文字描述，再把描述發送給目標模型。",
