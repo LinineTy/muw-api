@@ -71,11 +71,22 @@ describe('ManualThemeEditorDialog', () => {
 
     // 回归:弹层必须限高并裁剪,内部滚动——而不是随内容(四个 auto-grow 输入框)
     // 撑高超过屏幕导致无法滚动。
-    expect(popup.classList.contains('overflow-hidden'), '弹层应裁剪溢出内容').toBe(
-      true
-    )
+    // 上游 2026-09-19 把弹层基类从 `overflow-hidden + max-h-[calc(100vh-2rem)]`
+    // 改为 `overflow-x-hidden overflow-y-auto + max-h-(--dialog-available-height)`
+    // （移动端工具栏遮挡修复），判据跟着放宽到「横向裁剪 + 纵向可滚 + 有限高」。
     expect(
-      [...popup.classList].some((c) => c.startsWith('max-h-[')),
+      popup.classList.contains('overflow-x-hidden'),
+      '弹层应横向裁剪溢出内容'
+    ).toBe(true)
+    expect(
+      popup.classList.contains('overflow-y-auto') ||
+        [...popup.querySelectorAll('*')].some((el) =>
+          (el as HTMLElement).classList.contains('overflow-y-auto')
+        ),
+      '弹层应可纵向滚动'
+    ).toBe(true)
+    expect(
+      [...popup.classList].some((c) => c.startsWith('max-h-')),
       '弹层应限制最大高度,不超出视口'
     ).toBe(true)
     const scrollBody = [...popup.querySelectorAll('*')].find((el) =>

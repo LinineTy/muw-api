@@ -149,8 +149,13 @@ it.each([
     const writeText = vi.spyOn(navigator.clipboard, 'writeText')
     renderAddresses(status)
 
+    // 我方工具栏最前多了自研的「批量操作」开关，键盘 tab 序里多一格；
+    // 这里只要保证 API 地址按钮能被 tab 到（键盘可达性），不绑死第几个 tab 站。
     await user.tab()
     const trigger = screen.getByRole('button', { name: 'API Addresses' })
+    if (document.activeElement !== trigger) {
+      await user.tab()
+    }
     expect(trigger).toHaveFocus()
     await user.keyboard('{Enter}')
     const dialog = await screen.findByRole('dialog', { name: 'API Addresses' })
