@@ -43,6 +43,7 @@
 | `web/src/features/channels/components/model-mapping-editor.tsx` | 采用上游重写后的结构，但保留本 fork 的表头 i18n key（`Request Model` / `Upstream Model`） | `0cde9d94f` 模型重定向工作台 |
 | `web/src/features/channels/components/drawers/channel-mutate-drawer.tsx` | 采用上游新的 `useChannelModelDiscovery`（preview/saved 两种请求）结构，本 fork 的 `formPreviewFetcher`/`fetchChannelAvailableModels` 已被等价取代并删除 | `6b638788c` 上游模型预览 |
 | `web/src/i18n/static-keys.ts` | 本 fork 去掉上游列表里的重复键（含相邻重复的 `User updated successfully`），保留首次出现 | 上游仍带重复 |
+| `web/src/components/ui/combobox-input.tsx` | 包裹层由 `relative` 改为 `relative flex items-center`：上游重写模型重定向行时删掉了行容器的 `items-center`，行高被 `h-10` 删除按钮撑到 40px 而输入框 32px 顶对齐，指示器按包裹层居中 ⇒ 比输入框中心低 4px。改包裹层后同心（实测 delta 4px→0），且输入框在行内回到居中 | `0cde9d94f` / 上游重写 |
 
 **渠道编号对照表（前后端必须一致）**
 
