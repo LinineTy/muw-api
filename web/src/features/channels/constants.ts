@@ -142,6 +142,9 @@ export const CODING_PLAN_PROVIDER_OPTIONS: {
   { value: 'volcengine', label: 'Volcengine Ark' },
   { value: 'zenmux', label: 'ZenMux' },
   { value: 'openrouter', label: 'OpenRouter · Free tier' },
+  // Command Code（commandcode.ai）：GOAT/Pro/Max 等订阅套餐按 credits 计费，
+  // 三档窗口 = 任意 5 小时 / 任意 7 天 / 每月；推理端点与余量查询共用同一把 API key。
+  { value: 'commandcode', label: 'Command Code' },
 ]
 
 // 手动/自定义渠道显式关闭余量监控的厂商值:即使 base_url 是套餐端点也不再自动绑定。
@@ -218,6 +221,9 @@ export function detectCodingPlanProvider(
     return 'zhipu_en'
   }
   if (url.includes('zenmux')) return 'zenmux'
+  // Command Code 的推理端点在 api.commandcode.ai/provider[/v1]（OpenAI 与 Anthropic
+  // 两套同 host），base_url 里认域名即可。
+  if (url.includes('commandcode.ai')) return 'commandcode'
   return undefined
 }
 
