@@ -21,6 +21,7 @@ import { describe, expect, test } from 'vitest'
 import type {
   PlanRecord,
   SubscriptionPlan,
+  UserSubscription,
   UserSubscriptionRecord,
 } from '@/features/subscriptions/types'
 
@@ -39,9 +40,11 @@ const active: UserSubscriptionRecord[] = [
       status: 'active',
       start_time: 0,
       end_time: 1,
-      amount_total: 100,
-      amount_used: 100,
-    },
+      period_used: 100,
+      // 上游夹具用 amount_total/amount_used，我方订阅模型没有这两个字段
+      // （额度来自套餐窗口，见 features/subscriptions/types.ts），
+      // 与既有测试一致用断言补齐 zod 默认值字段。
+    } as unknown as UserSubscription,
   },
 ]
 
