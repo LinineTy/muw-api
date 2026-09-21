@@ -181,9 +181,6 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 	}()
 
-	if newAPIError = relay.PrepareRequestBilling(c, relayInfo); newAPIError != nil {
-		return
-	}
 	defer func() {
 		if conversationCapture != nil {
 			persistConversationRecord(c, relayInfo, newAPIError, conversationCapture)
@@ -217,22 +214,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	} else {
 		meta = fastTokenCountMetaForPricing(request)
 	}
-
-	if needSensitiveCheck && meta != nil && !common.GetContextKeyBool(c, constant.ContextKeyInternalSubRequest) {
-		contains, words := service.CheckSensitiveText(meta.CombineText)
-		if contains {
-			logger.LogWarn(c, fmt.Sprintf("user sensitive words detected: %s", strings.Join(words, ", ")))
-			// 信誉分：本地关键词命中扣分（审计留痕），无论是否拦截都会扣。
-			service.ApplyKeywordCreditDeduction(c, relayInfo, words)
-			// StopOnSensitiveEnabled=true 时拦截请求（400，零计费）；false 时只记录不拦截，
-			// 请求照常转发——敏感词库可能误伤（如网上词库混入 system 等通用词），仅记录时
-			// 误伤只扣点分、不挡请求，可在设置页开启恢复拦截。
-			if setting.StopOnSensitiveEnabled {
-				newAPIError = types.NewError(err, types.ErrorCodeSensitiveWordsDetected)
-				return
-			}
-		}
-	}
+	// 这份 meta 与后面的 token 估算会被计费入口（relay.PrepareRequestBilling）复用，
+	// 同一请求不重复拼 CombineText、不重复跑估算。
+	relayInfo.SetPricedTokenMeta(meta)
 
 	tokens, err := service.EstimateRequestToken(c, meta, relayInfo)
 	if err != nil {
@@ -248,25 +232,18 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		return
 	}
 
-	priceData, err := helper.ModelPriceHelper(c, relayInfo, tokens, meta)
-	if err != nil {
-		newAPIError = types.NewError(err, types.ErrorCodeModelPriceError, types.ErrOptionWithStatusCode(http.StatusBadRequest))
-		return
-	}
-
-	// common.SetContextKey(c, constant.ContextKeyTokenCountMeta, meta)
-
-	if priceData.FreeModel {
-		logger.LogInfo(c, fmt.Sprintf("模型 %s 免费，跳过预扣费", relayInfo.OriginModelName))
-	} else {
-		newAPIError = service.PreConsumeBilling(c, priceData.QuotaToPreConsume, relayInfo)
-		if newAPIError != nil {
-			// 预扣费失败(余额/订阅/配额不足)：写一条 type=5 错误日志，让使用日志可见被拒原因。
-			// 该失败发生在选渠道之前，不经过 processChannelError，且错误带 NoRecordErrorLog 标记，
-			// 默认完全不落使用日志——补记后风控/运维才能审计"谁在持续额度不足"。
+	// 定价 + 预扣费只走一个入口：重复建计费会话会让预扣费泄漏（2026-09-21 实测，上游
+	// Responses WebSocket 计费测试暴露 token 被多扣一份预扣）。敏感词校验同样在该入口内
+	// 按我方口径执行（内部子请求跳过 / 命中扣信誉分 / StopOnSensitiveEnabled 才拦截）。
+	if newAPIError = relay.PrepareRequestBilling(c, relayInfo); newAPIError != nil {
+		// 预扣费失败(余额/订阅/配额不足)：写一条 type=5 错误日志，让使用日志可见被拒原因。
+		// 该失败发生在选渠道之前，不经过 processChannelError，且错误带 NoRecordErrorLog 标记，
+		// 默认完全不落使用日志——补记后风控/运维才能审计"谁在持续额度不足"。
+		switch newAPIError.GetErrorCode() {
+		case types.ErrorCodeInsufficientUserQuota, types.ErrorCodePreConsumeTokenQuotaFailed:
 			recordPreConsumeErrorLog(c, relayInfo, newAPIError)
-			return
 		}
+		return
 	}
 
 	defer func() {

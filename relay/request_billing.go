@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -23,37 +24,52 @@ import (
 // channel retries retain the resulting billing session and pricing snapshot.
 func PrepareRequestBilling(c *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIError {
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
-	meta := &types.TokenCountMeta{TokenType: types.TokenTypeTokenizer}
-	if info.Request != nil && (needSensitiveCheck || constant.CountToken) {
-		meta = info.Request.GetTokenCountMeta()
-	} else {
-		// Avoid building CombineText when only the pricing quantities are needed.
-		switch request := info.Request.(type) {
-		case *dto.GeneralOpenAIRequest:
-			meta.MaxTokens = int(max(lo.FromPtr(request.MaxTokens), lo.FromPtr(request.MaxCompletionTokens)))
-		case *dto.OpenAIResponsesRequest:
-			meta.MaxTokens = int(lo.FromPtr(request.MaxOutputTokens))
-		case *dto.ClaudeRequest:
-			meta.MaxTokens = int(lo.FromPtr(request.MaxTokens))
-		case *dto.ImageRequest:
-			meta = request.GetTokenCountMeta()
+	// 入口（controller.Relay）已算过 meta 时直接复用：同一请求不重复拼 CombineText。
+	// 未缓存（如 Responses WebSocket 内层请求）才自行构建。
+	meta := info.GetPricedTokenMeta()
+	if meta == nil {
+		meta = &types.TokenCountMeta{TokenType: types.TokenTypeTokenizer}
+		if info.Request != nil && (needSensitiveCheck || constant.CountToken) {
+			meta = info.Request.GetTokenCountMeta()
+		} else {
+			// Avoid building CombineText when only the pricing quantities are needed.
+			switch request := info.Request.(type) {
+			case *dto.GeneralOpenAIRequest:
+				meta.MaxTokens = int(max(lo.FromPtr(request.MaxTokens), lo.FromPtr(request.MaxCompletionTokens)))
+			case *dto.OpenAIResponsesRequest:
+				meta.MaxTokens = int(lo.FromPtr(request.MaxOutputTokens))
+			case *dto.ClaudeRequest:
+				meta.MaxTokens = int(lo.FromPtr(request.MaxTokens))
+			case *dto.ImageRequest:
+				meta = request.GetTokenCountMeta()
+			}
 		}
 	}
 
-	if needSensitiveCheck && meta != nil {
+	// 敏感词：按我方口径——内部子请求跳过；命中先记信誉分，只有 StopOnSensitiveEnabled
+	// 打开才拦截（关闭时只记录不拦，避免词库误伤挡掉正常请求）。
+	if needSensitiveCheck && meta != nil && !common.GetContextKeyBool(c, constant.ContextKeyInternalSubRequest) {
 		if contains, words := service.CheckSensitiveText(meta.CombineText); contains {
-			service.RequestPolicy(c).AddEvent(service.PolicyEvent{ErrorCode: string(types.ErrorCodeSensitiveWordsDetected), ErrorSource: "local", Decision: service.PolicyDecision{Action: "stop", Reason: "local_rejection", Source: "global"}, Health: "unchanged"})
 			message := fmt.Sprintf("user sensitive words detected: %s", strings.Join(words, ", "))
 			logger.LogWarn(c, message)
-			return types.NewError(errors.New(message), types.ErrorCodeSensitiveWordsDetected)
+			// 信誉分：本地关键词命中扣分（审计留痕），无论是否拦截都会扣。
+			service.ApplyKeywordCreditDeduction(c, info, words)
+			if setting.StopOnSensitiveEnabled {
+				service.RequestPolicy(c).AddEvent(service.PolicyEvent{ErrorCode: string(types.ErrorCodeSensitiveWordsDetected), ErrorSource: "local", Decision: service.PolicyDecision{Action: "stop", Reason: "local_rejection", Source: "global"}, Health: "unchanged"})
+				return types.NewError(errors.New(message), types.ErrorCodeSensitiveWordsDetected)
+			}
 		}
 	}
 
-	tokens, err := service.EstimateRequestToken(c, meta, info)
-	if err != nil {
-		return types.NewError(err, types.ErrorCodeCountTokenFailed)
+	tokens := info.GetEstimatePromptTokens()
+	if tokens <= 0 {
+		var err error
+		tokens, err = service.EstimateRequestToken(c, meta, info)
+		if err != nil {
+			return types.NewError(err, types.ErrorCodeCountTokenFailed)
+		}
+		info.SetEstimatePromptTokens(tokens)
 	}
-	info.SetEstimatePromptTokens(tokens)
 
 	priceData, err := helper.ModelPriceHelper(c, info, tokens, meta)
 	if err != nil {

@@ -204,6 +204,11 @@ type RelayInfo struct {
 	// convOptions caches the converter settings snapshot (see ConvOptions).
 	convOptions *convmeta.Options
 
+	// pricedTokenMeta 缓存 Relay 入口已算好的 TokenCountMeta：入口要拿它做敏感词/上下文
+	// 窗口校验，计费准备阶段（PrepareRequestBilling）还要拿同一份去定价——缓存后避免
+	// 把 CombineText 拼两遍、token 估算跑两遍。
+	pricedTokenMeta *types.TokenCountMeta
+
 	conversionDiagnostics          []types.ConversionDiagnostic
 	conversionDiagnosticKeys       map[conversionDiagnosticKey]struct{}
 	conversionDiagnosticsTruncated bool
@@ -815,6 +820,22 @@ func (info *RelayInfo) GetEstimatePromptTokens() int {
 		return 0
 	}
 	return info.estimatePromptTokens
+}
+
+// SetPricedTokenMeta / GetPricedTokenMeta 缓存本次请求用于计价的 TokenCountMeta，
+// 供 PrepareRequestBilling 复用（见 pricedTokenMeta 字段注释）。
+func (info *RelayInfo) SetPricedTokenMeta(meta *types.TokenCountMeta) {
+	if info == nil {
+		return
+	}
+	info.pricedTokenMeta = meta
+}
+
+func (info *RelayInfo) GetPricedTokenMeta() *types.TokenCountMeta {
+	if info == nil {
+		return nil
+	}
+	return info.pricedTokenMeta
 }
 
 // ---------------------------------------------------------------------------
