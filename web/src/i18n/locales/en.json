@@ -8211,6 +8211,12 @@
     "Must be greater than or equal to 0": "Must be greater than or equal to 0",
     "Reserve the estimated input cost multiplied by this value, without estimating output tokens. Defaults to 1; positive decimals such as 0.5 and 1.5 are supported. Final charges use actual usage. Per-request and task prices are unaffected.": "Reserve the estimated input cost multiplied by this value, without estimating output tokens. Defaults to 1; positive decimals such as 0.5 and 1.5 are supported. Final charges use actual usage. Per-request and task prices are unaffected.",
     "Skip pre-consumption when the wallet balance and limited API key balance both exceed this amount. Set to 0 to always pre-consume. Subscriptions and asynchronous tasks always reserve quota.": "Skip pre-consumption when the wallet balance and limited API key balance both exceed this amount. Set to 0 to always pre-consume. Subscriptions and asynchronous tasks always reserve quota.",
-    "Wallet pre-consume bypass threshold (USD)": "Wallet pre-consume bypass threshold (USD)"
+    "Wallet pre-consume bypass threshold (USD)": "Wallet pre-consume bypass threshold (USD)",
+    "Activate now": "Activate now",
+    "Activating...": "Activating...",
+    "Later": "Later",
+    "Plugin activation failed": "Plugin activation failed",
+    "Plugin saved, activation required": "Plugin saved, activation required",
+    "This version is saved but not active. Activate it to replace the current version, or activate it later from the Versions tab.": "This version is saved but not active. Activate it to replace the current version, or activate it later from the Versions tab."
   }
 }
