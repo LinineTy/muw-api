@@ -7898,6 +7898,9 @@
     "Active Minutes A": "アクティブ分数 A",
     "Active Minutes B": "アクティブ分数 B",
     "Ratio = actual overlapping minutes ÷ expected (activeA × activeB ÷ window)": "倍率 = 実際の重複分数 ÷ 期待値（A の分数 × B の分数 ÷ 集計期間）",
-    "Distinct IPs Trend": "独立 IP の推移"
+    "Distinct IPs Trend": "独立 IP の推移",
+    "Extra credits": "追加クレジット",
+    "Purchased": "購入分",
+    "Free credits": "付与分"
   }
 }

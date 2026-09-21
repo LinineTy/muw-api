@@ -86,22 +86,25 @@ func TestParseCommandCodeTiersRealGoatShape(t *testing.T) {
 	assert.Equal(t, CodingPlanTierWeeklyLimit, tiers[1].Name)
 	assert.Equal(t, CodingPlanTierMonthlyLimit, tiers[2].Name)
 
-	// 5 小时：$14 窗口，已用 0.070953134 credits
-	assert.Equal(t, int64(14), tiers[0].Limit)
-	assert.Equal(t, int64(14), tiers[0].Remaining)
-	assert.Equal(t, int64(0), tiers[0].Used)
+	// 5 小时：$14 窗口，已用 0.070953134 credits（小数照原样，不取整）
+	assert.InDelta(t, 14, tiers[0].Limit, 1e-9)
+	assert.InDelta(t, 13.929046866, tiers[0].Remaining, 1e-9)
+	assert.InDelta(t, 0.070953134, tiers[0].Used, 1e-9)
 	assert.InDelta(t, 0.5068081, tiers[0].Utilization, 1e-6)
 	require.NotNil(t, tiers[0].ResetsAt)
 	assert.Contains(t, *tiers[0].ResetsAt, "2026-09-21")
 
 	// 每周：$35 窗口
-	assert.Equal(t, int64(35), tiers[1].Limit)
+	assert.InDelta(t, 35, tiers[1].Limit, 1e-9)
+	assert.InDelta(t, 34.929046866, tiers[1].Remaining, 1e-9)
 	assert.InDelta(t, 0.20272324, tiers[1].Utilization, 1e-6)
 	require.NotNil(t, tiers[1].ResetsAt)
 	assert.Contains(t, *tiers[1].ResetsAt, "2026-09-28")
 
 	// 每月：GOAT 月额度 $70，剩余 69.929（重置时间取订阅 currentPeriodEnd）
-	assert.Equal(t, int64(70), tiers[2].Limit)
+	assert.InDelta(t, 70, tiers[2].Limit, 1e-9)
+	assert.InDelta(t, 69.929046866, tiers[2].Remaining, 1e-9)
+	assert.InDelta(t, 0.070953134, tiers[2].Used, 1e-9)
 	assert.InDelta(t, 0.10136162, tiers[2].Utilization, 1e-6)
 	require.NotNil(t, tiers[2].ResetsAt)
 	assert.Equal(t, "2026-10-21T07:47:30.000Z", *tiers[2].ResetsAt)
@@ -126,8 +129,9 @@ func TestParseCommandCodeTiersMissingWindowLimits(t *testing.T) {
 
 	require.Len(t, tiers, 1)
 	assert.Equal(t, CodingPlanTierMonthlyLimit, tiers[0].Name)
-	assert.Equal(t, int64(70), tiers[0].Limit)
-	assert.Equal(t, int64(35), tiers[0].Remaining)
+	assert.InDelta(t, 70, tiers[0].Limit, 1e-9)
+	assert.InDelta(t, 35, tiers[0].Remaining, 1e-9)
+	assert.InDelta(t, 35, tiers[0].Used, 1e-9)
 	assert.InDelta(t, 50, tiers[0].Utilization, 1e-6)
 	assert.Nil(t, tiers[0].ResetsAt, "没有 currentPeriodEnd 时不给重置时间")
 }
@@ -149,11 +153,11 @@ func TestParseCommandCodeTiersExceededWindowClampsRemaining(t *testing.T) {
 	tiers := parseCommandCodeTiers(body, "individual-goat", "")
 
 	require.Len(t, tiers, 2)
-	assert.Equal(t, int64(0), tiers[0].Remaining)
-	assert.Equal(t, int64(14), tiers[0].Used)
+	assert.InDelta(t, 0, tiers[0].Remaining, 1e-9)
+	assert.InDelta(t, 14, tiers[0].Used, 1e-9)
 	assert.InDelta(t, 100, tiers[0].Utilization, 1e-4)
 	// 月度 0/70 已用满
-	assert.Equal(t, int64(0), tiers[1].Remaining)
+	assert.InDelta(t, 0, tiers[1].Remaining, 1e-9)
 	assert.InDelta(t, 100, tiers[1].Utilization, 1e-6)
 }
 
@@ -165,8 +169,8 @@ func TestParseCommandCodeTiersBoostedCreditsClampedToCap(t *testing.T) {
 	tiers := parseCommandCodeTiers(body, "individual-goat", "")
 
 	require.Len(t, tiers, 1)
-	assert.Equal(t, int64(70), tiers[0].Remaining)
-	assert.Equal(t, int64(0), tiers[0].Used)
+	assert.InDelta(t, 70, tiers[0].Remaining, 1e-9)
+	assert.InDelta(t, 0, tiers[0].Used, 1e-9)
 	assert.InDelta(t, 0, tiers[0].Utilization, 1e-6)
 }
 
@@ -335,4 +339,67 @@ func TestQueryCodingPlanCommandCodeAtNetworkError(t *testing.T) {
 	quota, err := queryCodingPlanCommandCodeAt(context.Background(), "http://127.0.0.1:1", "cmd-api-key")
 	require.Error(t, err)
 	assert.Nil(t, quota)
+}
+
+// 窗口外的额外额度（购买 + 赠送）照原样下发。
+func TestCommandCodeExtraCreditsFromBody(t *testing.T) {
+	body := commandCodeBody(t, `{
+	  "credits": { "monthlyCredits": 30, "purchasedCredits": 12.5, "freeCredits": 2.25 }
+	}`)
+
+	extra := commandCodeExtraCredits(body)
+	require.NotNil(t, extra)
+	assert.InDelta(t, 12.5, extra.Purchased, 1e-9)
+	assert.InDelta(t, 2.25, extra.Free, 1e-9)
+}
+
+// 两笔都为 0（或没有 credits 段）：不挂这一行，别在卡上显示 0。
+func TestCommandCodeExtraCreditsAbsentWhenZero(t *testing.T) {
+	assert.Nil(t, commandCodeExtraCredits(commandCodeBody(t, `{
+	  "credits": { "monthlyCredits": 70, "purchasedCredits": 0, "freeCredits": 0 }
+	}`)))
+	assert.Nil(t, commandCodeExtraCredits(commandCodeBody(t, `{}`)))
+	assert.Nil(t, commandCodeExtraCredits(nil))
+}
+
+// 负值（上游异常）夹到 0，不产出负数额度。
+func TestCommandCodeExtraCreditsClampsNegative(t *testing.T) {
+	body := commandCodeBody(t, `{
+	  "credits": { "monthlyCredits": 70, "purchasedCredits": -3, "freeCredits": 5 }
+	}`)
+
+	extra := commandCodeExtraCredits(body)
+	require.NotNil(t, extra)
+	assert.InDelta(t, 0, extra.Purchased, 1e-9)
+	assert.InDelta(t, 5, extra.Free, 1e-9)
+}
+
+// 查询链路里也带上额外额度（真实样本两笔都是 0 ⇒ 不出 extra 字段）。
+func TestQueryCodingPlanCommandCodeAtCarriesExtraCredits(t *testing.T) {
+	InitHttpClient()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case commandCodeWhoamiPath:
+			_, _ = w.Write([]byte(commandCodeWhoamiSample))
+		case commandCodeCreditsPath:
+			_, _ = w.Write([]byte(`{
+			  "credits": { "monthlyCredits": 69.5, "purchasedCredits": 20, "freeCredits": 5 },
+			  "windowLimits": { "fiveHour": { "used": 1, "cap": 14, "resetAt": 1790003105447 } }
+			}`))
+		default:
+			_, _ = w.Write([]byte(commandCodeSubscriptionSample))
+		}
+	}))
+	defer server.Close()
+
+	quota, err := queryCodingPlanCommandCodeAt(context.Background(), server.URL, "cmd-api-key")
+	require.NoError(t, err)
+	require.True(t, quota.Success, quota.Error)
+	require.NotNil(t, quota.Extra)
+	assert.InDelta(t, 20, quota.Extra.Purchased, 1e-9)
+	assert.InDelta(t, 5, quota.Extra.Free, 1e-9)
+	// 月度窗口用的是 monthlyCredits(69.5),不含额外额度
+	require.Len(t, quota.Tiers, 2)
+	assert.InDelta(t, 69.5, quota.Tiers[1].Remaining, 1e-9)
 }

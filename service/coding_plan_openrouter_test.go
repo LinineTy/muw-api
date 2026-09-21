@@ -45,9 +45,9 @@ func TestOpenRouterQuotaFromBodyPaidTier(t *testing.T) {
 
 	tier := quota.Tiers[0]
 	assert.Equal(t, CodingPlanTierDailyLimit, tier.Name)
-	assert.Equal(t, int64(1000), tier.Limit)
-	assert.Equal(t, int64(997), tier.Remaining)
-	assert.Equal(t, int64(3), tier.Used)
+	assert.Equal(t, float64(1000), tier.Limit)
+	assert.Equal(t, float64(997), tier.Remaining)
+	assert.Equal(t, float64(3), tier.Used)
 	assert.InDelta(t, 0.3, tier.Utilization, 1e-9) // 3/1000
 	require.NotNil(t, tier.ResetsAt)
 	assert.NotEmpty(t, *tier.ResetsAt)
@@ -62,9 +62,9 @@ func TestOpenRouterQuotaFromBodyFreeTier(t *testing.T) {
 	}`))
 
 	assert.Equal(t, "free tier (50/day)", quota.Level)
-	assert.Equal(t, int64(50), quota.Tiers[0].Limit)
-	assert.Equal(t, int64(50), quota.Tiers[0].Remaining)
-	assert.Equal(t, int64(0), quota.Tiers[0].Used)
+	assert.Equal(t, float64(50), quota.Tiers[0].Limit)
+	assert.Equal(t, float64(50), quota.Tiers[0].Remaining)
+	assert.Equal(t, float64(0), quota.Tiers[0].Used)
 	assert.InDelta(t, 0, quota.Tiers[0].Utilization, 1e-9)
 }
 
@@ -72,9 +72,9 @@ func TestOpenRouterQuotaFromBodyFreeTier(t *testing.T) {
 func TestOpenRouterQuotaFromBodyNoLimitOmitsRawValues(t *testing.T) {
 	tier := openRouterQuotaFromBody(openRouterBody(t, `{"data":{"is_free_tier":false}}`)).Tiers[0]
 
-	assert.Equal(t, int64(0), tier.Limit)
-	assert.Equal(t, int64(0), tier.Remaining)
-	assert.Equal(t, int64(0), tier.Used)
+	assert.Equal(t, float64(0), tier.Limit)
+	assert.Equal(t, float64(0), tier.Remaining)
+	assert.Equal(t, float64(0), tier.Used)
 	assert.InDelta(t, 0, tier.Utilization, 1e-9)
 }
 
@@ -89,14 +89,14 @@ func TestOpenRouterQuotaFromBodyUtilizationEdgeCases(t *testing.T) {
 	    "free_model_daily_requests": { "used": 1005, "limit": 1000, "remaining": -5 } }
 	}`)).Tiers[0]
 	assert.InDelta(t, 100.5, over.Utilization, 1e-9)
-	assert.Equal(t, int64(1005), over.Used)
+	assert.Equal(t, float64(1005), over.Used)
 
 	under := openRouterQuotaFromBody(openRouterBody(t, `{
 	  "data": { "is_free_tier": false,
 	    "free_model_daily_requests": { "used": -200, "limit": 1000, "remaining": 1200 } }
 	}`)).Tiers[0]
 	assert.InDelta(t, 0, under.Utilization, 1e-9)
-	assert.Equal(t, int64(0), under.Used, "负 used 应被钳到 0")
+	assert.Equal(t, float64(0), under.Used, "负 used 应被钳到 0")
 }
 
 // 重置时间是未来的 UTC 零点(免费额度按 UTC 日界重置)。
