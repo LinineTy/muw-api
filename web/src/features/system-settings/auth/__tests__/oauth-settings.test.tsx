@@ -61,6 +61,11 @@ const defaults: ComponentProps<typeof OAuthSection>['defaultValues'] = {
   LinuxDOClientId: '',
   LinuxDOClientSecret: '',
   LinuxDOMinimumTrustLevel: '',
+  // 我方自研：LinuxDO 等级映射 / 黑名单 / 静默刷新
+  LinuxDOGroupMapping: '',
+  LinuxDOBlacklist: '',
+  LinuxDoRefreshEnabled: false,
+  LinuxDoRefreshIntervalHours: '6',
   WeChatAuthEnabled: false,
   WeChatServerAddress: '',
   WeChatServerToken: '',
