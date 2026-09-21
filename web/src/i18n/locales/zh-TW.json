@@ -7901,6 +7901,7 @@
     "Distinct IPs Trend": "獨立 IP 趨勢",
     "Extra credits": "額外額度",
     "Purchased": "已購買",
-    "Free credits": "贈送額度"
+    "Free credits": "贈送額度",
+    "Alibaba Cloud Model Studio workspace endpoint, e.g. https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com (copy the API Host from the workspace page in the console). Leave empty to keep using the shared domain dashscope.aliyuncs.com, which no longer receives new features since 2026-09-30.": "阿里雲百煉業務空間專屬端點，形如 https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com（在百煉控制台「業務空間管理」頁複製 API Host）。留空則繼續使用共享網域 dashscope.aliyuncs.com，該網域自 2026-09-30 起不再支援新特性。"
   }
 }

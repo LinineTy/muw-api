@@ -7901,6 +7901,7 @@
     "Distinct IPs Trend": "Xu hướng IP riêng biệt",
     "Extra credits": "Tín dụng bổ sung",
     "Purchased": "Đã mua",
-    "Free credits": "Tín dụng tặng"
+    "Free credits": "Tín dụng tặng",
+    "Alibaba Cloud Model Studio workspace endpoint, e.g. https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com (copy the API Host from the workspace page in the console). Leave empty to keep using the shared domain dashscope.aliyuncs.com, which no longer receives new features since 2026-09-30.": "Endpoint riêng của không gian làm việc Alibaba Cloud Model Studio, ví dụ https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com (sao chép API Host ở trang quản lý không gian làm việc trong bảng điều khiển). Để trống để tiếp tục dùng tên miền chia sẻ dashscope.aliyuncs.com, tên miền này không còn nhận tính năng mới kể từ 2026-09-30."
   }
 }

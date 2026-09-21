@@ -149,6 +149,7 @@ import {
   ADD_MODE_OPTIONS,
   CLAUDE_FIELD_PASSTHROUGH_TYPES,
   CHANNEL_STATUS_LABELS,
+  CHANNEL_TYPE_BASE_URL_TIPS,
   CHANNEL_TYPE_OPTIONS,
   CODING_PLAN_SYMBOL_KEYS,
   CHANNEL_TYPE_OPENCODE_ZEN,
@@ -533,6 +534,7 @@ export function ChannelMutateDrawer({
   const currentType = formValues.type
   const baseUrlPlaceholder =
     defaultBaseURLs?.[currentType] || t(FIELD_PLACEHOLDERS.BASE_URL)
+  const baseUrlTip = CHANNEL_TYPE_BASE_URL_TIPS[currentType]
   const shouldPreviewUnsavedModels =
     !isEditing ||
     (currentType === CHANNEL_TYPE_ADVANCED_CUSTOM && canEditSensitive)
@@ -3363,6 +3365,9 @@ export function ChannelMutateDrawer({
                       'Custom API base URL. For official channels, New API has built-in addresses. Only fill this for third-party proxy sites or special endpoints. Do not add /v1 or trailing slash.'
                     )}
                   </FormDescription>
+                )}
+                {baseUrlTip && (
+                  <FormDescription>{t(baseUrlTip)}</FormDescription>
                 )}
                 {currentType === CHANNEL_TYPE_TASK_PLUGIN &&
                   !boundTaskPlugin?.baseUrl && (

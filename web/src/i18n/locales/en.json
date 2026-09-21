@@ -7901,6 +7901,7 @@
     "Distinct IPs Trend": "Distinct IPs Trend",
     "Extra credits": "Extra credits",
     "Purchased": "Purchased",
-    "Free credits": "Free credits"
+    "Free credits": "Free credits",
+    "Alibaba Cloud Model Studio workspace endpoint, e.g. https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com (copy the API Host from the workspace page in the console). Leave empty to keep using the shared domain dashscope.aliyuncs.com, which no longer receives new features since 2026-09-30.": "Alibaba Cloud Model Studio workspace endpoint, e.g. https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com (copy the API Host from the workspace page in the console). Leave empty to keep using the shared domain dashscope.aliyuncs.com, which no longer receives new features since 2026-09-30."
   }
 }
