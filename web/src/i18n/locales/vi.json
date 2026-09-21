@@ -7898,6 +7898,9 @@
     "Active Minutes A": "Phút hoạt động A",
     "Active Minutes B": "Phút hoạt động B",
     "Ratio = actual overlapping minutes ÷ expected (activeA × activeB ÷ window)": "Tỷ lệ = phút trùng thực tế ÷ kỳ vọng (A × B ÷ khoảng thời gian)",
-    "Distinct IPs Trend": "Xu hướng IP riêng biệt"
+    "Distinct IPs Trend": "Xu hướng IP riêng biệt",
+    "Extra credits": "Tín dụng bổ sung",
+    "Purchased": "Đã mua",
+    "Free credits": "Tín dụng tặng"
   }
 }

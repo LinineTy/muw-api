@@ -67,9 +67,16 @@ export interface AccountCodingPlanTier {
   name: string
   utilization: number
   resets_at?: string | null
+  /** 下面是窗口原始值（小数，单位随厂商：credits/次数），只有厂商返回时才有 */
   limit?: number
   remaining?: number
   used?: number
+}
+
+/** 窗口外的额外额度（如 Command Code 的额外购买/赠送 credits，不受窗口限制） */
+export interface AccountCodingPlanExtra {
+  purchased?: number
+  free?: number
 }
 
 export interface AccountCodingPlanQuota {
@@ -77,6 +84,8 @@ export interface AccountCodingPlanQuota {
   error?: string
   level?: string
   tiers: AccountCodingPlanTier[]
+  /** 额外额度；厂商没这个概念或额度为 0 时不返回 */
+  extra?: AccountCodingPlanExtra
   queried_at: number
 }
 

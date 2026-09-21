@@ -132,4 +132,61 @@ describe('CodingPlanQuotaCell 余量详情', () => {
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText('Total 1000 · Remaining 600')).toBeInTheDocument()
   })
+
+  // 2026-09-21：credits 类厂商（Command Code）的额度是小数，DTO 也改成小数了 ⇒
+  // 弹窗要照原样显示两位小数，而不是取整成 13 / 70。
+  it('小数额度照原样显示（credits 类厂商）', async () => {
+    vi.mocked(getAccountCodingPlanQuota).mockResolvedValue({
+      ...quota,
+      tiers: [
+        {
+          name: 'monthly_limit',
+          utilization: 0.9,
+          resets_at: '2026-10-21T07:47:30.000Z',
+          limit: 70,
+          remaining: 69.929046866,
+          used: 0.070953134,
+        },
+      ],
+    })
+    const user = userEvent.setup()
+    renderCell()
+
+    await user.click(
+      await screen.findByRole('button', { name: /Monthly · Remaining 99.1%/ })
+    )
+    const dialog = await screen.findByRole('dialog')
+    expect(
+      within(dialog).getByText('Total 70 · Remaining 69.93')
+    ).toBeInTheDocument()
+  })
+
+  // 2026-09-21：窗口外的额外额度（额外购买 + 赠送）单独一行，画成进度条没意义。
+  it('额外额度单独一行显示（购买 + 赠送）', async () => {
+    vi.mocked(getAccountCodingPlanQuota).mockResolvedValue({
+      ...quota,
+      extra: { purchased: 12.5, free: 2.5 },
+    })
+    const user = userEvent.setup()
+    renderCell()
+
+    await user.click(
+      await screen.findByRole('button', { name: /5h · Remaining 62%/ })
+    )
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/Extra credits/)).toHaveTextContent(
+      'Extra credits 15 · Purchased 12.50 · Free credits 2.50'
+    )
+  })
+
+  it('没有额外额度时不显示这一行', async () => {
+    const user = userEvent.setup()
+    renderCell()
+
+    await user.click(
+      await screen.findByRole('button', { name: /5h · Remaining 62%/ })
+    )
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByText(/Extra credits/)).toBeNull()
+  })
 })

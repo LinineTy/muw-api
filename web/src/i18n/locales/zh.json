@@ -7898,6 +7898,9 @@
     "Active Minutes A": "活跃分钟 A",
     "Active Minutes B": "活跃分钟 B",
     "Ratio = actual overlapping minutes ÷ expected (activeA × activeB ÷ window)": "倍数 = 实测重合分钟 ÷ 随机期望（活跃A × 活跃B ÷ 窗口分钟数）",
-    "Distinct IPs Trend": "独立 IP 趋势"
+    "Distinct IPs Trend": "独立 IP 趋势",
+    "Extra credits": "额外额度",
+    "Purchased": "已购买",
+    "Free credits": "赠送额度"
   }
 }

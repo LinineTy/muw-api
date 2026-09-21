@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"net/url"
 	"sort"
@@ -561,8 +560,8 @@ func parseKimiTiers(body *kimiUsageResponse) []dto.CodingPlanTier {
 			Name:        name,
 			Utilization: utilizationPercent(limitF, remainingF),
 			ResetsAt:    jsonNumToRFC3339Ptr(detail.ResetTime),
-			Limit:       jsonNumInt64(detail.Limit, 0),
-			Remaining:   jsonNumInt64(detail.Remaining, 0),
+			Limit:       jsonNumF64(detail.Limit, 0),
+			Remaining:   jsonNumF64(detail.Remaining, 0),
 		}
 		// 原始数值仅在 limit 有效时给出;used 下限 0,避免上游异常导致负值。
 		if tier.Limit > 0 {
@@ -786,7 +785,7 @@ type commandCodeSubscriptionResponse struct {
 }
 
 // parseCommandCodeTiers 组装三档窗口;缺哪一档就不出哪一档。
-// 额度是小数 credits,而 DTO 的原始数值只有整数字段 ⇒ 四舍五入(百分比走浮点,不失真)。
+// 额度是小数 credits,照原样下发(DTO 自 2026-09-21 起是小数,前端按 2 位小数展示)。
 func parseCommandCodeTiers(body *commandCodeCreditsResponse, planID string, periodEnd string) []dto.CodingPlanTier {
 	if body == nil || body.Credits == nil {
 		return nil
@@ -806,15 +805,13 @@ func parseCommandCodeTiers(body *commandCodeCreditsResponse, planID string, peri
 		if remaining < 0 {
 			remaining = 0
 		}
-		limit := int64(math.Round(capacity))
-		rem := int64(math.Round(remaining))
 		tiers = append(tiers, dto.CodingPlanTier{
 			Name:        name,
 			Utilization: utilizationPercent(capacity, remaining),
 			ResetsAt:    millisToRFC3339Ptr(jsonNumInt64(w.ResetAt, 0)),
-			Limit:       limit,
-			Remaining:   rem,
-			Used:        limit - rem,
+			Limit:       capacity,
+			Remaining:   remaining,
+			Used:        capacity - remaining,
 		})
 	}
 	if body.WindowLimits != nil {
@@ -832,14 +829,12 @@ func parseCommandCodeTiers(body *commandCodeCreditsResponse, planID string, peri
 			// 促销加成 / 额外额度不计入本窗口,按满额处理
 			remaining = capacity
 		}
-		limit := int64(math.Round(capacity))
-		rem := int64(math.Round(remaining))
 		tier := dto.CodingPlanTier{
 			Name:        CodingPlanTierMonthlyLimit,
 			Utilization: utilizationPercent(capacity, remaining),
-			Limit:       limit,
-			Remaining:   rem,
-			Used:        limit - rem,
+			Limit:       capacity,
+			Remaining:   remaining,
+			Used:        capacity - remaining,
 		}
 		if iso := strings.TrimSpace(periodEnd); iso != "" {
 			tier.ResetsAt = &iso
@@ -847,6 +842,26 @@ func parseCommandCodeTiers(body *commandCodeCreditsResponse, planID string, peri
 		tiers = append(tiers, tier)
 	}
 	return tiers
+}
+
+// commandCodeExtraCredits 窗口外额度(额外购买 + 赠送的 credits)。两者都为 0 时返回 nil
+// ——「有额外额度」才有展示价值,平时别在卡上多挂一行 0。
+func commandCodeExtraCredits(body *commandCodeCreditsResponse) *dto.CodingPlanExtraCredits {
+	if body == nil || body.Credits == nil {
+		return nil
+	}
+	purchased := jsonNumF64(body.Credits.PurchasedCredits, 0)
+	free := jsonNumF64(body.Credits.FreeCredits, 0)
+	if purchased <= 0 && free <= 0 {
+		return nil
+	}
+	if purchased < 0 {
+		purchased = 0
+	}
+	if free < 0 {
+		free = 0
+	}
+	return &dto.CodingPlanExtraCredits{Purchased: purchased, Free: free}
 }
 
 // commandCodeFetch 打一个 /alpha 接口并做统一错误映射:
@@ -926,6 +941,7 @@ func queryCodingPlanCommandCodeAt(ctx context.Context, host string, apiKey strin
 		Success:   true,
 		Level:     level,
 		Tiers:     parseCommandCodeTiers(&body, planID, periodEnd),
+		Extra:     commandCodeExtraCredits(&body),
 		QueriedAt: nowMillis(),
 	}, nil
 }
@@ -1087,9 +1103,9 @@ func openRouterQuotaFromBody(body *openRouterKeyResponse) *dto.CodingPlanQuota {
 	}
 	// 仅在额度有效时下发原始值(前端有原始值就优先按 已用/总量 展示,否则回退百分比)。
 	if free.Limit > 0 {
-		tier.Limit = free.Limit
-		tier.Remaining = free.Remaining
-		tier.Used = free.Used
+		tier.Limit = float64(free.Limit)
+		tier.Remaining = float64(free.Remaining)
+		tier.Used = float64(free.Used)
 		if tier.Used < 0 {
 			tier.Used = 0
 		}

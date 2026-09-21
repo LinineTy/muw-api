@@ -7898,6 +7898,9 @@
     "Active Minutes A": "Активных минут A",
     "Active Minutes B": "Активных минут B",
     "Ratio = actual overlapping minutes ÷ expected (activeA × activeB ÷ window)": "Коэффициент = совпавшие минуты ÷ ожидаемое (A × B ÷ окно)",
-    "Distinct IPs Trend": "Динамика уникальных IP"
+    "Distinct IPs Trend": "Динамика уникальных IP",
+    "Extra credits": "Дополнительные кредиты",
+    "Purchased": "Куплено",
+    "Free credits": "Бесплатные кредиты"
   }
 }

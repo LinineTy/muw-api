@@ -36,7 +36,11 @@ import { cn } from '@/lib/utils'
 
 import { getAccountCodingPlanQuota } from '../api'
 import { isCodingPlanMonitored, QUOTA_REFRESH_MS } from '../constants'
-import type { Account, AccountCodingPlanTier } from '../types'
+import type {
+  Account,
+  AccountCodingPlanExtra,
+  AccountCodingPlanTier,
+} from '../types'
 
 // 进度条宽度：表格单元格（窄）里靠外层的最小轨道撑住，卡片里随列宽拉伸成左右多列。
 const TIER_ROW_CLASS = 'flex items-center gap-1.5'
@@ -61,8 +65,7 @@ function tierLabel(name: string, t: (key: string) => string): string {
 }
 
 /** 余量越低越红：≤10% 红、≤30% 琥珀，其余绿。 */
-function remainingToneClass(remaining: number): string {
-  if (remaining <= 10) return 'bg-destructive'
+function remainingToneClass(remaining: number): string {  if (remaining <= 10) return 'bg-destructive'
   if (remaining <= 30) return 'bg-warning'
   return 'bg-emerald-500'
 }
@@ -71,6 +74,13 @@ function remainingTextClass(remaining: number): string {
   if (remaining <= 10) return 'text-destructive'
   if (remaining <= 30) return 'text-amber-600 dark:text-amber-400'
   return 'text-muted-foreground'
+}
+
+// 厂商给的原始额度数值：整数照原样（Kimi 的 1000/600 仍是 1000/600，不加千分位），
+// 小数保留两位——credits 类厂商（Command Code）的额度本身就是小数（13.93）。
+function formatAmount(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return '—'
+  return Number.isInteger(value) ? String(value) : value.toFixed(2)
 }
 
 // 厂商给的是 ISO 字符串；统一走全局日期写法（YYYY-MM-DD HH:mm:ss），
@@ -181,9 +191,47 @@ function QuotaTierDetail({ tier }: { tier: AccountCodingPlanTier }) {
       </div>
       {hasRawValues ? (
         <div className='text-muted-foreground text-xs'>
-          {t('Total')} {tier.limit ?? '—'} · {t('Remaining')}{' '}
-          {tier.remaining ?? '—'}
+          {t('Total')} {formatAmount(tier.limit)} · {t('Remaining')}{' '}
+          {formatAmount(tier.remaining)}
         </div>
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * 窗口外的额外额度（如 Command Code 的额外购买/赠送 credits）：不受任何滚动窗口限制，
+ * 只报剩余数值，画成进度条没有意义 —— 所以单独一行文字，不用条。
+ */
+function ExtraCreditsLine({
+  extra,
+  className,
+}: {
+  extra: AccountCodingPlanExtra
+  className?: string
+}) {
+  const { t } = useTranslation()
+  const purchased = extra.purchased ?? 0
+  const free = extra.free ?? 0
+  const total = purchased + free
+  if (total <= 0) return null
+
+  return (
+    <div
+      className={cn(
+        'text-muted-foreground text-xs whitespace-nowrap',
+        className
+      )}
+    >
+      {t('Extra credits')}{' '}
+      <span className='font-mono tabular-nums'>{formatAmount(total)}</span>
+      {purchased > 0 && free > 0 ? (
+        <span className='opacity-80'>
+          {' · '}
+          {t('Purchased')} {formatAmount(purchased)}
+          {' · '}
+          {t('Free credits')} {formatAmount(free)}
+        </span>
       ) : null}
     </div>
   )
@@ -307,6 +355,7 @@ export function CodingPlanQuotaCell({
         </TooltipProvider>
       </div>
       {body}
+      {!failed && data?.extra ? <ExtraCreditsLine extra={data.extra} /> : null}
       <Dialog
         open={detailsOpen}
         onOpenChange={setDetailsOpen}
@@ -320,6 +369,7 @@ export function CodingPlanQuotaCell({
           {tiers.map((tier) => (
             <QuotaTierDetail key={tier.name} tier={tier} />
           ))}
+          {data?.extra ? <ExtraCreditsLine extra={data.extra} /> : null}
         </div>
       </Dialog>
     </div>

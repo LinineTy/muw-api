@@ -7898,6 +7898,9 @@
     "Active Minutes A": "Minutes actives A",
     "Active Minutes B": "Minutes actives B",
     "Ratio = actual overlapping minutes ÷ expected (activeA × activeB ÷ window)": "Ratio = minutes communes ÷ attendu (actif A × actif B ÷ fenêtre)",
-    "Distinct IPs Trend": "Évolution des IP distinctes"
+    "Distinct IPs Trend": "Évolution des IP distinctes",
+    "Extra credits": "Crédits supplémentaires",
+    "Purchased": "Achetés",
+    "Free credits": "Crédits offerts"
   }
 }
