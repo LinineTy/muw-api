@@ -120,3 +120,28 @@ func TestRequestPolicyDatabaseMatrix(t *testing.T) {
 		})
 	}
 }
+
+// 「请求策略 → 渠道健康」页会整组提交 monitor_setting.*，后端只接受白名单内的键，
+// 否则保存直接 400 “not a request policy option”（2026-09-22 实测回归：
+// 两个 muw 自研开关合并进该表单时漏加白名单）。同时在快照里必须能读到这些键，
+// 否则页面上显示的是前端兜底默认值而不是库里的当前值。
+//
+// 键来源：web/src/features/system-settings/request-policies/channel-health-section.tsx
+// 该表单新增 monitor_setting.* 键时，本测试与 model/request_policy.go 的白名单要同步。
+func TestChannelHealthFormOptionsAreAllowed(t *testing.T) {
+	formKeys := []string{
+		"monitor_setting.auto_test_channel_enabled",
+		"monitor_setting.auto_test_channel_minutes",
+		"monitor_setting.channel_test_concurrency",
+		"monitor_setting.channel_test_mode",
+		"monitor_setting.auto_test_all_models",
+		"monitor_setting.record_user_traffic",
+	}
+	snapshot, err := BuildRequestPolicy(map[string]string{})
+	require.NoError(t, err)
+	for _, key := range formKeys {
+		assert.True(t, IsRequestPolicyOption(key), "渠道健康表单键不在请求策略白名单，保存会 400: %s", key)
+		assert.Contains(t, snapshot.Options, key, "请求策略快照里缺该键，页面读不到当前值: %s", key)
+	}
+	assert.False(t, IsRequestPolicyOption("monitor_setting.not_a_real_key"))
+}

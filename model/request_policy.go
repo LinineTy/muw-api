@@ -69,7 +69,12 @@ func IsRequestPolicyOption(key string) bool {
 		return true
 	}
 	switch key {
-	case "CheckSensitiveEnabled", "CheckSensitiveOnPromptEnabled", "SensitiveWords", "AutomaticEnableChannelEnabled", "ChannelDisableThreshold", "monitor_setting.auto_test_channel_enabled", "monitor_setting.auto_test_channel_minutes", "monitor_setting.channel_test_concurrency", "monitor_setting.channel_test_mode", "RetryTimes", "AutomaticRetryStatusCodes", "AutomaticDisableChannelEnabled", "AutomaticDisableStatusCodes", "AutomaticDisableKeywords":
+	// ⚠️ 与「请求策略 → 渠道健康」页提交的键保持同步
+	// （web/src/features/system-settings/request-policies/channel-health-section.tsx）：
+	// 前四个是上游键；后两个是 muw 自研开关（模型健康「逐模型测试」「记录真实用户流量」），
+	// 同步上游后重新落进该表单时，必须同时加进本白名单，否则保存会 400
+	// “not a request policy option”。
+	case "CheckSensitiveEnabled", "CheckSensitiveOnPromptEnabled", "SensitiveWords", "AutomaticEnableChannelEnabled", "ChannelDisableThreshold", "monitor_setting.auto_test_channel_enabled", "monitor_setting.auto_test_channel_minutes", "monitor_setting.channel_test_concurrency", "monitor_setting.channel_test_mode", "RetryTimes", "AutomaticRetryStatusCodes", "AutomaticDisableChannelEnabled", "AutomaticDisableStatusCodes", "AutomaticDisableKeywords", "monitor_setting.auto_test_all_models", "monitor_setting.record_user_traffic":
 		return true
 	}
 	return false
