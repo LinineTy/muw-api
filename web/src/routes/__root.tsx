@@ -36,7 +36,7 @@ import { GeneralError } from '@/features/errors/general-error'
 import { NotFoundError } from '@/features/errors/not-found-error'
 import { getSetupStatus } from '@/features/setup/api'
 import { useSystemConfig } from '@/hooks/use-system-config'
-import { APP_LOADING_TIMING } from '@/lib/app-loading'
+import { APP_LOADING_TIMING, appLoadingCycleMs } from '@/lib/app-loading'
 import {
   bootstrapAuthentication,
   clearAuthenticatedClientState,
@@ -67,33 +67,27 @@ function RootComponent() {
 
   // 首屏占位(index.html 里的 #app-loading,os 窗体里则是滚动圆)到这里才撤:
   // 挂载 + 首个路由解析完成前页面只有它,撤早了就是「壁纸全空 + 顶部进度条」。
-  // 等站点名逐字画完再淡出,避免刚浮现就被抽走;缓存命中(整体 < 150ms)时占位
-  // 压根还没显形,直接摘掉更干净。
+  //
+  // ⚠️ 一轮「逐字上浮」必须播完再放行(2026-09-22 maintainer要求):加载再快也不许在
+  // 单轮中途抽走占位——以「首字起浮 → 末字落定(含余韵)」为一轮,不看这是第几次
+  // 打开、第几轮,当前这轮没走完就等它走完。已经在页面里挂了很久(冷启动那种,
+  // 一轮早就过去)则 hold = 0,立刻淡出。
   useEffect(() => {
     if (routerStatus !== 'idle') return
-    const elapsed = performance.now()
     const splash = document.querySelector<HTMLElement>('#app-loading')
     if (!splash) return
 
     const reduceMotion = window.matchMedia(
       '(prefers-reduced-motion: reduce)'
     ).matches
-    if (reduceMotion || elapsed < APP_LOADING_TIMING.showDelayMs) {
-      splash.remove()
-      return
-    }
-
-    const appearedAt =
-      APP_LOADING_TIMING.showDelayMs + APP_LOADING_TIMING.appearMs
-    const revealEnd =
-      APP_LOADING_TIMING.showDelayMs +
-      Math.max(0, splash.querySelectorAll('.brand span').length - 1) *
-        APP_LOADING_TIMING.staggerMs +
-      APP_LOADING_TIMING.riseMs
-    const hold =
-      elapsed < appearedAt
-        ? 0
-        : Math.max(0, revealEnd + APP_LOADING_TIMING.settleMs - elapsed)
+    // 无动画(系统要求减少动效)时逐字上浮是瞬时的,没有「一轮」可等
+    const hold = reduceMotion
+      ? 0
+      : Math.max(
+          0,
+          appLoadingCycleMs(splash.querySelectorAll('.brand span').length) -
+            performance.now()
+        )
 
     let removeTimer: number | undefined
     const leaveTimer = window.setTimeout(() => {
