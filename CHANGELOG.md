@@ -3,11 +3,18 @@
 本文件记录 muw fork 的发布版本与变更。版本号格式：`vYY.MM.DD.muw.N`
 （发版日期 + muw 小标记），自 v26.08.14.muw.1 起从上游 semver 版本号迁移到日期制。
 
+## v26.09.22.muw.9
+
+### 修复
+
+- **OpenCode Zen 免费套餐在带工具调用时不再 403**：逐项实测表明上游对免费档按「形态」放行 —— 不带 tools 的请求须像 CLI 的标题生成调用（已有提示词注入），而带 tools 的请求须出现 CLI 自己的整套工具名（bash / edit / glob / grep / read / skill / task / todowrite / webfetch / websearch / write），参数 schema 与描述一概不看、缺任意一个即 403。现在调用方带 tools 时会补齐缺失的名字（空参数、描述标注为占位勿调用），调用方自己的工具原样保留在前；不带 tools 的请求维持原样
+
+
 ## v26.09.22.muw.8 (2026-09-22)
 
 ### 修复
 
-- **OpenCode Zen 免费套餐不再偶发 403**：当 chat/completions 被全局策略改道走 Responses 时，请求会绕过适配器的转换阶段，导致免费套餐需要的 CLI system 指纹与客户端头都没带上、上游直接以 403 拒绝（渠道测试因走直连转换不受影响）。现在这条改道路径也会补上注入
+- **chat/completions 走 Responses 改道路径时补齐 OpenCode Zen 客户端注入（预防性）**：该路径不执行适配器转换，若启用改道策略会缺少 CLI system 指纹与客户端头。实测该策略未启用，故这不是线上 403 的原因，真正原因见 v26.09.22.muw.9
 
 
 ### 优化

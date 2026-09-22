@@ -95,6 +95,7 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 	}
 	if isFreeTier(info) {
 		injectFreeTierPromptOpenAI(request)
+		padFreeTierTools(request)
 	}
 	return request, nil
 }
