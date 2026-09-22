@@ -47,7 +47,13 @@ func GetModelHealth(c *gin.Context) {
 	}
 	if q != "" {
 		like := "%" + q + "%"
-		query = query.Where("(channel_name LIKE ? OR model_name LIKE ?)", like, like)
+		if c.GetInt("role") < common.RoleAdminUser {
+			// Channel names are masked for non-admin viewers, so searching by one
+			// would only leak whether it exists: match model names for them.
+			query = query.Where("model_name LIKE ?", like)
+		} else {
+			query = query.Where("(channel_name LIKE ? OR model_name LIKE ?)", like, like)
+		}
 	}
 
 	var records []model.ChannelTestRecord
