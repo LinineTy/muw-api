@@ -1,11 +1,15 @@
 package opencodezen
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 
+	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/relay/channel"
 	"github.com/QuantumNous/new-api/relay/channel/claude"
 	"github.com/QuantumNous/new-api/relay/channel/gemini"
@@ -69,6 +73,19 @@ func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *rel
 		}
 	case types.RelayFormatGemini:
 		req.Set("x-goog-api-key", apiKey)
+	}
+	// 诊断开关（与 DoRequest 的 body dump 配套）：把最终发出的头与 URL 落盘。
+	if os.Getenv("MUW_OC_WIRE_DUMP") == "1" {
+		authState := "none"
+		if apiKey == PublicApiKey {
+			authState = "public"
+		} else if strings.TrimSpace(apiKey) != "" {
+			authState = "other"
+		}
+		logger.LogInfo(c, fmt.Sprintf("[oc-wire-hdr] url=%s%s ua=%q client=%q project=%q request=%q session=%q auth=%s",
+			info.ChannelBaseUrl, info.RequestURLPath, req.Get("User-Agent"),
+			req.Get("x-opencode-client"), req.Get("x-opencode-project"),
+			req.Get("x-opencode-request"), req.Get("x-opencode-session"), authState))
 	}
 	return nil
 }
@@ -156,6 +173,20 @@ func (a *Adaptor) ConvertAudioRequest(c *gin.Context, info *relaycommon.RelayInf
 }
 
 func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, requestBody io.Reader) (any, error) {
+	// 诊断开关：MUW_OC_WIRE_DUMP=1 时把出站 body 与关键上下文原样落到日志。
+	// 免费档的放行判据是按请求「形态」匹配的，出问题时只有看到真正发出去的东西才能定位，
+	// 平时不设这个环境变量即完全无副作用。
+	if os.Getenv("MUW_OC_WIRE_DUMP") == "1" {
+		if raw, err := io.ReadAll(requestBody); err == nil {
+			shown := string(raw)
+			if len(shown) > 6000 {
+				shown = shown[:6000] + "...(truncated)"
+			}
+			logger.LogInfo(c, fmt.Sprintf("[oc-wire] baseURL=%q upstreamModel=%q stream=%v keyEmpty=%v len=%d body=%s",
+				info.ChannelBaseUrl, info.UpstreamModelName, info.IsStream, strings.TrimSpace(info.ApiKey) == "", len(raw), shown))
+			requestBody = bytes.NewReader(raw)
+		}
+	}
 	return channel.DoApiRequest(a, c, info, requestBody)
 }
 
