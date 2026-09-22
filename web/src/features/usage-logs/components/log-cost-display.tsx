@@ -33,6 +33,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { formatLogQuota } from '@/lib/format'
+import { cn } from '@/lib/utils'
 
 import { hasToolSurcharge } from '../lib/format'
 import type { LogOtherData } from '../types'
@@ -108,7 +109,13 @@ export function LogCostDisplay(props: LogCostDisplayProps) {
           variant='neutral'
           size='lg'
           copyable={false}
-          className='border-border/80 bg-muted/60 text-foreground rounded-md border font-semibold tabular-nums'
+          className={cn(
+            'rounded-md border font-semibold tabular-nums',
+            isSubscription
+              ? // 订阅扣费：恢复绿色徽标（此前与钱包一样是中性灰，只有图标不同，区分不明显）
+                'border-emerald-200/70 bg-emerald-50/60 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/25 dark:text-emerald-400'
+              : 'border-border/80 bg-muted/60 text-foreground'
+          )}
         >
           {source ? (
             <Tooltip>
