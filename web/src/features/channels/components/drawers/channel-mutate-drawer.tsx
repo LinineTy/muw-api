@@ -2591,6 +2591,7 @@ export function ChannelMutateDrawer({
                 disabled={isSubmitting}
                 sourceModelOptions={currentModelsArray}
                 targetModelOptions={modelOptions.map((option) => option.value)}
+                channelId={channelId}
                 onBatchAdd={
                   canBatchMap
                     ? () =>
