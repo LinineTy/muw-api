@@ -26,6 +26,7 @@ import {
 } from '@/context/theme-customization-provider'
 import { ThemeProvider, useTheme } from '@/context/theme-provider'
 import { initializeFrontendCache } from '@/lib/frontend-cache'
+import { DEFAULT_THEME_CUSTOMIZATION } from '@/lib/theme-customization'
 
 const savedPreferences = {
   'newapi:theme:v1:mode': 'dark',
@@ -110,7 +111,11 @@ describe('theme preference persistence', () => {
 
     expect(screen.getByLabelText('Theme mode')).toHaveTextContent('system')
     expect(document.documentElement).toHaveClass('light')
-    expect(document.body).not.toHaveAttribute('data-theme-preset')
+    // NOTE(fork): 我方 preset 轴总是写属性（默认是琉璃），用默认值断言
+    expect(document.body).toHaveAttribute(
+      'data-theme-preset',
+      DEFAULT_THEME_CUSTOMIZATION.preset
+    )
     expect(document.body).toHaveAttribute('data-theme-font', 'sans')
     expect(document.body).not.toHaveAttribute('data-theme-radius')
     expect(document.body).not.toHaveAttribute('data-theme-scale')
@@ -156,7 +161,11 @@ describe('theme preference persistence', () => {
 
     expect(screen.getByLabelText('Theme mode')).toHaveTextContent('system')
     expect(document.documentElement).toHaveClass('light')
-    expect(document.body).not.toHaveAttribute('data-theme-preset')
+    // NOTE(fork): 我方 preset 轴总是写属性（默认是琉璃），用默认值断言
+    expect(document.body).toHaveAttribute(
+      'data-theme-preset',
+      DEFAULT_THEME_CUSTOMIZATION.preset
+    )
     expect(document.body).toHaveAttribute('data-theme-font', 'sans')
     expect(document.body).not.toHaveAttribute('data-theme-radius')
     expect(document.body).not.toHaveAttribute('data-theme-scale')
@@ -178,7 +187,11 @@ describe('theme preference persistence', () => {
       render(<ThemeFixture />)
 
       expect(screen.getByLabelText('Theme mode')).toHaveTextContent('system')
-      expect(document.body).not.toHaveAttribute('data-theme-preset')
+      // NOTE(fork): 我方 preset 轴总是写属性（默认是琉璃），用默认值断言
+      expect(document.body).toHaveAttribute(
+        'data-theme-preset',
+        DEFAULT_THEME_CUSTOMIZATION.preset
+      )
       expect(document.body).toHaveAttribute('data-theme-font', 'sans')
       expect(document.body).not.toHaveAttribute('data-theme-radius')
       expect(document.body).not.toHaveAttribute('data-theme-scale')
@@ -194,7 +207,11 @@ describe('theme preference persistence', () => {
     render(<ThemeFixture />)
 
     expect(screen.getByLabelText('Theme mode')).toHaveTextContent('system')
-    expect(document.body).not.toHaveAttribute('data-theme-preset')
+    // NOTE(fork): 我方 preset 轴总是写属性（默认是琉璃），用默认值断言
+    expect(document.body).toHaveAttribute(
+      'data-theme-preset',
+      DEFAULT_THEME_CUSTOMIZATION.preset
+    )
   })
 
   it('still applies and resets preferences when storage writes fail', async () => {
@@ -215,7 +232,11 @@ describe('theme preference persistence', () => {
     await user.click(screen.getByRole('button', { name: 'Reset' }))
 
     expect(screen.getByLabelText('Theme mode')).toHaveTextContent('system')
-    expect(document.body).not.toHaveAttribute('data-theme-preset')
+    // NOTE(fork): 我方 preset 轴总是写属性（默认是琉璃），用默认值断言
+    expect(document.body).toHaveAttribute(
+      'data-theme-preset',
+      DEFAULT_THEME_CUSTOMIZATION.preset
+    )
   })
 
   it('preserves saved theme preferences during frontend cache initialization', () => {
