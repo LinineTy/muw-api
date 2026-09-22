@@ -10,6 +10,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { formatRelativeTime } from '@/features/channels/lib/channel-utils'
+import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -48,11 +49,15 @@ export function ChannelHealthTile({
   isAdmin: boolean
   onOpenDetail: (row: ModelHealthRow) => void
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const variant = successRateVariant(row.success_rate)
 
   return (
-    <div className='bg-card flex flex-col gap-1.5 rounded-[10px] px-2.5 py-2 ring-1 ring-foreground/[0.07]'>
+    <div
+      data-slot='channel-health-tile'
+      data-channel-id={row.channel_id}
+      className='bg-card flex flex-col gap-1.5 rounded-[10px] px-2.5 py-2 ring-1 ring-foreground/[0.07]'
+    >
       <div className='flex min-w-0 items-center gap-1.5'>
         {isAdmin ? (
           <>
@@ -94,7 +99,12 @@ export function ChannelHealthTile({
           </>
         ) : null}
         <span className='whitespace-nowrap'>
-          {formatRelativeTime(row.last_test_time)}
+          {row.last_test_time
+            ? formatRelativeTime(
+                row.last_test_time,
+                toIntlLocale(i18n.resolvedLanguage || i18n.language)
+              )
+            : t('No data')}
         </span>
         {isAdmin && row.last_error ? (
           <Tooltip>

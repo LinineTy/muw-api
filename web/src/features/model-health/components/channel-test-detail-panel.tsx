@@ -12,6 +12,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { formatRelativeTime } from '@/features/channels/lib/channel-utils'
+import { toIntlLocale } from '@/i18n/languages'
 import { formatTimestampToDate } from '@/lib/format'
 
 import { getChannelTestRecords } from '../api'
@@ -23,7 +24,7 @@ const PAGE_SIZE = 20
 // pair inline below its card row, newest first, with a compact aggregate summary
 // and pagination. It is rendered only while the row is expanded.
 export function ChannelTestDetailPanel({ row }: { row: ModelHealthRow }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [page, setPage] = useState(1)
 
   const recordsQuery = useQuery({
@@ -75,7 +76,10 @@ export function ChannelTestDetailPanel({ row }: { row: ModelHealthRow }) {
         </span>
         <Tooltip>
           <TooltipTrigger render={<span className='shrink-0 text-xs' />}>
-            {formatRelativeTime(record.created_at)}
+            {formatRelativeTime(
+              record.created_at,
+              toIntlLocale(i18n.resolvedLanguage || i18n.language)
+            )}
           </TooltipTrigger>
           <TooltipContent>
             <p className='font-mono text-sm'>
