@@ -1,7 +1,11 @@
 // @muw-owned
 import { Menu, X } from 'lucide-react'
-import type { PointerEvent as ReactPointerEvent } from 'react'
-import { useEffect, useRef, useState } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 
 import { useSidebar } from '@/components/ui/sidebar'
 import { useIsMobile } from '@/hooks/use-mobile'
