@@ -13,6 +13,13 @@
 
 ---
 
+## 有意删除的上游文件（新增于 2026-09-22）
+
+- `web/src/components/navigation-progress.tsx`（`react-top-loading-bar`，顶栏 2px 加载条）
+  - 原因：首屏已由加载占位承担，这条进度条在页顶又多一条视觉噪音，maintainer 2026-09-22 要求去掉
+  - 处理：删除文件 + `routes/__root.tsx` 里的引用；`package.json` 的 `react-top-loading-bar`
+    依赖暂留（未使用，避免锁文件大改），下次动依赖时一并清
+
 ## 一、本 fork 有意删除、上游仍在维护的文件
 
 | 文件 | 为什么删 | 下次同步怎么做 |

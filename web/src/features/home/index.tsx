@@ -28,6 +28,7 @@ import { ThemeSrcdocFrame } from '@/components/theme-srcdoc-frame'
 import { useTheme } from '@/context/theme-provider'
 import { useAppLoadingGate } from '@/hooks'
 import { isFullHtmlDocument, isLikelyHtml } from '@/lib/content-format'
+import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { CTA, Features, Hero, HowItWorks, Stats } from './components'
@@ -67,14 +68,33 @@ export function Home() {
 
   // 首屏占位里那一轮逐字上浮要走完才放行(见 useAppLoadingGate);首页内容就绪但这一轮没完时继续挂着
   const roundReleased = useAppLoadingGate(!isLoaded)
+  const ready = isLoaded && roundReleased
+
+  // 占位本身也走淡入/淡出:出场上浮完就硬切、或内容就绪瞬间消失,都会显得生硬。
+  // 内容就绪后再让占位淡出 320ms 才卸载,交接就成了交叉淡化。
+  const [entered, setEntered] = useState(false)
+  const [splashGone, setSplashGone] = useState(false)
+  useEffect(() => {
+    const raf = window.requestAnimationFrame(() => setEntered(true))
+    return () => window.cancelAnimationFrame(raf)
+  }, [])
+  useEffect(() => {
+    if (!ready) {
+      setSplashGone(false)
+      return
+    }
+    const timer = window.setTimeout(() => setSplashGone(true), 320)
+    return () => window.clearTimeout(timer)
+  }, [ready])
+  const splashVisible = !ready || !splashGone
+  const splashLeaving = ready && !splashGone
 
   const renderBody = () => {
-    if (!isLoaded || !roundReleased) {
+    if (!ready) {
+      // 内容还没就绪:先用空白版面撑住,占位作为浮层盖在上面(与首屏内联那份视觉一致)
       return (
         <PublicLayout showMainContainer={false}>
-          <main className='flex min-h-screen items-center justify-center px-6'>
-            <AppLoading />
-          </main>
+          <div className='min-h-screen' />
         </PublicLayout>
       )
     }
@@ -173,6 +193,16 @@ export function Home() {
         countdownSeconds={announcementDialog.countdownSeconds}
       />
       {renderBody()}
+      {splashVisible && (
+        <div
+          className={cn(
+            'pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-background px-6 transition-opacity duration-300 ease-out',
+            entered && !splashLeaving ? 'opacity-100' : 'opacity-0'
+          )}
+        >
+          <AppLoading />
+        </div>
+      )}
     </>
   )
 }
