@@ -125,12 +125,12 @@ Inside `relaykit/`, use `kitutil.*` from `relaykit/relayconvert/kitutil/json.go`
 
 **Release discipline (single atomic release commit):**
 
-A release is **ONE commit** that changes **exactly two files**: `CHANGELOG.md` (new entry on top) and `VERSION` (bumped). Never ship one without the other — a CHANGELOG-only release commit ships a version number that no binary will ever report (happened in v26.09.10.muw.3: first attempt touched only CHANGELOG.md, then a follow-up "fix" commit, both wrong; the correct fix squashed everything back into one atomic commit).
+A release bumps `CHANGELOG.md` (new entry on top) and `VERSION` **together, in the same commit that carries the change being released** — there is no separate `chore(release)` commit any more. Never update one without the other: a CHANGELOG-only change ships a version number that no binary will ever report (happened in v26.09.10.muw.3; the follow-up "fix" commit was wrong too — everything was squashed back into one atomic commit).
 
-- Version format: `vYY.MM.DD.muw.N`. Commit message format: `chore(release): <version>` plus a change-summary body.
+- Version format: `vYY.MM.DD.muw.N` (release date + the Nth release of that day). Commit messages are English, imperative, and describe the change; the released version lives in `VERSION`, not in the commit subject.
 - `VERSION` is the single version source: `Dockerfile:33` injects it via ldflags into `common.Version`, and `Dockerfile:8` injects it into the frontend as `VITE_REACT_APP_VERSION`. The `"v0.0.0"` default in `common/constants.go` is the no-ldflags fallback — do not hand-edit it; `web/package.json` `version` is NOT part of a release.
 - **Before pushing a release commit, verify the injection chain for real**: build with the exact Dockerfile ldflags (`go build -ldflags "-s -w -X 'github.com/QuantumNous/new-api/common.Version=$(cat VERSION)'" -o /tmp/rel-check .`) and run `/tmp/rel-check --version` — the output MUST equal the new `VERSION`. Editing the file is not proof the chain works.
-- **Never patch a broken release with a follow-up commit.** If a mistake is found after pushing, redo the release commit itself (reset/amend/squash back to the two-file atomic form) and force-push — only after confirming the remote has no one else's commits on top. Release history must stay uniform: `git log --oneline --grep="chore(release)"` then `git show <commit> --stat` should always show the same two-file shape.
+- **Never patch a broken release with a follow-up commit.** If a mistake is found after pushing, redo the release commit itself (reset/amend/squash back to the two-file atomic form) and force-push — only after confirming the remote has no one else's commits on top. Release history must stay uniform: every commit that bumps `VERSION` must also carry the change being released (verify with `git show --stat <commit>` — it should contain `VERSION` and `CHANGELOG.md` alongside the code).
 - Do not touch `VERSION` outside of release commits.
 
 **Relay and provider behavior:**
@@ -213,12 +213,12 @@ Reference implementation: `web/src/features/channels/components/drawers/channel-
 
 **Release discipline (single atomic release commit):**
 
-A release is **ONE commit** that changes **exactly two files**: `CHANGELOG.md` (new entry on top) and `VERSION` (bumped). Never ship one without the other — a CHANGELOG-only release commit ships a version number that no binary will ever report (happened in v26.09.10.muw.3: first attempt touched only CHANGELOG.md, then a follow-up "fix" commit, both wrong; the correct fix squashed everything back into one atomic commit).
+A release bumps `CHANGELOG.md` (new entry on top) and `VERSION` **together, in the same commit that carries the change being released** — there is no separate `chore(release)` commit any more. Never update one without the other: a CHANGELOG-only change ships a version number that no binary will ever report (happened in v26.09.10.muw.3; the follow-up "fix" commit was wrong too — everything was squashed back into one atomic commit).
 
-- Version format: `vYY.MM.DD.muw.N`. Commit message format: `chore(release): <version>` plus a change-summary body.
+- Version format: `vYY.MM.DD.muw.N` (release date + the Nth release of that day). Commit messages are English, imperative, and describe the change; the released version lives in `VERSION`, not in the commit subject.
 - `VERSION` is the single version source: `Dockerfile:33` injects it via ldflags into `common.Version`, and `Dockerfile:8` injects it into the frontend as `VITE_REACT_APP_VERSION`. The `"v0.0.0"` default in `common/constants.go` is the no-ldflags fallback — do not hand-edit it; `web/package.json` `version` is NOT part of a release.
 - **Before pushing a release commit, verify the injection chain for real**: build with the exact Dockerfile ldflags (`go build -ldflags "-s -w -X 'github.com/QuantumNous/new-api/common.Version=$(cat VERSION)'" -o /tmp/rel-check .`) and run `/tmp/rel-check --version` — the output MUST equal the new `VERSION`. Editing the file is not proof the chain works.
-- **Never patch a broken release with a follow-up commit.** If a mistake is found after pushing, redo the release commit itself (reset/amend/squash back to the two-file atomic form) and force-push — only after confirming the remote has no one else's commits on top. Release history must stay uniform: `git log --oneline --grep="chore(release)"` then `git show <commit> --stat` should always show the same two-file shape.
+- **Never patch a broken release with a follow-up commit.** If a mistake is found after pushing, redo the release commit itself (reset/amend/squash back to the two-file atomic form) and force-push — only after confirming the remote has no one else's commits on top. Release history must stay uniform: every commit that bumps `VERSION` must also carry the change being released (verify with `git show --stat <commit>` — it should contain `VERSION` and `CHANGELOG.md` alongside the code).
 - Do not touch `VERSION` outside of release commits.
 
 **Relay and provider behavior:**
