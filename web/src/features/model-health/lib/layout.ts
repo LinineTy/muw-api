@@ -25,7 +25,7 @@ export function perPageForWidth(width: number): number {
 
 /** 总页数（至少 1 页，空列表也算 1 页以免出现 0/0） */
 export function pageCount(total: number, perPage: number): number {
-  const size = Math.max(1, Math.floor(perPage))
+  const size = Number.isFinite(perPage) ? Math.max(1, Math.floor(perPage)) : 1
   return Math.max(1, Math.ceil(Math.max(0, total) / size))
 }
 

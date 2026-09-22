@@ -126,8 +126,12 @@ export function HealthBlocks({
       {visible.length === 0 ? (
         <span className='text-muted-foreground text-xs'>—</span>
       ) : (
-        visible.map((point) => (
-          <Tooltip key={`${point.created_at}-${point.response_time}`}>
+        // key 用下标:created_at 只有秒级精度,且对非管理员响应耗时已被抹掉,
+        // 「时间+耗时」无法唯一(同秒并发探测常见),会导致 React 重复 key。
+        // 这些块是无状态叶子节点,下标作 key 安全。
+        visible.map((point, index) => (
+          // oxlint-disable-next-line react/no-array-index-key -- 同秒探测点无数据可区分
+          <Tooltip key={`${point.created_at}-${index}`}>
             <TooltipTrigger
               render={
                 <span
