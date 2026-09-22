@@ -7188,7 +7188,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "Related Projects",
     "footer.defaultCopyright": "All rights reserved.",
-    "footer.new\u0061pi.projectAttributionSuffix": "All rights reserved. Designed and developed by the project contributors.",
+    "footer.newapi.projectAttributionSuffix": "All rights reserved. Designed and developed by the project contributors.",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -8219,6 +8219,8 @@
     "Plugin saved, activation required": "Plugin saved, activation required",
     "This version is saved but not active. Activate it to replace the current version, or activate it later from the Versions tab.": "This version is saved but not active. Activate it to replace the current version, or activate it later from the Versions tab.",
     "Plugin source exceeds the 8 MiB limit.": "Plugin source exceeds the 8 MiB limit.",
-    "Single .js file, up to 8 MiB. Its source is shown below before upload.": "Single .js file, up to 8 MiB. Its source is shown below before upload."
+    "Single .js file, up to 8 MiB. Its source is shown below before upload.": "Single .js file, up to 8 MiB. Its source is shown below before upload.",
+    "Channel #{{id}}": "Channel #{{id}}",
+    "{{count}} tests": "{{count}} tests"
   }
 }

@@ -7188,7 +7188,7 @@
     "footer.columns.related.links.oneApi": "Один API",
     "footer.columns.related.title": "Связанные проекты",
     "footer.defaultCopyright": "Все права защищены.",
-    "footer.new\u0061pi.projectAttributionSuffix": "Все права защищены. Разработано участниками проекта.",
+    "footer.newapi.projectAttributionSuffix": "Все права защищены. Разработано участниками проекта.",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -8219,6 +8219,8 @@
     "Plugin saved, activation required": "Плагин сохранён, требуется активация",
     "This version is saved but not active. Activate it to replace the current version, or activate it later from the Versions tab.": "Эта версия сохранена, но не активна. Активируйте её, чтобы заменить текущую версию, или сделайте это позже на вкладке «Версии».",
     "Plugin source exceeds the 8 MiB limit.": "Код плагина превышает лимит 8 МиБ.",
-    "Single .js file, up to 8 MiB. Its source is shown below before upload.": "Один файл .js размером до 8 МиБ. Его исходный код показан ниже перед загрузкой."
+    "Single .js file, up to 8 MiB. Its source is shown below before upload.": "Один файл .js размером до 8 МиБ. Его исходный код показан ниже перед загрузкой.",
+    "Channel #{{id}}": "Канал #{{id}}",
+    "{{count}} tests": "{{count}} тестов"
   }
 }

@@ -7188,7 +7188,7 @@
     "footer.columns.related.links.oneApi": "1つのAPI",
     "footer.columns.related.title": "関連プロジェクト",
     "footer.defaultCopyright": "すべての権利を留保します。",
-    "footer.new\u0061pi.projectAttributionSuffix": "すべての権利を留保します。プロジェクトコントリビューターにより設計・開発されています。",
+    "footer.newapi.projectAttributionSuffix": "すべての権利を留保します。プロジェクトコントリビューターにより設計・開発されています。",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -8219,6 +8219,8 @@
     "Plugin saved, activation required": "プラグインを保存しました。有効化が必要です",
     "This version is saved but not active. Activate it to replace the current version, or activate it later from the Versions tab.": "このバージョンは保存済みですが、まだ有効ではありません。有効化すると現在のバージョンを置き換えます。後で「バージョン」タブから有効化することもできます。",
     "Plugin source exceeds the 8 MiB limit.": "プラグインのソースが 8 MiB の上限を超えています。",
-    "Single .js file, up to 8 MiB. Its source is shown below before upload.": "単一の .js ファイル、最大 8 MiB。アップロード前に下部でソースを確認できます。"
+    "Single .js file, up to 8 MiB. Its source is shown below before upload.": "単一の .js ファイル、最大 8 MiB。アップロード前に下部でソースを確認できます。",
+    "Channel #{{id}}": "チャネル #{{id}}",
+    "{{count}} tests": "{{count}} 回"
   }
 }

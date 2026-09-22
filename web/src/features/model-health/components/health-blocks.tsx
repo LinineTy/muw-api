@@ -13,8 +13,10 @@ import type { TestTrendPoint } from '../types'
 
 // BLOCK_SIZE is the default-theme estimate; the actual rendered width (theme's
 // --spacing scales it up on large theme scales) is measured from the DOM.
-const BLOCK_SIZE = 10 // px
-const BLOCK_GAP = 3 // px
+// 2026-09-23：方块压扁成 3×10 的细长条（纵向不变、横向压扁），同样宽度能放约 3 倍
+// 的历史，卡片密度上去了。
+const BLOCK_SIZE = 3 // px
+const BLOCK_GAP = 2 // px
 
 // healthBlockClass maps one probe outcome to its block color:
 //   green          success, or a moderation block (the upstream handled the
@@ -56,7 +58,14 @@ function healthBlockLabel(t: (k: string) => string, point: TestTrendPoint) {
 // failures. The number of blocks adapts to the container width — as many newest
 // blocks as fit — so the strip fills the available space instead of a fixed
 // count. Missing data renders as a muted dash.
-export function HealthBlocks({ trend }: { trend: TestTrendPoint[] }) {
+export function HealthBlocks({
+  trend,
+  hideLatency = false,
+}: {
+  trend: TestTrendPoint[]
+  /** 普通用户视角：探测耗时不下发也不展示，tooltip 只给时间与结果 */
+  hideLatency?: boolean
+}) {
   const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
@@ -112,7 +121,7 @@ export function HealthBlocks({ trend }: { trend: TestTrendPoint[] }) {
   return (
     <div
       ref={containerRef}
-      className='flex min-w-0 flex-1 items-center gap-[3px] overflow-hidden'
+      className='flex min-w-0 flex-1 items-center gap-[2px] overflow-hidden'
     >
       {visible.length === 0 ? (
         <span className='text-muted-foreground text-xs'>—</span>
@@ -123,7 +132,7 @@ export function HealthBlocks({ trend }: { trend: TestTrendPoint[] }) {
               render={
                 <span
                   data-health-block
-                  className={`size-2.5 shrink-0 cursor-default rounded-[2px] ${healthBlockClass(point)}`}
+                  className={`h-2.5 w-[3px] shrink-0 cursor-default rounded-[1px] ${healthBlockClass(point)}`}
                 />
               }
             />
@@ -132,7 +141,9 @@ export function HealthBlocks({ trend }: { trend: TestTrendPoint[] }) {
                 {formatTimestampToDate(point.created_at)}
               </p>
               <p className='font-mono text-xs'>
-                {point.response_time}ms · {healthBlockLabel(t, point)}
+                {hideLatency
+                  ? healthBlockLabel(t, point)
+                  : `${point.response_time}ms · ${healthBlockLabel(t, point)}`}
               </p>
             </TooltipContent>
           </Tooltip>

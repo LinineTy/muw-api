@@ -83,71 +83,56 @@ func TestAggregateChannelTestRecordsEmpty(t *testing.T) {
 	assert.Empty(t, rows)
 }
 
-func TestCollapseToModelLevel(t *testing.T) {
+
+func TestMaskChannelIdentityForViewer(t *testing.T) {
 	rows := []ModelHealthRow{
 		{
-			ChannelId: 1, ChannelName: "A", ModelName: "gpt-4o",
+			ChannelId: 7, ChannelName: "Secret Upstream", ModelName: "gpt-4o",
 			TestCount: 3, SuccessCount: 2, SuccessRate: 66.7, AvgResponseTime: 200,
-			LastResponseTime: 200, LastTestTime: 3000, LastError: "upstream 500", UserTrafficCount: 1,
+			LastResponseTime: 200, LastTestTime: 3000, LastError: "upstream 500",
+			LastErrorKind: "upstream", UserTrafficCount: 1, ClientErrorCount: 0,
+			ModerationCount: 0,
 			Trend: []TestTrendPoint{
 				{CreatedAt: 1000, ResponseTime: 100, Success: true},
-				{CreatedAt: 2000, ResponseTime: 300, Success: false},
-				{CreatedAt: 3000, ResponseTime: 200, Success: true},
+				{CreatedAt: 2000, ResponseTime: 300, Success: false, ErrorKind: "upstream"},
 			},
 		},
-		{
-			ChannelId: 2, ChannelName: "B", ModelName: "gpt-4o",
-			TestCount: 1, SuccessCount: 1, SuccessRate: 100, AvgResponseTime: 50,
-			LastResponseTime: 50, LastTestTime: 2500, LastError: "", UserTrafficCount: 0,
-			Trend: []TestTrendPoint{{CreatedAt: 2500, ResponseTime: 50, Success: true}},
-		},
-		{
-			ChannelId: 3, ChannelName: "C", ModelName: "gpt-4o-mini",
-			TestCount: 1, SuccessCount: 0, SuccessRate: 0, AvgResponseTime: 500,
-			LastResponseTime: 500, LastTestTime: 1500, LastError: "timeout", UserTrafficCount: 0,
-			Trend: []TestTrendPoint{{CreatedAt: 1500, ResponseTime: 500, Success: false}},
-		},
 	}
 
-	merged := CollapseToModelLevel(rows)
-	require.Len(t, merged, 2)
+	masked := MaskChannelIdentityForViewer(rows)
+	require.Len(t, masked, 1)
+	row := masked[0]
 
-	byModel := map[string]ModelHealthRow{}
-	for _, row := range merged {
-		byModel[row.ModelName] = row
-	}
+	// 渠道身份与延迟/错误细节一律不下发；渠道 id 保留（前端只拿它当标签）
+	assert.Equal(t, 7, row.ChannelId)
+	assert.Equal(t, "gpt-4o", row.ModelName)
+	assert.Equal(t, "", row.ChannelName)
+	assert.Equal(t, 0, row.AvgResponseTime)
+	assert.Equal(t, 0, row.LastResponseTime)
+	assert.Equal(t, "", row.LastError)
+	assert.Equal(t, "", row.LastErrorKind)
 
-	// gpt-4o merges both channels: counts sum, latency is test-count weighted.
-	row := byModel["gpt-4o"]
-	assert.Equal(t, 4, row.TestCount)
-	assert.Equal(t, 3, row.SuccessCount)
-	assert.InDelta(t, 75, row.SuccessRate, 0.1)
-	assert.Equal(t, 163, row.AvgResponseTime) // round((200*3+50*1)/4) = round(162.5) = 163
+	// 计数、成功率、探测时间线保留（模型级汇总与条带要靠它们）
+	assert.Equal(t, 3, row.TestCount)
+	assert.Equal(t, 2, row.SuccessCount)
+	assert.InDelta(t, 66.7, row.SuccessRate, 0.01)
 	assert.Equal(t, 1, row.UserTrafficCount)
 	assert.Equal(t, int64(3000), row.LastTestTime)
-	assert.Equal(t, 200, row.LastResponseTime)
-	// Channel-scoped details are zeroed for non-admin viewers.
-	assert.Equal(t, 0, row.ChannelId)
-	assert.Equal(t, "", row.ChannelName)
-	assert.Equal(t, "", row.LastError)
+	require.Len(t, row.Trend, 2)
+	assert.Equal(t, int64(2000), row.Trend[1].CreatedAt)
+	assert.False(t, row.Trend[1].Success)
+	assert.Equal(t, "upstream", row.Trend[1].ErrorKind)
+	// 单次探测的耗时也要抹掉（tooltip 不再暴露渠道速度）
+	assert.Equal(t, 0, row.Trend[0].ResponseTime)
+	assert.Equal(t, 0, row.Trend[1].ResponseTime)
 
-	// Trends are merged and re-sorted chronologically (tie-break by latency).
-	require.Len(t, row.Trend, 4)
-	assert.Equal(t, []int64{1000, 2000, 2500, 3000}, []int64{
-		row.Trend[0].CreatedAt, row.Trend[1].CreatedAt, row.Trend[2].CreatedAt, row.Trend[3].CreatedAt,
-	})
-
-	// A single channel row collapses to one model row, still sanitized.
-	mini := byModel["gpt-4o-mini"]
-	assert.Equal(t, 1, mini.TestCount)
-	assert.Equal(t, 0, mini.ChannelId)
-	assert.Equal(t, "", mini.ChannelName)
-	assert.Equal(t, "", mini.LastError)
+	// 输入不被就地改写
+	assert.Equal(t, "Secret Upstream", rows[0].ChannelName)
+	assert.Equal(t, 100, rows[0].Trend[0].ResponseTime)
 }
 
-func TestCollapseToModelLevelEmpty(t *testing.T) {
-	merged := CollapseToModelLevel(nil)
-	assert.Empty(t, merged)
+func TestMaskChannelIdentityForViewerEmpty(t *testing.T) {
+	assert.Empty(t, MaskChannelIdentityForViewer(nil))
 }
 
 func TestAggregateChannelTestRecordsUserTrafficSource(t *testing.T) {
@@ -198,7 +183,6 @@ func TestAggregateChannelTestRecordsOrderIndependent(t *testing.T) {
 	assert.Equal(t, a.Trend[0].CreatedAt, b.Trend[0].CreatedAt)
 	assert.Equal(t, a.Trend[2].CreatedAt, b.Trend[2].CreatedAt)
 }
-
 
 // ── 错误归类(ClassifyRelayError)────────────────────────────────
 

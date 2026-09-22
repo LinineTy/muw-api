@@ -7188,7 +7188,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "Projets liés",
     "footer.defaultCopyright": "Tous droits réservés.",
-    "footer.new\u0061pi.projectAttributionSuffix": "Tous droits réservés. Conçu et développé par les contributeurs du projet.",
+    "footer.newapi.projectAttributionSuffix": "Tous droits réservés. Conçu et développé par les contributeurs du projet.",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -8219,6 +8219,8 @@
     "Plugin saved, activation required": "Plugin enregistré, activation requise",
     "This version is saved but not active. Activate it to replace the current version, or activate it later from the Versions tab.": "Cette version est enregistrée mais inactive. Activez-la pour remplacer la version actuelle, ou activez-la plus tard dans l’onglet Versions.",
     "Plugin source exceeds the 8 MiB limit.": "Le code du plugin dépasse la limite de 8 Mio.",
-    "Single .js file, up to 8 MiB. Its source is shown below before upload.": "Un seul fichier .js, jusqu’à 8 Mio. Sa source est affichée ci-dessous avant l’envoi."
+    "Single .js file, up to 8 MiB. Its source is shown below before upload.": "Un seul fichier .js, jusqu’à 8 Mio. Sa source est affichée ci-dessous avant l’envoi.",
+    "Channel #{{id}}": "Canal #{{id}}",
+    "{{count}} tests": "{{count}} tests"
   }
 }
