@@ -8221,6 +8221,7 @@
     "Plugin source exceeds the 8 MiB limit.": "プラグインのソースが 8 MiB の上限を超えています。",
     "Single .js file, up to 8 MiB. Its source is shown below before upload.": "単一の .js ファイル、最大 8 MiB。アップロード前に下部でソースを確認できます。",
     "Channel #{{id}}": "チャネル #{{id}}",
-    "{{count}} tests": "{{count}} 回"
+    "{{n}} test": "{{n}} 回",
+    "{{n}} tests": "{{n}} 回"
   }
 }

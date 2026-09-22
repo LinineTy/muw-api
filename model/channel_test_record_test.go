@@ -319,3 +319,18 @@ func TestTechnicalSuccessRate(t *testing.T) {
 	assert.InDelta(t, 50, technicalSuccessRate(1, 0, 3, 1), 0.001)    // 1/(3-1)
 	assert.InDelta(t, 100, technicalSuccessRate(0, 0, 0, 0), 0.001)   // 空窗口
 }
+
+func TestApplyChannelNames(t *testing.T) {
+	rows := []ModelHealthRow{
+		{ChannelId: 7, ChannelName: "old-name", ModelName: "m1"},
+		{ChannelId: 8, ChannelName: "gone", ModelName: "m1"},
+	}
+	out := ApplyChannelNames(rows, map[int]string{7: "new-name"})
+
+	if out[0].ChannelName != "new-name" {
+		t.Fatalf("重命名后的渠道应显示实时名, got %q", out[0].ChannelName)
+	}
+	if out[1].ChannelName != "gone" {
+		t.Fatalf("渠道已不存在时应保留快照名, got %q", out[1].ChannelName)
+	}
+}

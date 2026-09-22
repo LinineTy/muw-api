@@ -63,6 +63,21 @@ func GetModelHealth(c *gin.Context) {
 	}
 
 	rows := model.AggregateChannelTestRecords(records)
+	// 渠道名用 channels 表的实时名称（探活记录里只是写入时的快照，改名后会过期）
+	if len(rows) > 0 {
+		ids := make([]int, 0, len(rows))
+		for _, row := range rows {
+			ids = append(ids, row.ChannelId)
+		}
+		var channels []model.Channel
+		if err := model.DB.Model(&model.Channel{}).Select("id", "name").Where("id IN ?", ids).Find(&channels).Error; err == nil {
+			idToName := make(map[int]string, len(channels))
+			for _, ch := range channels {
+				idToName[ch.Id] = ch.Name
+			}
+			rows = model.ApplyChannelNames(rows, idToName)
+		}
+	}
 	if c.GetInt("role") < common.RoleAdminUser {
 		// Non-admin viewers get the same per-channel rows (the page renders one
 		// card per channel with that channel's success rate), but channel

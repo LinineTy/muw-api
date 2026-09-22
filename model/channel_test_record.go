@@ -333,6 +333,20 @@ func AggregateChannelTestRecords(records []ChannelTestRecord) []ModelHealthRow {
 // Counts, rates and per-probe outcomes stay, so the model-level aggregates the
 // page derives in the browser (test/real-traffic totals, merged heartbeat
 // strip) are unchanged. Order is preserved; the input slice is not mutated.
+// ApplyChannelNames overwrites each row's channel name with the live name from
+// the channels table. The name stored on a test record is a snapshot taken when
+// the probe was written, so a renamed channel would keep showing its old name
+// (the aggregation also takes it from the oldest record in the window). Rows
+// whose channel no longer exists keep the snapshot.
+func ApplyChannelNames(rows []ModelHealthRow, idToName map[int]string) []ModelHealthRow {
+	for i := range rows {
+		if name, ok := idToName[rows[i].ChannelId]; ok {
+			rows[i].ChannelName = name
+		}
+	}
+	return rows
+}
+
 func MaskChannelIdentityForViewer(rows []ModelHealthRow) []ModelHealthRow {
 	masked := make([]ModelHealthRow, 0, len(rows))
 	for _, row := range rows {

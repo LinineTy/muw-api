@@ -85,7 +85,7 @@ export function ChannelHealthTile({
           {row.success_rate.toFixed(1)}%
         </span>
         <span className='text-muted-foreground text-[11.5px] whitespace-nowrap'>
-          {t('{{count}} tests', { count: formatNumber(row.test_count) })}
+          {t(row.test_count === 1 ? '{{n}} test' : '{{n}} tests', { n: formatNumber(row.test_count) })}
         </span>
       </div>
 

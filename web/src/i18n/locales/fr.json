@@ -8221,6 +8221,7 @@
     "Plugin source exceeds the 8 MiB limit.": "Le code du plugin dépasse la limite de 8 Mio.",
     "Single .js file, up to 8 MiB. Its source is shown below before upload.": "Un seul fichier .js, jusqu’à 8 Mio. Sa source est affichée ci-dessous avant l’envoi.",
     "Channel #{{id}}": "Canal #{{id}}",
-    "{{count}} tests": "{{count}} tests"
+    "{{n}} test": "{{n}} test",
+    "{{n}} tests": "{{n}} tests"
   }
 }

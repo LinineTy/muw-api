@@ -8221,6 +8221,7 @@
     "Plugin source exceeds the 8 MiB limit.": "Mã nguồn plugin vượt giới hạn 8 MiB.",
     "Single .js file, up to 8 MiB. Its source is shown below before upload.": "Một tệp .js duy nhất, tối đa 8 MiB. Mã nguồn được hiển thị bên dưới trước khi tải lên.",
     "Channel #{{id}}": "Kênh #{{id}}",
-    "{{count}} tests": "{{count}} lượt"
+    "{{n}} test": "{{n}} lượt",
+    "{{n}} tests": "{{n}} lượt"
   }
 }
