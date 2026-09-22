@@ -62,7 +62,7 @@ export function OsDesktopPlaceholder() {
               className='group hover:bg-popover/40 focus-visible:ring-ring/40 flex w-[6.5rem] flex-col items-center gap-2 rounded-xl px-1 py-2 transition-colors outline-none focus-visible:ring-2'
             >
               {/* 方圆形磁贴:玻璃底,与 Dock 的圆形球体区分。
-                  圆角**不写死**（原来硬编码 1.15rem，切主题/圆角设置纹丝不动 —— maintainer 2026-09-12 抓的）：
+                  圆角**不写死**（原来硬编码 1.15rem，切主题/圆角设置纹丝不动 —— 2026-09-12 抓的）：
                   内圆角 = 外圆角 − 四周留白，才能与外层按钮（rounded-xl）保持同心；max() 兜住"圆角=0"。
                   用内联 style 而不是 arbitrary class：Tailwind 生成不了嵌套 max()+calc() 的类。
                   系数从 --radius 现算（×1.4 与 .rounded-xl 同档）：--radius-xl 这个变量在样式表里

@@ -13,7 +13,7 @@ import { OsWidget } from './os-widget'
 /**
  * OS 桌面 · 余额小组件（2x1）
  *
- * maintainer 2026-09-12 定的首批组件之一。2x1 = 228×100px，塞得下"标签 + 大余额 + 今日消耗"。
+ * 2026-09-12 定的首批组件之一。2x1 = 228×100px，塞得下"标签 + 大余额 + 今日消耗"。
  * 数据源：`/api/user/self`（余额 quota） + 使用日志统计（今日消耗，
  * 与钱包页"本月消费"同一套算法，只是时间窗换成今天 0 点起）。
  * 点击 = 打开钱包窗口。
@@ -60,7 +60,7 @@ export function OsDesktopBalance() {
       <button
         type='button'
         onClick={() => osNavigate('/wallet')}
-        // 不用 WIDGET_CLICKABLE_CLASS 的 justify-between：那会把大数字压到卡底（maintainer 2026-09-12
+        // 不用 WIDGET_CLICKABLE_CLASS 的 justify-between：那会把大数字压到卡底（2026-09-12
         // "余额往上挪点"）。这里标签行贴顶（与相邻卡的标签同一水平线），数字在剩余空间里居中。
         className='focus-visible:ring-ring/40 flex h-full w-full cursor-pointer flex-col text-left outline-none focus-visible:ring-2'
       >

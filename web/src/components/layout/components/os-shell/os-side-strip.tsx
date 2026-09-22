@@ -37,7 +37,7 @@ function closeNavCard() {
   useOsBallStore.getState().close()
 }
 
-/** 第三方接入球:打开弹窗列对话客户端（原下拉菜单，2026-09-21 maintainer要弹窗） */
+/** 第三方接入球:打开弹窗列对话客户端（原下拉菜单，2026-09-21要弹窗） */
 function OsThirdPartyBall() {
   const { t } = useTranslation()
   const { chatPresets } = useChatPresets()
@@ -69,7 +69,7 @@ function OsThirdPartyBall() {
   )
 }
 
-/** 快速导航球:打开弹窗列管理端配置的顶栏链接（原下拉菜单，2026-09-21 maintainer要弹窗） */
+/** 快速导航球:打开弹窗列管理端配置的顶栏链接（原下拉菜单，2026-09-21要弹窗） */
 function OsQuickLinksBall() {
   const { t } = useTranslation()
   const links = useTopNavLinks()
@@ -156,7 +156,7 @@ function RailToolsGroup() {
 
       <OsNotificationsBall />
 
-      {/* 组件 + 鲸鱼合并成一个弹窗入口（2026-09-20 maintainer：边栏少一颗球、功能放一起）。
+      {/* 组件 + 鲸鱼合并成一个弹窗入口（2026-09-20：边栏少一颗球、功能放一起）。
           公告卡开关也在这个弹窗里 —— 它本来就是桌面组件之一 */}
       <OsPreferencesBall />
 
@@ -169,7 +169,7 @@ function RailToolsGroup() {
  * 消息球（原公告铃铛的位置，外观不变）。
  *
  * 功能换成**站内消息**：点开消息弹窗（上游模型巡检等管理端通知），带未读角标。
- * 角标是"还剩几条未读"，只在**逐条标为已读**时递减（打开弹窗不清空，2026-09-21 maintainer定）。
+ * 角标是"还剩几条未读"，只在**逐条标为已读**时递减（打开弹窗不清空，2026-09-21定）。
  * 公告卡的展开/收起已并入「偏好设置」弹窗，两处能关同一个东西只会让人困惑。
  * 目前只有管理员会收到站内消息，所以对非管理员不渲染这颗球。
  */

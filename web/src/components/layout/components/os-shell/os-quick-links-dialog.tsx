@@ -10,7 +10,7 @@ import { useTopNavLinks } from '@/hooks/use-top-nav-links'
  * OS 桌面壳 · 「快速导航」弹窗。
  *
  * 收纳管理端 HeaderNavModules 配置的顶栏页面链接。原来是一颗球 + 下拉菜单
- * （菜单项一行一个小图标，挤且点不准）—— 2026-09-21 maintainer要"弹窗、好看些"，
+ * （菜单项一行一个小图标，挤且点不准）—— 2026-09-21要"弹窗、好看些"，
  * 改成弹窗里一行一个链接卡片：图标 + 标题 + 方向指示（站内 →、外链 ↗）。
  */
 export function OsQuickLinksDialog({

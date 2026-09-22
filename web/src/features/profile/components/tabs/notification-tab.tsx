@@ -54,7 +54,7 @@ const NOTIFICATION_ICONS: Record<NotifyType, typeof Mail> = {
   bark: Bell,
   gotify: Server,
   // 站内消息：用「消息气泡」。原先是收件箱（Inbox）——小尺寸下和邮箱的 Mail 信封
-  // 太像，五个选项里两个几乎分不出来（2026-09-21 maintainer）
+  // 太像，五个选项里两个几乎分不出来（2026-09-21）
   web: MessageSquareText,
 }
 

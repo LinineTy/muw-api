@@ -87,7 +87,7 @@ export function resolveLegacyRoute(rawHref: string): string | null {
   }
   if (pathname === '/console/chat') {
     // 「回控制台首页」的语义 = 桌面壳。'/console' 本身早就映射到 /os-desktop，
-    // 这里以前落 /dashboard（概览页）自相矛盾（2026-09-12 maintainer定：统一到桌面）。
+    // 这里以前落 /dashboard（概览页）自相矛盾（2026-09-12定：统一到桌面）。
     return buildTargetHref('/os-desktop', source)
   }
   if (pathname.startsWith('/console/chat/')) {

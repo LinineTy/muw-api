@@ -54,7 +54,7 @@ export function BillingTimeProbeFields(props: {
   includeTokens?: boolean
   /**
    * 阶梯条件专用：只给计费/长度探针（len / p / c），时间类探针归乘数区（请求规则）。
-   * 2026-09-12 maintainer定：「旧版阶梯条件里只有输入输出相关的，新版把条件乘数区的全加上了」
+   * 2026-09-12定：「旧版阶梯条件里只有输入输出相关的，新版把条件乘数区的全加上了」
    * —— 上游 rework 把两套变量合成一套，按 fork 口径拆回。
    * 当前值若本来就是时间探针（老文档/上游风格表达式），仍并入选项以免显示成空值、保存即损坏。
    */
@@ -133,7 +133,7 @@ export function BillingConditionValueInput(props: {
 }) {
   const { t, i18n } = useTranslation()
   // 星期是枚举，永远用下拉（0~6 = 周日~周六）；数值草稿（normalizeNumberDrafts）只对
-  // hour/minute/month/day 这类数字探针有意义 —— 2026-09-13 maintainer指出乘数区的星期范围
+  // hour/minute/month/day 这类数字探针有意义 —— 2026-09-13指出乘数区的星期范围
   // 显示成了原始数字「1 至 6」。原先这里多一个 `!normalizeNumberDrafts` 条件，导致
   // 乘数区（传了 normalizeNumberDrafts）落回数字输入框。
   if (

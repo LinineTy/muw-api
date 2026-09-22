@@ -1050,7 +1050,7 @@ func millisToRFC3339Ptr(ms int64) *string {
 
 // 端点: GET https://openrouter.ai/api/v1/key,Bearer 认证。
 // 只取 free_model_daily_requests —— 免费模型($0/token)的日额度。
-// 口径要点(2026-09-19 实测,详见 openrouter免费层):
+// 口径要点(2026-09-19 实测):
 //   - 全免费模型**共用一个桶**,不是每个模型各一份;UTC 日界重置
 //   - 档位由账号「历史累计充值」决定:<$10 → 50/天,≥$10 → 1000/天;RPM 固定 20
 //   - 免费模型不消耗 credit ⇒ 账户余额与本窗口无关,本窗口只看「次数」

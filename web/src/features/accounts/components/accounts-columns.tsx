@@ -192,7 +192,7 @@ export function useAccountsColumns(options: {
         // 隐藏列：仅用于工具栏的「是否被引用 / 是否开启监控」筛选（toolbar 只在列存在时
         // 才渲染对应筛选），表格与卡片都不展示它。
         // enableHiding:false = 不参与「查看」（列显隐）——它是纯筛选载体，cell 返回 null，
-        // 一旦被勾出来就是一条只有表头、内容空白的重复列（2026-09-13 maintainer截图）。
+        // 一旦被勾出来就是一条只有表头、内容空白的重复列（2026-09-13截图）。
         id: 'referenced',
         accessorFn: (item) => (item.channel_count > 0 ? 1 : 0),
         header: () => t('Referenced by'),

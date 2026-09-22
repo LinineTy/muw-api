@@ -847,7 +847,7 @@ body[data-theme-radius='xl'] {
   --table-disabled-hover: oklch(1 0 0 / 0.55);
   --table-disabled-border: oklch(0.85 0 0 / 0.45);
 
-  /* 琉璃的圆角默认值：原 1.25rem，maintainer 2026-09-12 定 0.95rem
+  /* 琉璃的圆角默认值：原 1.25rem，2026-09-12 定 0.95rem
    *（1.25 太大 —— 大卡 rounded-xl 会到 28px，肉眼比"圆角=1.0"档还大；
    * 0.95rem 让 Auto 略小于 1.0 档，观感更收。）
    * 注意：这个值只在用户没手动选过圆角时生效（body 上没有 data-theme-radius）。 */
@@ -1040,7 +1040,7 @@ body[data-theme-preset='liquid-glass']::before {
  * header(管理端顶栏)与 sidebar-inner(侧栏)不在列表内:两者要求纯透明,
  * 不做二次模糊(背景层 body::before 已有整页 blur,面板再叠 backdrop-filter
  * 属于重复处理);header 本身 bg-transparent,直接透出背景。
- * sidebar-inner 连 bg-sidebar 底色也一并去掉(maintainer拍板:侧栏是框架,框架
+ * sidebar-inner 连 bg-sidebar 底色也一并去掉(已定:侧栏是框架,框架
  * 全透——底色去掉后菜单直接坐在驯服过的壁纸上,与顶栏透明同一语言;
  * 68fd67c9a 去掉的是它的 backdrop-filter,这里补全底色。移动端不受影响:
  * 移动端弹卡外壳自带 bg-sidebar+backdrop-blur-md,内部不渲染

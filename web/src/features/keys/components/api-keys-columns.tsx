@@ -148,14 +148,14 @@ export function useApiKeysColumns(
       accessorKey: 'remain_quota',
       // 两段式表头：左「额度 (单位)」对应单元格里的剩余值，右「已用」对应已消费值
       // —— 上游 551bb63ed 去掉了桌面端的行内标签后，右侧数字一直没有表题
-      // （2026-09-13 maintainer指出）。宽度/栅格与 ApiKeyQuotaCell 的桌面版一致（max-w-45 + grid-cols-2），
+      // （2026-09-13指出）。宽度/栅格与 ApiKeyQuotaCell 的桌面版一致（max-w-45 + grid-cols-2），
       // 保证两段标题分别落在两个数字正上方。
       header: ({ column }) => (
         <DataTableColumnHeader
           column={column}
           title={
             // 两段式表头：左「额度 (单位)」对应单元格里的剩余值，右「已用」对应已消费值。
-            // 上游 551bb63ed 去掉了桌面端的行内标签后，右侧数字一直没有表题（2026-09-13 maintainer指出）。
+            // 上游 551bb63ed 去掉了桌面端的行内标签后，右侧数字一直没有表题（2026-09-13指出）。
             // 栅格宽度与 ApiKeyQuotaCell 桌面版一致（w-45 + grid-cols-2），两段标题分别落在两个数字正上方。
             <span className='grid w-45 grid-cols-2 items-center gap-x-2'>
               <span className='min-w-0 truncate'>{`${t('Quota')} (${quotaUnit})`}</span>

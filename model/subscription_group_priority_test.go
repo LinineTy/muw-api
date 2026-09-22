@@ -118,7 +118,7 @@ func TestGroupPriorityExpiry(t *testing.T) {
 	assert.False(t, downgraded)
 	assert.Equal(t, "v2", gpUserGroup(t, 830), "v1 过期时 v2 订阅撑组，保持 v2")
 
-	// d2) v2 订阅过期但 v1 订阅还活着（maintainer核心场景的续集：a 中保住组的 v2 用户，
+	// d2) v2 订阅过期但 v1 订阅还活着（核心场景的续集：a 中保住组的 v2 用户，
 	// 其 v2 订阅到期后应回 v1 而非底组）——独立新用户，v1 订阅保持活跃。
 	seedGPUser(t, 833, "v2")
 	seedGPSubFull(t, 8234, 833, 8111, "v2", "default", -3600)

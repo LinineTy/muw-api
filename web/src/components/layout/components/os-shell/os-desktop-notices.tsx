@@ -21,7 +21,7 @@ import { OsWidget } from './os-widget'
  *
  * 只取「时间线」（announcements）——通知（notice）已经有糊脸强制阅读弹窗，桌面不重复。
  *
- * 2026-09-12 maintainer定的形态：**全量元素进卡，一次只显示一条公告，卡底部给上下翻页按钮**。
+ * 2026-09-12定的形态：**全量元素进卡，一次只显示一条公告，卡底部给上下翻页按钮**。
  * 比原来的「堆叠露出多张」更彻底地根除接缝鬼影 —— 只有一张卡，卡与卡之间不存在接缝，
  * 也就不存在「鼠标移出页面后接缝处冒黑线、只有重绘才恢复」那类合成层陈旧绘制问题。
  * 默认显示最新一条；点卡体或底部箭头都能翻（循环）。无公告时不渲染，桌面保持干净。
@@ -38,7 +38,7 @@ export function OsDesktopNotices() {
   const collapsed = useOsNoticeStore((state) => state.collapsed)
   const setCollapsed = useOsNoticeStore((state) => state.setCollapsed)
   // 收起后**先把格子让出来**：淡出 300ms 再卸载。
-  // 之前只做透明+右移，格子还占着（maintainer 2026-09-12："公告向右隐藏还占宽度"），
+  // 之前只做透明+右移，格子还占着（2026-09-12：向右隐藏后仍占着宽度），
   // 而且 translate 溢出还会把组件的横向滚动条顶出来。
   const [unmounted, setUnmounted] = useState(false)
   useEffect(() => {
@@ -52,7 +52,7 @@ export function OsDesktopNotices() {
 
   // 淡入标记：**跟随"该不该显示"**而不是挂载时机。
   // 早先是挂载后 rAF 置真 —— 但卡片在数据回来前是 return null，等数据到了 entered 早已是 true，
-  // 于是"出现"是硬切、没有动画（2026-09-12 maintainer："公告出现的动画没了"）。
+  // 于是"出现"是硬切、没有动画（2026-09-12：出现动画被砍掉了）。
   // 现在：只要显示条件成立就重新走一次"先透明、下一帧再显示"，数据到达 / 收起后重新展开都有淡入。
   const shouldShow = !loading && total > 0 && !unmounted
   const [entered, setEntered] = useState(false)

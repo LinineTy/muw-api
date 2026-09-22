@@ -224,7 +224,7 @@ function describeGroup(
   // 模型广场（无 trace）走结构化路径，日志（带 trace）此前优先走源码表达式路径，
   // 同一个条件在日志里显示成「周一至周五 18:00至24:00或00:00至14:00或周六或周日」，
   // 在模型广场显示成「每天 18:00~次日 14:00 · 每周一~周五 或 每周六 或 每周日」。
-  // 2026-09-13 maintainer判定模型广场那条（保留跨零点区间）为准，日志统一过来。
+  // 2026-09-13判定模型广场那条（保留跨零点区间）为准，日志统一过来。
   // 结构化解析失败（conditions 为空）时才回落源码表达式渲染。
   const structured = formatRequestDnfText(group.conditions, t)
   if (structured) return structured

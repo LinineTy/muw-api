@@ -7,7 +7,7 @@ import { useAccountsColumns } from '../accounts-columns'
 /**
  * 账户列表列定义 · 「查看」（列显隐）契约回归
  *
- * maintainer 2026-09-13 截图两个症状：
+ * 2026-09-13 截图两个症状：
  * ① 弹层里是英文（Name / Type / Referenced / Monitoring）—— 弹层读的是 `meta.label`，
  *    而这里 header 全是函数（`() => t('X')`），读不到就退化成列 id（英文）；
  * ② 勾上最后两项后多出空白的「被引用的渠道」「套餐余量监控」重复列 —— `referenced`

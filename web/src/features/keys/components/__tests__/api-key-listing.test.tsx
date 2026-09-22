@@ -538,7 +538,7 @@ function ColumnIds({ enableSelection }: { enableSelection: boolean }) {
 }
 
 // 上游同步把「勾选列」重复合并进来过一次：批量模式打开后表里出现两排勾选框
-// （2026-09-13 maintainer截图指出）。这里锁死「开批量=刚好一列 / 关批量=没有」。
+// （2026-09-13 截图发现）。这里锁死「开批量=刚好一列 / 关批量=没有」。
 it('keeps exactly one selection column, and none while batch mode is off', () => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, enabled: false } },

@@ -82,7 +82,7 @@ export function visualNodeId(): string {
  * ⚠️ 默认探针是 `len`（完整输入长度）而不是 `hour`：本函数只服务**阶梯条件**
  * （visitor：visual-billing-document-editor 的"添加计费分支"、visual-condition-tree 的"添加条件"），
  * 而阶梯条件按 fork 口径只吃 计费/长度 变量，时间类变量归条件乘数区（请求规则）。
- * 2026-09-12 maintainer发现"添加计费分支后默认是小时"——那正是上游把两套变量合并的残留。
+ * 2026-09-12发现"添加计费分支后默认是小时"——那正是上游把两套变量合并的残留。
  */
 export function createEmptyVisualCondition(): VisualComparison {
   return {
