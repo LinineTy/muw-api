@@ -86,7 +86,7 @@
    - 冲突在 `theme-provider.tsx` / `theme-customization-provider.tsx` 的 import 段：保留我方 `syncOsWindowThemes`（OS 壳窗口主题同步），删掉已无引用的 `@/lib/cookies` 导入；`theme-storage` 导入不重复加。
    - 我方预涂脚本（`web/index.html` 内联）改为只读 `localStorage['newapi:theme:v1:mode']`，**不回退旧 cookie**——与上游同口径，否则升级后首帧按旧值涂错、React 再改回来会闪。
    - 上游新测试 `theme-preferences.test.tsx` 假设"默认预设不写 `data-theme-preset`"，与我方设计冲突（默认是琉璃，preset 轴**总是**写属性，见 `theme-customization-provider.tsx` 注释）⇒ 5 处断言改为按 `DEFAULT_THEME_CUSTOMIZATION.preset` 断言，保留"旧 cookie 没串进来"的回归价值。
-   - ⚠️ **待产品决定**：升级后已登录用户的主题偏好会回到默认（系统 + 琉璃）。要不要做一次性迁移旧 cookie，需maintainer拍板。
+   - ✅ **已定（2026-09-22 maintainer）**：**不做迁移**，升级后主题偏好就回到默认（系统 + 琉璃）——「回到默认就默认」。
 2. **locale 冲突**（`e537dc380`、`c0cff23a3`）按老规矩用 `/工具箱/i18n补key.py`：以我方为基础逐行补上游新 key，7 个语言各 +6，共 8220 键。
 
 ### 验证（本批）
