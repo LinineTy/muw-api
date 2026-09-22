@@ -28,6 +28,24 @@ import { getLobeIconNames } from '@/lib/lobe-icon'
 
 import { ModelBadge } from '../model-badge'
 
+// 本地适配（2026-09-22）：provider 图标走的是 @lobehub/icons 的**懒加载**
+// （`lib/lobe-icon.tsx` 用 lazy + Suspense，加载中渲染的是「字母占位 div」而不是 svg/img）。
+// jsdom 里那次动态 import 不会在 5s 内落地 ⇒ `waitFor(svg)` 必然超时（183 例里 155 例挂，
+// 整个文件跑 13 分钟）。这里把图标换成同步 stub：本用例真正要守的是**模型归类**与
+// "该分类的图标槽位有内容"，不是图标包本身能否懒加载。
+vi.mock('@/lib/lobe-icon', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('@/lib/lobe-icon')>()
+  const React = await import('react')
+  return {
+    ...mod,
+    getLobeIcon: () =>
+      React.createElement('svg', {
+        'data-testid': 'lobe-icon-stub',
+        'aria-hidden': 'true',
+      }),
+  }
+})
+
 const providers = [
   {
     category: 'Perplexity',
