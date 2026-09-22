@@ -59,7 +59,9 @@ export function ModelHealthCard({
   const current = clampPage(page, pages)
   // 本页实际张数 = 本页列数：最后一页不足满页时也铺满整行
   const visible = rows.slice(current * perPage, current * perPage + perPage)
-  const columns = Math.max(1, visible.length)
+  // 单张瓷砖不独占整行：按 2 列的宽度放置（模型只有 1 个渠道时左侧半宽、右侧留白），
+  // 窄卡（手机，每页 1 张）例外，仍然占满整行。
+  const columns = Math.min(perPage, Math.max(2, visible.length))
 
   // Memoized so the strip doesn't get a fresh array on every re-render — a stable
   // reference keeps HealthBlocks' measurements in sync instead of churning its
