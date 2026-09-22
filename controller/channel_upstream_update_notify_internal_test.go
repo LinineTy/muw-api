@@ -7,7 +7,7 @@ import (
 )
 
 // 巡检通知只讲「已配模型消失」：新增是配置现状（一渠道一模型 vs 上游几百个），
-// 进通知就是纯噪音 —— 首轮巡检后按maintainer口径收紧（2026-09-20）。
+// 进通知就是纯噪音 —— 首轮巡检后按既定口径收紧（2026-09-20）。
 func TestBuildUpstreamModelUpdateNotificationContentOnlyRemovals(t *testing.T) {
 	content := buildUpstreamModelUpdateTaskNotificationContent(
 		28,

@@ -15,7 +15,7 @@ import { FAB_BALL } from './os-ball-style'
  * - 菜单数据复用 useOsNavGroups(侧栏同源,权限/i18n/分组小标题继承)
  * - 点击磁贴=开窗(已开则置顶);设置页例外(走主层完整布局,不进窗口)
  * - z-[90] 全场最高:开始面板必须盖住一切窗口(≤45)与 Radix 弹卡(80),
- *   否则被窗口挡住就失去存在意义(maintainer拍板)
+ *   否则被窗口挡住就失去存在意义(已定)
  * - 面板锚 Dock 上方居中:bottom-4.5rem + motion x:'-50%'(tailwind translate
  *   会被 motion 的 transform 覆盖,居中必须交给 motion 自己)
  * - 卡与遮罩 portal 到 body:**Dock 胶囊自带 backdrop-blur(8px)**,

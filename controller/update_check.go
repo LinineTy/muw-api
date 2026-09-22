@@ -33,13 +33,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// 更新检测的源 = **公网 Gitea 的 releases API**（2026-09-22 maintainer定，取代此前的静态发布清单 update.md）：
+// 更新检测的源 = **公网 Gitea 的 releases API**（2026-09-22定，取代此前的静态发布清单 update.md）：
 //
 //	GET https://git.example.com/api/v1/repos/owner/muw-api/releases
 //
 // 上游 new-api 也只有一份 GitHub release，我们跟着走同一套，不再自造清单 + notes 静态文件。
 //
-// 两个通道（2026-09-13 maintainer定）：
+// 两个通道（2026-09-13定）：
 //   - stable：最新的**非 prerelease** release —— 对外公告的稳定版。没打开「检测开发版更新」的部署都按它判断。
 //   - dev：最新 release（含 prerelease）—— 最新构建。只有打开开关的实例才按它判断
 //     （operation_setting.UpdateCheckDevChannelEnabled）。

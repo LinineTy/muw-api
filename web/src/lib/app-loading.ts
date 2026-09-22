@@ -18,7 +18,7 @@ export const APP_LOADING_TIMING = {
   fadeMs: 240,
   /**
    * 系统要求「减少动效」时没有逐字上浮可等，但站点名也不能一闪而过 ——
-   * 至少留这么久再撤(否则就是maintainer看到的「闪进」)。
+   * 至少留这么久再撤(否则就是维护者看到的「闪进」)。
    */
   reducedMotionHoldMs: 900,
 } as const

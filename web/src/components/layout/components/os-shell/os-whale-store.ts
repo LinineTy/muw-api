@@ -8,7 +8,7 @@ import { persist } from 'zustand/middleware'
  * 存**浏览器本地**（zustand persist → localStorage），与桌面小组件的显隐偏好同一套思路：
  * 挂件是"个人桌面装饰"，换浏览器回到默认即可，不值得为它加后端字段。
  *
- * 大小范围是原版 0.6–2.5 收紧后的口径（2026-09-14 maintainer「压小吧，然后默认大小也缩小」）：
+ * 大小范围是原版 0.6–2.5 收紧后的口径（2026-09-14「压小吧，然后默认大小也缩小」）：
  * 上限 2.5 → 2.0、默认 1.5 → 1.2（1440×900 下鲸鱼本体 223px → 178px）；
  * 原版那套后端 size.json 落盘机制不要 ——
  * 这里没有宿主进程，偏好放浏览器就够。
@@ -22,7 +22,7 @@ export const WHALE_DEFAULT_SCALE = 1.2
  * （上游走 `/dsh-whale/sound/press.mp3?set=duck|fx1`，这里直接落成两个素材路径）：
  * - `duck`：小黄鸭 Ya1/Ya2（原版默认，就是那声"嘎"）
  * - `fx1`：音效 1 → D1/D2（更闷的一声"咚"）
- * maintainer 2026-09-14「要的」= 两套都要，所以做成可选而不是替换。
+ * 2026-09-14「要的」= 两套都要，所以做成可选而不是替换。
  */
 export const WHALE_SOUND_SETS = ['duck', 'fx1'] as const
 export type WhaleSoundSet = (typeof WHALE_SOUND_SETS)[number]
@@ -66,7 +66,7 @@ function clampVolume(value: number): number {
 
 type OsWhaleStore = {
   /**
-   * 整个挂件的显隐（maintainer 2026-09-14：「万一不想看了还能关掉」）。
+   * 整个挂件的显隐（2026-09-14：「万一不想看了还能关掉」）。
    * 关掉 = `OsWhale` 直接不渲染：盒子/像素命中/气泡/音效一起消失，右下角点击照常穿透。
    * 入口在侧栏「鲸鱼」球 —— 球属于竖条、不受这里影响，所以关了还能再打开。
    */

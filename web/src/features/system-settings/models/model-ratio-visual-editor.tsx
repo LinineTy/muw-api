@@ -119,7 +119,7 @@ const STORAGE_KEY = 'model-ratio-column-visibility'
 /**
  * 表格列宽按**列 id** 取，而不是按位置写死五条 <col>。
  * 按位置写死时，「查看」里取消勾选「模式」会让后面所有列宽错位
- * （价格摘要被压到 120px、操作列拿到 w-auto 失去定宽）——2026-09-12 maintainer反馈。
+ * （价格摘要被压到 120px、操作列拿到 w-auto 失去定宽）——2026-09-12反馈。
  */
 const MODEL_RATIO_COL_WIDTHS: Record<string, string> = {
   select: 'w-9',

@@ -6,7 +6,7 @@ import { matchOsNavItem, type OsNavItem } from '../use-os-nav'
 /**
  * 桌面壳导航匹配 · 窗口标题/图标全靠它
  *
- * maintainer 2026-09-13 截图：点 CPU/内存、请求数小组件开出的窗口标题是原始路径 `/dashboard`、
+ * 2026-09-13 截图：点 CPU/内存、请求数小组件开出的窗口标题是原始路径 `/dashboard`、
  * Dock 没图标 —— 小组件当时传的是分段页的 index stub（`/dashboard`、`/usage-logs`），
  * 匹配不到导航项就被兜成"标题 = url"。除小组件改指规范 URL 外，这里再加一层父路径兜底，
  * 让任何父路径入口都能落到该分区的默认页（标题/图标正常）。

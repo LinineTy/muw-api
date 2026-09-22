@@ -303,7 +303,7 @@ export function useModelsColumns(
       cell: ({ row }) => {
         // fork 老口径：官方同步按语义着色（官方同步=success、不同步=warning），
         // 文案也用老的（上游 rework 换成了 Sync policy / Allow updates / Keep local 的灰文本）；
-        // 2026-09-13 maintainer：「旧版如此花哨，新版好素」「文案还是老版本的直观」
+        // 2026-09-13：「旧版如此花哨，新版好素」「文案还是老版本的直观」
         if (!row.original.id) {
           return <span className='text-muted-foreground text-sm'>—</span>
         }
@@ -321,7 +321,7 @@ export function useModelsColumns(
       },
     },
     // 状态列：文案与渲染换回 fork 口径（上游 rework 改成了「展示策略 / 允许 / 隐藏」纯文本，
-    // 与工具栏那张「状态（显示/未显示）」筛选对不上，且"允许"说不清允许什么 —— 2026-09-12 maintainer定）
+    // 与工具栏那张「状态（显示/未显示）」筛选对不上，且"允许"说不清允许什么 —— 2026-09-12定）
     {
       accessorKey: 'status',
       header: t('Status'),

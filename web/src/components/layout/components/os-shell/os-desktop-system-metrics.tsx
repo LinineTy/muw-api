@@ -11,10 +11,10 @@ import { OsWidget, WIDGET_CLICKABLE_CLASS } from './os-widget'
 /**
  * OS 桌面 · 系统负载小组件（**两个 1x1**，摆在组件区最上面）
  *
- * maintainer 2026-09-12 定的形态："2 个 1x1，最上面"。1x1 只有 112×100px，
+ * 2026-09-12 定的形态："2 个 1x1，最上面"。1x1 只有 112×100px，
  * 一个格子塞得下一个"百分比 + 标签 + 细进度条"，所以拆成 CPU / 内存两张。
  *
- * 数据源（2026-09-12 maintainer纠正）：**和概览页同源** —— 公开的 `/api/status` → `system_load`，
+ * 数据源（2026-09-12纠正）：**和概览页同源** —— 公开的 `/api/status` → `system_load`，
  * 走现成的 `useSystemLoad()`（30s 轮询、尊重后台 system_load_enabled 开关）。
  * ⚠️ 早先我误用了 `/api/system-info/instances`（那个是 **RootAuth 仅 root**）：
  * 结果普通用户看不到、非 root 的管理员反而看不到 —— 数据是公开的，就该按公开的取，
@@ -38,7 +38,7 @@ function MetricWidget(props: {
 }) {
   const { label, percent, onOpen } = props
   // 数值还没回来（或该指标没上报）就显示 —，**卡片本身不消失** ——
-  // 组件悄悄消失会留下空洞、让人以为坏了（2026-09-12 maintainer抓的就是这个）
+  // 组件悄悄消失会留下空洞、让人以为坏了（2026-09-12抓的就是这个）
   const clamped = percent === undefined ? null : Math.max(0, Math.min(100, percent))
 
   return (
@@ -77,7 +77,7 @@ export function OsDesktopSystemMetrics() {
   // 概览的规范 URL = `/dashboard/<默认分区>`（侧栏 / 磁贴 / Dock 用的都是它）。
   // 早先写 `/dashboard` 只是 index 路由的 redirect stub：页面能打开，但
   // matchOsNavItem 匹配不到 → 窗口标题退化成原始路径、Dock 也没有图标
-  // （2026-09-13 maintainer截图）。开窗一律传能被导航表识别的 URL。
+  // （2026-09-13截图）。开窗一律传能被导航表识别的 URL。
   const open = () => osNavigate(`/dashboard/${DASHBOARD_DEFAULT_SECTION}`)
 
   return (

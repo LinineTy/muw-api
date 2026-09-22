@@ -49,7 +49,7 @@ function RowTrailing({ type, loading }: { type: ChatPreset['type']; loading: boo
  * 管理端配的对话客户端，两类走法：
  *   - http 客户端（`type=web`）→ 进站内 `/chat/<id>`，在窗口里 iframe 打开
  *   - 本地客户端（custom-protocol，如 `cherrystudio://`）→ 带密钥直接拉起
- * 原先是球 + 下拉菜单，2026-09-21 maintainer要"弹窗、好看些"：改成一行一个客户端卡片，
+ * 原先是球 + 下拉菜单，2026-09-21要"弹窗、好看些"：改成一行一个客户端卡片，
  * 拉起期间该行显示转圈并禁用，成功后关弹窗。
  *
  * `fluent` 类型和其它两处入口一样过滤掉（它是上游残留类型，站内不渲染）。

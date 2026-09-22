@@ -311,7 +311,7 @@ test('keeps the condition tree as the default after switching models and applyin
 })
 
 test('keeps time probes out of tier conditions after the fork split', async () => {
-  // fork 口径（2026-09-12 maintainer定）：阶梯条件只给计费/长度变量，时间类变量归乘数区。
+  // fork 口径（2026-09-12定）：阶梯条件只给计费/长度变量，时间类变量归乘数区。
   // 上游 rework 把两套变量合成一套，这里锁住拆分后的行为，防止下次同步再被合回去。
   const onBillingExprChange = vi.fn()
   render(
@@ -945,7 +945,7 @@ test('makes a selected tier the fallback in one click and keeps every price', as
 })
 
 test('new tier branches default to the length probe, not a time probe', async () => {
-  // 2026-09-12 maintainer：新建阶梯分支的默认条件曾经是「小时」（上游合并残留），
+  // 2026-09-12：新建阶梯分支的默认条件曾经是「小时」（上游合并残留），
   // 按 fork 口径应为长度/计费类变量。
   const onBillingExprChange = vi.fn()
   render(

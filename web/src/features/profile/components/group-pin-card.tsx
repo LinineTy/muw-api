@@ -84,7 +84,7 @@ export function GroupPinCard({ profile, loading }: GroupPinCardProps) {
   )
 
   // 无钉无订阅也必须渲染：header 已不含分组展示，本卡是 profile 页分组信息
-  // 的唯一来源，整卡消失 = 用户看不到自己当前分组（2026-09-10 maintainer反馈）。
+  // 的唯一来源，整卡消失 = 用户看不到自己当前分组（2026-09-10反馈）。
   // 空锚点态由 rows 空态说明兜底。
 
   const currentGroup = profile?.group ?? ''

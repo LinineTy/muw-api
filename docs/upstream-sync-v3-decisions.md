@@ -16,7 +16,7 @@
 ## 有意删除的上游文件（新增于 2026-09-22）
 
 - `web/src/components/navigation-progress.tsx`（`react-top-loading-bar`，顶栏 2px 加载条）
-  - 原因：首屏已由加载占位承担，这条进度条在页顶又多一条视觉噪音，maintainer 2026-09-22 要求去掉
+  - 原因：首屏已由加载占位承担，这条进度条在页顶又多一条视觉噪音，2026-09-22 要求去掉
   - 处理：删除文件 + `routes/__root.tsx` 里的引用；`package.json` 的 `react-top-loading-bar`
     依赖暂留（未使用，避免锁文件大改），下次动依赖时一并清
 
@@ -93,8 +93,8 @@
    - 冲突在 `theme-provider.tsx` / `theme-customization-provider.tsx` 的 import 段：保留我方 `syncOsWindowThemes`（OS 壳窗口主题同步），删掉已无引用的 `@/lib/cookies` 导入；`theme-storage` 导入不重复加。
    - 我方预涂脚本（`web/index.html` 内联）改为只读 `localStorage['newapi:theme:v1:mode']`，**不回退旧 cookie**——与上游同口径，否则升级后首帧按旧值涂错、React 再改回来会闪。
    - 上游新测试 `theme-preferences.test.tsx` 假设"默认预设不写 `data-theme-preset`"，与我方设计冲突（默认是琉璃，preset 轴**总是**写属性，见 `theme-customization-provider.tsx` 注释）⇒ 5 处断言改为按 `DEFAULT_THEME_CUSTOMIZATION.preset` 断言，保留"旧 cookie 没串进来"的回归价值。
-   - ✅ **已定（2026-09-22 maintainer）**：**不做迁移**，升级后主题偏好就回到默认（系统 + 琉璃）——「回到默认就默认」。
-2. **locale 冲突**（`e537dc380`、`c0cff23a3`）按老规矩用 `/工具箱/i18n补key.py`：以我方为基础逐行补上游新 key，7 个语言各 +6，共 8220 键。
+   - ✅ **已定（2026-09-22）**：**不做迁移**，升级后主题偏好就回到默认（系统 + 琉璃）——「回到默认就默认」。
+2. **locale 冲突**（`e537dc380`、`c0cff23a3`）按老规矩补：以我方为基础逐行补上游新 key，7 个语言各 +6，共 8220 键。
 
 ### 验证（本批）
 

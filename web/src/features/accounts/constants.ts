@@ -40,7 +40,7 @@ export function writeQuotaAutoRefresh(enabled: boolean): void {
  * 抽屉保存时也会把关闭状态写成 `"none"`。所以**不能用真值判断**：
  * `Boolean('none') === true`，会把关闭的账户误判成开启 —— 卡片照样渲染「编码套餐余量」块，
  * 还会真去发余量查询，后端回 `coding plan monitoring is disabled for this account`，
- * 界面就成了「查询失败」+ 英文报错 toast（2026-09-11 maintainer反馈）。
+ * 界面就成了「查询失败」+ 英文报错 toast（2026-09-11反馈）。
  *
  * 与抽屉表单（account-mutate-drawer.tsx）里的判定保持同一口径：空串与 `"none"` 都算关闭。
  */

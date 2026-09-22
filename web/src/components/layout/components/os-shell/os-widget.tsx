@@ -27,7 +27,7 @@ import { cn } from '@/lib/utils'
  *   单行卡（1x1 / 2x1）→ `rounded-lg`（= --radius）
  *   两行以上（2x2 / 3x2 / 3x3）→ `rounded-xl`（= --radius × 1.4，与全站 Card / Dialog 同档）
  * 单行卡只有 6.25rem(100px) 高，用大卡的档位会让圆角吃掉三四成高度、内容贴到弧线上
- * 像"糊边"（2026-09-12 maintainer点名性能显示那两张 1x1），所以小卡降一档。
+ * 像"糊边"（2026-09-12 实测性能显示那两张 1x1 最明显），所以小卡降一档。
  */
 export type OsWidgetSize = '1x1' | '2x1' | '2x2' | '3x2' | '3x3'
 
@@ -39,7 +39,7 @@ const SIZE_SPAN: Record<
   '2x1': { col: 2, row: 1, radius: 'rounded-lg' },
   // 大卡用 rounded-xl（= --radius × 1.4），与全站 Card / Dialog 同一档；
   // 原来写 rounded-2xl（× 1.8）→ 圆角设置选 1.0 时实际是 1.8rem=28.8px，明显比设置值大一圈
-  //（maintainer 2026-09-12："琉璃的圆角是不是比预设里的 1.0 还大啊"）
+  //（2026-09-12：琉璃的圆角比预设 1.0 还大）
   '2x2': { col: 2, row: 2, radius: 'rounded-xl' },
   '3x2': { col: 3, row: 2, radius: 'rounded-xl' },
   '3x3': { col: 3, row: 3, radius: 'rounded-xl' },
@@ -92,11 +92,11 @@ export function OsWidget({
       }}
       className={cn(
         // 与公告卡同一套琉璃底：卡自身不透明度过低，靠 backdrop-blur 出材质。
-        // ⚠️ 不留阴影（2026-09-12 maintainer："底部阴影很出戏"）：Tailwind 的 shadow-md
+        // ⚠️ 不留阴影（2026-09-12：底部阴影很出戏）：Tailwind 的 shadow-md
         // 是贴边的小硬阴影，在浅色壁纸上会给每张卡糊一条灰边；组件是"贴在桌面上"的元素，
         // 不像 Dock/窗口那样悬浮（那两处用的是 0_12px_40px 这类大范围柔影）。无阴影与磁贴一致。
         // ⚠️ 内边距**不小于圆角半径**（圆角 1rem ⇒ 内边距 1rem/0.75rem）：
-        // 1x1 原来单独收紧成 px-3 py-2，内容贴到圆角上像"糊边"（2026-09-12 maintainer点名性能显示那两张）。
+        // 1x1 原来单独收紧成 px-3 py-2，内容贴到圆角上像"糊边"（2026-09-12 实测性能显示那两张最明显）。
         // 所有尺寸统一 px-4 py-3，也顺便让各卡的标签左缘对齐在同一条竖线上。
         'bg-card/90 border-border/70 flex h-full w-full flex-col overflow-hidden border px-4 py-3 backdrop-blur-md',
         span.radius,

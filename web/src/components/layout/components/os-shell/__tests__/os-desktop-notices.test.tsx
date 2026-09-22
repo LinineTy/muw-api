@@ -7,7 +7,7 @@ import { OsDesktopNotices } from '../os-desktop-notices'
 /**
  * 桌面公告卡 · 「新公告自动展开」回归网
  *
- * maintainer 2026-09-12 改竖条时问过"加个球不影响有新公告自动弹出吧？"——
+ * 2026-09-12 改竖条时确认过：加个球不影响新公告自动弹出——
  * 这条行为靠"未读数变大就 setCollapsed(false)"实现，浏览器里很难端到端造出
  * `/api/status` 的重新拉取（headless 下 focus/visibility 事件不触发 react-query refetch），
  * 所以用组件测试把它钉住：收起 → 未读数增加 → 卡片必须自己回来。

@@ -7,7 +7,7 @@ import { BillingTimeRangeFields } from '../billing-time-fields'
 
 // 星期是枚举：范围两端必须渲染成「星期X」下拉，而不是原始数字（1 至 6）。
 // 回归目标：`BillingConditionValueInput` 原先要求 `!normalizeNumberDrafts` 才走下拉，
-// 于是传了 normalizeNumberDrafts 的乘数区（请求规则）退回数字输入框 —— 2026-09-13 maintainer截图指出。
+// 于是传了 normalizeNumberDrafts 的乘数区（请求规则）退回数字输入框 —— 2026-09-13 截图发现。
 it('renders weekday range bounds as day-name selects even with number drafts enabled', () => {
   render(
     <BillingTimeRangeFields

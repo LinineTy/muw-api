@@ -13,7 +13,7 @@ import { OsWidget, WIDGET_CLICKABLE_CLASS } from './os-widget'
 /**
  * OS 桌面 · 今日请求数小组件（1x1）
  *
- * maintainer 2026-09-12 点名的组件。数据源与概览页的请求趋势**同源**：
+ * 2026-09-12 定的首批桌面组件之一。数据源与概览页的请求趋势**同源**：
  * `getUserQuotaDates`（普通用户走 `/api/data/self`）按小时返回 `count`，这里把今天 0 点起的
  * 求和 —— 与余额卡的"今天 $x"同一时间窗，读起来是一套。
  *
@@ -54,7 +54,7 @@ export function OsDesktopRequests() {
       <button
         type='button'
         // 使用日志的规范 URL = `/usage-logs/<默认分区>`（侧栏用的就是它）。
-        // 传 `/usage-logs` 只是 redirect stub → 窗口标题变原始路径、Dock 没图标（2026-09-13 maintainer截图）
+        // 传 `/usage-logs` 只是 redirect stub → 窗口标题变原始路径、Dock 没图标（2026-09-13截图）
         onClick={() => osNavigate(`/usage-logs/${USAGE_LOGS_DEFAULT_SECTION}`)}
         className={WIDGET_CLICKABLE_CLASS}
       >

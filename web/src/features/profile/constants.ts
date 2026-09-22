@@ -35,6 +35,6 @@ export const NOTIFICATION_METHODS = [
   { value: 'gotify' as const, label: 'Gotify' },
   // 站内消息（自研）：不往外发，落在网页「消息」窗口里。
   // label 用独立 key「In-app」——原先复用「Notifications」(=通知)，既和上面的组标题
-  // 「通知方式」撞词，也看不出是哪个渠道（2026-09-21 maintainer定）
+  // 「通知方式」撞词，也看不出是哪个渠道（2026-09-21定）
   { value: 'web' as const, label: 'In-app' },
 ] as const

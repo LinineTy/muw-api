@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 /**
- * OS 桌面 · 小组件的显隐偏好（maintainer 2026-09-12："不想要了怎么办"）
+ * OS 桌面 · 小组件的显隐偏好（2026-09-12：不想要了要能收起来）
  *
  * 存**浏览器本地**（zustand persist → localStorage）：
  * - 桌面组件是"个人桌面装饰"，跟窗口位置一样属于本机偏好，不值得为它加后端字段；

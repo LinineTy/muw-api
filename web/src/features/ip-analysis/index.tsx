@@ -553,7 +553,7 @@ function UserIpDetailDialog(props: {
         宽度必须用 sm: 变体覆盖：DialogContent 基础样式里带了 `sm:max-w-sm`（384px），
         它是媒体查询规则、在 CSS 顺序上压过裸的 `max-w-xl`——之前写 `max-w-xl`
         实际不生效，弹窗一直只有 384px，长 IPv6 行撑到 452px → 列表出现横向滚动，
-        滚动后每行开头被推出视口（2026-09-20 maintainer截图里"IP 少了前 10 个字符"）。
+        滚动后每行开头被推出视口（2026-09-20截图里"IP 少了前 10 个字符"）。
       */}
       <DialogContent className='sm:max-w-2xl'>
         <DialogHeader>
