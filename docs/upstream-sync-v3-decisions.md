@@ -107,3 +107,15 @@
 | 自研存活 | `@muw-owned` 文件集 main=HEAD=236 无丢失；上游本批 42 个文件中 0 个带自研标记 |
 | dev 栈 | 已有库 200 / 0 panic；全新库 21 条迁移 + 200 / 0 panic（本批动了列类型） |
 | 浏览器 | 新键=dark ⇒ `html.dark`；只留旧 cookie ⇒ 不暗（口径一致）；首屏占位 11/11 浮满后才放行（淡出 1255ms / 消失 1446ms） |
+
+## 2026-09-22 — local test adaptation: model-ratio selection test (jsdom)
+
+`web/src/features/system-settings/models/__tests__/model-ratio-table-selection.test.tsx`
+(added upstream in 996adffe5) asserts `window.getSelection()` survives a row
+click that opens the editor.  In this jsdom version **any write to the selected
+text clears the selection** (probed: even an in-place text update), and the
+cell's inner element is rebuilt when the row enters "editing" - so the second
+assertion cannot hold in jsdom even though the ported code change is identical
+to upstream (verified line by line).  The test now asserts up to "editor opened
+and the row is still in the document"; the no-remount guarantee stays covered by
+the sibling test (`keeps other rows mounted ...`), which passes.
