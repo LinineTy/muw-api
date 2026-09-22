@@ -1061,9 +1061,38 @@ body[data-theme-preset='liquid-glass']::before {
   [data-slot='dropdown-menu-content'],
   [data-slot='dropdown-menu-sub-content']
 ) {
-  backdrop-filter: blur(8px) saturate(150%);
   box-shadow: none;
   background-image: none;
+}
+
+/* 玻璃模糊留给"非容器"层(卡片/浮层自身):它们不会成为弹层的祖先 */
+[data-theme-preset='liquid-glass'] :is(
+  [data-slot='card'],
+  [data-slot='popover-content'],
+  [data-slot='dropdown-menu-content'],
+  [data-slot='dropdown-menu-sub-content']
+) {
+  backdrop-filter: blur(8px) saturate(150%);
+}
+
+/* 弹窗容器(对话框/抽屉/sheet)的模糊改由 ::before 内层承载,容器自身不带 backdrop-filter。
+ * 原因:backdrop-filter 祖先会成为 fixed 后代的 containing block,而 Combobox/Select 的弹层
+ * 会被 Base UI 的嵌套 portal 带进这些面板里 —— 它按视口算好的 left/top 会被面板自身位置
+ * 整体平移(实测 dx=+548 ≈ 面板 x=546),表现为"下拉飞出对话框"。::before 没有后代,无此副作用。
+ * 视觉等价:内层铺满面板、圆角继承,模糊的还是面板背后的内容。 */
+[data-theme-preset='liquid-glass'] :is(
+  [data-slot='dialog-content'],
+  [data-slot='alert-dialog-content'],
+  [data-slot='sheet-content'],
+  [data-slot='drawer-content']
+)::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  backdrop-filter: blur(8px) saturate(150%);
 }
 .dark
   [data-theme-preset='liquid-glass'] :is(
