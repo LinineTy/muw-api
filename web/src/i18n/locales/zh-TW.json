@@ -8211,6 +8211,14 @@
     "Must be greater than or equal to 0": "必須大於或等於 0",
     "Reserve the estimated input cost multiplied by this value, without estimating output tokens. Defaults to 1; positive decimals such as 0.5 and 1.5 are supported. Final charges use actual usage. Per-request and task prices are unaffected.": "按預估輸入費用乘以此倍率預扣，不預估輸出 token。預設為 1，支援 0.5、1.5 等正小數。最終按實際用量結算，按次和任務計費不受影響。",
     "Skip pre-consumption when the wallet balance and limited API key balance both exceed this amount. Set to 0 to always pre-consume. Subscriptions and asynchronous tasks always reserve quota.": "錢包餘額和有限額的 API 權杖餘額都超過此金額時，略過預扣。設為 0 則一律預扣。訂閱和非同步任務一律預留額度。",
-    "Wallet pre-consume bypass threshold (USD)": "錢包免預扣門檻（美元）"
+    "Wallet pre-consume bypass threshold (USD)": "錢包免預扣門檻（美元）",
+    "Activate now": "立即啟用",
+    "Activating...": "啟用中...",
+    "Later": "稍後",
+    "Plugin activation failed": "外掛啟用失敗",
+    "Plugin saved, activation required": "外掛已儲存，待啟用",
+    "This version is saved but not active. Activate it to replace the current version, or activate it later from the Versions tab.": "此版本已儲存但尚未啟用。啟用後將取代目前版本，也可以稍後在外掛詳情的「版本」頁中啟用。",
+    "Plugin source exceeds the 8 MiB limit.": "外掛原始碼超過 8 MiB 上限。",
+    "Single .js file, up to 8 MiB. Its source is shown below before upload.": "單一 .js 檔案，最大 8 MiB。上傳前會在下方顯示其原始碼。"
   }
 }

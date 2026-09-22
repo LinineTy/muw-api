@@ -8211,6 +8211,14 @@
     "Must be greater than or equal to 0": "Doit être supérieur ou égal à 0",
     "Reserve the estimated input cost multiplied by this value, without estimating output tokens. Defaults to 1; positive decimals such as 0.5 and 1.5 are supported. Final charges use actual usage. Per-request and task prices are unaffected.": "Réserve le coût estimé des entrées multiplié par cette valeur, sans estimer les tokens de sortie. Valeur par défaut : 1. Les décimales positives, comme 0,5 et 1,5, sont acceptées. La facturation finale utilise la consommation réelle. Les tarifs par requête et par tâche restent inchangés.",
     "Skip pre-consumption when the wallet balance and limited API key balance both exceed this amount. Set to 0 to always pre-consume. Subscriptions and asynchronous tasks always reserve quota.": "Aucun pré-débit si le solde du portefeuille et celui de la clé API à quota limité dépassent ce montant. La valeur 0 impose le pré-débit. Les abonnements et tâches asynchrones réservent toujours un quota.",
-    "Wallet pre-consume bypass threshold (USD)": "Seuil sans pré-débit du portefeuille (USD)"
+    "Wallet pre-consume bypass threshold (USD)": "Seuil sans pré-débit du portefeuille (USD)",
+    "Activate now": "Activer maintenant",
+    "Activating...": "Activation...",
+    "Later": "Plus tard",
+    "Plugin activation failed": "Échec de l’activation du plugin",
+    "Plugin saved, activation required": "Plugin enregistré, activation requise",
+    "This version is saved but not active. Activate it to replace the current version, or activate it later from the Versions tab.": "Cette version est enregistrée mais inactive. Activez-la pour remplacer la version actuelle, ou activez-la plus tard dans l’onglet Versions.",
+    "Plugin source exceeds the 8 MiB limit.": "Le code du plugin dépasse la limite de 8 Mio.",
+    "Single .js file, up to 8 MiB. Its source is shown below before upload.": "Un seul fichier .js, jusqu’à 8 Mio. Sa source est affichée ci-dessous avant l’envoi."
   }
 }
