@@ -7,7 +7,8 @@ import "github.com/QuantumNous/new-api/relaykit/dto"
 //
 // 免费档上游按「工具名表单」判定请求是否来自 CLI（2026-09-22 逐项实测）：
 //   - 带 tools 的请求：这整套名字必须齐全（schema 与 description 一律不看，空 schema 也放行），
-//     缺任何一个都返回 403 FreeTierError —— 与 system 提示词写什么无关；
+//     缺任何一个都返回 403 FreeTierError；同时**不能**带 CLI 的标题提示词——提示词 + tools
+//     同时出现同样 403（普通短 system 无妨），两套形态互斥；
 //   - 不带 tools 的请求：必须像 CLI 的标题生成调用（见 free_tier_prompt.go 的提示词注入）。
 //
 // 所以调用方自带工具时，我们把缺的名字补上（空参数），让请求满足上游要求的那套形态。

@@ -79,6 +79,13 @@ func injectFreeTierPromptOpenAI(request *dto.GeneralOpenAIRequest) {
 	if request == nil {
 		return
 	}
+	// 带 tools 的请求走的是 CLI 对话形态：上游要求「CLI 那套工具名齐全、且**不含**标题提示词」。
+	// 2026-09-22 用网关真实发出的字节做 A/B 实测：标题提示词与 tools 同时出现会被判成
+	// 非 CLI 请求 ⇒ 403 FreeTierError；去掉提示词保留 tools 即 200（换成普通短 system 也 200）。
+	// 两套形态不能混着塞，所以这类请求只补工具名（padFreeTierTools），不注入标题提示词。
+	if len(request.Tools) > 0 {
+		return
+	}
 	for i := range request.Messages {
 		if request.Messages[i].Role == "system" {
 			if s, ok := request.Messages[i].Content.(string); ok && promptPresent(s) {
