@@ -26,6 +26,7 @@ import { Footer } from '@/components/layout/components/footer'
 import { RichContent } from '@/components/rich-content'
 import { ThemeSrcdocFrame } from '@/components/theme-srcdoc-frame'
 import { useTheme } from '@/context/theme-provider'
+import { useAppLoadingGate } from '@/hooks'
 import { isFullHtmlDocument, isLikelyHtml } from '@/lib/content-format'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -64,8 +65,11 @@ export function Home() {
     }
   }, [isUrl, syncIframePreferences])
 
+  // 首屏占位里那一轮逐字上浮要走完才放行(见 useAppLoadingGate);首页内容就绪但这一轮没完时继续挂着
+  const roundReleased = useAppLoadingGate(!isLoaded)
+
   const renderBody = () => {
-    if (!isLoaded) {
+    if (!isLoaded || !roundReleased) {
       return (
         <PublicLayout showMainContainer={false}>
           <main className='flex min-h-screen items-center justify-center px-6'>

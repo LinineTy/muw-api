@@ -182,12 +182,37 @@
         } catch (e) {}
         var brandName = cachedName || document.title || 'Muw API'
         var brandWrap = splash.querySelector('.brand')
-        Array.from(brandName).forEach(function (char, index) {
+        var letters = Array.from(brandName)
+        letters.forEach(function (char, index) {
           var span = document.createElement('span')
           span.textContent = char === ' ' ? '\u00a0' : char
           span.style.animationDelay = 150 + index * 40 + 'ms'
           brandWrap.appendChild(span)
         })
+
+        // 把这一轮的「真实」起止记下来交给 routes/__root.tsx 撤占位时用：
+        // CSS 动画的时钟从浏览器第一次渲染这一刻起算，而 performance.now() 从导航起算，
+        // 冷加载时能差上百毫秒到一秒多 —— 只按 performance.now() 减一轮时长会把这一轮截断。
+        var reduced = false
+        try {
+          reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        } catch (e) {}
+        var round = {
+          letterCount: letters.length,
+          startedAt: null,
+          endedAt: null,
+          reduced: reduced
+        }
+        window.__muwSplash = round
+        requestAnimationFrame(function () {
+          round.startedAt = performance.now()
+        })
+        var lastLetter = brandWrap.lastElementChild
+        if (lastLetter) {
+          lastLetter.addEventListener('animationend', function () {
+            round.endedAt = performance.now()
+          })
+        }
 
         // 兜底：正常由 routes/__root.tsx 在路由 idle 后撤下；挂载前就卡住
         // （接口/chunk 挂死）时这里无条件淡出，别让它永久糊住页面
