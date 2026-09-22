@@ -82,6 +82,7 @@ function ChangelogHistoryRow({ entry }: { entry: ChangelogHistoryEntry }) {
         render={
           <button
             type='button'
+            data-press-scale='false'
             className='hover:bg-muted/40 flex w-full items-center justify-between gap-x-3 rounded-md px-3 py-2 text-left transition-colors'
             aria-expanded={open}
           />
@@ -287,6 +288,7 @@ export function UpdateCheckerSection({
                   render={
                     <button
                       type='button'
+                      data-press-scale='false'
                       className='flex w-full items-center justify-between gap-x-3 text-left'
                       aria-expanded={historyOpen}
                     />
