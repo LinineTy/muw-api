@@ -44,13 +44,18 @@ function mergeTrend(rows: ModelHealthRow[]): TestTrendPoint[] {
  *
  * 瓷砖永远只占一行：每页张数按卡片实际宽度算（`lib/layout.ts`），本页列数 = 本页
  * 实际张数，所以每页都铺满，不会出现"孤零零一张 + 大片空白"；放不下的翻页看。
+ *
+ * hideChannels 打开时：翻页器与瓷砖那一行**整块不渲染**（不是用 CSS 藏），
+ * 卡片只剩头部与合并条带。
  */
 export function ModelHealthCard({
   modelName,
   rows,
+  hideChannels,
 }: {
   modelName: string
   rows: ModelHealthRow[]
+  hideChannels: boolean
 }) {
   const { t } = useTranslation()
   const userRole = useAuthStore((s) => s.auth.user?.role)
@@ -58,7 +63,8 @@ export function ModelHealthCard({
   const [detailRow, setDetailRow] = useState<ModelHealthRow | null>(null)
   const [page, setPage] = useState(0)
   const gridRef = useRef<HTMLDivElement>(null)
-  const perPage = usePerPage(gridRef)
+  // 网格隐藏时不量宽（重新显示出来的是新节点，观测器要跟着重挂）
+  const perPage = usePerPage(gridRef, !hideChannels)
 
   const pages = pageCount(rows.length, perPage)
   const current = clampPage(page, pages)
@@ -107,7 +113,7 @@ export function ModelHealthCard({
           {modelName}
         </span>
 
-        {pages > 1 ? (
+        {!hideChannels && pages > 1 ? (
           <div className='flex shrink-0 items-center gap-0.5'>
             <Button
               variant='ghost'
@@ -194,20 +200,22 @@ export function ModelHealthCard({
         <HealthBlocks trend={trend} hideLatency={!isAdmin} />
       </div>
 
-      <div
-        ref={gridRef}
-        className='bg-muted/40 grid gap-1.5 border-t p-3'
-        style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
-      >
-        {visible.map((row) => (
-          <ChannelHealthTile
-            key={row.channel_id}
-            row={row}
-            isAdmin={isAdmin}
-            onOpenDetail={setDetailRow}
-          />
-        ))}
-      </div>
+      {!hideChannels && (
+        <div
+          ref={gridRef}
+          className='bg-muted/40 grid gap-1.5 border-t p-3'
+          style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+        >
+          {visible.map((row) => (
+            <ChannelHealthTile
+              key={row.channel_id}
+              row={row}
+              isAdmin={isAdmin}
+              onOpenDetail={setDetailRow}
+            />
+          ))}
+        </div>
+      )}
 
       <ChannelDetailDialog row={detailRow} onClose={() => setDetailRow(null)} />
     </Card>

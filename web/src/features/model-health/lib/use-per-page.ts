@@ -8,11 +8,19 @@ import { perPageForWidth } from './layout'
  *
  * 观测的是瓷砖网格自身（block 级、宽度由卡片决定，跟列数无关），所以不会因为
  * perPage 变化而反复触发 —— 与 `health-blocks.tsx` 的观测套路一致。
+ *
+ * enabled=false 用于"网格这一轮根本没渲染"的场景（隐藏渠道）：不量也不观测。重新渲染
+ * 时必须靠这个依赖重新量一次 —— 隐藏再显示出来的是**新** DOM 节点，旧观测器跟不到它，
+ * 只认 `ref` 的话会一直停在隐藏前的值（甚至被 0 宽度观测带成每页 1 张）。
  */
-export function usePerPage(ref: RefObject<HTMLElement | null>): number {
+export function usePerPage(
+  ref: RefObject<HTMLElement | null>,
+  enabled = true
+): number {
   const [perPage, setPerPage] = useState(1)
 
   useLayoutEffect(() => {
+    if (!enabled) return
     const el = ref.current
     if (!el) return
     const update = () => {
@@ -27,7 +35,7 @@ export function usePerPage(ref: RefObject<HTMLElement | null>): number {
     const observer = new ResizeObserver(update)
     observer.observe(el)
     return () => observer.disconnect()
-  }, [ref])
+  }, [ref, enabled])
 
   return perPage
 }

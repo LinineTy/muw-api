@@ -1,9 +1,17 @@
 // @muw-owned
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  deleteNotifications,
+  deleteNotificationsByScope,
   getUserNotifications,
   markAllNotificationsRead,
   markNotificationsRead,
@@ -15,6 +23,8 @@ import {
 } from '../notifications-dialog'
 
 vi.mock('../../api', () => ({
+  deleteNotifications: vi.fn(),
+  deleteNotificationsByScope: vi.fn(),
   getUserNotifications: vi.fn(),
   markAllNotificationsRead: vi.fn(),
   markNotificationsRead: vi.fn(),
@@ -71,6 +81,8 @@ describe('NotificationsDialog', () => {
     vi.clearAllMocks()
     vi.mocked(markAllNotificationsRead).mockResolvedValue(1)
     vi.mocked(markNotificationsRead).mockResolvedValue(1)
+    vi.mocked(deleteNotifications).mockResolvedValue(1)
+    vi.mocked(deleteNotificationsByScope).mockResolvedValue(1)
   })
 
   it('逐条渲染标题与正文', async () => {
@@ -155,5 +167,95 @@ describe('NotificationsDialog', () => {
     expect(await screen.findByText('No notifications yet')).toBeInTheDocument()
     expect(markAllNotificationsRead).not.toHaveBeenCalled()
     expect(markNotificationsRead).not.toHaveBeenCalled()
+    // 空态没有可删的东西：单条删除与两个清空动作都不渲染
+    expect(screen.queryByTestId('notifications-clear-all')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('notifications-clear-read')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('notification-delete-1')).not.toBeInTheDocument()
+  })
+
+  it('删除按钮常驻（不靠 hover 才出现）：已读行也有', async () => {
+    vi.mocked(getUserNotifications).mockResolvedValue(page)
+
+    renderDialog()
+
+    // id=2 是未读行、id=1 是已读行 —— 两行都能直接点到删除
+    expect(await screen.findByTestId('notification-delete-2')).toBeEnabled()
+    expect(screen.getByTestId('notification-delete-1')).toBeEnabled()
+  })
+
+  it('点单条删除：直接删（不弹确认），删完重拉列表', async () => {
+    vi.mocked(getUserNotifications).mockResolvedValue(page)
+
+    renderDialog()
+
+    fireEvent.click(await screen.findByTestId('notification-delete-2'))
+
+    await waitFor(() => expect(deleteNotifications).toHaveBeenCalledWith([2]))
+    // 不弹确认弹窗；删完 invalidate 列表，列表与角标一起刷新
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    await waitFor(() => expect(getUserNotifications).toHaveBeenCalledTimes(2))
+  })
+
+  it('点「清空已读」：调 only_read=true，不弹确认', async () => {
+    vi.mocked(getUserNotifications).mockResolvedValue(page)
+
+    renderDialog()
+
+    fireEvent.click(await screen.findByTestId('notifications-clear-read'))
+
+    await waitFor(() =>
+      expect(deleteNotificationsByScope).toHaveBeenCalledWith(true)
+    )
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    await waitFor(() => expect(getUserNotifications).toHaveBeenCalledTimes(2))
+  })
+
+  it('点「清空全部」：先弹确认，确认后调 only_read=false 并重拉列表', async () => {
+    vi.mocked(getUserNotifications).mockResolvedValue(page)
+
+    renderDialog()
+
+    fireEvent.click(await screen.findByTestId('notifications-clear-all'))
+
+    const confirm = await screen.findByRole('alertdialog', {
+      name: 'Clear all notifications?',
+    })
+    expect(deleteNotificationsByScope).not.toHaveBeenCalled()
+
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Clear all' }))
+
+    await waitFor(() =>
+      expect(deleteNotificationsByScope).toHaveBeenCalledWith(false)
+    )
+    await waitFor(() => expect(getUserNotifications).toHaveBeenCalledTimes(2))
+  })
+
+  it('「清空全部」在确认弹窗里取消：不删任何东西', async () => {
+    vi.mocked(getUserNotifications).mockResolvedValue(page)
+
+    renderDialog()
+
+    fireEvent.click(await screen.findByTestId('notifications-clear-all'))
+    const confirm = await screen.findByRole('alertdialog', {
+      name: 'Clear all notifications?',
+    })
+
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Cancel' }))
+
+    expect(deleteNotificationsByScope).not.toHaveBeenCalled()
+    await waitFor(() =>
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    )
+  })
+
+  it('删除失败：把缓存拉回服务端真实状态（重拉列表）', async () => {
+    vi.mocked(getUserNotifications).mockResolvedValue(page)
+    vi.mocked(deleteNotifications).mockRejectedValue(new Error('boom'))
+
+    renderDialog()
+
+    fireEvent.click(await screen.findByTestId('notification-delete-2'))
+
+    await waitFor(() => expect(getUserNotifications).toHaveBeenCalledTimes(2))
   })
 })

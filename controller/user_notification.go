@@ -59,3 +59,42 @@ func MarkAllUserNotificationsRead(c *gin.Context) {
 	}
 	common.ApiSuccess(c, gin.H{"updated": affected})
 }
+
+type deleteNotificationsRequest struct {
+	Ids []int `json:"ids"`
+}
+
+// DeleteUserNotifications 删除若干条（消息窗口单条删除按钮）。
+func DeleteUserNotifications(c *gin.Context) {
+	var req deleteNotificationsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	deleted, err := model.DeleteUserNotifications(c.GetInt("id"), req.Ids)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"deleted": deleted})
+}
+
+type deleteNotificationsByScopeRequest struct {
+	OnlyRead bool `json:"only_read"`
+}
+
+// DeleteUserNotificationsByScope 按范围清空：「清空已读」only_read=true，
+// 「清空全部」only_read=false。
+func DeleteUserNotificationsByScope(c *gin.Context) {
+	var req deleteNotificationsByScopeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	deleted, err := model.DeleteUserNotificationsByScope(c.GetInt("id"), req.OnlyRead)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"deleted": deleted})
+}

@@ -1,8 +1,10 @@
 // @muw-owned
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, CheckCheck, Inbox } from 'lucide-react'
+import { Check, CheckCheck, Inbox, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 import {
@@ -15,6 +17,8 @@ import { formatTimestampToDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 import {
+  deleteNotifications,
+  deleteNotificationsByScope,
   getUserNotifications,
   markAllNotificationsRead,
   markNotificationsRead,
@@ -67,11 +71,15 @@ function applyMarkedRead(
 function NotificationRow({
   item,
   marking,
+  deleting,
   onMarkRead,
+  onDelete,
 }: {
   item: UserNotificationItem
   marking: boolean
+  deleting: boolean
   onMarkRead: (id: number) => void
+  onDelete: (id: number) => void
 }) {
   const { t } = useTranslation()
   const unread = item.read_at === 0
@@ -117,6 +125,26 @@ function NotificationRow({
             <TooltipContent>{t('Mark as read')}</TooltipContent>
           </Tooltip>
         )}
+        {/* 删除按钮常驻显示（不做 hover 才出现）：触屏上没有 hover，藏起来就点不到 */}
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                type='button'
+                variant='ghost'
+                size='icon-sm'
+                className='text-muted-foreground hover:text-destructive shrink-0'
+                disabled={deleting}
+                onClick={() => onDelete(item.id)}
+                aria-label={t('Delete notification')}
+                data-testid={`notification-delete-${item.id}`}
+              />
+            }
+          >
+            <Trash2 className='size-3.5' />
+          </TooltipTrigger>
+          <TooltipContent>{t('Delete notification')}</TooltipContent>
+        </Tooltip>
       </div>
       {/* 后端正文是纯文本台账（带换行），按 pre-wrap 原样展示，不解析 HTML */}
       <p className='text-muted-foreground text-xs whitespace-pre-wrap'>
@@ -134,6 +162,9 @@ function NotificationRow({
  * 分不清新到的是哪条、也看不到"读一条少一条"。现在每条未读行右侧有「标为已读」，
  * 点一下该条已读、角标 -1；要一次清完用列表上方的「全部已读」。
  * 角标与列表共用同一份缓存，两边永远同步。
+ *
+ * 删除策略：每条右侧常驻一个删除按钮（直接删，不弹窗）；列表上方「清空已读」直接清、
+ * 「清空全部」不可撤销所以弹一次确认。删除成功后重拉列表，列表与角标一起刷新。
  */
 export function NotificationsDialog({
   open,
@@ -145,8 +176,11 @@ export function NotificationsDialog({
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { data, isLoading } = useUserNotifications()
+  const [clearAllOpen, setClearAllOpen] = useState(false)
   const items = data?.items ?? []
   const unread = data?.unread ?? 0
+  // 已读条数走服务端总数（total 是全部消息，unread 是全部未读），不受当前页影响
+  const readCount = Math.max(0, (data?.total ?? 0) - unread)
 
   // 标记失败（网络 / 服务端拒绝）就把缓存拉回服务端真实状态：角标宁可回到未读，
   // 也不能少算了却没人知道
@@ -184,50 +218,111 @@ export function NotificationsDialog({
     onError: resync,
   })
 
+  // 删除（单条 / 按范围清空）：不做乐观更新，等服务端确认后重拉列表 ——
+  // 列表与角标都来自这一份缓存，重拉后删掉的条目自然消失，不留幽灵行
+  const removeOne = useMutation({
+    mutationFn: (ids: number[]) => deleteNotifications(ids),
+    onSuccess: resync,
+    onError: resync,
+  })
+
+  const clearByScope = useMutation({
+    mutationFn: (onlyRead: boolean) => deleteNotificationsByScope(onlyRead),
+    onSuccess: (_deleted, onlyRead) => {
+      // 「清空全部」确认弹窗成功后自己关上；失败则留着让用户重试或取消
+      if (!onlyRead) setClearAllOpen(false)
+      void resync()
+    },
+    onError: resync,
+  })
+
   return (
-    <Dialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title={t('Notifications')}
-      contentClassName='sm:max-w-xl'
-      contentHeight='min(60vh, 32rem)'
-    >
-      {isLoading && items.length === 0 ? (
-        <p className='text-muted-foreground p-3 text-sm'>{t('Loading...')}</p>
-      ) : items.length === 0 ? (
-        <div className='text-muted-foreground flex flex-col items-center gap-2 py-10 text-sm'>
-          <Inbox className='size-6' aria-hidden='true' />
-          {t('No notifications yet')}
-        </div>
-      ) : (
-        <div className='flex flex-col gap-2' data-testid='notifications-list'>
-          {unread > 0 && (
-            <div className='flex justify-end'>
+    <>
+      <Dialog
+        open={open}
+        onOpenChange={onOpenChange}
+        title={t('Notifications')}
+        contentClassName='sm:max-w-xl'
+        contentHeight='min(60vh, 32rem)'
+      >
+        {isLoading && items.length === 0 ? (
+          <p className='text-muted-foreground p-3 text-sm'>{t('Loading...')}</p>
+        ) : items.length === 0 ? (
+          <div className='text-muted-foreground flex flex-col items-center gap-2 py-10 text-sm'>
+            <Inbox className='size-6' aria-hidden='true' />
+            {t('No notifications yet')}
+          </div>
+        ) : (
+          <div className='flex flex-col gap-2' data-testid='notifications-list'>
+            <div className='flex flex-wrap items-center justify-end gap-1'>
+              {unread > 0 && (
+                <Button
+                  type='button'
+                  variant='ghost'
+                  size='sm'
+                  className='text-muted-foreground hover:text-foreground'
+                  disabled={markAll.isPending}
+                  onClick={() => markAll.mutate()}
+                  aria-label={t('Mark all as read')}
+                  data-testid='notifications-mark-all'
+                >
+                  <CheckCheck className='size-3.5' />
+                  {t('Mark all as read')}
+                </Button>
+              )}
+              {readCount > 0 && (
+                <Button
+                  type='button'
+                  variant='ghost'
+                  size='sm'
+                  className='text-muted-foreground hover:text-foreground'
+                  disabled={clearByScope.isPending}
+                  onClick={() => clearByScope.mutate(true)}
+                  aria-label={t('Clear read')}
+                  data-testid='notifications-clear-read'
+                >
+                  <Trash2 className='size-3.5' />
+                  {t('Clear read')}
+                </Button>
+              )}
               <Button
                 type='button'
                 variant='ghost'
                 size='sm'
-                className='text-muted-foreground hover:text-foreground'
-                disabled={markAll.isPending}
-                onClick={() => markAll.mutate()}
-                aria-label={t('Mark all as read')}
-                data-testid='notifications-mark-all'
+                className='text-muted-foreground hover:text-destructive'
+                disabled={clearByScope.isPending}
+                onClick={() => setClearAllOpen(true)}
+                aria-label={t('Clear all')}
+                data-testid='notifications-clear-all'
               >
-                <CheckCheck className='size-3.5' />
-                {t('Mark all as read')}
+                <Trash2 className='size-3.5' />
+                {t('Clear all')}
               </Button>
             </div>
-          )}
-          {items.map((item) => (
-            <NotificationRow
-              key={item.id}
-              item={item}
-              marking={markRead.isPending}
-              onMarkRead={(id) => markRead.mutate([id])}
-            />
-          ))}
-        </div>
-      )}
-    </Dialog>
+            {items.map((item) => (
+              <NotificationRow
+                key={item.id}
+                item={item}
+                marking={markRead.isPending}
+                deleting={removeOne.isPending}
+                onMarkRead={(id) => markRead.mutate([id])}
+                onDelete={(id) => removeOne.mutate([id])}
+              />
+            ))}
+          </div>
+        )}
+      </Dialog>
+      {/* 清空全部不可撤销，弹一次确认；清空已读与单条删除不弹 */}
+      <ConfirmDialog
+        open={clearAllOpen}
+        onOpenChange={setClearAllOpen}
+        title={t('Clear all notifications?')}
+        desc={t('This action cannot be undone.')}
+        confirmText={t('Clear all')}
+        destructive
+        isLoading={clearByScope.isPending}
+        handleConfirm={() => clearByScope.mutate(false)}
+      />
+    </>
   )
 }

@@ -119,3 +119,27 @@ func MarkAllUserNotificationsRead(userId int) (int64, error) {
 		Update("read_at", common.GetTimestamp())
 	return result.RowsAffected, result.Error
 }
+
+// DeleteUserNotifications 删除指定消息（单条/多条共用）。userId 进 WHERE：
+// 别人的消息 id 传进来也删不到（与 MarkUserNotificationsRead 同一模式）。
+func DeleteUserNotifications(userId int, ids []int) (int64, error) {
+	if userId <= 0 || len(ids) == 0 {
+		return 0, nil
+	}
+	result := DB.Where("user_id = ? AND id IN ?", userId, ids).Delete(&UserNotification{})
+	return result.RowsAffected, result.Error
+}
+
+// DeleteUserNotificationsByScope 按范围清空自己的消息：onlyRead=true 清空已读，
+// false 清空全部。同样只作用于 user_id 匹配的行。
+func DeleteUserNotificationsByScope(userId int, onlyRead bool) (int64, error) {
+	if userId <= 0 {
+		return 0, nil
+	}
+	query := DB.Where("user_id = ?", userId)
+	if onlyRead {
+		query = query.Where("read_at > 0")
+	}
+	result := query.Delete(&UserNotification{})
+	return result.RowsAffected, result.Error
+}

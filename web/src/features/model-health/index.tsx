@@ -1,6 +1,6 @@
 // @muw-owned
 import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, RefreshCw } from 'lucide-react'
+import { AlertTriangle, EyeOff, RefreshCw } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -42,6 +42,8 @@ export function ModelHealth() {
   ]
   const [days, setDays] = useState(1)
   const [unhealthyOnly, setUnhealthyOnly] = useState(false)
+  // 隐藏渠道瓷砖那一行（含翻页器），只留模型卡头部；不持久化，每次进来默认显示
+  const [hideChannels, setHideChannels] = useState(false)
   const userRole = useAuthStore((s) => s.auth.user?.role)
   const isAdmin = Boolean(userRole && userRole >= ROLE.ADMIN)
 
@@ -121,6 +123,7 @@ export function ModelHealth() {
               key={name}
               modelName={name}
               rows={groups.get(name) ?? []}
+              hideChannels={hideChannels}
             />
           ))}
         </div>
@@ -171,12 +174,25 @@ export function ModelHealth() {
             checked={unhealthyOnly}
             onCheckedChange={setUnhealthyOnly}
           />
+          <TogglePill
+            id='model-health-hide-channels'
+            label={t('Hide channels')}
+            icon={<EyeOff className='text-muted-foreground size-4' />}
+            checked={hideChannels}
+            onCheckedChange={setHideChannels}
+          />
           <MobileToggleMenu>
             <ToggleMenuItem
               label={t('Only unhealthy')}
               icon={<AlertTriangle className='size-4' />}
               checked={unhealthyOnly}
               onCheckedChange={setUnhealthyOnly}
+            />
+            <ToggleMenuItem
+              label={t('Hide channels')}
+              icon={<EyeOff className='size-4' />}
+              checked={hideChannels}
+              onCheckedChange={setHideChannels}
             />
           </MobileToggleMenu>
         </div>

@@ -125,6 +125,8 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.GET("/notifications", controller.GetUserNotifications)
 				selfRoute.POST("/notifications/read", controller.MarkUserNotificationsRead)
 				selfRoute.POST("/notifications/read_all", controller.MarkAllUserNotificationsRead)
+				selfRoute.POST("/notifications/delete", controller.DeleteUserNotifications)
+				selfRoute.POST("/notifications/delete_all", controller.DeleteUserNotificationsByScope)
 
 				// 2FA routes
 				selfRoute.GET("/2fa/status", controller.Get2FAStatus)
