@@ -147,13 +147,29 @@
         }
 
         // ── 顶级文档：先把明暗落到 <html> 上（首屏不能等 React，与
-        //    ThemeProvider 的 cookie 名/规则保持一致，避免深色用户闪白底）──
+        //    ThemeProvider 的存储键/规则保持一致，避免深色用户闪白底）──
+        //    主题偏好自 54eee488b 起从 cookie 搬进 localStorage（cookie 跨端口会串偏好），
+        //    这里读新键；新键没有（老浏览器存的历史值）再退旧 cookie。
         if (!splash) return
         try {
-          var themeMatch = document.cookie.match(
-            /(?:^|;\s*)vite-ui-theme=(dark|light|system)/
-          )
-          var themePref = themeMatch ? themeMatch[1] : 'system'
+          var storedMode = null
+          try {
+            storedMode = localStorage.getItem('newapi:theme:v1:mode')
+          } catch (e) {}
+          var themePref
+          if (
+            storedMode === 'dark' ||
+            storedMode === 'light' ||
+            storedMode === 'system'
+          ) {
+            themePref = storedMode
+          } else {
+            // 新键没有（或 storage 被禁）才退旧 cookie 里的历史值
+            var themeMatch = document.cookie.match(
+              /(?:^|;\s*)vite-ui-theme=(dark|light|system)/
+            )
+            themePref = themeMatch ? themeMatch[1] : 'system'
+          }
           if (
             themePref === 'dark' ||
             (themePref === 'system' &&
