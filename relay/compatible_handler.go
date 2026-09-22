@@ -2,6 +2,7 @@ package relay
 
 import (
 	"fmt"
+	"github.com/QuantumNous/new-api/relay/channel/opencodezen"
 	"io"
 	"net/http"
 	"strings"
@@ -79,6 +80,11 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 		!info.ChannelSetting.PassThroughBodyEnabled &&
 		service.ShouldChatCompletionsUseResponsesGlobal(info.ChannelId, info.ChannelType, info.OriginModelName) {
 		applySystemPromptIfNeeded(c, info, request)
+		// chat/completions 被改道走 Responses 时不会执行 adaptor 的 ConvertOpenAIRequest，
+		// 这里补一次 OpenCode Zen 免费套餐的 system 指纹注入（否则上游会以 403 拒绝）。
+		if info.ChannelType == constant.ChannelTypeOpenCodeZen {
+			opencodezen.InjectFreeTierPromptForInfo(info, request)
+		}
 		usage, newApiErr := textRequestViaResponses(c, info, adaptor, request)
 		if newApiErr != nil {
 			return newApiErr
