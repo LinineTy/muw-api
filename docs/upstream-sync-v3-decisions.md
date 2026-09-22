@@ -72,3 +72,31 @@
 功能清单与说明见 [`README.muw.md`](../README.muw.md) 的「主要增强」「精简项」两节；
 自研文件在首行带 `// @muw-owned` 标记（版权检查脚本据此豁免）。
 同步时的原则：**上游新功能一律采纳，本 fork 自研功能一处不丢**，冲突逐处人工判读。
+
+
+## 2026-09-22 增量批（`9c293e8c0` → `9310231b3`，12 条中 1 条空跳过）
+
+**分支**：`merge/upstream-20260922`（基于 `origin/main` = fa64b735a）
+
+**跳过**：`0aec08fee`（chore: credit 作者）——补丁为空（credit 行随 #7512 一起来）
+
+### fork 适配（自研必须保留 / 移植）
+
+1. **`54eee488b fix(web): isolate theme preferences in local storage`** —— 上游把主题偏好从 cookie（`theme_preset`/`theme_font`/`vite-ui-theme`…）搬进 `localStorage`（键 `newapi:theme:v1:*`），且**明确不迁移旧值**。
+   - 冲突在 `theme-provider.tsx` / `theme-customization-provider.tsx` 的 import 段：保留我方 `syncOsWindowThemes`（OS 壳窗口主题同步），删掉已无引用的 `@/lib/cookies` 导入；`theme-storage` 导入不重复加。
+   - 我方预涂脚本（`web/index.html` 内联）改为只读 `localStorage['newapi:theme:v1:mode']`，**不回退旧 cookie**——与上游同口径，否则升级后首帧按旧值涂错、React 再改回来会闪。
+   - 上游新测试 `theme-preferences.test.tsx` 假设"默认预设不写 `data-theme-preset`"，与我方设计冲突（默认是琉璃，preset 轴**总是**写属性，见 `theme-customization-provider.tsx` 注释）⇒ 5 处断言改为按 `DEFAULT_THEME_CUSTOMIZATION.preset` 断言，保留"旧 cookie 没串进来"的回归价值。
+   - ✅ **已定（2026-09-22 maintainer）**：**不做迁移**，升级后主题偏好就回到默认（系统 + 琉璃）——「回到默认就默认」。
+2. **locale 冲突**（`e537dc380`、`c0cff23a3`）按老规矩用 `/工具箱/i18n补key.py`：以我方为基础逐行补上游新 key，7 个语言各 +6，共 8220 键。
+
+### 验证（本批）
+
+| 项 | 结果 |
+|---|---|
+| 内容核对 | 除 locale / 我方改过的主题与插件文件外，与上游逐提交逐字节一致 |
+| 后端 | `go build ./...` 通过；`go test ./... -count=1` 46 包 ok，仅 `pkg/ipgeo` 既有失败（本批未动该包，与 main 同树） |
+| 前端 | `tsgo` 干净、`oxlint`（改动文件）0 报、`oxfmt` 通过 |
+| vitest | **187 文件 / 2158 用例全过**——含上游新测试；顺带修好 main 上原本就红的 `lobe-icon`（5/7）与 `model-badge`（155/183），上游本批正是修这两处 |
+| 自研存活 | `@muw-owned` 文件集 main=HEAD=236 无丢失；上游本批 42 个文件中 0 个带自研标记 |
+| dev 栈 | 已有库 200 / 0 panic；全新库 21 条迁移 + 200 / 0 panic（本批动了列类型） |
+| 浏览器 | 新键=dark ⇒ `html.dark`；只留旧 cookie ⇒ 不暗（口径一致）；首屏占位 11/11 浮满后才放行（淡出 1255ms / 消失 1446ms） |

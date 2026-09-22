@@ -147,13 +147,24 @@
         }
 
         // ── 顶级文档：先把明暗落到 <html> 上（首屏不能等 React，与
-        //    ThemeProvider 的 cookie 名/规则保持一致，避免深色用户闪白底）──
+        //    ThemeProvider 的存储键/规则保持一致，避免深色用户闪白底）──
+        //    主题偏好自 54eee488b 起从 cookie 搬进 localStorage（cookie 跨端口会串偏好），
+        //    且**不再读旧 cookie**（上游口径：旧值一律不迁移），这里必须同口径，
+        //    否则升级后首帧会按旧 cookie 涂错、React 再改回来闪一下。
         if (!splash) return
         try {
-          var themeMatch = document.cookie.match(
-            /(?:^|;\s*)vite-ui-theme=(dark|light|system)/
-          )
-          var themePref = themeMatch ? themeMatch[1] : 'system'
+          var themePref = 'system'
+          var storedMode = null
+          try {
+            storedMode = localStorage.getItem('newapi:theme:v1:mode')
+          } catch (e) {}
+          if (
+            storedMode === 'dark' ||
+            storedMode === 'light' ||
+            storedMode === 'system'
+          ) {
+            themePref = storedMode
+          }
           if (
             themePref === 'dark' ||
             (themePref === 'system' &&
