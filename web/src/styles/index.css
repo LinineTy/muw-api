@@ -922,18 +922,11 @@ html.os-in-window [data-slot='sidebar-gap'] {
   }
 }
 
-/* 接续首屏那一轮:站点名已在屏上,不重浮;但仍要淡入,别"啪"地一下出现。
-   放在 @media (prefers-reduced-motion) 之后:纯透明度淡入不算位移动效,
-   减少动效时也保留(否则那一档会变成硬切)。 */
+/* 接续首屏那一轮:站点名此刻**已经在屏上**(首屏那份占位正在显它),
+   所以这里必须直接就位——再淡入一次会让名字"淡出又淡入",看着就是闪。 */
 .app-loading-letter-settled {
-  animation: app-loading-fade-in 0.34s ease-out forwards;
-  opacity: 0;
+  animation: none;
+  opacity: 1;
   transform: none;
   filter: none;
-}
-
-@keyframes app-loading-fade-in {
-  to {
-    opacity: 1;
-  }
 }

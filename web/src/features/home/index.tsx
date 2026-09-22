@@ -27,6 +27,7 @@ import { RichContent } from '@/components/rich-content'
 import { ThemeSrcdocFrame } from '@/components/theme-srcdoc-frame'
 import { useTheme } from '@/context/theme-provider'
 import { useAppLoadingGate } from '@/hooks'
+import { splashBootRoundPlayed } from '@/lib/app-loading'
 import { isFullHtmlDocument, isLikelyHtml } from '@/lib/content-format'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
@@ -68,16 +69,28 @@ export function Home() {
 
   // 首屏占位里那一轮逐字上浮要走完才放行(见 useAppLoadingGate);首页内容就绪但这一轮没完时继续挂着
   const roundReleased = useAppLoadingGate(!isLoaded)
-  const ready = isLoaded && roundReleased
+  // 外链首页是 iframe 加载的:等它 onLoad(真的画出来了)再交接,
+  // 否则占位一撤、iframe 还是白的,看着就是"空一下又刷出来"。8s 兜底防挂死。
+  const [frameLoaded, setFrameLoaded] = useState(false)
+  useEffect(() => {
+    if (!isUrl || frameLoaded) return
+    const timer = window.setTimeout(() => setFrameLoaded(true), 8000)
+    return () => window.clearTimeout(timer)
+  }, [isUrl, frameLoaded])
+  const ready = isLoaded && roundReleased && (!isUrl || frameLoaded)
 
-  // 占位本身也走淡入/淡出:出场上浮完就硬切、或内容就绪瞬间消失,都会显得生硬。
-  // 内容就绪后再让占位淡出 320ms 才卸载,交接就成了交叉淡化。
-  const [entered, setEntered] = useState(false)
+  // 占位的进出场:
+  // - 接续首屏那一轮时,名字**此刻已经在屏上**,浮层直接以不透明就位,绝不能淡入
+  //   (淡入 = 名字先淡出再淡入,快网下就是肉眼可见的一闪)
+  // - 内容就绪后再让占位淡出 320ms 才卸载,交接做成交叉淡化
+  const bootPlayed = splashBootRoundPlayed()
+  const [entered, setEntered] = useState(bootPlayed)
   const [splashGone, setSplashGone] = useState(false)
   useEffect(() => {
+    if (bootPlayed) return
     const raf = window.requestAnimationFrame(() => setEntered(true))
     return () => window.cancelAnimationFrame(raf)
-  }, [])
+  }, [bootPlayed])
   useEffect(() => {
     if (!ready) {
       setSplashGone(false)
@@ -117,7 +130,10 @@ export function Home() {
               className='h-screen w-full border-none'
               title={t('Custom Home Page')}
               sandbox='allow-forms allow-popups allow-popups-to-escape-sandbox allow-scripts allow-top-navigation-by-user-activation'
-              onLoad={syncIframePreferences}
+              onLoad={() => {
+                syncIframePreferences()
+                setFrameLoaded(true)
+              }}
             />
           </PublicLayout>
         )
