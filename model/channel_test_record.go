@@ -320,55 +320,36 @@ func AggregateChannelTestRecords(records []ChannelTestRecord) []ModelHealthRow {
 	return rows
 }
 
-// CollapseToModelLevel folds per-(channel, model) ModelHealthRow aggregation
-// into one model-level row per model, dropping channel-scoped details. It backs
-// the model health page for non-admin users, who must not learn channel
-// identity, per-channel latency or error reasons. ChannelId, ChannelName and
-// LastError are therefore always zeroed. Counts sum across channels, average
-// response time is test-count weighted, and trends are merged and re-sorted
-// chronologically. The result order is first-seen by model name.
-func CollapseToModelLevel(rows []ModelHealthRow) []ModelHealthRow {
-	type acc struct {
-		row        ModelHealthRow
-		latencySum int64
-	}
-	groups := make(map[string]*acc)
-	var order []string
+// MaskChannelIdentityForViewer strips channel-identifying fields and
+// per-channel latency/error details from per-(channel, model) rows for
+// non-admin viewers.
+//
+// Non-admins DO see one row per (channel, model) — the model health page
+// renders one card per channel carrying that channel's success rate — but the
+// channel name, latency, last error and per-probe latency must not leave the
+// server: ChannelId is the only channel identifier a normal user gets
+// (the frontend labels it "Channel #<id>").
+//
+// Counts, rates and per-probe outcomes stay, so the model-level aggregates the
+// page derives in the browser (test/real-traffic totals, merged heartbeat
+// strip) are unchanged. Order is preserved; the input slice is not mutated.
+func MaskChannelIdentityForViewer(rows []ModelHealthRow) []ModelHealthRow {
+	masked := make([]ModelHealthRow, 0, len(rows))
 	for _, row := range rows {
-		a, ok := groups[row.ModelName]
-		if !ok {
-			a = &acc{row: ModelHealthRow{ModelName: row.ModelName}}
-			groups[row.ModelName] = a
-			order = append(order, row.ModelName)
-		}
-		a.row.TestCount += row.TestCount
-		a.row.SuccessCount += row.SuccessCount
-		a.row.UserTrafficCount += row.UserTrafficCount
-		a.row.ClientErrorCount += row.ClientErrorCount
-		a.row.UpstreamErrorCount += row.UpstreamErrorCount
-		a.row.ModerationCount += row.ModerationCount
-		a.latencySum += int64(row.AvgResponseTime) * int64(row.TestCount)
-		if row.LastTestTime > a.row.LastTestTime {
-			a.row.LastTestTime = row.LastTestTime
-			a.row.LastResponseTime = row.LastResponseTime
-		}
-		a.row.Trend = append(a.row.Trend, row.Trend...)
-	}
-
-	out := make([]ModelHealthRow, 0, len(order))
-	for _, key := range order {
-		a := groups[key]
-		if a.row.TestCount > 0 {
-			a.row.AvgResponseTime = int(math.Round(float64(a.latencySum) / float64(a.row.TestCount)))
-		}
-		a.row.SuccessRate = technicalSuccessRate(a.row.SuccessCount, a.row.ModerationCount, a.row.TestCount, a.row.ClientErrorCount)
-		sort.SliceStable(a.row.Trend, func(i, j int) bool {
-			if a.row.Trend[i].CreatedAt != a.row.Trend[j].CreatedAt {
-				return a.row.Trend[i].CreatedAt < a.row.Trend[j].CreatedAt
+		row.ChannelName = ""
+		row.AvgResponseTime = 0
+		row.LastResponseTime = 0
+		row.LastError = ""
+		row.LastErrorKind = ""
+		if len(row.Trend) > 0 {
+			trend := make([]TestTrendPoint, len(row.Trend))
+			copy(trend, row.Trend)
+			for i := range trend {
+				trend[i].ResponseTime = 0
 			}
-			return a.row.Trend[i].ResponseTime < a.row.Trend[j].ResponseTime
-		})
-		out = append(out, a.row)
+			row.Trend = trend
+		}
+		masked = append(masked, row)
 	}
-	return out
+	return masked
 }

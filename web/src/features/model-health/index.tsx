@@ -108,13 +108,16 @@ export function ModelHealth() {
           trafficModelCount={trafficModelCount}
         />
         <HealthLegend />
-        {modelNames.map((name) => (
-          <ModelHealthCard
-            key={name}
-            modelName={name}
-            rows={groups.get(name) ?? []}
-          />
-        ))}
+        {/* 模型卡两列（≥1120px）：渠道少的模型不再右边空一大片，一行能看两个模型 */}
+        <div className='grid gap-3 min-[1120px]:grid-cols-2'>
+          {modelNames.map((name) => (
+            <ModelHealthCard
+              key={name}
+              modelName={name}
+              rows={groups.get(name) ?? []}
+            />
+          ))}
+        </div>
       </div>
     )
   }

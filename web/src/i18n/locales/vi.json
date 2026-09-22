@@ -7188,7 +7188,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "Các Dự Án Liên Quan",
     "footer.defaultCopyright": "Bản quyền được bảo lưu.",
-    "footer.new\u0061pi.projectAttributionSuffix": "Bản quyền được bảo lưu. Được thiết kế và phát triển bởi các cộng tác viên dự án.",
+    "footer.newapi.projectAttributionSuffix": "Bản quyền được bảo lưu. Được thiết kế và phát triển bởi các cộng tác viên dự án.",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -8219,6 +8219,8 @@
     "Plugin saved, activation required": "Đã lưu plugin, cần kích hoạt",
     "This version is saved but not active. Activate it to replace the current version, or activate it later from the Versions tab.": "Phiên bản này đã được lưu nhưng chưa kích hoạt. Kích hoạt để thay thế phiên bản hiện tại, hoặc kích hoạt sau trong thẻ Phiên bản.",
     "Plugin source exceeds the 8 MiB limit.": "Mã nguồn plugin vượt giới hạn 8 MiB.",
-    "Single .js file, up to 8 MiB. Its source is shown below before upload.": "Một tệp .js duy nhất, tối đa 8 MiB. Mã nguồn được hiển thị bên dưới trước khi tải lên."
+    "Single .js file, up to 8 MiB. Its source is shown below before upload.": "Một tệp .js duy nhất, tối đa 8 MiB. Mã nguồn được hiển thị bên dưới trước khi tải lên.",
+    "Channel #{{id}}": "Kênh #{{id}}",
+    "{{count}} tests": "{{count}} lượt"
   }
 }

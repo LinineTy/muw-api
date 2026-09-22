@@ -58,9 +58,11 @@ func GetModelHealth(c *gin.Context) {
 
 	rows := model.AggregateChannelTestRecords(records)
 	if c.GetInt("role") < common.RoleAdminUser {
-		// Non-admin viewers get model-level aggregation only: channel identity,
-		// per-channel latency and error reasons must not leak.
-		rows = model.CollapseToModelLevel(rows)
+		// Non-admin viewers get the same per-channel rows (the page renders one
+		// card per channel with that channel's success rate), but channel
+		// identity, per-channel latency and error reasons must not leak — the
+		// channel id is the only identifier they receive.
+		rows = model.MaskChannelIdentityForViewer(rows)
 	}
 	if unhealthyOnly {
 		filtered := rows[:0]

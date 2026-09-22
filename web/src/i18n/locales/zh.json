@@ -7188,7 +7188,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "相关项目",
     "footer.defaultCopyright": "版权所有。",
-    "footer.new\u0061pi.projectAttributionSuffix": "版权所有，由项目贡献者设计与开发。",
+    "footer.newapi.projectAttributionSuffix": "版权所有，由项目贡献者设计与开发。",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -8219,6 +8219,8 @@
     "Plugin saved, activation required": "插件已保存，待激活",
     "This version is saved but not active. Activate it to replace the current version, or activate it later from the Versions tab.": "此版本已保存但尚未激活。激活后将替换当前版本，也可以稍后在插件详情的“版本”页中激活。",
     "Plugin source exceeds the 8 MiB limit.": "插件源码超过 8 MiB 上限。",
-    "Single .js file, up to 8 MiB. Its source is shown below before upload.": "单个 .js 文件，最大 8 MiB。上传前会在下方显示其源码。"
+    "Single .js file, up to 8 MiB. Its source is shown below before upload.": "单个 .js 文件，最大 8 MiB。上传前会在下方显示其源码。",
+    "Channel #{{id}}": "渠道 #{{id}}",
+    "{{count}} tests": "{{count}} 次"
   }
 }
