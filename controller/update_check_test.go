@@ -96,42 +96,36 @@ func TestCompareForkVersions(t *testing.T) {
 	) > 0)
 }
 
-// manifestServer 起一个假更新源:update.json + 两个说明文件。
-func manifestServer(t *testing.T, manifestBody string) *httptest.Server {
+// releasesServer 起一个假更新源:路径 /releases 返回 Gitea releases 风格的 JSON 数组。
+func releasesServer(t *testing.T, body string) *httptest.Server {
 	t.Helper()
-	mux := http.NewServeMux()
-	mux.HandleFunc("/update.json", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(manifestBody))
-	})
-	mux.HandleFunc("/notes.md", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("### 稳定版说明\n- 稳定版内容\n"))
-	})
-	mux.HandleFunc("/notes-dev.md", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("### 开发版说明\n- 开发版内容\n"))
-	})
-	srv := httptest.NewServer(mux)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
 	t.Cleanup(srv.Close)
 	return srv
 }
 
-const twoChannelManifest = `{
-	"stable": {"version": "v26.08.20.muw.1", "notes": "notes.md"},
-	"dev": {"version": "v26.09.13.muw.15", "notes": "notes-dev.md"},
-	"min_supported_version": "v26.08.01.muw.1"
-}`
+// twoChannelReleases 一条 dev(prerelease) + 一条 stable(非 prerelease)，顺序:新的在前。
+const twoChannelReleases = `[
+	{"tag_name": "v26.09.13.muw.15", "body": "### 开发版说明\n- 开发版内容\n", "prerelease": true, "draft": false},
+	{"tag_name": "v26.08.20.muw.1", "body": "### 稳定版说明\n- 稳定版内容\n", "prerelease": false, "draft": false}
+]`
 
-func TestFetchReleaseManifest(t *testing.T) {
+func TestFetchReleases(t *testing.T) {
 	// 多出来的字段(未来扩展)一律忽略。
-	srv := manifestServer(t, twoChannelManifest)
-	manifest, err := fetchReleaseManifest(context.Background(), srv.URL+"/update.json")
+	srv := releasesServer(t, twoChannelReleases)
+	items, err := fetchReleases(context.Background(), srv.URL+"/releases", 1<<20)
 	require.NoError(t, err)
-	assert.Equal(t, "v26.08.20.muw.1", manifest.Stable.Version)
-	assert.Equal(t, "notes.md", manifest.Stable.Notes)
-	assert.Equal(t, "v26.09.13.muw.15", manifest.Dev.Version)
+	require.Len(t, items, 2)
+	assert.Equal(t, "v26.09.13.muw.15", items[0].TagName)
+	assert.True(t, items[0].Prerelease)
+	assert.Contains(t, items[0].Body, "开发版内容")
+	assert.False(t, items[1].Prerelease)
 
 	// 内容不是合法 JSON → 报错。
-	broken := manifestServer(t, `{not json`)
-	_, err = fetchReleaseManifest(context.Background(), broken.URL+"/update.json")
+	broken := releasesServer(t, `{not json`)
+	_, err = fetchReleases(context.Background(), broken.URL+"/releases", 1<<20)
 	assert.Error(t, err)
 
 	// 源不可达 → 报错。
@@ -139,25 +133,62 @@ func TestFetchReleaseManifest(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	t.Cleanup(down.Close)
-	_, err = fetchReleaseManifest(context.Background(), down.URL+"/update.json")
+	_, err = fetchReleases(context.Background(), down.URL+"/releases", 1<<20)
 	assert.Error(t, err)
 }
 
-func TestResolveNotesURL(t *testing.T) {
-	// 相对路径按清单 URL 解析;绝对 URL 原样使用;空值返回空串。
-	assert.Equal(t, "https://example.com/a/notes.md",
-		resolveNotesURL("https://example.com/a/update.json", "notes.md"))
-	assert.Equal(t, "https://example.com/a/dev/notes.md",
-		resolveNotesURL("https://example.com/a/update.json", "dev/notes.md"))
-	assert.Equal(t, "https://cdn.example.com/notes.md",
-		resolveNotesURL("https://example.com/a/update.json", "https://cdn.example.com/notes.md"))
-	assert.Equal(t, "", resolveNotesURL("https://example.com/a/update.json", "  "))
+func TestPickRelease(t *testing.T) {
+	items, err := fetchReleases(context.Background(),
+		releasesServer(t, twoChannelReleases).URL+"/releases", 1<<20)
+	require.NoError(t, err)
+
+	// dev 通道(含 prerelease):取版本号最大的,说明跟着它走。
+	tag, body, ok := pickRelease(items, true)
+	require.True(t, ok)
+	assert.Equal(t, "v26.09.13.muw.15", tag)
+	assert.Contains(t, body, "开发版内容")
+
+	// stable 通道(只要非 prerelease):跳过 prerelease。
+	tag, body, ok = pickRelease(items, false)
+	require.True(t, ok)
+	assert.Equal(t, "v26.08.20.muw.1", tag)
+	assert.Contains(t, body, "稳定版内容")
+
+	// 顺序无关:故意倒序(老版本在前)仍取版本号最大的那个 —— 补发老稳定版 release
+	// 绝不会让 stable 通道回退。
+	reversed := []giteaReleaseItem{
+		{TagName: "v26.08.20.muw.1", Body: "old"},
+		{TagName: "v26.08.14.muw.1", Body: "older"},
+	}
+	tag, _, ok = pickRelease(reversed, false)
+	require.True(t, ok)
+	assert.Equal(t, "v26.08.20.muw.1", tag)
+
+	// draft 跳过;解析不出格式的 tag(上游 latest 之类)跳过。
+	mixed := []giteaReleaseItem{
+		{TagName: "latest", Body: "x"},
+		{TagName: "v26.09.20.muw.1", Body: "draft", Draft: true},
+		{TagName: "v26.09.15.muw.1", Body: "real", Prerelease: true},
+	}
+	tag, body, ok = pickRelease(mixed, true)
+	require.True(t, ok)
+	assert.Equal(t, "v26.09.15.muw.1", tag)
+	assert.Equal(t, "real", body)
+
+	// 只有 prerelease 时,stable 通道挑不出来(上层报错,不误报有更新)。
+	onlyPre := []giteaReleaseItem{{TagName: "v26.09.15.muw.1", Prerelease: true}}
+	_, _, ok = pickRelease(onlyPre, false)
+	assert.False(t, ok)
+
+	// 空列表同样挑不出来。
+	_, _, ok = pickRelease(nil, true)
+	assert.False(t, ok)
 }
 
 func TestGetUpdateCheckChannelSwitch(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	srv := manifestServer(t, twoChannelManifest)
-	t.Setenv("UPDATE_CHECK_URL", srv.URL+"/update.json")
+	srv := releasesServer(t, twoChannelReleases)
+	t.Setenv("UPDATE_CHECK_RELEASES_URL", srv.URL+"/releases")
 
 	previous := common.Version
 	previousDev := operation_setting.UpdateCheckDevChannelEnabled
@@ -197,7 +228,7 @@ func TestGetUpdateCheckChannelSwitch(t *testing.T) {
 	assert.Equal(t, "v26.08.20.muw.1", latestTag)
 	assert.False(t, hasUpdate)
 
-	// 比稳定版老的部署(旧 semver)→ 提示升级到稳定版,并带稳定版说明。
+	// 比稳定版老的部署(旧 semver)→ 提示升级到稳定版,并带稳定版说明(release body)。
 	hasUpdate, latestTag, channel, changelog := call(t, "v1.0.0-rc.24-muw.1", false)
 	assert.True(t, hasUpdate)
 	assert.Equal(t, "v26.08.20.muw.1", latestTag)
@@ -211,23 +242,17 @@ func TestGetUpdateCheckChannelSwitch(t *testing.T) {
 	assert.Equal(t, "dev", channel)
 	assert.Contains(t, changelog, "开发版内容")
 
-	// 开关开但已经是最新 dev ⇒ 无更新,也不拉说明。
+	// 开关开但已经是最新 dev ⇒ 无更新,也不带说明。
 	hasUpdate, _, channel, changelog = call(t, "v26.09.13.muw.15", true)
 	assert.False(t, hasUpdate)
 	assert.Equal(t, "dev", channel)
 	assert.Empty(t, changelog)
 
-	// 清单里没有 dev 条目 ⇒ 即使开关开着也退回 stable,不报错。
-	noDev := manifestServer(t, `{"stable": {"version": "v26.08.20.muw.1", "notes": "notes.md"}}`)
-	t.Setenv("UPDATE_CHECK_URL", noDev.URL+"/update.json")
-	_, latestTag, channel, _ = call(t, "v26.09.12.muw.14", true)
-	assert.Equal(t, "stable", channel)
-	assert.Equal(t, "v26.08.20.muw.1", latestTag)
-
-	// 清单里连 stable 都没有 → 明确报错。
-	emptyManifest := manifestServer(t, `{}`)
-	t.Setenv("UPDATE_CHECK_URL", emptyManifest.URL+"/update.json")
+	// 源里全是 prerelease ⇒ stable 通道挑不出来,明确报错(不静默当成"无更新")。
+	onlyPre := releasesServer(t, `[{"tag_name":"v26.09.15.muw.1","body":"x","prerelease":true,"draft":false}]`)
+	t.Setenv("UPDATE_CHECK_RELEASES_URL", onlyPre.URL+"/releases")
 	common.Version = "v26.09.12.muw.14"
+	operation_setting.UpdateCheckDevChannelEnabled = false
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/status/update-check", nil)
