@@ -33,6 +33,8 @@ export type ComboboxInputOption = {
 }
 
 interface ComboboxInputProps {
+  /** 展开状态变化（供调用方在展开时按需拉数据）。 */
+  onOpenChange?: (open: boolean) => void
   options: readonly ComboboxInputOption[]
   value?: string
   onValueChange: (value: string) => void
@@ -68,6 +70,7 @@ export function ComboboxInput({
   openOnFocus = true,
   disabled = false,
   onKeyDown,
+  onOpenChange,
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledBy,
   'aria-invalid': ariaInvalid,
@@ -75,6 +78,11 @@ export function ComboboxInput({
   const { t } = useTranslation()
   const listId = React.useId()
   const [open, setOpen] = React.useState(false)
+  const onOpenChangeRef = React.useRef(onOpenChange)
+  onOpenChangeRef.current = onOpenChange
+  React.useEffect(() => {
+    onOpenChangeRef.current?.(open)
+  }, [open])
   const [searchValue, setSearchValue] = React.useState('')
   const [searchChanged, setSearchChanged] = React.useState(false)
   const [highlightedIndex, setHighlightedIndex] = React.useState(-1)

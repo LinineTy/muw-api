@@ -27,6 +27,13 @@ import zh from '@/i18n/locales/zh.json'
 
 import { ModelMappingEditor } from '../model-mapping-editor'
 
+const { fetchUpstreamModelsMock } = vi.hoisted(() => ({
+  fetchUpstreamModelsMock: vi.fn(),
+}))
+vi.mock('../../api', () => ({
+  fetchUpstreamModels: (id: number) => fetchUpstreamModelsMock(id),
+}))
+
 test('external mapping changes update the editor without emitting an edit', () => {
   const onChange = vi.fn()
   const view = render(
@@ -261,4 +268,52 @@ test('commit fires once an edit settles on Enter or when focus leaves, not per k
   expect(onCommit).toHaveBeenCalledTimes(1)
   await user.click(screen.getByRole('button', { name: 'outside' }))
   expect(onCommit).toHaveBeenCalledTimes(2)
+})
+
+test('上游模型下拉展开时拉取真实上游模型，并与渠道预设合并', async () => {
+  fetchUpstreamModelsMock.mockReset()
+  fetchUpstreamModelsMock.mockResolvedValue({
+    success: true,
+    data: ['upstream-live-model'],
+  })
+  const user = userEvent.setup()
+  render(
+    <ModelMappingEditor
+      value='{"client-a":"upstream-a"}'
+      onChange={vi.fn()}
+      channelId={7}
+      targetModelOptions={['preset-model']}
+    />
+  )
+  await user.click(screen.getByDisplayValue('upstream-a'))
+  await waitFor(() => expect(fetchUpstreamModelsMock).toHaveBeenCalledWith(7))
+  await waitFor(() =>
+    expect(screen.getByText('upstream-live-model')).toBeInTheDocument()
+  )
+  expect(screen.getByText('preset-model')).toBeInTheDocument()
+
+  // 关掉再展开：作废缓存，重新拉一次
+  await user.keyboard('{Escape}')
+  await waitFor(() =>
+    expect(screen.queryByText('upstream-live-model')).not.toBeInTheDocument()
+  )
+  await user.click(screen.getByDisplayValue('upstream-a'))
+  await waitFor(() =>
+    expect(fetchUpstreamModelsMock).toHaveBeenCalledTimes(2)
+  )
+})
+
+test('没有 channelId（新建渠道）时不发请求，只用预设', async () => {
+  fetchUpstreamModelsMock.mockReset()
+  const user = userEvent.setup()
+  render(
+    <ModelMappingEditor
+      value='{"client-a":"upstream-a"}'
+      onChange={vi.fn()}
+      targetModelOptions={['preset-model']}
+    />
+  )
+  await user.click(screen.getByDisplayValue('upstream-a'))
+  await waitFor(() => expect(screen.getByText('preset-model')).toBeInTheDocument())
+  expect(fetchUpstreamModelsMock).not.toHaveBeenCalled()
 })

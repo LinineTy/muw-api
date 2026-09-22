@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { Code, ListPlus, Plus, Table, Trash2 } from 'lucide-react'
 import {
+  useCallback,
   useEffect,
   useEffectEvent,
   useId,
@@ -26,6 +27,8 @@ import {
   useState,
 } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { fetchUpstreamModels } from '../api'
 
 import { JsonCodeEditor } from '@/components/json-code-editor'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -59,6 +62,8 @@ type ModelMappingEditorProps = {
   disabled?: boolean
   sourceModelOptions?: string[]
   targetModelOptions?: string[]
+  /** 已保存渠道的 id：有值时"上游模型"下拉展开会去拉该渠道的真实上游模型列表。 */
+  channelId?: number | null
   /** Shows the batch button; the caller owns the batch dialog. */
   onBatchAdd?: () => void
   /**
@@ -121,14 +126,38 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
       })),
     [props.sourceModelOptions]
   )
-  const targetOptions = useMemo(
-    () =>
-      (props.targetModelOptions ?? []).map((model) => ({
-        value: model,
-        label: model,
-      })),
-    [props.targetModelOptions]
+  // 展开时拉到的真实上游模型（弹层不关就复用这一份；关掉即作废，下次展开重新拉）
+  const [liveTargetModels, setLiveTargetModels] = useState<string[] | null>(null)
+  const handleTargetOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) {
+        setLiveTargetModels(null)
+        return
+      }
+      if (liveTargetModels || !props.channelId) return
+      fetchUpstreamModels(props.channelId)
+        .then((res) => {
+          if (res?.success && Array.isArray(res.data)) setLiveTargetModels(res.data)
+        })
+        .catch(() => {
+          // 拉不到（未配置密钥/网络失败）就继续用渠道预设列表兜底
+        })
+    },
+    [liveTargetModels, props.channelId]
   )
+  const targetOptions = useMemo(() => {
+    const seen = new Set<string>()
+    const merged: { value: string; label: string }[] = []
+    for (const model of [
+      ...(liveTargetModels ?? []),
+      ...(props.targetModelOptions ?? []),
+    ]) {
+      if (!model || seen.has(model)) continue
+      seen.add(model)
+      merged.push({ value: model, label: model })
+    }
+    return merged
+  }, [liveTargetModels, props.targetModelOptions])
 
   const createRowId = () => {
     nextRowIdRef.current += 1
@@ -487,6 +516,7 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
                   <ComboboxInput
                     id={rowInputId(row.id, 'to')}
                     options={targetOptions}
+                    onOpenChange={handleTargetOpenChange}
                     value={row.to}
                     onValueChange={(value) =>
                       handleRowChange(row.id, 'to', value)
