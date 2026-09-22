@@ -892,6 +892,14 @@ html.os-in-window [data-slot='sidebar-gap'] {
   animation: app-loading-rise 0.42s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
+/* 接续首屏那一轮:站点名已在屏上,直接落定,不重浮 */
+.app-loading-letter-settled {
+  animation: none;
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+
 @keyframes app-loading-rise {
   to {
     opacity: 1;

@@ -36,7 +36,12 @@ import { GeneralError } from '@/features/errors/general-error'
 import { NotFoundError } from '@/features/errors/not-found-error'
 import { getSetupStatus } from '@/features/setup/api'
 import { useSystemConfig } from '@/hooks/use-system-config'
-import { APP_LOADING_TIMING, appLoadingCycleMs } from '@/lib/app-loading'
+import {
+  APP_LOADING_TIMING,
+  appLoadingCycleMs,
+  readSplashRound,
+  splashRoundEndAt,
+} from '@/lib/app-loading'
 import {
   bootstrapAuthentication,
   clearAuthenticatedClientState,
@@ -77,17 +82,18 @@ function RootComponent() {
     const splash = document.querySelector<HTMLElement>('#app-loading')
     if (!splash) return
 
-    const reduceMotion = window.matchMedia(
-      '(prefers-reduced-motion: reduce)'
-    ).matches
-    // 无动画(系统要求减少动效)时逐字上浮是瞬时的,没有「一轮」可等
-    const hold = reduceMotion
-      ? 0
-      : Math.max(
-          0,
-          appLoadingCycleMs(splash.querySelectorAll('.brand span').length) -
-            performance.now()
-        )
+    // ⚠️ 锚点必须用内联占位量到的「首帧 + 末字落定」,不能拿 performance.now() 直接减一轮:
+    // 动画的时钟从浏览器首次渲染起算、performance.now() 从导航起算,冷加载时两者差上百
+    // 毫秒到一秒多,直接减就会把这一轮截断(2026-09-22 线上实测:热加载被切末字、
+    // reduce-motion 下整轮一闪而过)。无动画时改用最短留屏时长。
+    const letterCount = splash.querySelectorAll('.brand span').length
+    const round = readSplashRound()
+    const hold = Math.max(
+      0,
+      (round
+        ? splashRoundEndAt(round, letterCount)
+        : appLoadingCycleMs(letterCount)) - performance.now()
+    )
 
     let removeTimer: number | undefined
     const leaveTimer = window.setTimeout(() => {

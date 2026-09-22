@@ -26,6 +26,7 @@ export { useTopNavLinks } from './use-top-nav-links'
 export { useNotifications } from './use-notifications'
 
 // Utils
+export { useAppLoadingGate } from './use-app-loading-gate'
 export { useDebounce } from './use-debounce'
 
 // Media Query
