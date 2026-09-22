@@ -119,3 +119,10 @@ assertion cannot hold in jsdom even though the ported code change is identical
 to upstream (verified line by line).  The test now asserts up to "editor opened
 and the row is still in the document"; the no-remount guarantee stays covered by
 the sibling test (`keeps other rows mounted ...`), which passes.
+
+## 2026-09-22 — combobox wrapper alignment divergence (from a leftover branch)
+
+The model-redirect row lost its `items-center` in an upstream rewrite, so its 40px-tall
+row left the 32px combobox trigger 4px low.  Our fix keeps `relative flex items-center`
+on the wrapping layer instead of shrinking the row (commit `3a759b7df` in the old
+`merge/upstream-20260921` branch, already in main).
