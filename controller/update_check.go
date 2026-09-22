@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -34,43 +33,36 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// 更新检测的源 = 一份「发布清单」update.md（内容仍是 JSON，由 repo 根的 release.sh 生成）：
+// 更新检测的源 = **公网 Gitea 的 releases API**（2026-09-22 maintainer定，取代此前的静态发布清单 update.md）：
 //
-//	GET https://registry.dev3.mulink.top/update.md
-//	{
-//	  "stable": {"version":"v26.08.20.muw.1",  "notes":"notes.md"},
-//	  "dev":    {"version":"v26.09.13.muw.17", "notes":"notes-dev.md"}
-//	}
+//	GET https://git.example.com/api/v1/repos/owner/muw-api/releases
+//
+// 上游 new-api 也只有一份 GitHub release，我们跟着走同一套，不再自造清单 + notes 静态文件。
 //
 // 两个通道（2026-09-13 maintainer定）：
-//   - stable：**对外公告的稳定版**。没打开「检测开发版更新」的部署都按它判断。
-//   - dev：最新构建。只有打开「检测开发版更新」开关的实例才按它判断
+//   - stable：最新的**非 prerelease** release —— 对外公告的稳定版。没打开「检测开发版更新」的部署都按它判断。
+//   - dev：最新 release（含 prerelease）—— 最新构建。只有打开开关的实例才按它判断
 //     （operation_setting.UpdateCheckDevChannelEnabled）。
-//   两个通道都只是清单里的一栏，由 repo 根 release.sh 发版时按问到的公告范围生成：
-//   选"稳定版"= 本次版本（同时把本次版本写进仓库根的 STABLE 作记录），选"开发版"= 保持上次公告值。
+//     发版时由 repo 根 release.sh 按问到的公告范围决定本次 release 是否标 prerelease，
+//     所以"哪个是稳定版"由发版动作本身决定，检测端不需要额外清单。
 //
-// notes 是该版说明正文的文件名（相对清单 URL 解析，也接受绝对 URL），
-// release.sh 从 CHANGELOG 顶部条目切出。说明不能内置进二进制：旧版本部署的
-// 二进制里没有新版本的说明，得像上游 GitHub release body 那样动态拉。
+// 版本号取 tag_name，说明正文取 body（Markdown，随 release 一起发），
+// ⇒ 说明必须动态取、不能内置进二进制：旧版本部署的二进制里没有新版本的说明。
 //
-// 未知字段一律忽略，以后要在清单里加字段（如 min_supported_version）不必改后端。
-// 自建分发时用 UPDATE_CHECK_URL 指向自己的清单。
-// ⚠️ 路径故意用 .md 而不是 .json：反代前面是腾讯 EdgeOne，它**按路径缓存、忽略查询串**
-// （`?t=` 破缓存无效，请求头带 no-cache 也不绕），但站点给 .md 配了"忽略缓存"，实测
-// `.md` 每次 MISS 回源、`.json` 会被缓存住（2026-09-13 maintainer排查 + 实测）。
-// 另外源站这几个 location 都补了 `Cache-Control: no-store`，配合"遵循源站"规则也不该再被缓存。
-const updateCheckURLDefault = "https://registry.dev3.mulink.top/update.md"
+// 未登录实例读得到：该仓库本身保持私有，但「公开访问」里把**发布 + 软件包**放开为可读
+// （2026-09-22 实测匿名 GET releases 返回 200；代码不外露）。自建分发时用
+// UPDATE_CHECK_RELEASES_URL 指向自己的 releases API。
+const updateCheckURLDefault = "https://git.example.com/api/v1/repos/owner/muw-api/releases"
 
-// updateChannelManifest 清单里的一个通道。
-type updateChannelManifest struct {
-	Version string `json:"version"`
-	Notes   string `json:"notes"`
-}
+// updateCheckUserAgent 给源站一个可识别的 UA（有的反代/WAF 会拦空 UA 或默认 UA）。
+const updateCheckUserAgent = "muw-api-update-check"
 
-// releaseManifest 发布清单（见文件头说明）。
-type releaseManifest struct {
-	Stable updateChannelManifest `json:"stable"`
-	Dev    updateChannelManifest `json:"dev"`
+// giteaReleaseItem Gitea releases API 的一条记录（只取用得上的字段，其余忽略）。
+type giteaReleaseItem struct {
+	TagName    string `json:"tag_name"`
+	Body       string `json:"body"`
+	Prerelease bool   `json:"prerelease"`
+	Draft      bool   `json:"draft"`
 }
 
 // parseForkVersion 解析 muw fork 版本号,支持两种体系,返回可比数组:
@@ -78,7 +70,7 @@ type releaseManifest struct {
 //   - 日期制:vYY.MM.DD[.muw.N]             → [2, YY, MM, DD, muw号]
 //
 // 首维是体系优先级(epoch):日期制(2)恒大于旧格式(1)——因此部署旧版本号
-// 的实例只要清单里出现日期制版本就提示更新(「旧版本号一律提示升级到
+// 的实例只要源里出现日期制版本就提示更新(「旧版本号一律提示升级到
 // 新体系」)。无法解析(如 latest、普通 tag)返回 nil。历史误标的杂后缀(如 .ts)
 // 直接忽略。
 func parseForkVersion(s string) []int {
@@ -179,10 +171,9 @@ func compareForkVersions(a, b []int) int {
 	return 0
 }
 
-// fetchUpdateSource 取更新源里的静态文件。带时间戳查询参数绕 CDN 缓存:
-// 清单/说明都挂在反代(EdgeOne)后面,旧缓存里没有新版本 → 表现成"提示有新版
-// 但日志空白",2026-09-11 在 CHANGELOG.md 上踩过这个坑。检查更新不频繁,
-// 回源代价可忽略。
+// fetchUpdateSource 取更新源。带时间戳查询参数绕中间缓存:源站背后可能有反代/CDN,
+// 旧缓存里没有新版本 → 表现成"提示有新版但日志空白",2026-09-11 在静态日志文件上踩过。
+// 检查更新不频繁,回源代价可忽略。
 func fetchUpdateSource(ctx context.Context, rawURL string, limit int64) ([]byte, error) {
 	sep := "?"
 	if strings.Contains(rawURL, "?") {
@@ -194,6 +185,7 @@ func fetchUpdateSource(ctx context.Context, rawURL string, limit int64) ([]byte,
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("User-Agent", updateCheckUserAgent)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -205,91 +197,82 @@ func fetchUpdateSource(ctx context.Context, rawURL string, limit int64) ([]byte,
 	return io.ReadAll(io.LimitReader(resp.Body, limit))
 }
 
-// fetchReleaseManifest 取发布清单。
-func fetchReleaseManifest(ctx context.Context, manifestURL string) (*releaseManifest, error) {
-	data, err := fetchUpdateSource(ctx, manifestURL, 64<<10)
+// fetchReleases 取 releases 列表（Gitea API 返回数组，越新越靠前）。
+func fetchReleases(ctx context.Context, releasesURL string, limit int64) ([]giteaReleaseItem, error) {
+	data, err := fetchUpdateSource(ctx, releasesURL, limit)
 	if err != nil {
 		return nil, err
 	}
-	var manifest releaseManifest
-	if err := common.Unmarshal(data, &manifest); err != nil {
-		return nil, fmt.Errorf("更新清单解析失败: %w", err)
+	var items []giteaReleaseItem
+	if err := common.Unmarshal(data, &items); err != nil {
+		return nil, fmt.Errorf("更新源解析失败: %w", err)
 	}
-	return &manifest, nil
+	return items, nil
 }
 
-// pickChannel 按「检测开发版更新」开关选通道。开了但清单里没有 dev 条目时
-// 退回 stable（不该因为少写一段就让检查更新彻底失败）。
-func pickChannel(manifest *releaseManifest) (string, updateChannelManifest) {
-	if operation_setting.UpdateCheckDevChannelEnabled &&
-		strings.TrimSpace(manifest.Dev.Version) != "" {
-		return "dev", manifest.Dev
+// pickRelease 从 release 列表里挑出该通道的版本号与说明。
+//
+// 按**版本号大小**挑最大的，而不是信 API 的返回顺序（顺序是时间维度，发版顺序
+// 与版本大小未必一致：补发一个老的稳定版 release 时就会错）。忽略 draft 与
+// 解析不出格式的 tag（如上游的 latest）。
+//
+// includePrerelease=false 时只看非 prerelease 条目（stable 通道）。
+func pickRelease(items []giteaReleaseItem, includePrerelease bool) (string, string, bool) {
+	bestTag, bestBody := "", ""
+	var best []int
+	for _, item := range items {
+		if item.Draft {
+			continue
+		}
+		if item.Prerelease && !includePrerelease {
+			continue
+		}
+		tag := strings.TrimSpace(item.TagName)
+		vals := parseForkVersion(tag)
+		if vals == nil {
+			continue
+		}
+		if best == nil || compareForkVersions(vals, best) > 0 {
+			best, bestTag, bestBody = vals, tag, item.Body
+		}
 	}
-	return "stable", manifest.Stable
+	return bestTag, bestBody, best != nil
 }
 
-// resolveNotesURL 把清单里的 notes 文件名解析成绝对 URL。
-func resolveNotesURL(manifestURL, notes string) string {
-	notes = strings.TrimSpace(notes)
-	if notes == "" {
-		return ""
-	}
-	if strings.HasPrefix(notes, "http://") || strings.HasPrefix(notes, "https://") {
-		return notes
-	}
-	base, err := url.Parse(manifestURL)
-	if err != nil {
-		return ""
-	}
-	ref, err := url.Parse(notes)
-	if err != nil {
-		return ""
-	}
-	return base.ResolveReference(ref).String()
-}
-
-// fetchVersionNotes 拉取该版本的更新说明正文。失败/未配置返回空串,
-// 不阻塞更新检测本身。
-func fetchVersionNotes(ctx context.Context, notesURL string) string {
-	if notesURL == "" {
-		return ""
-	}
-	data, err := fetchUpdateSource(ctx, notesURL, 1<<20)
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(data))
-}
-
-// GetUpdateCheck 读发布清单,返回是否有比当前版本更新的版本。
-// 只读接口;清单是静态文件(GET),但无 CORS,故由后端代查再返回给前端。
+// GetUpdateCheck 读更新源（公网 Gitea releases），返回是否有比当前版本更新的版本。
+// 只读接口；releases 无 CORS 限制但需要出网，故由后端代查再返回给前端。
 func GetUpdateCheck(c *gin.Context) {
-	manifestURL := common.GetEnvOrDefaultString("UPDATE_CHECK_URL", updateCheckURLDefault)
+	releasesURL := common.GetEnvOrDefaultString("UPDATE_CHECK_RELEASES_URL", updateCheckURLDefault)
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
 	defer cancel()
 
-	manifest, err := fetchReleaseManifest(ctx, manifestURL)
+	items, err := fetchReleases(ctx, releasesURL, 1<<20)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
 
-	channel, entry := pickChannel(manifest)
-	latestTag := strings.TrimSpace(entry.Version)
-	if latestTag == "" {
-		common.ApiError(c, fmt.Errorf("更新清单里没有 %s 通道的版本号", channel))
+	// 通道只决定"看不看 prerelease"，命中哪个版本由版本号大小决定。
+	includePrerelease := operation_setting.UpdateCheckDevChannelEnabled
+	channel := "stable"
+	if includePrerelease {
+		channel = "dev"
+	}
+	latestTag, latestBody, ok := pickRelease(items, includePrerelease)
+	if !ok {
+		common.ApiError(c, fmt.Errorf("更新源里没有可用的 %s 通道版本（是否还没发过该类 release？）", channel))
 		return
 	}
 
 	current := parseForkVersion(common.Version)
 	latestVals := parseForkVersion(latestTag)
-	// 清单里版本号解析不出来(手抖写错)时按"无更新"处理,不误报。
+	// 源里版本号解析不出来(手抖写错 tag)时按"无更新"处理,不误报。
 	hasUpdate := latestVals != nil && (current == nil || compareForkVersions(latestVals, current) > 0)
 
 	latestChangelog := ""
 	if hasUpdate {
-		latestChangelog = fetchVersionNotes(ctx, resolveNotesURL(manifestURL, entry.Notes))
+		latestChangelog = strings.TrimSpace(latestBody)
 	}
 
 	common.ApiSuccess(c, gin.H{

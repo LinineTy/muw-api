@@ -215,7 +215,7 @@ export function UpdateCheckerSection({
             </div>
           </div>
 
-          {/* 通道开关：默认只比发布清单里的稳定版；打开后连开发版（最新构建）一起比 */}
+          {/* 通道开关：默认只比非 prerelease 的稳定版 release；打开后连开发版（prerelease）一起比 */}
           <div className='rounded-lg border p-4'>
             <div className='flex items-center justify-between gap-4'>
               <div className='space-y-1'>
@@ -243,8 +243,8 @@ export function UpdateCheckerSection({
 
           {/* 与其它设置页一致：更新入口作为页面级操作放到右上角，避免与下方「检查更新」按钮文案相撞 */}
           {/* 与其它设置页一致：更新操作统一放右上角。
-              只用我们自己的更新源（/api/status/update-check → 发布清单 update.json
-              + 同源 notes.md），不引入上游走 GitHub releases 的入口。 */}
+              只用我们自己的更新源（/api/status/update-check → 公网 Gitea releases，
+              后端代查后返回），不引入前端直连上游 GitHub releases 的入口。 */}
           <SettingsPageActionsPortal>
             <Button
               type='button'
