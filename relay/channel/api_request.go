@@ -1,12 +1,15 @@
 package channel
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -316,6 +319,18 @@ func DoApiRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody
 		return nil, fmt.Errorf("get request url failed: %w", err)
 	}
 	logger.LogDebug(c, "fullRequestURL: %s", common.SanitizeURLForLog(fullRequestURL))
+	// 诊断开关（MUW_OC_WIRE_DUMP=1）：把即将交给 HTTP 客户端的请求体原样记下来，
+	// 与 adaptor 层的 dump 对照即可确认中间是否有环节改写了 body。平时无副作用。
+	if os.Getenv("MUW_OC_WIRE_DUMP") == "1" {
+		if raw, rerr := io.ReadAll(requestBody); rerr == nil {
+			shown := string(raw)
+			if len(shown) > 8000 {
+				shown = shown[:8000] + "...(truncated)"
+			}
+			logger.LogInfo(c, fmt.Sprintf("[oc-wire-final-body] len=%d body=%s", len(raw), shown))
+			requestBody = bytes.NewReader(raw)
+		}
+	}
 	req, err := http.NewRequest(c.Request.Method, fullRequestURL, requestBody)
 	if err != nil {
 		return nil, fmt.Errorf("new request failed: %w", err)
@@ -333,6 +348,21 @@ func DoApiRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody
 		return nil, err
 	}
 	applyHeaderOverrideToRequest(req, headerOverride)
+	// 诊断开关：最终头 + 传输形态（这两项在 adaptor 层看不到）。
+	if os.Getenv("MUW_OC_WIRE_DUMP") == "1" {
+		masked := make([]string, 0, len(req.Header))
+		for k, v := range req.Header {
+			if strings.EqualFold(k, "Authorization") || strings.EqualFold(k, "X-Api-Key") {
+				joined := strings.Join(v, ",")
+				masked = append(masked, fmt.Sprintf("%s=[len:%d,prefix:%s]", k, len(joined), firstN(joined, 12)))
+				continue
+			}
+			masked = append(masked, fmt.Sprintf("%s=%q", k, strings.Join(v, ",")))
+		}
+		sort.Strings(masked)
+		logger.LogInfo(c, fmt.Sprintf("[oc-wire-final-hdr] method=%s url=%s contentType=%q contentLength=%d transferEncoding=%v proto=%q headers={%s}",
+			req.Method, fullRequestURL, req.Header.Get("Content-Type"), req.ContentLength, req.TransferEncoding, req.Proto, strings.Join(masked, " ")))
+	}
 	resp, err := doRequest(c, req, info)
 	if err != nil {
 		return nil, fmt.Errorf("do request failed: %w", err)
@@ -623,4 +653,12 @@ func newTaskAPIRequest(c *gin.Context, fullRequestURL string, requestBody io.Rea
 		return nil, errors.New("task client request is missing")
 	}
 	return http.NewRequestWithContext(c.Request.Context(), c.Request.Method, fullRequestURL, requestBody)
+}
+
+// firstN 取字符串前 n 个字符（诊断日志脱敏用）。
+func firstN(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
 }
