@@ -25,6 +25,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { getModelHealth } from './api'
 import { HealthLegend } from './components/health-legend'
 import { ModelHealthCard } from './components/model-health-card'
+import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
+
 import { ModelHealthSummary } from './components/model-health-summary'
 import { summarizeModelHealth } from './lib/summary'
 import type { ModelHealthRow } from './types'
@@ -39,6 +42,8 @@ export function ModelHealth() {
   ]
   const [days, setDays] = useState(1)
   const [unhealthyOnly, setUnhealthyOnly] = useState(false)
+  const userRole = useAuthStore((s) => s.auth.user?.role)
+  const isAdmin = Boolean(userRole && userRole >= ROLE.ADMIN)
 
   const healthQuery = useQuery({
     queryKey: ['model-health', days, unhealthyOnly],
@@ -106,6 +111,7 @@ export function ModelHealth() {
           avgResponseTime={avgResponseTime}
           unhealthyModelCount={unhealthyModelCount}
           trafficModelCount={trafficModelCount}
+          hideLatency={!isAdmin}
         />
         <HealthLegend />
         {/* 模型卡两列（≥1120px）：渠道少的模型不再右边空一大片，一行能看两个模型 */}

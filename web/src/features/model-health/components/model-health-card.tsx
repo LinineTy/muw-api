@@ -6,6 +6,11 @@ import { useTranslation } from 'react-i18next'
 import { textColorMap } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { formatNumber } from '@/lib/format'
 import { ROLE } from '@/lib/roles'
 import { cn } from '@/lib/utils'
@@ -63,9 +68,9 @@ export function ModelHealthCard({
   // 窄卡（手机，每页 1 张）例外，仍然占满整行。
   const columns = Math.min(perPage, Math.max(2, visible.length))
 
-  // Memoized so the strip doesn't get a fresh array on every re-render — a stable
-  // reference keeps HealthBlocks' measurements in sync instead of churning its
-  // observer (which used to leave the strip sized for a wider container).
+  // 合并该模型所有渠道的心跳点。父组件每次渲染都会新建 rows，所以这个 memo 基本
+  // 每次都会重算 —— 留着只是为了不再重复排序；HealthBlocks 的量宽观测已不依赖
+  // trend 引用（依赖数组改成一次性布尔），刷新时机与它无关。
   const trend = useMemo(() => mergeTrend(rows), [rows])
 
   const totalTests = rows.reduce((sum, row) => sum + row.test_count, 0)
@@ -88,6 +93,12 @@ export function ModelHealthCard({
   const denom = totalTests - totalClientErrors
   const technicalRate = denom > 0 ? ((totalSuccess + totalModeration) / denom) * 100 : 100
   const rateVariant = successRateVariant(technicalRate)
+  const rateClass = cn(
+    'font-mono text-[13px] font-semibold tabular-nums',
+    textColorMap[rateVariant]
+  )
+  // 原始口径与技术口径不一致时，悬停成功率即可对照（与渠道瓷砖同条件）
+  const rateDiffers = Math.abs(overallRate - technicalRate) >= 0.05
 
   return (
     <Card data-card-hover='false' className='gap-0 overflow-hidden py-0'>
@@ -147,17 +158,31 @@ export function ModelHealthCard({
               </b>
             </span>
           ) : null}
-          <span
-            className={cn(
-              'font-mono text-[13px] font-semibold tabular-nums',
-              textColorMap[rateVariant]
-            )}
-            title={t('Success rate')}
-          >
-            {technicalRate.toFixed(1)}%
-          </span>
-          {/* 原始口径与技术口径不一致时，鼠标悬停即可对照 */}
-          {Math.abs(overallRate - technicalRate) >= 0.05 ? (
+          {rateDiffers ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span className={rateClass} title={t('Success rate')}>
+                    {technicalRate.toFixed(1)}%
+                  </span>
+                }
+              />
+              <TooltipContent side='top' className='max-w-xs'>
+                <p className='text-xs'>
+                  {t('Technical success rate')}: {technicalRate.toFixed(1)}%
+                </p>
+                <p className='text-muted-foreground text-xs'>
+                  {t('Raw success rate')}: {overallRate.toFixed(1)}%
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <span className={rateClass} title={t('Success rate')}>
+              {technicalRate.toFixed(1)}%
+            </span>
+          )}
+          {/* 原始口径与技术口径不一致时，上面的悬停气泡里可对照 */}
+          {rateDiffers ? (
             <span className='sr-only'>
               {t('Raw success rate')}: {overallRate.toFixed(1)}%
             </span>

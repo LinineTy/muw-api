@@ -2,10 +2,11 @@
 import { useTranslation } from 'react-i18next'
 
 // HealthLegend explains the heartbeat block colors on the model health page.
-// Rendered in the shared header area (visible to admins and regular users
-// alike — non-admins see model-level strips too) so the three-color strip is
-// self-explanatory: green = channel served the request (incl. moderation
-// verdicts), amber = the request itself was broken, red = upstream trouble.
+// Rendered in the shared header area (admins and regular users alike — both see
+// the strips: model-level on the card head, per-channel on the tiles) so the
+// colors are self-explanatory: green = channel served the request (incl.
+// moderation verdicts), amber = the request itself was broken, red = upstream
+// trouble. Swatches mirror the real block shape (3×10) rather than a square.
 export function HealthLegend() {
   const { t } = useTranslation()
   const items = [
@@ -22,7 +23,7 @@ export function HealthLegend() {
             <span className='w-2.5 text-center leading-none'>—</span>
           ) : (
             <span
-              className={`size-2 shrink-0 rounded-[2px] ${item.className}`}
+              className={`h-2.5 w-[3px] shrink-0 rounded-[1px] ${item.className}`}
             />
           )}
           {item.label}

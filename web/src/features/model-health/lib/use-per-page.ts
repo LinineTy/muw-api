@@ -15,7 +15,14 @@ export function usePerPage(ref: RefObject<HTMLElement | null>): number {
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
-    const update = () => setPerPage(perPageForWidth(el.clientWidth))
+    const update = () => {
+      // 量 content box:网格自带 p-3,clientWidth 含左右内距会多报 24px,
+      // 恰好够把 178px 的下限判断推过一档(522~545px 时会算成 3 张)。
+      const style = getComputedStyle(el)
+      const padding =
+        (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0)
+      setPerPage(perPageForWidth(el.clientWidth - padding))
+    }
     update()
     const observer = new ResizeObserver(update)
     observer.observe(el)

@@ -8,7 +8,8 @@ import { useAuthStore } from '@/stores/auth-store'
  * 模型广场卡片状态点的数据源。
  *
  * 复用模型健康页的聚合接口(/api/channel/health/models, 24h 窗口):
- * - 已登录 → 拉取并按 model_name 建成功率 map;非管理员由后端折叠到模型级
+ * - 已登录 → 拉取并按 model_name 建成功率 map(非管理员拿到的行已抹掉渠道名/延迟,
+ *   同模型多渠道时取成功率最高的那条)
  * - 未登录 → 不发起请求,卡片不渲染状态点(pricing 页可公开)
  * - 请求失败(无权限/网络) → 静默降级,等同未登录
  */

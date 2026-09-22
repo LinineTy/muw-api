@@ -21,6 +21,9 @@ import { SuccessRateBadge } from './success-rate-badge'
  * 模型健康页顶部汇总:在当前查询范围(天数/搜索/仅不健康)之上展示总体统计
  * —— 模型数 / 通道数 / 测试次数 / 整体成功率 / 平均响应时间 /
  * 异常模型数 / 有真实用户流量的模型数。
+ *
+ * 平均响应时间只对管理员有意义:非管理员拿到的行里延迟已被抹掉(恒为 0),
+ * 加权平均必然算出 0ms,所以直接显示「—」而不是把 0 当成真值。
  */
 export type ModelHealthSummaryData = {
   modelCount: number
@@ -30,6 +33,8 @@ export type ModelHealthSummaryData = {
   avgResponseTime: number
   unhealthyModelCount: number
   trafficModelCount: number
+  /** 非管理员视角:延迟不可见,汇总里该项显示「—」 */
+  hideLatency?: boolean
 }
 
 function SummaryItem({
@@ -73,6 +78,7 @@ export function ModelHealthSummary({
   avgResponseTime,
   unhealthyModelCount,
   trafficModelCount,
+  hideLatency,
 }: ModelHealthSummaryData) {
   const { t } = useTranslation()
 
@@ -91,7 +97,9 @@ export function ModelHealthSummary({
         <SuccessRateBadge rate={successRate} />
       </SummaryItem>
       <SummaryItem icon={Gauge} label={t('Average latency')}>
-        <NumberValue value={`${Math.round(avgResponseTime)}ms`} />
+        <NumberValue
+          value={hideLatency ? '—' : `${Math.round(avgResponseTime)}ms`}
+        />
       </SummaryItem>
       <SummaryItem icon={AlertTriangle} label={t('Unhealthy models')}>
         <NumberValue
