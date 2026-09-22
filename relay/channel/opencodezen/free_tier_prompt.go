@@ -3,6 +3,7 @@ package opencodezen
 
 import (
 	"encoding/json"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"strings"
 
 	"github.com/QuantumNous/new-api/relaykit/dto"
@@ -144,4 +145,16 @@ func injectFreeTierPromptGemini(request *dto.GeminiChatRequest) {
 		}
 	}
 	request.SystemInstructions.Parts = append([]dto.GeminiPart{{Text: freeTierSystemPrompt}}, request.SystemInstructions.Parts...)
+}
+
+// InjectFreeTierPromptForInfo 供中继里那些"绕过 adaptor 转换"的路径调用
+// （例如 chat/completions 被全局策略改道走 Responses 时，ConvertOpenAIRequest 不会执行），
+// 保证免费套餐请求在任何路径上都会带上 OpenCode CLI 的 system 指纹。
+// 返回 true 表示确实注入了。
+func InjectFreeTierPromptForInfo(info *relaycommon.RelayInfo, request *dto.GeneralOpenAIRequest) bool {
+	if info == nil || request == nil || !isFreeTier(info) {
+		return false
+	}
+	injectFreeTierPromptOpenAI(request)
+	return true
 }
