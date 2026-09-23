@@ -23,6 +23,7 @@ import { CountdownRing } from '../components/countdown-ring'
 import { LOGIN_RESULT_REDIRECT_SECONDS } from '../constants'
 import { BADGE, CARD_FOOT } from '../lib/auth-card-geometry'
 import { useAuthEnter } from '../lib/auth-motion'
+import { useAuthLeave } from '../lib/auth-motion'
 import { sanitizeAuthRedirect } from '../lib/auth-redirect'
 import { AUTH_MINOR_TEXT } from '../lib/auth-styles'
 
@@ -49,7 +50,11 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
   const successTarget = sanitizeAuthRedirect(redirect, window.location.origin)
   const signInTarget = sanitizeAuthRedirect(redirect, window.location.origin)
 
-  const navigateAway = () => {
+  // 离开时先淡出再跳转，避免收束页 → 桌面/控制台之间生硬切换（尊重系统「减少动效」）
+  const [leaving, setLeaving] = useState(false)
+  const leave = useAuthLeave()
+
+  const performNavigate = () => {
     if (isSuccess) {
       // 激活制兜底：登录结果页上用户仍未激活时，改去激活页而非 dashboard。
       if (user?.activated === false) {
@@ -64,6 +69,15 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
       search: signInTarget ? { redirect: signInTarget } : undefined,
       replace: true,
     })
+  }
+
+  const navigateAway = () => {
+    if (!leave) {
+      performNavigate()
+      return
+    }
+    setLeaving(true)
+    window.setTimeout(performNavigate, leave.durationMs)
   }
 
   useEffect(() => {
@@ -123,7 +137,11 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
   const title = isSuccess ? t('Welcome back') : statusTitle
 
   return (
-    <div className='w-full'>
+    <motion.div
+      className='w-full'
+      animate={{ opacity: leaving ? 0 : 1 }}
+      transition={leave?.opacity}
+    >
       {/* 卡外标题区：标题 + 副标题；成功态在副标题右侧挂倒计时圆环 */}
       <motion.div className='mb-4' {...enterTitle}>
         <h2 className='text-2xl font-semibold tracking-tight'>{title}</h2>
@@ -260,6 +278,6 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
           }
         />
       </motion.div>
-    </div>
+    </motion.div>
   )
 }

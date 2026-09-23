@@ -17,21 +17,32 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckSquare, RefreshCcw, Settings2 } from 'lucide-react'
+import { CheckSquare, RefreshCcw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { ErrorState } from '@/components/error-state'
 import { Button } from '@/components/ui/button'
-
 import {
-  fetchUpstreamRatios,
-  getUpstreamChannels,
-  updateSystemOption,
-} from '../api'
+  buildPricingChanges,
+  getModelPricing,
+  saveModelPricing,
+  invalidateModelPricing,
+  type ModelPricingConfig,
+} from '@/features/model-pricing/api'
+import { applyPriceSyncSelections } from '@/features/model-pricing/pricing'
+import { handleServerError } from '@/lib/handle-server-error'
+import {
+  requireServerSuccess,
+  createServerError,
+} from '@/lib/server-error-message'
+
+import { fetchUpstreamRatios, getUpstreamChannels } from '../api'
 import type {
   DifferencesMap,
-  RatioType,
+  PricingSyncModels,
+  PricingSyncValues,
   UpstreamChannel,
   UpstreamConfig,
 } from '../types'
@@ -51,49 +62,13 @@ import {
   SUB2API_ENDPOINT,
 } from './constants'
 import {
-  NUMERIC_SYNC_FIELDS,
-  RATIO_SYNC_FIELDS,
-  applyResolutionRemovalPlan,
-  applyResolutionSelection,
-  applyResolutionSelections,
-  deleteResolutionField,
-  type ResolutionRemovalPlan,
-  type ResolutionSelection,
-  type ResolutionsMap,
+  describeSyncPrice,
+  getUpstreamDisplayName,
+  type PricingSourceSelection,
+  type PricingSourceSelections,
 } from './upstream-ratio-sync-helpers'
 import { UpstreamRatioSyncTable } from './upstream-ratio-sync-table'
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-// MERGE-DECISION: the merged call sites (ratio-settings-card / price-sync-dialog)
-// render <UpstreamRatioSync /> without the local price defaults, so the baseline
-// stays optional and falls back to an empty comparison set.
-type UpstreamRatioSyncModelRatios = {
-  ModelPrice: string
-  ModelRatio: string
-  CompletionRatio: string
-  CacheRatio: string
-  CreateCacheRatio: string
-  ImageRatio: string
-  AudioRatio: string
-  AudioCompletionRatio: string
-  'billing_setting.billing_mode': string
-  'billing_setting.billing_expr': string
-}
-
-type UpstreamRatioSyncProps = {
-  modelRatios?: Partial<UpstreamRatioSyncModelRatios>
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-// The two synthesized presets always carry stable negative IDs assigned by
-// `controller/ratio_sync.go`; matching by ID alone is sufficient and avoids
-// fragile name/base_url comparisons.
 function getDefaultEndpointForChannel(channel: UpstreamChannel): string {
   if (channel.id === MODELS_DEV_PRESET_ID) return MODELS_DEV_PRESET_ENDPOINT
   if (channel.id === OFFICIAL_CHANNEL_ID) return OFFICIAL_CHANNEL_ENDPOINT
@@ -101,42 +76,31 @@ function getDefaultEndpointForChannel(channel: UpstreamChannel): string {
   return DEFAULT_ENDPOINT
 }
 
-function optionKeyBySyncField(ratioType: string): string {
-  const explicit: Record<string, string> = {
-    billing_mode: 'billing_setting.billing_mode',
-    billing_expr: 'billing_setting.billing_expr',
-  }
-  if (explicit[ratioType]) return explicit[ratioType]
-  return ratioType
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join('')
-}
-
-function parseJsonRecord<T>(raw: string | undefined | null): Record<string, T> {
-  try {
-    return JSON.parse(raw || '{}') as Record<string, T>
-  } catch {
-    return {}
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
-export function UpstreamRatioSync({
-  modelRatios = {},
-}: UpstreamRatioSyncProps) {
+export function UpstreamRatioSync() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-
+  const [pricingBaseline, setPricingBaseline] =
+    useState<ModelPricingConfig | null>(null)
   const [channelDialogOpen, setChannelDialogOpen] = useState(false)
   const [conflictDialogOpen, setConflictDialogOpen] = useState(false)
   const [selectedChannelIds, setSelectedChannelIds] = useState<number[]>([])
   const [channelEndpoints, setChannelEndpoints] = useState<
     Record<number, string>
   >({})
+  const [differences, setDifferences] = useState<DifferencesMap>({})
+  const [prices, setPrices] = useState<PricingSyncModels>({})
+  const [selectedSources, setSelectedSources] =
+    useState<PricingSourceSelections>({})
+  const [conflictItems, setConflictItems] = useState<ConflictItem[]>([])
+  const [loadingBaseline, setLoadingBaseline] = useState(false)
+  const { data: channelsData } = useQuery({
+    queryKey: ['upstream-channels'],
+    queryFn: async () => requireServerSuccess(await getUpstreamChannels()),
+    enabled: channelDialogOpen,
+  })
+  const channels = useMemo(() => channelsData?.data ?? [], [channelsData?.data])
+
+  // 自定义上游（不是 new-api 渠道）：用合成负 id 与真实渠道合并成同一张表
   const [customUpstreams, setCustomUpstreams] = useState<
     Array<{ id: number; name: string; base_url: string }>
   >([])
@@ -144,469 +108,340 @@ export function UpstreamRatioSync({
 
   const addCustomUpstream = () => {
     const id = nextCustomId.current--
-    setCustomUpstreams((prev) => [...prev, { id, name: '', base_url: '' }])
-    setChannelEndpoints((prev) => ({ ...prev, [id]: SUB2API_ENDPOINT }))
+    setCustomUpstreams((previous) => [
+      ...previous,
+      { id, name: '', base_url: '' },
+    ])
+    setChannelEndpoints((previous) => ({ ...previous, [id]: SUB2API_ENDPOINT }))
   }
 
   const removeCustomUpstream = (id: number) => {
-    setCustomUpstreams((prev) => prev.filter((u) => u.id !== id))
-    setSelectedChannelIds((prev) => prev.filter((cid) => cid !== id))
-    setChannelEndpoints((prev) => {
-      const next = { ...prev }
+    setCustomUpstreams((previous) => previous.filter((item) => item.id !== id))
+    setSelectedChannelIds((previous) =>
+      previous.filter((channelId) => channelId !== id)
+    )
+    setChannelEndpoints((previous) => {
+      const next = { ...previous }
       delete next[id]
       return next
     })
   }
 
   const updateCustomName = (id: number, name: string) => {
-    setCustomUpstreams((prev) =>
-      prev.map((u) => (u.id === id ? { ...u, name } : u))
+    setCustomUpstreams((previous) =>
+      previous.map((item) => (item.id === id ? { ...item, name } : item))
     )
   }
 
   const updateCustomBaseUrl = (id: number, baseUrl: string) => {
-    setCustomUpstreams((prev) =>
-      prev.map((u) => (u.id === id ? { ...u, base_url: baseUrl } : u))
+    setCustomUpstreams((previous) =>
+      previous.map((item) =>
+        item.id === id ? { ...item, base_url: baseUrl } : item
+      )
     )
   }
 
-  const [differences, setDifferences] = useState<DifferencesMap>({})
-  const [resolutions, setResolutions] = useState<ResolutionsMap>({})
-  const [conflictItems, setConflictItems] = useState<ConflictItem[]>([])
-  const [confirmLoading, setConfirmLoading] = useState(false)
-
-  const { data: channelsData } = useQuery({
-    queryKey: ['upstream-channels'],
-    queryFn: getUpstreamChannels,
-    enabled: channelDialogOpen,
-  })
-
-  // Memoize the channels list so the effect below only re-runs when the query
-  // data actually changes, instead of on every render (the `|| []` fallback
-  // would otherwise produce a new array reference each render).
-  const channels = useMemo(() => channelsData?.data ?? [], [channelsData?.data])
-
-  // 自定义上游合成负 id，与真实渠道合并成同一张表
   const dialogChannels = useMemo<UpstreamChannel[]>(
     () => [
       ...channels,
-      ...customUpstreams.map((u) => ({
-        id: u.id,
-        name: u.name,
-        base_url: u.base_url,
+      ...customUpstreams.map((item) => ({
+        id: item.id,
+        name: item.name,
+        base_url: item.base_url,
         status: 1,
       })),
     ],
     [channels, customUpstreams]
   )
-
   useEffect(() => {
-    if (channels.length === 0) return
-    setChannelEndpoints((prev) => {
-      let mutated = false
-      const next = { ...prev }
+    if (!channels.length) return
+    setChannelEndpoints((previous) => {
+      const next = { ...previous }
       for (const channel of channels) {
-        if (!next[channel.id]) {
-          next[channel.id] = getDefaultEndpointForChannel(channel)
-          mutated = true
-        }
+        next[channel.id] ??= getDefaultEndpointForChannel(channel)
       }
-      return mutated ? next : prev
+      return next
     })
   }, [channels])
-
+  const resolutions = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(selectedSources).flatMap(([name, source]) => {
+          const values = prices[name]?.upstreams[source]
+          return values ? [[name, { ...values }]] : []
+        })
+      ) as Record<string, Record<string, number | string>>,
+    [selectedSources, prices]
+  )
   const fetchMutation = useMutation({
-    mutationFn: fetchUpstreamRatios,
-    onSuccess: (data) => {
-      if (!data.success) {
-        toast.error(data.message || t('Failed to fetch upstream prices'))
-        return
+    mutationFn: async (request: Parameters<typeof fetchUpstreamRatios>[0]) => {
+      const response = await fetchUpstreamRatios(request)
+      if (!response.success || !response.data?.prices) {
+        throw createServerError(response, t('Failed to fetch upstream prices'))
       }
-
-      const { differences: diffs, test_results } = data.data
-
-      const errorResults = test_results.filter((r) => r.status === 'error')
-      if (errorResults.length > 0) {
-        const errorMsg = errorResults
-          .map((r) => `${r.name}: ${r.error}`)
-          .join(', ')
-        toast.warning(t('Some channels failed: {{errorMsg}}', { errorMsg }))
-      }
-
-      setDifferences(diffs)
-      setResolutions({})
-
-      if (Object.keys(diffs).length === 0) {
-        toast.success(t('No price differences found'))
-      } else {
-        toast.success(t('Upstream prices fetched successfully'))
-      }
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || t('Failed to fetch upstream prices'))
-    },
-  })
-
-  const { mutate: syncMutate, isPending: isSyncPending } = useMutation({
-    mutationFn: async (updates: Array<{ key: string; value: string }>) => {
-      for (const update of updates) {
-        await updateSystemOption(update)
-      }
-    },
-    onSuccess: () => {
-      toast.success(t('Prices synced successfully'))
-      queryClient.invalidateQueries({ queryKey: ['system-options'] })
-
-      setDifferences((prevDiffs) => {
-        const newDiffs = { ...prevDiffs }
-        Object.entries(resolutions).forEach(([model, ratios]) => {
-          Object.keys(ratios).forEach((ratioType) => {
-            if (newDiffs[model]?.[ratioType as RatioType]) {
-              delete newDiffs[model][ratioType as RatioType]
-              if (Object.keys(newDiffs[model]).length === 0) {
-                delete newDiffs[model]
-              }
-            }
-          })
-        })
-        return newDiffs
-      })
-
-      setResolutions({})
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || t('Failed to sync prices'))
-    },
-  })
-
-  const handleOpenChannelDialog = () => {
-    setChannelDialogOpen(true)
-  }
-
-  // 确认选择只保存选中项，不发起请求；真正同步由「同步上游价格」按钮触发
-  const handleConfirmChannelSelection = (selectedIds: number[]) => {
-    if (selectedIds.length === 0) {
-      toast.warning(t('Please select at least one channel'))
-    }
-  }
-
-  const buildUpstreams = (): UpstreamConfig[] => {
-    const selected = dialogChannels.filter((ch) =>
-      selectedChannelIds.includes(ch.id)
-    )
-    return selected
-      .map((ch) => ({
-        id: ch.id,
-        name: ch.name || ch.base_url,
-        base_url: ch.base_url,
-        endpoint: channelEndpoints[ch.id] || DEFAULT_ENDPOINT,
-      }))
-      .filter((u) => u.base_url.trim() !== '')
-  }
-
-  const handleFetchUpstreams = () => {
-    const upstreams = buildUpstreams()
-    if (upstreams.length === 0) {
-      toast.warning(t('Please select at least one channel'))
-      return
-    }
-    fetchMutation.mutate({ upstreams, timeout: 10 })
-  }
-
-  const handleSelectValue = useCallback(
-    (
-      model: string,
-      ratioType: RatioType,
-      value: number | string,
-      sourceName: string
-    ) => {
-      setResolutions((prev) =>
-        applyResolutionSelection(prev, differences, {
-          model,
-          ratioType,
-          value,
-          sourceName,
-        })
-      )
-    },
-    [differences]
-  )
-
-  const handleSelectValues = useCallback(
-    (selections: ResolutionSelection[]) => {
-      if (selections.length === 0) return
-      setResolutions((prev) =>
-        applyResolutionSelections(prev, differences, selections)
-      )
-    },
-    [differences]
-  )
-
-  const handleUnselectValue = useCallback(
-    (model: string, ratioType: RatioType) => {
-      setResolutions((prev) => deleteResolutionField(prev, model, ratioType))
-    },
-    []
-  )
-
-  const handleUnselectValues = useCallback((plan: ResolutionRemovalPlan) => {
-    if (plan.size === 0) return
-    setResolutions((prev) => applyResolutionRemovalPlan(prev, plan))
-  }, [])
-
-  const parsedRatios = useMemo(() => {
-    return {
-      ModelRatio: parseJsonRecord<number>(modelRatios.ModelRatio),
-      CompletionRatio: parseJsonRecord<number>(modelRatios.CompletionRatio),
-      CacheRatio: parseJsonRecord<number>(modelRatios.CacheRatio),
-      CreateCacheRatio: parseJsonRecord<number>(modelRatios.CreateCacheRatio),
-      ImageRatio: parseJsonRecord<number>(modelRatios.ImageRatio),
-      AudioRatio: parseJsonRecord<number>(modelRatios.AudioRatio),
-      AudioCompletionRatio: parseJsonRecord<number>(
-        modelRatios.AudioCompletionRatio
-      ),
-      ModelPrice: parseJsonRecord<number>(modelRatios.ModelPrice),
-      'billing_setting.billing_mode': parseJsonRecord<string>(
-        modelRatios['billing_setting.billing_mode']
-      ),
-      'billing_setting.billing_expr': parseJsonRecord<string>(
-        modelRatios['billing_setting.billing_expr']
-      ),
-    }
-  }, [modelRatios])
-
-  type ParsedRatios = typeof parsedRatios
-
-  const getLocalBillingCategory = (
-    model: string,
-    currentRatios: ParsedRatios
-  ): 'price' | 'ratio' | null => {
-    if (currentRatios.ModelPrice[model] !== undefined) return 'price'
-    if (
-      currentRatios.ModelRatio[model] !== undefined ||
-      currentRatios.CompletionRatio[model] !== undefined ||
-      currentRatios.CacheRatio[model] !== undefined ||
-      currentRatios.CreateCacheRatio[model] !== undefined ||
-      currentRatios.ImageRatio[model] !== undefined ||
-      currentRatios.AudioRatio[model] !== undefined ||
-      currentRatios.AudioCompletionRatio[model] !== undefined
-    ) {
-      return 'ratio'
-    }
-    return null
-  }
-
-  const performSync = useCallback(
-    async (currentRatios: ParsedRatios): Promise<boolean> => {
-      const finalRatios: Record<string, Record<string, number | string>> = {
-        ModelRatio: { ...currentRatios.ModelRatio },
-        CompletionRatio: { ...currentRatios.CompletionRatio },
-        CacheRatio: { ...currentRatios.CacheRatio },
-        CreateCacheRatio: { ...currentRatios.CreateCacheRatio },
-        ImageRatio: { ...currentRatios.ImageRatio },
-        AudioRatio: { ...currentRatios.AudioRatio },
-        AudioCompletionRatio: { ...currentRatios.AudioCompletionRatio },
-        ModelPrice: { ...currentRatios.ModelPrice },
-        'billing_setting.billing_mode': {
-          ...currentRatios['billing_setting.billing_mode'],
-        },
-        'billing_setting.billing_expr': {
-          ...currentRatios['billing_setting.billing_expr'],
-        },
-      }
-
-      Object.entries(resolutions).forEach(([model, ratios]) => {
-        const selectedTypes = Object.keys(ratios)
-        const hasPrice = selectedTypes.includes('model_price')
-        const hasRatio = selectedTypes.some((rt) =>
-          RATIO_SYNC_FIELDS.includes(rt as RatioType)
+      const results = response.data.test_results
+      if (
+        results.length &&
+        results.every((result) => result.status === 'error')
+      ) {
+        throw new Error(
+          results
+            .map(
+              (result) =>
+                `${getUpstreamDisplayName(result.name, t)}: ${result.error}`
+            )
+            .join(', ')
         )
-
-        if (hasPrice) {
-          delete finalRatios.ModelRatio[model]
-          delete finalRatios.CompletionRatio[model]
-          delete finalRatios.CacheRatio[model]
-          delete finalRatios.CreateCacheRatio[model]
-          delete finalRatios.ImageRatio[model]
-          delete finalRatios.AudioRatio[model]
-          delete finalRatios.AudioCompletionRatio[model]
-        }
-        if (hasRatio) {
-          delete finalRatios.ModelPrice[model]
-        }
-
-        Object.entries(ratios).forEach(([ratioType, value]) => {
-          const optionKey = optionKeyBySyncField(ratioType)
-          finalRatios[optionKey][model] = NUMERIC_SYNC_FIELDS.has(ratioType)
-            ? Number(value)
-            : value
-        })
-      })
-
-      const updates = Object.entries(finalRatios).map(([key, value]) => ({
-        key,
-        value: JSON.stringify(value, null, 2),
-      }))
-
-      return new Promise<boolean>((resolve) => {
-        syncMutate(updates, {
-          onSuccess: () => resolve(true),
-          onError: () => resolve(false),
-        })
-      })
+      }
+      return response
     },
-    [resolutions, syncMutate]
-  )
-
-  const findSourceChannel = (
-    model: string,
-    ratioType: RatioType,
-    value: number | string
-  ): string => {
-    const upMap = differences[model]?.[ratioType]?.upstreams
-    if (!upMap) return 'Unknown'
-    const entry = Object.entries(upMap).find(([, v]) => v === value)
-    return entry ? entry[0] : 'Unknown'
-  }
-
-  const handleApplySync = () => {
-    const currentRatios = parsedRatios
-    const conflicts: ConflictItem[] = []
-
-    const fixedPriceLabel = t('Fixed price')
-    const modelRatioLabel = t('Model ratio')
-    const completionRatioLabel = t('Completion ratio')
-
-    Object.entries(resolutions).forEach(([model, ratios]) => {
-      const localCat = getLocalBillingCategory(model, currentRatios)
-      const selectedTypes = Object.keys(ratios)
-      let newCat: 'price' | 'ratio' | 'tiered'
-      if ('model_price' in ratios) {
-        newCat = 'price'
-      } else if (RATIO_SYNC_FIELDS.some((rt) => selectedTypes.includes(rt))) {
-        newCat = 'ratio'
-      } else {
-        newCat = 'tiered'
+    onMutate: () => {
+      setPrices({})
+      setDifferences({})
+      setSelectedSources({})
+    },
+    onSuccess: (response) => {
+      const errors = response.data.test_results.filter(
+        (result) => result.status === 'error'
+      )
+      if (errors.length) {
+        toast.warning(
+          t('Some channels failed: {{errorMsg}}', {
+            errorMsg: errors
+              .map(
+                (result) =>
+                  `${getUpstreamDisplayName(result.name, t)}: ${result.error}`
+              )
+              .join(', '),
+          })
+        )
       }
-
-      if (localCat && newCat !== 'tiered' && localCat !== newCat) {
-        const currentDesc =
-          localCat === 'price'
-            ? `${fixedPriceLabel}: ${currentRatios.ModelPrice[model]}`
-            : `${modelRatioLabel}: ${currentRatios.ModelRatio[model] ?? '-'}\n${completionRatioLabel}: ${currentRatios.CompletionRatio[model] ?? '-'}`
-
-        const newDesc =
-          newCat === 'price'
-            ? `${fixedPriceLabel}: ${ratios.model_price}`
-            : `${modelRatioLabel}: ${ratios.model_ratio ?? '-'}\n${completionRatioLabel}: ${ratios.completion_ratio ?? '-'}`
-
-        const channelNames = selectedTypes
-          .map((rt) => findSourceChannel(model, rt as RatioType, ratios[rt]))
-          .filter((v, idx, arr) => arr.indexOf(v) === idx)
-          .join(', ')
-
-        conflicts.push({
-          channel: channelNames,
-          model,
-          current: currentDesc,
-          newVal: newDesc,
-        })
+      setDifferences(response.data.differences)
+      setPrices(response.data.prices)
+      if (!Object.keys(response.data.prices).length) {
+        toast.success(t('No price differences found'))
       }
-    })
-
-    if (conflicts.length > 0) {
-      setConflictItems(conflicts)
-      setConflictDialogOpen(true)
+    },
+    onError: (error: Error) =>
+      handleServerError(error, t('Failed to fetch upstream prices')),
+  })
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      if (!pricingBaseline) throw new Error(t('Reload pricing'))
+      const after = applyPriceSyncSelections(
+        pricingBaseline.options,
+        resolutions
+      )
+      await saveModelPricing(
+        buildPricingChanges(pricingBaseline, pricingBaseline.options, after)
+      )
+      return resolutions
+    },
+    onSuccess: async (saved) => {
+      setPrices((previous) =>
+        Object.fromEntries(
+          Object.entries(previous).map(([name, row]) => [
+            name,
+            { ...row, current: saved[name] ?? row.current },
+          ])
+        )
+      )
+      setSelectedSources({})
+      setConflictDialogOpen(false)
+      setPricingBaseline(null)
+      toast.success(t('Prices synced successfully'))
+      await invalidateModelPricing(queryClient)
+      try {
+        setPricingBaseline(await getModelPricing())
+      } catch (error) {
+        handleServerError(error, t('Reload pricing'))
+      }
+    },
+    onError: (error: Error) =>
+      handleServerError(error, t('Failed to sync prices')),
+  })
+  const handleConfirmChannelSelection = async (selectedIds: number[]) => {
+    const selected = dialogChannels.filter((channel) =>
+      selectedIds.includes(channel.id)
+    )
+    if (!selected.length) {
+      toast.warning(t('Please select at least one channel'))
       return
     }
-
-    toast.info(t('Syncing prices, please wait...'))
-    performSync(currentRatios)
-  }
-
-  const handleConfirmConflict = async () => {
-    setConfirmLoading(true)
+    const upstreams: UpstreamConfig[] = selected
+      .map((channel) => ({
+        id: channel.id,
+        name: channel.name || channel.base_url,
+        base_url: channel.base_url,
+        endpoint:
+          channelEndpoints[channel.id] ||
+          (customUpstreams.some((item) => item.id === channel.id)
+            ? SUB2API_ENDPOINT
+            : getDefaultEndpointForChannel(channel)),
+      }))
+      .filter((upstream) => upstream.base_url.trim() !== '')
+    setLoadingBaseline(true)
+    setPrices({})
+    setDifferences({})
+    fetchMutation.reset()
+    setPricingBaseline(null)
+    setSelectedSources({})
+    syncMutation.reset()
     try {
-      const success = await performSync(parsedRatios)
-      if (success) {
-        setConflictDialogOpen(false)
-      }
+      setPricingBaseline(await getModelPricing())
+      fetchMutation.mutate({ upstreams, timeout: 10 })
+    } catch (error) {
+      handleServerError(error, t('Failed to load model pricing'))
     } finally {
-      setConfirmLoading(false)
+      setLoadingBaseline(false)
     }
   }
-
-  const hasSelections = Object.keys(resolutions).length > 0
-  const hasUpstreams =
-    selectedChannelIds.length > 0 ||
-    customUpstreams.some((u) => u.base_url.trim() !== '')
-  const isLoading = fetchMutation.isPending || isSyncPending || confirmLoading
-
+  const handleSelectPrices = useCallback(
+    (selections: PricingSourceSelection[]) => {
+      setSelectedSources((previous) =>
+        Object.fromEntries([
+          ...Object.entries(previous),
+          ...selections
+            .filter(
+              (selection) =>
+                prices[selection.model]?.upstreams[selection.source]
+            )
+            .map((selection) => [selection.model, selection.source]),
+        ])
+      )
+    },
+    [prices]
+  )
+  const handleUnselectPrices = useCallback((models: string[]) => {
+    setSelectedSources((previous) => {
+      const next = { ...previous }
+      for (const name of models) delete next[name]
+      return next
+    })
+  }, [])
+  const handleApplySync = () => {
+    const previews: ConflictItem[] = Object.entries(selectedSources).flatMap(
+      ([model, source]) => {
+        const row = prices[model]
+        const selected: PricingSyncValues | undefined = row?.upstreams[source]
+        if (!row || !selected) return []
+        return [
+          {
+            model,
+            channel: getUpstreamDisplayName(source, t),
+            current: describeSyncPrice(row.current, t),
+            newVal: describeSyncPrice(selected, t),
+          },
+        ]
+      }
+    )
+    setConflictItems(previews)
+    setConflictDialogOpen(true)
+  }
+  const isLoading =
+    loadingBaseline || fetchMutation.isPending || syncMutation.isPending
   return (
-    <div className='flex h-full min-h-0 flex-col gap-4'>
-      <div className='flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
-        <div className='flex flex-col gap-2 sm:flex-row'>
-          <Button onClick={handleOpenChannelDialog} disabled={isLoading}>
-            <Settings2 className='mr-2 h-4 w-4' />
-            {t('Select Sync Channels')}
-          </Button>
-          <Button
-            variant='outline'
-            onClick={handleFetchUpstreams}
-            disabled={!hasUpstreams || isLoading}
-          >
-            <RefreshCcw className='mr-2 h-4 w-4' />
-            {t('Fetch Upstream Prices')}
-          </Button>
-          <Button
-            variant='secondary'
-            onClick={handleApplySync}
-            disabled={!hasSelections || isLoading}
-          >
-            {(isSyncPending || confirmLoading) && (
-              <span className='mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent' />
-            )}
-            <CheckSquare className='mr-2 h-4 w-4' />
-            {t('Apply Sync')}
-          </Button>
-        </div>
-      </div>
-
+    <div className='flex h-full min-h-0 flex-col gap-3'>
       <div className='min-h-0 flex-1'>
-        <UpstreamRatioSyncTable
-          differences={differences}
-          resolutions={resolutions}
-          isDisabled={isLoading}
-          isSyncing={fetchMutation.isPending}
-          onSelectValue={handleSelectValue}
-          onSelectValues={handleSelectValues}
-          onUnselectValue={handleUnselectValue}
-          onUnselectValues={handleUnselectValues}
-        />
+        {fetchMutation.isError ? (
+          <ErrorState
+            description={fetchMutation.error.message}
+            action={
+              <Button
+                variant='outline'
+                onClick={() =>
+                  void handleConfirmChannelSelection(selectedChannelIds)
+                }
+              >
+                {t('Retry')}
+              </Button>
+            }
+          />
+        ) : (
+          <UpstreamRatioSyncTable
+            toolbar={
+              <Button
+                variant='outline'
+                onClick={() => setChannelDialogOpen(true)}
+                disabled={isLoading}
+              >
+                <RefreshCcw className='size-4' aria-hidden />
+                {t('Select price sources')}
+              </Button>
+            }
+            prices={prices}
+            differences={differences}
+            selectedSources={selectedSources}
+            isDisabled={isLoading}
+            isSyncing={fetchMutation.isPending || loadingBaseline}
+            onSelectPrices={handleSelectPrices}
+            onUnselectPrices={handleUnselectPrices}
+          />
+        )}
       </div>
-
+      <div className='flex shrink-0 flex-wrap items-center justify-between gap-2 border-t pt-3'>
+        <div className='flex flex-wrap items-center gap-2'>
+          <span className='text-muted-foreground text-sm' role='status'>
+            {t('{{count}} selected models', {
+              count: Object.keys(selectedSources).length,
+            })}
+          </span>
+          {Object.keys(selectedSources).length > 0 && (
+            <Button
+              variant='ghost'
+              size='sm'
+              disabled={isLoading}
+              onClick={() => setSelectedSources({})}
+            >
+              {t('Clear selection')}
+            </Button>
+          )}
+        </div>
+        <Button
+          onClick={handleApplySync}
+          disabled={
+            !pricingBaseline ||
+            !Object.keys(selectedSources).length ||
+            isLoading
+          }
+        >
+          <CheckSquare className='size-4' aria-hidden />
+          {t('Apply Sync')}
+        </Button>
+      </div>
       <ChannelSelectorDialog
         open={channelDialogOpen}
         onOpenChange={setChannelDialogOpen}
         channels={dialogChannels}
-        selectedChannelIds={selectedChannelIds}
-        onSelectedChannelIdsChange={setSelectedChannelIds}
-        channelEndpoints={channelEndpoints}
-        onChannelEndpointsChange={setChannelEndpoints}
-        customUpstreamIds={customUpstreams.map((u) => u.id)}
+        customUpstreamIds={customUpstreams.map((item) => item.id)}
         onAddCustom={addCustomUpstream}
         onRemoveCustom={removeCustomUpstream}
         onCustomNameChange={updateCustomName}
         onCustomBaseUrlChange={updateCustomBaseUrl}
+        selectedChannelIds={selectedChannelIds}
+        onSelectedChannelIdsChange={setSelectedChannelIds}
+        channelEndpoints={channelEndpoints}
+        onChannelEndpointsChange={setChannelEndpoints}
         onConfirm={handleConfirmChannelSelection}
       />
-
       <ConflictConfirmDialog
         open={conflictDialogOpen}
-        onOpenChange={setConflictDialogOpen}
+        onOpenChange={(open) => {
+          if (!syncMutation.isPending) setConflictDialogOpen(open)
+        }}
         conflicts={conflictItems}
-        onConfirm={handleConfirmConflict}
-        isLoading={confirmLoading}
+        onConfirm={() => syncMutation.mutate()}
+        isLoading={syncMutation.isPending}
+        error={syncMutation.error?.message}
+        onReload={() => {
+          setConflictDialogOpen(false)
+          setSelectedSources({})
+          setPrices({})
+          setDifferences({})
+          setPricingBaseline(null)
+          syncMutation.reset()
+          setChannelDialogOpen(true)
+        }}
       />
     </div>
   )

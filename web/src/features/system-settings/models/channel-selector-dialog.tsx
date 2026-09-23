@@ -49,6 +49,7 @@ import {
   MODELS_DEV_PRESET_ID,
   OFFICIAL_CHANNEL_ID,
 } from './constants'
+import { getUpstreamDisplayName } from './upstream-ratio-sync-helpers'
 
 type ChannelSelectorDialogProps = {
   open: boolean
@@ -141,14 +142,16 @@ export function ChannelSelectorDialog({
             onCheckedChange={(value) =>
               table.toggleAllPageRowsSelected(!!value)
             }
-            aria-label='Select all'
+            aria-label={t('Select all')}
           />
         ),
         cell: ({ row }) => (
           <Checkbox
             checked={row.getIsSelected()}
             onCheckedChange={(value) => row.toggleSelected(!!value)}
-            aria-label='Select row'
+            aria-label={t('Select {{name}}', {
+              name: getUpstreamDisplayName(row.original.name, t),
+            })}
           />
         ),
         enableSorting: false,
@@ -160,7 +163,7 @@ export function ChannelSelectorDialog({
         size: 300,
         minSize: 220,
         cell: ({ row }) => {
-          const name = row.getValue('name') as string
+          const name = getUpstreamDisplayName(row.getValue('name') as string, t)
           const channel = row.original
           const isOfficial = isOfficialChannel(channel)
           const isCustomRow = customUpstreamIds.includes(channel.id)
@@ -363,10 +366,12 @@ export function ChannelSelectorDialog({
     const searchLower = debouncedSearch.toLowerCase()
     return channels.filter(
       (ch) =>
-        ch.name.toLowerCase().includes(searchLower) ||
+        getUpstreamDisplayName(ch.name, t)
+          .toLowerCase()
+          .includes(searchLower) ||
         ch.base_url.toLowerCase().includes(searchLower)
     )
-  }, [channels, debouncedSearch])
+  }, [channels, debouncedSearch, t])
 
   const sortedChannels = useMemo(() => {
     return [...filteredChannels].sort((a, b) => {
@@ -402,10 +407,7 @@ export function ChannelSelectorDialog({
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title={t('Select Sync Channels')}
-      description={t(
-        'Choose channels to sync upstream ratio configurations from'
-      )}
+      title={t('Select price sources')}
       contentClassName='flex max-h-[min(90dvh,var(--dialog-available-height))] max-w-[calc(100%-2rem)] flex-col sm:max-w-[90vw] md:max-w-[min(85vw,1024px)] xl:max-w-[1400px]'
       contentHeight='min(72vh, 720px)'
       bodyClassName='flex h-full min-h-0 flex-col overflow-hidden'
