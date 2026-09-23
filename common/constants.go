@@ -82,7 +82,11 @@ var TelegramOAuthEnabled = false
 var TurnstileCheckEnabled = false
 var RegisterEnabled = true
 
-// InviteCodeRegisterEnabled 开启后，新用户注册必须填写有效的注册邀请码（用途为邀请的兑换码）。
+// InviteCodeRegisterEnabled 邀请码激活制开关（option key 沿用历史名 InviteCodeRegisterEnabled）：
+// 开启后新注册账号、以及 OAuth 首次登录自动创建的账号都是"待激活"临时账号（activated=0），
+// 登录后只能访问激活页，需在激活页提交邀请码（ActivateInviteCode → OccupyInviteCode 占位）
+// 才转正。它同时以 invite_activation_enabled 暴露给前端（controller/misc.go）。
+// 注意：注册请求本身不携带邀请码，注册流程是"建号后置待激活"，不是"注册时必须填写"。
 var InviteCodeRegisterEnabled = false
 
 // TrapInviteCodeBanReason 钓鱼邀请码（Redemption.IsTrap）命中后写入 users.remark 的

@@ -31,8 +31,8 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
-import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 
 import {
@@ -165,9 +165,11 @@ export function BasicAuthSection({ defaultValues }: BasicAuthSectionProps) {
             render={({ field }) => (
               <SettingsSwitchItem>
                 <SettingsSwitchContent>
-                  <FormLabel>{t('Invitation Code Registration')}</FormLabel>
+                  <FormLabel>{t('Invitation Code Activation')}</FormLabel>
                   <FormDescription>
-                    {t('Require a valid invitation code to register')}
+                    {t(
+                      'New accounts (including the first OAuth sign-in) stay pending activation until an invitation code is entered on the activation page'
+                    )}
                   </FormDescription>
                 </SettingsSwitchContent>
                 <FormControl>
