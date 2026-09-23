@@ -137,7 +137,9 @@ func disableMultiKeyChannelIfUnavailable(channel *model.Channel) bool {
 }
 
 func restoreMultiKeyChannelIfAvailable(channel *model.Channel) {
-	if channel.Status != common.ChannelStatusManuallyDisabled || !hasEnabledMultiKey(channel) {
+	// 账户入口（account_id）没有渠道对象：调用方传 nil 时直接跳过渠道状态恢复，
+	// 与 disableMultiKeyChannelIfUnavailable / hasEnabledMultiKey 的 nil 处理保持一致。
+	if channel == nil || channel.Status != common.ChannelStatusManuallyDisabled || !hasEnabledMultiKey(channel) {
 		return
 	}
 	info := channel.GetOtherInfo()
