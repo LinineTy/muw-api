@@ -1,11 +1,12 @@
 // @muw-owned
 /**
  * 认证页的尺寸常量，逐条对齐设计稿（`/设计稿/登录页重构/index.html`）：
- * 主按钮 54px / 16px 字 / 圆角 13；输入框 46px / 14.5px 字 / 圆角 12；
+ * 主按钮与输入框同高 46px / 圆角 12（maintainer 2026-09-23 定：实色按钮全部缩到和输入框一样大，
+ * 覆盖设计稿原来的 54px）；输入框 46px / 14.5px 字 / 圆角 12；
  * 次级文字 12.5px、提示 12px。改这些值之前先改设计稿，别在这里单独飘。
  */
 export const AUTH_PRIMARY_BUTTON =
-  'h-[54px] w-full justify-center gap-2.5 rounded-[13px] text-base font-semibold'
+  'h-[46px] w-full justify-center gap-2.5 rounded-xl text-base font-semibold'
 
 export const AUTH_INPUT =
   // Input 组件自带 text-base + md:text-sm，要覆盖得把断点变体也写上

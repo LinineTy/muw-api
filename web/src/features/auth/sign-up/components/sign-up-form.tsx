@@ -264,7 +264,7 @@ export function SignUpForm({
               <FormControl>
                 <PasswordInput
                   placeholder={t('Enter password (8–128 characters)')}
-                  className={AUTH_INPUT}
+                  inputClassName={AUTH_INPUT}
                   {...field}
                 />
               </FormControl>
@@ -283,7 +283,7 @@ export function SignUpForm({
               <FormControl>
                 <PasswordInput
                   placeholder={t('Confirm password')}
-                  className={AUTH_INPUT}
+                  inputClassName={AUTH_INPUT}
                   {...field}
                 />
               </FormControl>

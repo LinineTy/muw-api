@@ -29,10 +29,13 @@ type PasswordInputProps = Omit<
   'type'
 > & {
   ref?: React.Ref<HTMLInputElement>
+  /** 传给内部 input 的类名（className 是给包裹层的，尺寸类要放这里，否则输入框会和别处不一样高） */
+  inputClassName?: string
 }
 
 export function PasswordInput({
   className,
+  inputClassName,
   disabled,
   ref,
   ...props
@@ -45,6 +48,7 @@ export function PasswordInput({
         type={showPassword ? 'text' : 'password'}
         ref={ref}
         disabled={disabled}
+        className={inputClassName}
         {...props}
       />
       <Button

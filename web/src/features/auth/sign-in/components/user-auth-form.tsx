@@ -427,7 +427,7 @@ export function UserAuthForm({
                         <FormControl>
                           <PasswordInput
                             placeholder={t('Enter password')}
-                            className={AUTH_INPUT}
+                            inputClassName={AUTH_INPUT}
                             {...field}
                           />
                         </FormControl>
@@ -441,7 +441,7 @@ export function UserAuthForm({
                       to='/forgot-password'
                       className={cn(
                         AUTH_MINOR_TEXT,
-                        'text-muted-foreground font-medium hover:opacity-75'
+                        'text-muted-foreground font-medium underline underline-offset-4 hover:opacity-75'
                       )}
                     >
                       {t('Forgot password?')}
