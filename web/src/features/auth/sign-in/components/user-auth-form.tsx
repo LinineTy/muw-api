@@ -370,6 +370,10 @@ export function UserAuthForm({
     </>
   )
 
+  // 「忘记密码？」拆成文字 + 问号：下划线只给文字
+  const forgotPasswordLabel = t('Forgot password?').replace(/[?？]\s*$/, '')
+  const forgotPasswordMark = t('Forgot password?').match(/[?？]\s*$/)?.[0] ?? ''
+
   return (
     <Form {...form}>
       <form
@@ -441,10 +445,14 @@ export function UserAuthForm({
                       to='/forgot-password'
                       className={cn(
                         AUTH_MINOR_TEXT,
-                        'text-muted-foreground font-medium underline underline-offset-4 hover:opacity-75'
+                        'text-muted-foreground font-medium hover:opacity-75'
                       )}
                     >
-                      {t('Forgot password?')}
+                      {/* 下划线只压在文字上，问号留在外面（中西文问号都这么处理） */}
+                      <span className='underline underline-offset-4'>
+                        {forgotPasswordLabel}
+                      </span>
+                      {forgotPasswordMark}
                     </Link>
                   </div>
 

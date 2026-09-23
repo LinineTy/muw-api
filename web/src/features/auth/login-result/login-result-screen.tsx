@@ -243,7 +243,7 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
               onClick={isSuccess ? navigateAway : () => navigate({ to: '/' })}
               className={cn(
                 AUTH_MINOR_TEXT,
-                'text-muted-foreground hover:text-foreground underline underline-offset-4 transition-colors'
+                'text-muted-foreground hover:text-foreground transition-colors'
               )}
             >
               {isSuccess

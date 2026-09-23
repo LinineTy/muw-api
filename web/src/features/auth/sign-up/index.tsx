@@ -59,7 +59,7 @@ export function SignUp() {
               to='/sign-in'
               className={cn(
                 AUTH_MINOR_TEXT,
-                'text-muted-foreground hover:text-foreground underline underline-offset-4'
+                'text-muted-foreground hover:text-foreground'
               )}
             >
               {t('Sign in with LinuxDO')}

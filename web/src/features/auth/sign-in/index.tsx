@@ -79,7 +79,7 @@ export function SignIn() {
                 type='button'
                 className={cn(
                   AUTH_MINOR_TEXT,
-                  'text-muted-foreground hover:text-foreground underline underline-offset-4'
+                  'text-muted-foreground hover:text-foreground'
                 )}
                 onClick={() =>
                   setMode((current) =>

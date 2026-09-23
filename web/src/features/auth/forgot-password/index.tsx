@@ -26,7 +26,7 @@ export function ForgotPassword() {
             to='/sign-up'
             className={cn(
               AUTH_MINOR_TEXT,
-              'text-muted-foreground hover:text-foreground underline underline-offset-4'
+              'text-muted-foreground hover:text-foreground'
             )}
           >
             {t("Don't have an account?")} {t('Sign up')}.
