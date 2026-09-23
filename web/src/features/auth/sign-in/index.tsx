@@ -23,9 +23,11 @@ import { useTranslation } from 'react-i18next'
 
 import { useStatus } from '@/hooks/use-status'
 import { MOTION_TRANSITION } from '@/lib/motion'
+import { cn } from '@/lib/utils'
 
 import { AuthLayout } from '../auth-layout'
 import { AuthCard } from '../components/auth-card'
+import { AUTH_MINOR_TEXT } from '../lib/auth-styles'
 import {
   getSignInCapabilities,
   type SignInMode,
@@ -73,7 +75,10 @@ export function SignIn() {
             canSwitchMode ? (
               <button
                 type='button'
-                className='text-muted-foreground hover:text-foreground text-sm underline underline-offset-4'
+                className={cn(
+                  AUTH_MINOR_TEXT,
+                  'text-muted-foreground hover:text-foreground underline underline-offset-4'
+                )}
                 onClick={() =>
                   setMode((current) =>
                     current === 'oauth' ? 'password' : 'oauth'

@@ -6495,6 +6495,7 @@
     "Unable to parse structured pricing": "Không thể phân tích giá có cấu trúc",
     "Unable to prepare chat link. Please ensure you have an enabled API key.": "Không thể chuẩn bị liên kết chat. Vui lòng đảm bảo bạn có khóa API được kích hoạt.",
     "Unable to read clipboard": "Không thể đọc bảng tạm",
+    "Unable to sign in": "Unable to sign in",
     "Unable to sign in or create an account": "Unable to sign in or create an account",
     "Unanalyzed": "Unanalyzed",
     "Unanalyzed errors reached the trigger threshold; analysis will run on the next error log.": "Unanalyzed errors reached the trigger threshold; analysis will run on the next error log.",

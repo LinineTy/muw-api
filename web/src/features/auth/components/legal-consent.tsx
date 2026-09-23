@@ -22,6 +22,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 
+import { AUTH_LEGAL_TEXT } from '../lib/auth-styles'
 import type { SystemStatus } from '../types'
 
 interface LegalConsentProps {
@@ -55,11 +56,14 @@ export function LegalConsent({
         id='legal-consent'
         checked={checked}
         onCheckedChange={handleChange}
-        className='mt-0.5'
+        className='mt-0.5 size-4'
       />
       <Label
         htmlFor='legal-consent'
-        className='text-muted-foreground items-start gap-1 text-left text-xs leading-5 font-normal'
+        className={cn(
+          'text-muted-foreground items-start gap-1 text-left leading-5 font-normal',
+          AUTH_LEGAL_TEXT
+        )}
       >
         <span>
           {t('I have read and agree to the')}{' '}

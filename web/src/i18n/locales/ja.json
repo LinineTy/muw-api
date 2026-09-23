@@ -6495,6 +6495,7 @@
     "Unable to parse structured pricing": "構造化された価格を解析できません",
     "Unable to prepare chat link. Please ensure you have an enabled API key.": "チャットリンクを準備できません。有効な API キーが設定されていることを確認してください。",
     "Unable to read clipboard": "クリップボードを読み取れません",
+    "Unable to sign in": "Unable to sign in",
     "Unable to sign in or create an account": "Unable to sign in or create an account",
     "Unanalyzed": "Unanalyzed",
     "Unanalyzed errors reached the trigger threshold; analysis will run on the next error log.": "Unanalyzed errors reached the trigger threshold; analysis will run on the next error log.",

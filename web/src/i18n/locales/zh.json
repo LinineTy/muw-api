@@ -6495,6 +6495,7 @@
     "Unable to parse structured pricing": "无法解析为结构化价格",
     "Unable to prepare chat link. Please ensure you have an enabled API key.": "无法准备聊天链接。请确保您有一个已启用的 API 密钥。",
     "Unable to read clipboard": "无法读取剪贴板",
+    "Unable to sign in": "无法登录",
     "Unable to sign in or create an account": "无法登录或创建账户",
     "Unanalyzed": "未分析",
     "Unanalyzed errors reached the trigger threshold; analysis will run on the next error log.": "未分析错误已达触发阈值，下一次错误日志写入将自动触发分析。",

@@ -11,7 +11,13 @@ import { Label } from '@/components/ui/label'
 import { activateAccount } from '@/features/auth/api'
 import { AuthLayout } from '@/features/auth/auth-layout'
 import { AuthCard } from '@/features/auth/components/auth-card'
+import {
+  AUTH_INPUT,
+  AUTH_MINOR_TEXT,
+  AUTH_PRIMARY_BUTTON,
+} from '@/features/auth/lib/auth-styles'
 import { isAuthUser } from '@/lib/auth-session'
+import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
 export function Activate() {
@@ -58,7 +64,10 @@ export function Activate() {
           <button
             type='button'
             onClick={() => navigate({ to: '/sign-in', replace: true })}
-            className='text-muted-foreground hover:text-foreground text-sm underline underline-offset-4'
+            className={cn(
+              AUTH_MINOR_TEXT,
+              'text-muted-foreground hover:text-foreground underline underline-offset-4'
+            )}
           >
             {t('Sign in with a different account')}
           </button>
@@ -66,10 +75,13 @@ export function Activate() {
       >
         <form onSubmit={handleSubmit} className='grid gap-4'>
           <div className='grid gap-2'>
-            <Label htmlFor='invite-code'>{t('Invitation Code')}</Label>
+            <Label htmlFor='invite-code' className='sr-only'>
+              {t('Invitation Code')}
+            </Label>
             <Input
               id='invite-code'
-              placeholder={t('Enter your invitation code')}
+              placeholder={t('Invitation Code')}
+              className={AUTH_INPUT}
               value={inviteCode}
               onChange={(e) => setInviteCode(e.target.value)}
               autoComplete='off'
@@ -79,7 +91,7 @@ export function Activate() {
           <Button
             type='submit'
             disabled={isSubmitting}
-            className='mt-2 w-full justify-center gap-2'
+            className={cn(AUTH_PRIMARY_BUTTON, 'mt-1')}
           >
             {isSubmitting ? <Loader2 className='h-4 w-4 animate-spin' /> : null}
             {t('Activate')}

@@ -15,13 +15,16 @@ import {
 } from '@/features/security/components/login-session-utils'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
 import dayjs from '@/lib/dayjs'
+import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { AuthCardBadge } from '../components/auth-card-badge'
 import { CountdownRing } from '../components/countdown-ring'
 import { LOGIN_RESULT_REDIRECT_SECONDS } from '../constants'
+import { BADGE, CARD_FOOT } from '../lib/auth-card-geometry'
 import { useAuthEnter } from '../lib/auth-motion'
 import { sanitizeAuthRedirect } from '../lib/auth-redirect'
+import { AUTH_MINOR_TEXT } from '../lib/auth-styles'
 
 export interface LoginResultSearch {
   status?: string
@@ -98,7 +101,7 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
 
   let statusTitle: string
   if (status === 'user_disabled') {
-    statusTitle = t('Your account has been disabled')
+    statusTitle = t('Unable to sign in')
   } else if (status === 'linuxdo_blacklisted') {
     statusTitle = t(
       'Your account is on the blacklist and is not allowed to sign in'
@@ -141,7 +144,7 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
 
       <motion.div className='relative' {...enterCard}>
         <Card data-card-hover='false' className='gap-0 py-0'>
-          <CardContent className='grid gap-3.5 px-5 pt-6'>
+          <CardContent className='grid gap-3.5 px-[22px] pt-6'>
             {/* 账号行：头像 + 双排（用户名 / @用户名 · LD 等级） */}
             {isSuccess && user ? (
               <div className='flex items-center gap-3'>
@@ -157,7 +160,7 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
                   </AvatarFallback>
                 </Avatar>
                 <div className='min-w-0'>
-                  <p className='min-w-0 truncate text-base leading-snug font-semibold'>
+                  <p className='min-w-0 truncate text-[15px] leading-snug font-semibold'>
                     {displayName}
                   </p>
                   <p className='text-muted-foreground text-xs'>
@@ -177,7 +180,7 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
                     className='text-muted-foreground size-4 shrink-0'
                     strokeWidth={2}
                   />
-                  <p className='min-w-0 truncate text-xs font-medium'>
+                  <p className='min-w-0 truncate text-[13.5px] font-medium'>
                     {device}
                   </p>
                 </div>
@@ -186,7 +189,7 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
                     className='text-muted-foreground size-4 shrink-0'
                     aria-hidden='true'
                   />
-                  <p className='text-muted-foreground min-w-0 truncate text-xs'>
+                  <p className='text-muted-foreground min-w-0 truncate text-[13.5px]'>
                     {methodLabel}
                   </p>
                 </div>
@@ -195,7 +198,7 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
                     className='text-muted-foreground mt-0.5 size-4 shrink-0'
                     aria-hidden='true'
                   />
-                  <p className='text-muted-foreground min-w-0 font-mono text-xs break-all'>
+                  <p className='text-muted-foreground min-w-0 font-mono text-[12.5px] break-all'>
                     {session.ip || t('Unknown')}
                   </p>
                 </div>
@@ -225,15 +228,23 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
             ) : null}
           </CardContent>
 
-          {/* 底部次要入口：成功 = 手动跳转；失败 = 返回首页（无主按钮） */}
+          {/* 底部保留区（与 AuthCard 同一套常量）：只放次要入口，右下让给角标 */}
           <div
-            className='flex min-h-11 items-center px-5'
-            style={{ paddingRight: 136 }}
+            className='flex flex-none items-center px-[22px]'
+            style={{
+              marginTop: CARD_FOOT.gap,
+              minHeight: CARD_FOOT.height,
+              paddingBottom: CARD_FOOT.paddingBottom,
+              paddingRight: BADGE.width - BADGE.outRight + BADGE.gap,
+            }}
           >
             <button
               type='button'
               onClick={isSuccess ? navigateAway : () => navigate({ to: '/' })}
-              className='text-muted-foreground hover:text-foreground text-sm underline underline-offset-4 transition-colors'
+              className={cn(
+                AUTH_MINOR_TEXT,
+                'text-muted-foreground hover:text-foreground underline underline-offset-4 transition-colors'
+              )}
             >
               {isSuccess
                 ? t('Not redirected automatically? Continue to the dashboard')

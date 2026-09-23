@@ -79,7 +79,8 @@ export function AuthLayout({ children }: AuthLayoutProps) {
         ) : null}
       </div>
       <div className='container flex items-center pt-16 sm:pt-0'>
-        <div className='mx-auto flex w-full flex-col justify-center space-y-2 px-4 py-8 sm:w-[480px] sm:p-8'>
+        {/* 设计稿里卡宽 400px（容器 464 = 400 + 两侧 32 padding） */}
+        <div className='mx-auto flex w-full flex-col justify-center space-y-2 px-4 py-8 sm:w-[464px] sm:p-8'>
           {children}
         </div>
       </div>

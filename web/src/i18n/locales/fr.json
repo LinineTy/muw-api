@@ -6495,6 +6495,7 @@
     "Unable to parse structured pricing": "Impossible d'analyser la tarification structurée",
     "Unable to prepare chat link. Please ensure you have an enabled API key.": "Impossible de préparer le lien de chat. Veuillez vous assurer d'avoir une clé API activée.",
     "Unable to read clipboard": "Impossible de lire le presse-papiers",
+    "Unable to sign in": "Unable to sign in",
     "Unable to sign in or create an account": "Unable to sign in or create an account",
     "Unanalyzed": "Unanalyzed",
     "Unanalyzed errors reached the trigger threshold; analysis will run on the next error log.": "Unanalyzed errors reached the trigger threshold; analysis will run on the next error log.",

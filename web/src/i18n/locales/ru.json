@@ -6495,6 +6495,7 @@
     "Unable to parse structured pricing": "Не удалось разобрать структурированные цены",
     "Unable to prepare chat link. Please ensure you have an enabled API key.": "Не удается подготовить ссылку для чата. Убедитесь, что у вас есть активированный API-ключ.",
     "Unable to read clipboard": "Не удалось прочитать буфер обмена",
+    "Unable to sign in": "Unable to sign in",
     "Unable to sign in or create an account": "Unable to sign in or create an account",
     "Unanalyzed": "Unanalyzed",
     "Unanalyzed errors reached the trigger threshold; analysis will run on the next error log.": "Unanalyzed errors reached the trigger threshold; analysis will run on the next error log.",

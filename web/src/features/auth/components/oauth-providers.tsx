@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 import { useOAuthLogin } from '../hooks/use-oauth-login'
+import { AUTH_PRIMARY_BUTTON } from '../lib/auth-styles'
 import type { SystemStatus } from '../types'
 
 type OAuthProvidersProps = {
@@ -172,7 +173,12 @@ export function OAuthProviders({
               type='button'
               disabled={disabled || isLoading || extraDisabled}
               onClick={onClick}
-              className='h-11 w-full justify-center gap-2 rounded-lg'
+              className={cn(
+                'w-full justify-center gap-2.5',
+                appearance === 'primary'
+                  ? AUTH_PRIMARY_BUTTON
+                  : 'h-11 rounded-lg'
+              )}
             >
               {icon}
               {label}

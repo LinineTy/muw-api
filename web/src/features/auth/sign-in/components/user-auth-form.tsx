@@ -49,9 +49,16 @@ import { useAuthRedirect } from '@/features/auth/hooks/use-auth-redirect'
 import { useTurnstile } from '@/features/auth/hooks/use-turnstile'
 import { sanitizeAuthRedirect } from '@/features/auth/lib/auth-redirect'
 import {
+  AUTH_HINT_TEXT,
+  AUTH_INPUT,
+  AUTH_MINOR_TEXT,
+  AUTH_PRIMARY_BUTTON,
+} from '@/features/auth/lib/auth-styles'
+import {
   buildLoginDeniedSearch,
   getLoginDeniedInfo,
 } from '@/features/auth/lib/login-denied'
+import { useLegalConsent } from '@/features/auth/lib/use-legal-consent'
 import { beginPasskeyLogin, finishPasskeyLogin } from '@/features/auth/passkey'
 import type { AuthFormProps } from '@/features/auth/types'
 import { useStatus } from '@/hooks/use-status'
@@ -80,7 +87,7 @@ export function UserAuthForm({
   const navigate = useNavigate()
   const [isLoading, setIsLoading] = useState(false)
   const [wechatCode, setWeChatCode] = useState('')
-  const [agreedToLegal, setAgreedToLegal] = useState(false)
+  const { agreedToLegal, setAgreedToLegal } = useLegalConsent()
   const [passkeySupported, setPasskeySupported] = useState(false)
   const [isPasskeyLoading, setIsPasskeyLoading] = useState(false)
   const [isWeChatDialogOpen, setIsWeChatDialogOpen] = useState(false)
@@ -119,14 +126,6 @@ export function UserAuthForm({
     (requiresLegalConsent && !agreedToLegal)
   const hasWeChatLogin = caps.hasWeChatLogin
   const hasAlternativeLogin = caps.hasAlternativeLogin
-
-  useEffect(() => {
-    if (requiresLegalConsent) {
-      setAgreedToLegal(false)
-    } else {
-      setAgreedToLegal(true)
-    }
-  }, [requiresLegalConsent])
 
   useEffect(() => {
     detectPasskeySupport()
@@ -386,7 +385,7 @@ export function UserAuthForm({
             animate={{ opacity: 1, y: 0 }}
             exit={shouldReduce ? undefined : { opacity: 0, y: -6 }}
             transition={MOTION_TRANSITION.fast}
-            className='grid gap-4'
+            className='grid gap-3'
           >
             {mode !== 'password' &&
               hasAlternativeLogin &&
@@ -401,10 +400,13 @@ export function UserAuthForm({
                     name='username'
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>{t('Username or Email')}</FormLabel>
+                        <FormLabel className='sr-only'>
+                          {t('Username or Email')}
+                        </FormLabel>
                         <FormControl>
                           <Input
                             placeholder={t('Enter your username or email')}
+                            className={AUTH_INPUT}
                             {...field}
                           />
                         </FormControl>
@@ -419,10 +421,13 @@ export function UserAuthForm({
                     name='password'
                     render={({ field }) => (
                       <FormItem className='relative'>
-                        <FormLabel>{t('Password')}</FormLabel>
+                        <FormLabel className='sr-only'>
+                          {t('Password')}
+                        </FormLabel>
                         <FormControl>
                           <PasswordInput
                             placeholder={t('Enter password')}
+                            className={AUTH_INPUT}
                             {...field}
                           />
                         </FormControl>
@@ -434,7 +439,10 @@ export function UserAuthForm({
                   <div className='-mt-1 flex justify-end'>
                     <Link
                       to='/forgot-password'
-                      className='text-muted-foreground text-sm font-medium hover:opacity-75'
+                      className={cn(
+                        AUTH_MINOR_TEXT,
+                        'text-muted-foreground font-medium hover:opacity-75'
+                      )}
                     >
                       {t('Forgot password?')}
                     </Link>
@@ -443,7 +451,7 @@ export function UserAuthForm({
                   {/* Submit Button */}
                   <Button
                     type='submit'
-                    className='mt-2 w-full justify-center gap-2'
+                    className={cn(AUTH_PRIMARY_BUTTON, 'mt-1')}
                     disabled={
                       isLoading || (requiresLegalConsent && !agreedToLegal)
                     }
@@ -480,7 +488,7 @@ export function UserAuthForm({
         />
 
         {requiresLegalConsent && !agreedToLegal ? (
-          <p className='text-destructive text-xs'>{legalConsentErrorMessage}</p>
+          <p className={AUTH_HINT_TEXT}>{legalConsentErrorMessage}</p>
         ) : null}
       </form>
 

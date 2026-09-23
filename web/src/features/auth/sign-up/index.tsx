@@ -19,8 +19,11 @@ For commercial licensing, please contact support@quantumnous.com
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
+import { cn } from '@/lib/utils'
+
 import { AuthLayout } from '../auth-layout'
 import { AuthCard } from '../components/auth-card'
+import { AUTH_MINOR_TEXT } from '../lib/auth-styles'
 import { SignUpForm } from './components/sign-up-form'
 
 export function SignUp() {
@@ -48,7 +51,10 @@ export function SignUp() {
           footer={
             <Link
               to='/sign-in'
-              className='text-muted-foreground hover:text-foreground text-sm underline underline-offset-4'
+              className={cn(
+                AUTH_MINOR_TEXT,
+                'text-muted-foreground hover:text-foreground underline underline-offset-4'
+              )}
             >
               {t('Sign in with LinuxDO')}
             </Link>
