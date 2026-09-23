@@ -36,7 +36,9 @@ export function ChannelDetailDialog({
       }}
     >
       <DialogContent className='sm:max-w-2xl'>
-        <DialogHeader>
+        {/* min-w-0: same grid-item reason as the panel below — a long channel
+            name must not widen the dialog column. */}
+        <DialogHeader className='min-w-0'>
           <DialogTitle className='min-w-0 truncate'>
             {row.channel_name || t('Channel #{{id}}', { id: row.channel_id })}
           </DialogTitle>

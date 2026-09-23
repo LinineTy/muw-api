@@ -92,7 +92,11 @@ export function ChannelTestDetailPanel({ row }: { row: ModelHealthRow }) {
   }
 
   return (
-    <div className='space-y-1.5'>
+    // min-w-0: this panel is a grid item of the detail dialog. A grid item
+    // defaults to min-width:auto, so a long error_reason (the row keeps the
+    // text on one line) would widen the whole column past the dialog and
+    // clip its right edge.
+    <div className='min-w-0 space-y-1.5'>
       <div className='max-h-72 space-y-1 overflow-y-auto'>{recordsContent}</div>
 
       <div className='flex items-center justify-between text-xs'>
