@@ -56,7 +56,9 @@ export function SignIn() {
           title={t('Sign in')}
           subtitle={
             !status?.self_use_mode_enabled &&
-            status?.register_enabled !== false ? (
+            status?.register_enabled !== false &&
+            // 密码注册关掉时注册页会回跳登录页，这里就不再引导去注册
+            status?.password_register_enabled !== false ? (
               <>
                 {t("Don't have an account?")}{' '}
                 <Link

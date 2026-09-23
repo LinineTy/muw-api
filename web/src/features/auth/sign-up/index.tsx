@@ -16,9 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Link } from '@tanstack/react-router'
+import { Link, Navigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
+import { useStatus } from '@/hooks/use-status'
 import { cn } from '@/lib/utils'
 
 import { AuthLayout } from '../auth-layout'
@@ -28,6 +29,11 @@ import { SignUpForm } from './components/sign-up-form'
 
 export function SignUp() {
   const { t } = useTranslation()
+  const { status } = useStatus()
+  // 密码注册关掉时注册页自动关闭（回到登录页；新账号走 OAuth 首登自动建号）
+  if (status && status.password_register_enabled === false) {
+    return <Navigate to='/sign-in' replace />
+  }
 
   return (
     <AuthLayout>
