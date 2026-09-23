@@ -20,3 +20,20 @@ export function useAuthEnter(delay = 0) {
     transition: { ...MOTION_TRANSITION.fast, delay },
   }
 }
+
+/**
+ * 收束页离开动效：先淡出、再跳转（跳转目标页自己没有入场过渡，硬切很生硬）。
+ * 系统开启「减少动效」时返回 null，调用方立即跳转。
+ */
+export function useAuthLeave(durationMs = 200) {
+  const shouldReduce = useReducedMotion()
+
+  if (shouldReduce) {
+    return null
+  }
+
+  return {
+    durationMs,
+    opacity: { duration: durationMs / 1000, ease: 'easeInOut' as const },
+  }
+}

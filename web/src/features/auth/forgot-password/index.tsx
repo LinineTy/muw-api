@@ -29,7 +29,10 @@ export function ForgotPassword() {
               'text-muted-foreground hover:text-foreground'
             )}
           >
-            {t("Don't have an account?")} {t('Sign up')}.
+            {t("Don't have an account?")}{' '}
+            {/* 下划线只压在「注册」上，句号留在外面 */}
+            <span className='underline underline-offset-4'>{t('Sign up')}</span>
+            .
           </Link>
         }
       >
