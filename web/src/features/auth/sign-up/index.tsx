@@ -19,42 +19,43 @@ For commercial licensing, please contact support@quantumnous.com
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
-import { useStatus } from '@/hooks/use-status'
-
 import { AuthLayout } from '../auth-layout'
-import { TermsFooter } from '../components/terms-footer'
+import { AuthCard } from '../components/auth-card'
 import { SignUpForm } from './components/sign-up-form'
 
 export function SignUp() {
   const { t } = useTranslation()
-  const { status } = useStatus()
 
   return (
     <AuthLayout>
-      <div className='w-full space-y-8'>
-        <div className='space-y-2'>
-          <h2 className='text-center text-2xl font-semibold tracking-tight sm:text-left'>
-            {t('Create an account')}
-          </h2>
-          <p className='text-muted-foreground text-left text-sm sm:text-base'>
-            {t('Already have an account?')}{' '}
+      <div className='w-full space-y-6'>
+        <AuthCard
+          title={t('Create an account')}
+          subtitle={
+            <>
+              {t('Already have an account?')}{' '}
+              <Link
+                to='/sign-in'
+                className='hover:text-primary font-medium underline underline-offset-4'
+              >
+                {t('Sign in')}
+              </Link>
+              .
+            </>
+          }
+          badge='secure'
+          badgeLabel={t('Connection secure')}
+          footer={
             <Link
               to='/sign-in'
-              className='hover:text-primary font-medium underline underline-offset-4'
+              className='text-muted-foreground hover:text-foreground text-sm underline underline-offset-4'
             >
-              {t('Sign in')}
+              {t('Sign in with LinuxDO')}
             </Link>
-            .
-          </p>
-        </div>
-
-        <SignUpForm />
-
-        <TermsFooter
-          variant='sign-up'
-          status={status}
-          className='text-center'
-        />
+          }
+        >
+          <SignUpForm />
+        </AuthCard>
       </div>
     </AuthLayout>
   )

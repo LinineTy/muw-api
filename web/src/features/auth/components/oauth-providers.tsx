@@ -35,6 +35,8 @@ import type { SystemStatus } from '../types'
 type OAuthProvidersProps = {
   status: SystemStatus | null
   disabled?: boolean
+  /** primary = 作为登录页主行动（唯一主色按钮、不显示分隔线）；secondary = 附在密码表单下的备选 */
+  appearance?: 'primary' | 'secondary'
   className?: string
   onWeChatLogin?: () => void
   isWeChatLoading?: boolean
@@ -52,6 +54,8 @@ type ProviderButton = {
 export function OAuthProviders({
   status,
   disabled = false,
+  /** primary = 作为登录页主行动（唯一主色按钮、不显示分隔线）；secondary = 附在密码表单下的备选 */
+  appearance = 'secondary',
   className,
   onWeChatLogin,
   isWeChatLoading = false,
@@ -146,23 +150,25 @@ export function OAuthProviders({
 
   return (
     <div className={cn('space-y-3', className)}>
-      <div className='relative'>
-        <div className='absolute inset-0 flex items-center'>
-          <span className='w-full border-t' />
+      {appearance === 'primary' ? null : (
+        <div className='relative'>
+          <div className='absolute inset-0 flex items-center'>
+            <span className='w-full border-t' />
+          </div>
+          <div className='relative flex justify-center text-xs uppercase'>
+            <span className='bg-background text-muted-foreground px-2'>
+              {t('Or continue with')}
+            </span>
+          </div>
         </div>
-        <div className='relative flex justify-center text-xs uppercase'>
-          <span className='bg-background text-muted-foreground px-2'>
-            {t('Or continue with')}
-          </span>
-        </div>
-      </div>
+      )}
 
       <div className='flex flex-col gap-2'>
         {providerButtons.map(
           ({ key, label, onClick, icon, disabled: extraDisabled }) => (
             <Button
               key={key}
-              variant='outline'
+              variant={appearance === 'primary' ? 'default' : 'outline'}
               type='button'
               disabled={disabled || isLoading || extraDisabled}
               onClick={onClick}

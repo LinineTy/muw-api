@@ -65,7 +65,8 @@ export function buildLoginDeniedSearch(
 ): LoginResultSearchParams {
   const search: LoginResultSearchParams = { status: denied.status }
   if (denied.reason) search.reason = denied.reason
-  if (typeof message === 'string' && message.length > 0) search.message = message
+  if (typeof message === 'string' && message.length > 0)
+    search.message = message
   if (redirect) search.redirect = redirect
   return search
 }

@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { activateAccount } from '@/features/auth/api'
 import { AuthLayout } from '@/features/auth/auth-layout'
+import { AuthCard } from '@/features/auth/components/auth-card'
 import { isAuthUser } from '@/lib/auth-session'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -46,17 +47,23 @@ export function Activate() {
 
   return (
     <AuthLayout>
-      <div className='w-full space-y-6'>
-        <div className='space-y-2 text-center'>
-          <h2 className='text-2xl font-semibold tracking-tight'>
-            {t('Activate Account')}
-          </h2>
-          <p className='text-muted-foreground text-sm'>
-            {t(
-              'This site requires an invitation code to activate your account'
-            )}
-          </p>
-        </div>
+      <AuthCard
+        title={t('Activate Account')}
+        subtitle={t(
+          'This site requires an invitation code to activate your account'
+        )}
+        badge='activate'
+        badgeLabel={t('Activation required')}
+        footer={
+          <button
+            type='button'
+            onClick={() => navigate({ to: '/sign-in', replace: true })}
+            className='text-muted-foreground hover:text-foreground text-sm underline underline-offset-4'
+          >
+            {t('Sign in with a different account')}
+          </button>
+        }
+      >
         <form onSubmit={handleSubmit} className='grid gap-4'>
           <div className='grid gap-2'>
             <Label htmlFor='invite-code'>{t('Invitation Code')}</Label>
@@ -78,7 +85,7 @@ export function Activate() {
             {t('Activate')}
           </Button>
         </form>
-      </div>
+      </AuthCard>
     </AuthLayout>
   )
 }

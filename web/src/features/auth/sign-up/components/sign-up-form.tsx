@@ -367,6 +367,9 @@ export function SignUpForm({
           onCheckedChange={setAgreedToLegal}
           className='mt-1'
         />
+        {requiresLegalConsent && !agreedToLegal ? (
+          <p className='text-destructive text-xs'>{legalConsentErrorMessage}</p>
+        ) : null}
 
         {/* Submit Button */}
         <Button

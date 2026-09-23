@@ -2,14 +2,12 @@
 import { LaptopIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useNavigate } from '@tanstack/react-router'
-import { CheckCircle2, CircleAlert, Globe, ShieldCheck } from 'lucide-react'
+import { CircleAlert, Clock, Globe, ShieldCheck } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
 import {
   loginMethodLabel,
   sessionDevice,
@@ -18,6 +16,8 @@ import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
 import dayjs from '@/lib/dayjs'
 import { useAuthStore } from '@/stores/auth-store'
 
+import { AuthCardBadge } from '../components/auth-card-badge'
+import { CountdownRing } from '../components/countdown-ring'
 import { LOGIN_RESULT_REDIRECT_SECONDS } from '../constants'
 import { sanitizeAuthRedirect } from '../lib/auth-redirect'
 
@@ -94,11 +94,6 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
   // loginMethodLabel 对 oauth:xxx 返回「OAuth · GitHub」等具体通道。
   const methodLabel = session ? loginMethodLabel(session.login_method, t) : ''
 
-  const redirectNote = t('Redirecting in {{seconds}} seconds', {
-    seconds: secondsLeft,
-  })
-  const progressPercent = (secondsLeft / LOGIN_RESULT_REDIRECT_SECONDS) * 100
-
   let statusTitle: string
   if (status === 'user_disabled') {
     statusTitle = t('Your account has been disabled')
@@ -117,159 +112,138 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
     failDetail = message
   }
 
-  let title: string
-  if (!isSuccess) {
-    title = statusTitle
-  } else if (displayName) {
-    title = t('Welcome back, {{name}}', { name: displayName })
-  } else {
-    title = t('Signed in successfully!')
-  }
+  // 设计稿：成功页标题不带用户名（用户名在卡内账号行），失败页用状态标题
+  const title = isSuccess ? t('Welcome back') : statusTitle
 
   return (
-    <div className='w-full space-y-6'>
-      {/* 顶部：状态图标 + 标题（成功/失败共用结构） */}
-      <div className='flex flex-col items-center gap-4 text-center'>
-        <div
-          className={
-            isSuccess
-              ? 'rounded-2xl bg-emerald-500/10 p-4 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-300'
-              : 'bg-destructive/10 text-destructive dark:bg-destructive/20 rounded-2xl p-4'
-          }
-        >
+    <div className='w-full'>
+      {/* 卡外标题区：标题 + 副标题；成功态在副标题右侧挂倒计时圆环 */}
+      <div className='mb-4'>
+        <h2 className='text-2xl font-semibold tracking-tight'>{title}</h2>
+        <div className='mt-1.5 flex items-center gap-3'>
+          <p className='text-muted-foreground text-sm'>
+            {isSuccess
+              ? t('Signed in successfully, entering the console')
+              : t('This account is currently disabled')}
+          </p>
           {isSuccess ? (
-            <CheckCircle2 className='size-8' aria-hidden='true' />
-          ) : (
-            <CircleAlert className='size-8' aria-hidden='true' />
-          )}
-        </div>
-        <div className='space-y-2'>
-          <h2 className='text-2xl font-semibold tracking-tight'>{title}</h2>
-          {isSuccess && displayName ? (
-            <p className='text-muted-foreground text-sm sm:text-base'>
-              {t('Signed in successfully!')}
-            </p>
+            <CountdownRing
+              secondsLeft={secondsLeft}
+              totalSeconds={LOGIN_RESULT_REDIRECT_SECONDS}
+            />
           ) : null}
         </div>
       </div>
 
-      {/* 失败原因（警示框，原因带「原因:」前缀） */}
-      {!isSuccess && failDetail ? (
-        <Alert variant='destructive'>
-          <CircleAlert className='mt-0.5 size-4' aria-hidden='true' />
-          <AlertDescription>
-            <span className='font-medium'>{t('Reason:')}</span> {failDetail}
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      {/* 成功态：账户 + 登录会话合并卡 */}
-      {isSuccess ? (
+      <div className='relative'>
         <Card data-card-hover='false' className='gap-0 py-0'>
-          {user ? (
-            <CardContent className='p-4'>
-              <p className='text-muted-foreground mb-2.5 text-xs font-medium tracking-wide uppercase'>
-                {t('Account')}
-              </p>
+          <CardContent className='grid gap-3.5 px-5 pt-6'>
+            {/* 账号行：头像 + 双排（用户名 / @用户名 · LD 等级） */}
+            {isSuccess && user ? (
               <div className='flex items-center gap-3'>
-                <Avatar className='ring-background h-11 w-11 shrink-0 rounded-lg text-sm ring-2'>
+                <Avatar className='ring-background size-10 shrink-0 rounded-full text-sm ring-1'>
                   {user.avatar ? (
                     <AvatarImage src={user.avatar} alt={displayName} />
                   ) : null}
                   <AvatarFallback
-                    className='rounded-lg text-white'
+                    className='rounded-full text-white'
                     style={getUserAvatarStyle(avatarName)}
                   >
                     {getUserAvatarFallback(avatarName)}
                   </AvatarFallback>
                 </Avatar>
-                <div className='min-w-0 flex-1'>
+                <div className='min-w-0'>
                   <p className='min-w-0 truncate text-base leading-snug font-semibold'>
                     {displayName}
                   </p>
-                  {/* 有 LD 绑定时在 @用户名 后用 · 跟 L 等级；无绑定则只显示 @用户名 */}
                   <p className='text-muted-foreground text-xs'>
                     @{user.username}
                     {user.linux_do_id ? ` · L${ldLevel ?? 0}` : null}
                   </p>
                 </div>
               </div>
-            </CardContent>
-          ) : null}
+            ) : null}
 
-          {user && session ? <Separator /> : null}
-
-          {session ? (
-            <CardContent className='p-4'>
-              <p className='text-muted-foreground mb-2.5 text-xs font-medium tracking-wide uppercase'>
-                {t('Sign-in session')}
-              </p>
-              <div className='space-y-1'>
-                <div className='flex items-center gap-2'>
-                  <div className='bg-muted flex size-7 shrink-0 items-center justify-center rounded-md'>
-                    <HugeiconsIcon
-                      icon={LaptopIcon}
-                      className='size-4'
-                      strokeWidth={2}
-                    />
-                  </div>
+            {/* 登录会话：设备 / 来源 / IP / 时间 四行，各带图标 */}
+            {isSuccess && session ? (
+              <div className='border-border bg-muted/30 grid gap-2.5 rounded-xl border px-3.5 py-3'>
+                <div className='flex items-center gap-2.5'>
+                  <HugeiconsIcon
+                    icon={LaptopIcon}
+                    className='text-muted-foreground size-4 shrink-0'
+                    strokeWidth={2}
+                  />
                   <p className='min-w-0 truncate text-xs font-medium'>
                     {device}
                   </p>
                 </div>
-                <div className='flex items-center gap-2'>
-                  <div className='bg-muted flex size-7 shrink-0 items-center justify-center rounded-md'>
-                    <ShieldCheck
-                      className='text-muted-foreground size-3.5'
-                      aria-hidden='true'
-                    />
-                  </div>
+                <div className='flex items-center gap-2.5'>
+                  <ShieldCheck
+                    className='text-muted-foreground size-4 shrink-0'
+                    aria-hidden='true'
+                  />
                   <p className='text-muted-foreground min-w-0 truncate text-xs'>
                     {methodLabel}
                   </p>
                 </div>
-                <div className='flex items-center gap-2'>
-                  <div className='bg-muted flex size-7 shrink-0 items-center justify-center rounded-md'>
-                    <Globe
-                      className='text-muted-foreground size-3.5'
-                      aria-hidden='true'
-                    />
-                  </div>
+                <div className='flex items-start gap-2.5'>
+                  <Globe
+                    className='text-muted-foreground mt-0.5 size-4 shrink-0'
+                    aria-hidden='true'
+                  />
+                  <p className='text-muted-foreground min-w-0 font-mono text-xs break-all'>
+                    {session.ip || t('Unknown')}
+                  </p>
+                </div>
+                <div className='flex items-center gap-2.5'>
+                  <Clock
+                    className='text-muted-foreground size-4 shrink-0'
+                    aria-hidden='true'
+                  />
                   <p className='text-muted-foreground min-w-0 truncate text-xs'>
-                    {session.ip || t('Unknown')} ·{' '}
                     {dayjs.unix(session.created_at).format('YYYY-MM-DD HH:mm')}
                   </p>
                 </div>
               </div>
-            </CardContent>
-          ) : null}
-        </Card>
-      ) : null}
+            ) : null}
 
-      {/* 倒计时进度条 + 未自动跳转时的兜底链接 */}
-      <div className='space-y-3'>
-        <div className='space-y-2'>
-          <div className='bg-muted h-1 w-full overflow-hidden rounded-full'>
-            <div
-              className='bg-primary h-full rounded-full transition-[width] duration-1000 ease-linear'
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
-          <p className='text-muted-foreground text-center text-sm'>
-            {redirectNote}
-          </p>
-        </div>
-        <div className='text-center'>
-          <button
-            type='button'
-            onClick={navigateAway}
-            className='text-muted-foreground hover:text-foreground text-xs underline underline-offset-4 transition-colors'
+            {/* 失败原因 */}
+            {!isSuccess && failDetail ? (
+              <div className='border-border bg-muted/30 flex items-start gap-2.5 rounded-xl border px-3.5 py-3'>
+                <CircleAlert
+                  className='text-destructive mt-0.5 size-4 shrink-0'
+                  aria-hidden='true'
+                />
+                <span className='break-anywhere text-xs leading-5'>
+                  {failDetail}
+                </span>
+              </div>
+            ) : null}
+          </CardContent>
+
+          {/* 底部次要入口：成功 = 手动跳转；失败 = 返回首页（无主按钮） */}
+          <div
+            className='flex min-h-11 items-center px-5'
+            style={{ paddingRight: 136 }}
           >
-            {isSuccess
-              ? t('Not redirected automatically? Continue to the dashboard')
-              : t('Not redirected automatically? Back to sign in')}
-          </button>
-        </div>
+            <button
+              type='button'
+              onClick={isSuccess ? navigateAway : () => navigate({ to: '/' })}
+              className='text-muted-foreground hover:text-foreground text-sm underline underline-offset-4 transition-colors'
+            >
+              {isSuccess
+                ? t('Not redirected automatically? Continue to the dashboard')
+                : t('Back to home')}
+            </button>
+          </div>
+        </Card>
+
+        <AuthCardBadge
+          kind={isSuccess ? 'success' : 'fail'}
+          label={
+            isSuccess ? t('Status: signed in') : t('Status: sign-in failed')
+          }
+        />
       </div>
     </div>
   )

@@ -62,11 +62,17 @@ import {
 import { getServerErrorMessageKey } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
+import {
+  getSignInCapabilities,
+  type SignInMode,
+} from '../../lib/sign-in-capabilities'
+
 export function UserAuthForm({
   className,
   redirectTo,
+  mode = 'oauth',
   ...props
-}: AuthFormProps) {
+}: AuthFormProps & { mode?: SignInMode }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [isLoading, setIsLoading] = useState(false)
@@ -81,13 +87,10 @@ export function UserAuthForm({
   const loginFailedMessage = t('Login failed')
 
   const { status } = useStatus()
-  const passkeyLoginEnabled = Boolean(
-    status?.passkey_login ?? status?.data?.passkey_login
-  )
-  const passwordLoginEnabled =
-    (status?.password_login_enabled ??
-      status?.data?.password_login_enabled ??
-      true) !== false
+  // 与登录页共用同一份能力判断（features/auth/lib/sign-in-capabilities.ts）
+  const caps = getSignInCapabilities(status)
+  const passkeyLoginEnabled = caps.passkeyLoginEnabled
+  const passwordLoginEnabled = caps.passwordLoginEnabled
   const passwordLoginEncryptionEnabled =
     (status?.password_login_encryption_enabled ??
       status?.data?.password_login_encryption_enabled ??
@@ -111,17 +114,8 @@ export function UserAuthForm({
     isPasskeyLoading ||
     !passkeySupported ||
     (requiresLegalConsent && !agreedToLegal)
-  const hasWeChatLogin = Boolean(status?.wechat_login)
-  const hasOAuthLogin = Boolean(
-    status?.github_oauth ||
-    status?.discord_oauth ||
-    status?.oidc_enabled ||
-    status?.linuxdo_oauth ||
-    status?.telegram_oauth ||
-    (status?.custom_oauth_providers?.length ?? 0) > 0
-  )
-  const hasAlternativeLogin =
-    passkeyLoginEnabled || hasWeChatLogin || hasOAuthLogin
+  const hasWeChatLogin = caps.hasWeChatLogin
+  const hasAlternativeLogin = caps.hasAlternativeLogin
 
   useEffect(() => {
     if (requiresLegalConsent) {
@@ -280,9 +274,7 @@ export function UserAuthForm({
     try {
       const begin = await beginPasskeyLogin()
 
-      const publicKey = prepareCredentialRequestOptions(
-        begin.options ?? begin
-      )
+      const publicKey = prepareCredentialRequestOptions(begin.options ?? begin)
       const flowToken = begin.flow_token
       if (!flowToken) {
         throw new Error(t('Login flow expired. Please sign in again.'))
@@ -366,6 +358,7 @@ export function UserAuthForm({
 
       {/* OAuth Providers */}
       <OAuthProviders
+        appearance={mode === 'oauth' ? 'primary' : 'secondary'}
         status={status}
         redirectTo={redirectTo}
         disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
@@ -382,75 +375,79 @@ export function UserAuthForm({
         className={cn('grid gap-4', className)}
         {...props}
       >
-        {hasAlternativeLogin && alternativeLoginMethods}
+        {mode !== 'password' && hasAlternativeLogin && alternativeLoginMethods}
 
-        {passwordLoginEnabled && (
-          <>
-            {/* Username Field */}
-            <FormField
-              control={form.control}
-              name='username'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Username or Email')}</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder={t('Enter your username or email')}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+        {passwordLoginEnabled &&
+          (mode === 'password' || !hasAlternativeLogin) && (
+            <>
+              {/* Username Field */}
+              <FormField
+                control={form.control}
+                name='username'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Username or Email')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder={t('Enter your username or email')}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            {/* Password Field */}
-            <FormField
-              control={form.control}
-              name='password'
-              render={({ field }) => (
-                <FormItem className='relative'>
-                  <FormLabel>{t('Password')}</FormLabel>
-                  <FormControl>
-                    <PasswordInput
-                      placeholder={t('Enter password')}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                  <Link
-                    to='/forgot-password'
-                    className='text-muted-foreground absolute end-0 -top-0.5 z-10 text-sm font-medium hover:opacity-75'
-                  >
-                    {t('Forgot password?')}
-                  </Link>
-                </FormItem>
-              )}
-            />
+              {/* Password Field */}
+              <FormField
+                control={form.control}
+                name='password'
+                render={({ field }) => (
+                  <FormItem className='relative'>
+                    <FormLabel>{t('Password')}</FormLabel>
+                    <FormControl>
+                      <PasswordInput
+                        placeholder={t('Enter password')}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            {/* Submit Button */}
-            <Button
-              type='submit'
-              className='mt-2 w-full justify-center gap-2'
-              disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
-            >
-              {isLoading ? <Loader2 className='animate-spin' /> : <LogIn />}
-              {t('Sign in')}
-            </Button>
-
-            {/* Turnstile */}
-            {isTurnstileEnabled && (
-              <div className='mt-2'>
-                <Turnstile
-                  key={turnstileWidgetKey}
-                  siteKey={turnstileSiteKey}
-                  onVerify={setTurnstileToken}
-                  onExpire={() => setTurnstileToken('')}
-                />
+              <div className='-mt-1 flex justify-end'>
+                <Link
+                  to='/forgot-password'
+                  className='text-muted-foreground text-sm font-medium hover:opacity-75'
+                >
+                  {t('Forgot password?')}
+                </Link>
               </div>
-            )}
-          </>
-        )}
+
+              {/* Submit Button */}
+              <Button
+                type='submit'
+                className='mt-2 w-full justify-center gap-2'
+                disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
+              >
+                {isLoading ? <Loader2 className='animate-spin' /> : <LogIn />}
+                {t('Sign in')}
+              </Button>
+
+              {/* Turnstile */}
+              {isTurnstileEnabled && (
+                <div className='mt-2'>
+                  <Turnstile
+                    key={turnstileWidgetKey}
+                    siteKey={turnstileSiteKey}
+                    onVerify={setTurnstileToken}
+                    onExpire={() => setTurnstileToken('')}
+                  />
+                </div>
+              )}
+            </>
+          )}
 
         <LegalConsent
           status={status}
@@ -459,7 +456,9 @@ export function UserAuthForm({
           className='mt-1'
         />
 
-        {!hasAlternativeLogin && alternativeLoginMethods}
+        {requiresLegalConsent && !agreedToLegal ? (
+          <p className='text-destructive text-xs'>{legalConsentErrorMessage}</p>
+        ) : null}
       </form>
 
       {hasWeChatLogin && (

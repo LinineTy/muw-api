@@ -1,3 +1,4 @@
+import { Link, useSearch } from '@tanstack/react-router'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -16,30 +17,42 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Link, useSearch } from '@tanstack/react-router'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useStatus } from '@/hooks/use-status'
 
 import { AuthLayout } from '../auth-layout'
-import { TermsFooter } from '../components/terms-footer'
+import { AuthCard } from '../components/auth-card'
+import {
+  getSignInCapabilities,
+  type SignInMode,
+} from '../lib/sign-in-capabilities'
 import { UserAuthForm } from './components/user-auth-form'
 
 export function SignIn() {
   const { t } = useTranslation()
   const { redirect } = useSearch({ from: '/(auth)/sign-in' })
   const { status } = useStatus()
+  const caps = getSignInCapabilities(status)
+  // 默认主位 = OAuth（L1）；没有替代登录方式时只剩账号密码，直接落到密码模式。
+  const [mode, setMode] = useState<SignInMode>(
+    caps.hasAlternativeLogin ? 'oauth' : 'password'
+  )
+  useEffect(() => {
+    if (!caps.hasAlternativeLogin) setMode('password')
+  }, [caps.hasAlternativeLogin])
+  const canSwitchMode = caps.hasAlternativeLogin && caps.passwordLoginEnabled
 
   return (
     <AuthLayout>
-      <div className='w-full space-y-8'>
-        <div className='space-y-2'>
-          <h2 className='text-center text-2xl font-semibold tracking-tight sm:text-left'>
-            {t('Sign in')}
-          </h2>
-          {!status?.self_use_mode_enabled &&
-            status?.register_enabled !== false && (
-              <p className='text-muted-foreground text-left text-sm sm:text-base'>
+      <div className='w-full space-y-6'>
+        <AuthCard
+          title={t('Sign in')}
+          subtitle={
+            !status?.self_use_mode_enabled &&
+            status?.register_enabled !== false ? (
+              <>
                 {t("Don't have an account?")}{' '}
                 <Link
                   to='/sign-up'
@@ -48,17 +61,31 @@ export function SignIn() {
                   {t('Sign up')}
                 </Link>
                 .
-              </p>
-            )}
-        </div>
-
-        <UserAuthForm redirectTo={redirect} />
-
-        <TermsFooter
-          variant='sign-in'
-          status={status}
-          className='text-center'
-        />
+              </>
+            ) : null
+          }
+          badge='secure'
+          badgeLabel={t('Connection secure')}
+          footer={
+            canSwitchMode ? (
+              <button
+                type='button'
+                className='text-muted-foreground hover:text-foreground text-sm underline underline-offset-4'
+                onClick={() =>
+                  setMode((current) =>
+                    current === 'oauth' ? 'password' : 'oauth'
+                  )
+                }
+              >
+                {mode === 'oauth'
+                  ? t('Sign in with username and password')
+                  : t('Sign in with OAuth')}
+              </button>
+            ) : null
+          }
+        >
+          <UserAuthForm redirectTo={redirect} mode={mode} />
+        </AuthCard>
       </div>
     </AuthLayout>
   )

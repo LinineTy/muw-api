@@ -38,7 +38,10 @@ describe('getLoginDeniedInfo', () => {
 
   test('parses the axios error shape response.data', () => {
     expect(
-      getLoginDeniedInfo({ isAxiosError: true, response: { data: deniedPayload() } })
+      getLoginDeniedInfo({
+        isAxiosError: true,
+        response: { data: deniedPayload() },
+      })
     ).toEqual({ status: 'user_disabled', reason: 'violated terms' })
   })
 

@@ -20,6 +20,7 @@ import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { Skeleton } from '@/components/ui/skeleton'
+import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 
 type AuthLayoutProps = {
@@ -29,6 +30,8 @@ type AuthLayoutProps = {
 export function AuthLayout({ children }: AuthLayoutProps) {
   const { t } = useTranslation()
   const { systemName, logo, loading } = useSystemConfig()
+  const { status } = useStatus()
+  const year = new Date().getFullYear()
 
   return (
     <div data-slot='auth-layout' className='relative grid h-svh max-w-none'>
@@ -53,6 +56,28 @@ export function AuthLayout({ children }: AuthLayoutProps) {
           <h1 className='text-xl font-medium'>{systemName}</h1>
         )}
       </Link>
+      {/* 页脚：版权 + 法务入口固定在左下（设计稿：底栏不写版本号） */}
+      <div className='text-muted-foreground absolute bottom-4 left-4 z-10 flex flex-wrap items-center gap-3 text-xs sm:bottom-8 sm:left-8'>
+        <span>
+          © {year} {systemName}
+        </span>
+        {status?.user_agreement_enabled ? (
+          <a
+            href='/user-agreement'
+            className='hover:text-foreground underline-offset-4 hover:underline'
+          >
+            {t('User Agreement')}
+          </a>
+        ) : null}
+        {status?.privacy_policy_enabled ? (
+          <a
+            href='/privacy-policy'
+            className='hover:text-foreground underline-offset-4 hover:underline'
+          >
+            {t('Privacy Policy')}
+          </a>
+        ) : null}
+      </div>
       <div className='container flex items-center pt-16 sm:pt-0'>
         <div className='mx-auto flex w-full flex-col justify-center space-y-2 px-4 py-8 sm:w-[480px] sm:p-8'>
           {children}
