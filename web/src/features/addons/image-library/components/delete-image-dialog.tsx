@@ -48,7 +48,11 @@ export function DeleteImageDialog({ imageId, name }: DeleteImageDialogProps) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t('Delete Image')}</AlertDialogTitle>
-            <AlertDialogDescription className='break-words'>
+            {/* [overflow-wrap:anywhere] (not break-words): only `anywhere`
+                lowers the min-content width, so a long unbroken file name
+                wraps instead of widening the dialog past its max width and
+                squeezing the footer buttons out of view. */}
+            <AlertDialogDescription className='[overflow-wrap:anywhere]'>
               {t(
                 'Are you sure you want to delete the image "{{name}}"? Themes that reference its URL will stop showing it.',
                 { name }
