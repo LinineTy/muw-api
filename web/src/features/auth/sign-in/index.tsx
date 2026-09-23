@@ -17,10 +17,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useStatus } from '@/hooks/use-status'
+import { MOTION_TRANSITION } from '@/lib/motion'
 
 import { AuthLayout } from '../auth-layout'
 import { AuthCard } from '../components/auth-card'
@@ -32,6 +34,7 @@ import { UserAuthForm } from './components/user-auth-form'
 
 export function SignIn() {
   const { t } = useTranslation()
+  const shouldReduce = useReducedMotion()
   const { redirect } = useSearch({ from: '/(auth)/sign-in' })
   const { status } = useStatus()
   const caps = getSignInCapabilities(status)
@@ -77,9 +80,20 @@ export function SignIn() {
                   )
                 }
               >
-                {mode === 'oauth'
-                  ? t('Sign in with username and password')
-                  : t('Sign in with OAuth')}
+                <AnimatePresence mode='wait' initial={false}>
+                  <motion.span
+                    key={mode}
+                    initial={shouldReduce ? false : { opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={shouldReduce ? undefined : { opacity: 0, y: -4 }}
+                    transition={MOTION_TRANSITION.fast}
+                    className='inline-block'
+                  >
+                    {mode === 'oauth'
+                      ? t('Sign in with username and password')
+                      : t('Sign in with OAuth')}
+                  </motion.span>
+                </AnimatePresence>
               </button>
             ) : null
           }

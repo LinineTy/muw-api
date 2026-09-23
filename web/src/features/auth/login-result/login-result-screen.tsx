@@ -3,6 +3,7 @@ import { LaptopIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useNavigate } from '@tanstack/react-router'
 import { CircleAlert, Clock, Globe, ShieldCheck } from 'lucide-react'
+import { motion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -19,6 +20,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { AuthCardBadge } from '../components/auth-card-badge'
 import { CountdownRing } from '../components/countdown-ring'
 import { LOGIN_RESULT_REDIRECT_SECONDS } from '../constants'
+import { useAuthEnter } from '../lib/auth-motion'
 import { sanitizeAuthRedirect } from '../lib/auth-redirect'
 
 export interface LoginResultSearch {
@@ -113,12 +115,14 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
   }
 
   // 设计稿：成功页标题不带用户名（用户名在卡内账号行），失败页用状态标题
+  const enterTitle = useAuthEnter(0)
+  const enterCard = useAuthEnter(0.05)
   const title = isSuccess ? t('Welcome back') : statusTitle
 
   return (
     <div className='w-full'>
       {/* 卡外标题区：标题 + 副标题；成功态在副标题右侧挂倒计时圆环 */}
-      <div className='mb-4'>
+      <motion.div className='mb-4' {...enterTitle}>
         <h2 className='text-2xl font-semibold tracking-tight'>{title}</h2>
         <div className='mt-1.5 flex items-center gap-3'>
           <p className='text-muted-foreground text-sm'>
@@ -133,9 +137,9 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
             />
           ) : null}
         </div>
-      </div>
+      </motion.div>
 
-      <div className='relative'>
+      <motion.div className='relative' {...enterCard}>
         <Card data-card-hover='false' className='gap-0 py-0'>
           <CardContent className='grid gap-3.5 px-5 pt-6'>
             {/* 账号行：头像 + 双排（用户名 / @用户名 · LD 等级） */}
@@ -244,7 +248,7 @@ export function LoginResultScreen(props: { search: LoginResultSearch }) {
             isSuccess ? t('Status: signed in') : t('Status: sign-in failed')
           }
         />
-      </div>
+      </motion.div>
     </div>
   )
 }

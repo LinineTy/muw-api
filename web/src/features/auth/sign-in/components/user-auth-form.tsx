@@ -20,6 +20,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate } from '@tanstack/react-router'
 import axios from 'axios'
 import { Loader2, LogIn, KeyRound } from 'lucide-react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -54,6 +55,7 @@ import {
 import { beginPasskeyLogin, finishPasskeyLogin } from '@/features/auth/passkey'
 import type { AuthFormProps } from '@/features/auth/types'
 import { useStatus } from '@/hooks/use-status'
+import { MOTION_TRANSITION } from '@/lib/motion'
 import {
   buildAssertionResult,
   prepareCredentialRequestOptions,
@@ -74,6 +76,7 @@ export function UserAuthForm({
   ...props
 }: AuthFormProps & { mode?: SignInMode }) {
   const { t } = useTranslation()
+  const shouldReduce = useReducedMotion()
   const navigate = useNavigate()
   const [isLoading, setIsLoading] = useState(false)
   const [wechatCode, setWeChatCode] = useState('')
@@ -375,79 +378,99 @@ export function UserAuthForm({
         className={cn('grid gap-4', className)}
         {...props}
       >
-        {mode !== 'password' && hasAlternativeLogin && alternativeLoginMethods}
+        {/* 切换登录方式：旧内容淡出 → 卡片高度缓动 → 新内容淡入 */}
+        <AnimatePresence mode='wait' initial={false}>
+          <motion.div
+            key={mode}
+            initial={shouldReduce ? false : { opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={shouldReduce ? undefined : { opacity: 0, y: -6 }}
+            transition={MOTION_TRANSITION.fast}
+            className='grid gap-4'
+          >
+            {mode !== 'password' &&
+              hasAlternativeLogin &&
+              alternativeLoginMethods}
 
-        {passwordLoginEnabled &&
-          (mode === 'password' || !hasAlternativeLogin) && (
-            <>
-              {/* Username Field */}
-              <FormField
-                control={form.control}
-                name='username'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Username or Email')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder={t('Enter your username or email')}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Password Field */}
-              <FormField
-                control={form.control}
-                name='password'
-                render={({ field }) => (
-                  <FormItem className='relative'>
-                    <FormLabel>{t('Password')}</FormLabel>
-                    <FormControl>
-                      <PasswordInput
-                        placeholder={t('Enter password')}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className='-mt-1 flex justify-end'>
-                <Link
-                  to='/forgot-password'
-                  className='text-muted-foreground text-sm font-medium hover:opacity-75'
-                >
-                  {t('Forgot password?')}
-                </Link>
-              </div>
-
-              {/* Submit Button */}
-              <Button
-                type='submit'
-                className='mt-2 w-full justify-center gap-2'
-                disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
-              >
-                {isLoading ? <Loader2 className='animate-spin' /> : <LogIn />}
-                {t('Sign in')}
-              </Button>
-
-              {/* Turnstile */}
-              {isTurnstileEnabled && (
-                <div className='mt-2'>
-                  <Turnstile
-                    key={turnstileWidgetKey}
-                    siteKey={turnstileSiteKey}
-                    onVerify={setTurnstileToken}
-                    onExpire={() => setTurnstileToken('')}
+            {passwordLoginEnabled &&
+              (mode === 'password' || !hasAlternativeLogin) && (
+                <>
+                  {/* Username Field */}
+                  <FormField
+                    control={form.control}
+                    name='username'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Username or Email')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder={t('Enter your username or email')}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                </div>
+
+                  {/* Password Field */}
+                  <FormField
+                    control={form.control}
+                    name='password'
+                    render={({ field }) => (
+                      <FormItem className='relative'>
+                        <FormLabel>{t('Password')}</FormLabel>
+                        <FormControl>
+                          <PasswordInput
+                            placeholder={t('Enter password')}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className='-mt-1 flex justify-end'>
+                    <Link
+                      to='/forgot-password'
+                      className='text-muted-foreground text-sm font-medium hover:opacity-75'
+                    >
+                      {t('Forgot password?')}
+                    </Link>
+                  </div>
+
+                  {/* Submit Button */}
+                  <Button
+                    type='submit'
+                    className='mt-2 w-full justify-center gap-2'
+                    disabled={
+                      isLoading || (requiresLegalConsent && !agreedToLegal)
+                    }
+                  >
+                    {isLoading ? (
+                      <Loader2 className='animate-spin' />
+                    ) : (
+                      <LogIn />
+                    )}
+                    {t('Sign in')}
+                  </Button>
+
+                  {/* Turnstile */}
+                  {isTurnstileEnabled && (
+                    <div className='mt-2'>
+                      <Turnstile
+                        key={turnstileWidgetKey}
+                        siteKey={turnstileSiteKey}
+                        onVerify={setTurnstileToken}
+                        onExpire={() => setTurnstileToken('')}
+                      />
+                    </div>
+                  )}
+                </>
               )}
-            </>
-          )}
+          </motion.div>
+        </AnimatePresence>
 
         <LegalConsent
           status={status}

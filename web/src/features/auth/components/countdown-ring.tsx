@@ -55,7 +55,7 @@ export function CountdownRing({
           strokeLinecap='round'
           strokeDasharray={CIRCUMFERENCE}
           strokeDashoffset={offset}
-          className='stroke-primary transition-[stroke-dashoffset] duration-1000 ease-linear'
+          className='stroke-primary transition-[stroke-dashoffset] duration-1000 ease-linear motion-reduce:transition-none'
         />
       </svg>
       <span className='text-foreground absolute text-[11.5px] font-semibold tabular-nums'>

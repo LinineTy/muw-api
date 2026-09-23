@@ -1,6 +1,9 @@
+// @muw-owned
+import { motion, useReducedMotion } from 'motion/react'
+
+import { MOTION_TRANSITION, MOTION_VARIANTS } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 
-// @muw-owned
 import { BADGE } from '../lib/auth-card-geometry'
 
 /**
@@ -38,8 +41,13 @@ type AuthCardBadgeProps = {
 
 /** 卡片右下角的状态角标（叠卡）。绝对定位，父级需 relative。 */
 export function AuthCardBadge({ kind, label }: AuthCardBadgeProps) {
+  const shouldReduce = useReducedMotion()
+
   return (
-    <div
+    <motion.div
+      initial={shouldReduce ? false : MOTION_VARIANTS.scaleIn.initial}
+      animate={MOTION_VARIANTS.scaleIn.animate}
+      transition={{ ...MOTION_TRANSITION.normal, delay: 0.12 }}
       className='bg-card border-border absolute z-10 flex items-center gap-[9px] rounded-2xl border px-[14px] shadow-lg'
       style={{
         width: BADGE.width,
@@ -70,6 +78,6 @@ export function AuthCardBadge({ kind, label }: AuthCardBadgeProps) {
       {label ? (
         <span className='text-[13px] leading-tight font-semibold'>{label}</span>
       ) : null}
-    </div>
+    </motion.div>
   )
 }

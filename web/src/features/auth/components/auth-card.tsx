@@ -1,10 +1,14 @@
 // @muw-owned
+import { motion } from 'motion/react'
 import * as React from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { Card, CardContent } from '@/components/ui/card'
+import { MOTION_TRANSITION } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 
 import { BADGE } from '../lib/auth-card-geometry'
+import { useAuthEnter } from '../lib/auth-motion'
 import { AuthCardBadge, type AuthCardBadgeKind } from './auth-card-badge'
 
 /**
@@ -40,31 +44,64 @@ export function AuthCard({
   className,
   children,
 }: AuthCardProps) {
+  const enterTitle = useAuthEnter(0)
+  const enterCard = useAuthEnter(0.05)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const [contentHeight, setContentHeight] = useState<number | undefined>(
+    undefined
+  )
+
+  useEffect(() => {
+    const el = contentRef.current
+    if (!el) return
+    const sync = () => setContentHeight(el.getBoundingClientRect().height)
+    sync()
+    const observer = new ResizeObserver(sync)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
   return (
     <div className={cn('w-full', className)}>
-      <div className='mb-4'>
+      <motion.div className='mb-4' {...enterTitle}>
         <h2 className='text-2xl font-semibold tracking-tight'>{title}</h2>
         {subtitle ? (
           <p className='text-muted-foreground mt-1.5 text-sm'>{subtitle}</p>
         ) : null}
-      </div>
+      </motion.div>
 
       <div className='relative'>
-        <Card data-card-hover='false' className='gap-0 py-0'>
-          <CardContent className='grid gap-3.5 px-5 pt-6'>
-            {children}
-          </CardContent>
-          {footer ? (
-            <div
-              className='flex min-h-11 items-center gap-3.5 px-5'
-              style={{ paddingRight: BADGE.width - BADGE.outRight + BADGE.gap }}
-            >
-              {footer}
-            </div>
-          ) : (
-            <div className='h-4' />
-          )}
-        </Card>
+        <motion.div {...enterCard}>
+          <Card data-card-hover='false' className='gap-0 py-0'>
+            <CardContent className='px-5 pt-6'>
+              {/* 高度缓动：切换登录方式 / 提示出现时卡片平滑伸缩，不跳变。
+                  motion 的 height:'auto' 只在目标值变化时才动，内容自己长高不触发，
+                  所以这里量内容实际高度，再把它当动画目标值。 */}
+              <motion.div
+                initial={false}
+                animate={{ height: contentHeight }}
+                transition={MOTION_TRANSITION.normal}
+                className='overflow-hidden'
+              >
+                <div ref={contentRef} className='grid gap-3.5'>
+                  {children}
+                </div>
+              </motion.div>
+            </CardContent>
+            {footer ? (
+              <div
+                className='flex min-h-11 items-center gap-3.5 px-5'
+                style={{
+                  paddingRight: BADGE.width - BADGE.outRight + BADGE.gap,
+                }}
+              >
+                {footer}
+              </div>
+            ) : (
+              <div className='h-4' />
+            )}
+          </Card>
+        </motion.div>
 
         {badge ? <AuthCardBadge kind={badge} label={badgeLabel} /> : null}
       </div>
