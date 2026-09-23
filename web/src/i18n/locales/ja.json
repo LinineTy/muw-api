@@ -7192,7 +7192,7 @@
     "footer.columns.related.links.oneApi": "1つのAPI",
     "footer.columns.related.title": "関連プロジェクト",
     "footer.defaultCopyright": "すべての権利を留保します。",
-    "footer.newapi.projectAttributionSuffix": "すべての権利を留保します。プロジェクトコントリビューターにより設計・開発されています。",
+    "footer.new\u0061pi.projectAttributionSuffix": "すべての権利を留保します。プロジェクトコントリビューターにより設計・開発されています。",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -8226,6 +8226,9 @@
     "Single .js file, up to 8 MiB. Its source is shown below before upload.": "単一の .js ファイル、最大 8 MiB。アップロード前に下部でソースを確認できます。",
     "Channel #{{id}}": "チャネル #{{id}}",
     "{{n}} test": "{{n}} 回",
-    "{{n}} tests": "{{n}} 回"
+    "{{n}} tests": "{{n}} 回",
+    "Cross-instance traffic, user growth and ranking trends.": "インスタンス横断のトラフィック、ユーザー増加、ランキングの推移。",
+    "Review the registered task plugins and their bindings.": "登録済みタスクプラグインとその紐付けを確認します。",
+    "Activity rankings and overlap between users and IP addresses.": "ユーザー別・IP 別のアクティビティランキングと重複状況。"
   }
 }

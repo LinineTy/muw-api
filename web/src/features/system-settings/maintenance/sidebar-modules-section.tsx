@@ -184,6 +184,18 @@ export function SidebarModulesSection({
         title: t('System Info'),
         description: t('Monitor system instances and background tasks.'),
       },
+      operations_stats: {
+        title: t('Operations Stats'),
+        description: t(
+          'Cross-instance traffic, user growth and ranking trends.'
+        ),
+      },
+      task_plugins: {
+        title: t('Task Plugins'),
+        description: t(
+          'Review the registered task plugins and their bindings.'
+        ),
+      },
     },
     addon: {
       image_host: {
@@ -194,6 +206,12 @@ export function SidebarModulesSection({
         title: t('Risk Control'),
         description: t(
           'Credit score, conversation retention and marker analysis.'
+        ),
+      },
+      ip_analysis: {
+        title: t('IP Analysis'),
+        description: t(
+          'Activity rankings and overlap between users and IP addresses.'
         ),
       },
     },

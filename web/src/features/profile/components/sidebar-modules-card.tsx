@@ -192,6 +192,20 @@ export function SidebarModulesCard() {
               description: t('Monitor system instances and background tasks.'),
             },
             {
+              key: 'operations_stats',
+              title: t('Operations Stats'),
+              description: t(
+                'Cross-instance traffic, user growth and ranking trends.'
+              ),
+            },
+            {
+              key: 'task_plugins',
+              title: t('Task Plugins'),
+              description: t(
+                'Review the registered task plugins and their bindings.'
+              ),
+            },
+            {
               key: 'setting',
               title: t('System Settings'),
               description: t('Advanced platform configuration.'),
@@ -213,6 +227,13 @@ export function SidebarModulesCard() {
               title: t('Risk Control'),
               description: t(
                 'Credit score, conversation retention and marker analysis.'
+              ),
+            },
+            {
+              key: 'ip_analysis',
+              title: t('IP Analysis'),
+              description: t(
+                'Activity rankings and overlap between users and IP addresses.'
               ),
             },
           ],

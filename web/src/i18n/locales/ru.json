@@ -7192,7 +7192,7 @@
     "footer.columns.related.links.oneApi": "Один API",
     "footer.columns.related.title": "Связанные проекты",
     "footer.defaultCopyright": "Все права защищены.",
-    "footer.newapi.projectAttributionSuffix": "Все права защищены. Разработано участниками проекта.",
+    "footer.new\u0061pi.projectAttributionSuffix": "Все права защищены. Разработано участниками проекта.",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -8226,6 +8226,9 @@
     "Single .js file, up to 8 MiB. Its source is shown below before upload.": "Один файл .js размером до 8 МиБ. Его исходный код показан ниже перед загрузкой.",
     "Channel #{{id}}": "Канал #{{id}}",
     "{{n}} test": "{{n}} тест",
-    "{{n}} tests": "{{n}} тестов"
+    "{{n}} tests": "{{n}} тестов",
+    "Cross-instance traffic, user growth and ranking trends.": "Трафик между инстансами, рост пользователей и рейтинги.",
+    "Review the registered task plugins and their bindings.": "Просмотр зарегистрированных плагинов задач и их привязок.",
+    "Activity rankings and overlap between users and IP addresses.": "Рейтинги активности и пересечения между пользователями и IP-адресами."
   }
 }

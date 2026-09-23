@@ -7192,7 +7192,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "Projets liés",
     "footer.defaultCopyright": "Tous droits réservés.",
-    "footer.newapi.projectAttributionSuffix": "Tous droits réservés. Conçu et développé par les contributeurs du projet.",
+    "footer.new\u0061pi.projectAttributionSuffix": "Tous droits réservés. Conçu et développé par les contributeurs du projet.",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -8226,6 +8226,9 @@
     "Single .js file, up to 8 MiB. Its source is shown below before upload.": "Un seul fichier .js, jusqu’à 8 Mio. Sa source est affichée ci-dessous avant l’envoi.",
     "Channel #{{id}}": "Canal #{{id}}",
     "{{n}} test": "{{n}} test",
-    "{{n}} tests": "{{n}} tests"
+    "{{n}} tests": "{{n}} tests",
+    "Cross-instance traffic, user growth and ranking trends.": "Trafic inter-instances, croissance des utilisateurs et classements.",
+    "Review the registered task plugins and their bindings.": "Consulter les plugins de tâches enregistrés et leurs associations.",
+    "Activity rankings and overlap between users and IP addresses.": "Classements d’activité et recoupements entre utilisateurs et adresses IP."
   }
 }

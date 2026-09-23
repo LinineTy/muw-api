@@ -69,6 +69,7 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
     subscription: true,
     system_info: true,
     operations_stats: true,
+    task_plugins: true,
     setting: true,
   },
   addon: {
@@ -136,6 +137,7 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/system-settings/site': { section: 'admin', module: 'setting' },
   '/system-info': { section: 'admin', module: 'system_info' },
   '/operations-stats': { section: 'admin', module: 'operations_stats' },
+  '/task-plugins': { section: 'admin', module: 'task_plugins' },
   '/addon': { section: 'addon', module: 'image_host' },
   '/risk-control': { section: 'addon', module: 'risk_control' },
   '/ip-analysis': { section: 'addon', module: 'ip_analysis' },

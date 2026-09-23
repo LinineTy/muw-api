@@ -7192,7 +7192,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "Các Dự Án Liên Quan",
     "footer.defaultCopyright": "Bản quyền được bảo lưu.",
-    "footer.newapi.projectAttributionSuffix": "Bản quyền được bảo lưu. Được thiết kế và phát triển bởi các cộng tác viên dự án.",
+    "footer.new\u0061pi.projectAttributionSuffix": "Bản quyền được bảo lưu. Được thiết kế và phát triển bởi các cộng tác viên dự án.",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -8226,6 +8226,9 @@
     "Single .js file, up to 8 MiB. Its source is shown below before upload.": "Một tệp .js duy nhất, tối đa 8 MiB. Mã nguồn được hiển thị bên dưới trước khi tải lên.",
     "Channel #{{id}}": "Kênh #{{id}}",
     "{{n}} test": "{{n}} lượt",
-    "{{n}} tests": "{{n}} lượt"
+    "{{n}} tests": "{{n}} lượt",
+    "Cross-instance traffic, user growth and ranking trends.": "Lưu lượng giữa các máy chủ, tăng trưởng người dùng và bảng xếp hạng.",
+    "Review the registered task plugins and their bindings.": "Xem các plugin tác vụ đã đăng ký và liên kết của chúng.",
+    "Activity rankings and overlap between users and IP addresses.": "Bảng xếp hạng hoạt động và mức trùng lặp giữa người dùng và địa chỉ IP."
   }
 }

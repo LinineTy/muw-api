@@ -7192,7 +7192,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "相关项目",
     "footer.defaultCopyright": "版权所有。",
-    "footer.newapi.projectAttributionSuffix": "版权所有，由项目贡献者设计与开发。",
+    "footer.new\u0061pi.projectAttributionSuffix": "版权所有，由项目贡献者设计与开发。",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -8226,6 +8226,9 @@
     "Single .js file, up to 8 MiB. Its source is shown below before upload.": "单个 .js 文件，最大 8 MiB。上传前会在下方显示其源码。",
     "Channel #{{id}}": "渠道 #{{id}}",
     "{{n}} test": "{{n}} 次",
-    "{{n}} tests": "{{n}} 次"
+    "{{n}} tests": "{{n}} 次",
+    "Cross-instance traffic, user growth and ranking trends.": "跨实例流量、用户增长与排行趋势。",
+    "Review the registered task plugins and their bindings.": "查看已注册的任务插件及其绑定情况。",
+    "Activity rankings and overlap between users and IP addresses.": "单用户与单 IP 的活动排行及重合分析。"
   }
 }

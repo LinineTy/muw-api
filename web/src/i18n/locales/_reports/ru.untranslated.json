@@ -1085,5 +1085,8 @@
   "User IPs": "User IPs",
   "Min IPs": "Min IPs",
   "Min Users": "Min Users",
-  "90 Days": "90 Days"
+  "90 Days": "90 Days",
+  "SGLang": "SGLang",
+  "Responses WebSocket": "Responses WebSocket",
+  "Doubao": "Doubao"
 }

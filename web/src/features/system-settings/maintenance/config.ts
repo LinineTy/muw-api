@@ -89,12 +89,15 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     redemption: true,
     subscription: true,
     system_info: true,
+    operations_stats: true,
+    task_plugins: true,
     setting: true,
   },
   addon: {
     enabled: true,
     image_host: true,
     risk_control: true,
+    ip_analysis: true,
   },
 }
 

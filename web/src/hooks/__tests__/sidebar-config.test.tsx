@@ -185,3 +185,39 @@ describe('audit log sidebar entry', () => {
     expect(titles).toContain('Audit Logs')
   })
 })
+
+describe('admin-configurable modules added with their pages', () => {
+  it('admin defaults carry a switch for Operations Stats, Task Plugins and IP Analysis', () => {
+    // The settings page rebuilds its form from these defaults, so a module
+    // missing here has no switch at all — the page ships without a toggle.
+    const config = parseSidebarModulesAdmin('')
+    expect(config.admin.operations_stats).toBe(true)
+    expect(config.admin.task_plugins).toBe(true)
+    expect(config.addon.ip_analysis).toBe(true)
+  })
+
+  it('keeps the three new switches after a save round-trip', () => {
+    const config = parseSidebarModulesAdmin('{"admin":{"enabled":true}}')
+    config.admin.task_plugins = false
+    config.addon.ip_analysis = false
+    const saved = parseSidebarModulesAdmin(serializeSidebarModulesAdmin(config))
+    expect(saved.admin.operations_stats).toBe(true)
+    expect(saved.admin.task_plugins).toBe(false)
+    expect(saved.addon.ip_analysis).toBe(false)
+  })
+
+  it.each(['Task Plugins', 'Operations Stats', 'IP Analysis'])(
+    'hides %s when the admin disables its module',
+    (title) => {
+      const { result } = sidebarFor({
+        admin: { enabled: true, task_plugins: false, operations_stats: false },
+        addon: { enabled: true, ip_analysis: false },
+      })
+      expect(
+        result.current
+          .flatMap((group) => group.items)
+          .some((item) => item.title === title)
+      ).toBe(false)
+    }
+  )
+})
