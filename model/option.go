@@ -131,6 +131,7 @@ func InitOptionMap() {
 	common.OptionMap["UserPreferencePolicy"] = common.UserPreferencePolicy2JSONString()
 	common.OptionMap["QuotaRemindThreshold"] = strconv.Itoa(common.QuotaRemindThreshold)
 	common.OptionMap["PreConsumedQuota"] = strconv.Itoa(common.PreConsumedQuota)
+	common.OptionMap["InviteTrapGraceSeconds"] = strconv.Itoa(common.DefaultInviteTrapGraceSeconds)
 	common.OptionMap["ModelRequestRateLimitCount"] = strconv.Itoa(setting.ModelRequestRateLimitCount)
 	common.OptionMap["ModelRequestRateLimitDurationMinutes"] = strconv.Itoa(setting.ModelRequestRateLimitDurationMinutes)
 	common.OptionMap["ModelRequestRateLimitSuccessCount"] = strconv.Itoa(setting.ModelRequestRateLimitSuccessCount)
@@ -464,6 +465,9 @@ func updateOptionMap(key string, value string) (err error) {
 			common.RegisterEnabled = boolValue
 		case "InviteCodeRegisterEnabled":
 			common.InviteCodeRegisterEnabled = boolValue
+		case "InviteTrapGraceSeconds":
+			// 钓鱼邀请码宽限秒数（0/负数由 common.InviteTrapGraceWindow 回落默认）。
+			common.InviteTrapGraceSeconds, _ = strconv.Atoi(value)
 		case "EmailDomainRestrictionEnabled":
 			common.EmailDomainRestrictionEnabled = boolValue
 		case "EmailAliasRestrictionEnabled":

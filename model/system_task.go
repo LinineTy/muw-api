@@ -27,6 +27,9 @@ const (
 	SystemTaskTypeCreditMarkerAnalysis = "credit_marker_analysis"
 	SystemTaskTypeCreditAuditCleanup   = "credit_audit_cleanup"
 	SystemTaskTypeCreditScoreReset     = "credit_score_reset"
+	// SystemTaskTypeInviteTrapGrace 钓鱼邀请码宽限到期处置（自研）：扫描
+	// invite_trap_graces 里已到期仍未结清的记录，停用对应账号。
+	SystemTaskTypeInviteTrapGrace = "invite_trap_grace"
 )
 
 var ErrSystemTaskLockLost = errors.New("system task lock lost")
@@ -235,6 +238,33 @@ func DeleteSystemTaskHistory(filter SystemTaskFilter) (int64, error) {
 	}
 	filter.Scope = "history"
 	result := filter.query().Where("id < ? AND id NOT IN ?", newestID, latestIDs).Delete(&SystemTask{})
+	return result.RowsAffected, result.Error
+}
+
+// PruneSystemTaskHistoryByType 只保留该类型最近 keep 条记录，删掉更早的**终态**行。
+// 供高频调度任务（如每分钟一次的钩子宽限扫描）自清理，避免 system_tasks 稳定增长；
+// pending/running 行永不删除，因此不会动到其它实例正在跑的任务。
+func PruneSystemTaskHistoryByType(taskType string, keep int) (int64, error) {
+	if taskType == "" {
+		return 0, nil
+	}
+	if keep < 0 {
+		keep = 0
+	}
+	var keepIDs []int64
+	if err := DB.Model(&SystemTask{}).
+		Where("type = ?", taskType).
+		Order("id desc").
+		Limit(keep).
+		Pluck("id", &keepIDs).Error; err != nil {
+		return 0, err
+	}
+	query := DB.Where("type = ?", taskType).
+		Where("status IN ?", []any{string(SystemTaskStatusSucceeded), string(SystemTaskStatusFailed)})
+	if len(keepIDs) > 0 {
+		query = query.Where("id NOT IN ?", keepIDs)
+	}
+	result := query.Delete(&SystemTask{})
 	return result.RowsAffected, result.Error
 }
 

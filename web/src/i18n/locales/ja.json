@@ -8243,6 +8243,8 @@
     "{{n}} tests": "{{n}} 回",
     "Cross-instance traffic, user growth and ranking trends.": "インスタンス横断のトラフィック、ユーザー増加、ランキングの推移。",
     "Review the registered task plugins and their bindings.": "登録済みタスクプラグインとその紐付けを確認します。",
-    "Activity rankings and overlap between users and IP addresses.": "ユーザー別・IP 別のアクティビティランキングと重複状況。"
+    "Activity rankings and overlap between users and IP addresses.": "ユーザー別・IP 別のアクティビティランキングと重複状況。",
+    "Your account will be disabled in {{time}} unless you activate with a valid invitation code.": "{{time}} 以内に有効な招待コードで有効化しない場合、このアカウントは無効化されます。",
+    "The activation deadline has passed; this account will be disabled shortly.": "有効化の期限を過ぎました。このアカウントはまもなく無効化されます。"
   }
 }

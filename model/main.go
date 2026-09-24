@@ -376,6 +376,11 @@ func migrateDB() error {
 	if err := ensureRedemptionTrapColumn(DB); err != nil {
 		return err
 	}
+	// invite_trap_graces 表(钓鱼邀请码命中后的宽限记录,自研):新表,存量库走"跳过
+	// AutoMigrate"路径,必须在这里幂等建表,否则读取宽限状态会报 no such table。
+	if err := ensureInviteTrapGraceTable(DB); err != nil {
+		return err
+	}
 	// 上游同步新增的 schema(task_plugins / login_encryption_keys 表、
 	// users.access_token_created_at 列):已到最新迁移戳的库走"跳过 AutoMigrate"
 	// 路径,必须在这里幂等补齐,否则升级库启动即报 no such table。

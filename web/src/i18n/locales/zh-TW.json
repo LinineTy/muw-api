@@ -8243,6 +8243,8 @@
     "{{n}} tests": "{{n}} 次",
     "Cross-instance traffic, user growth and ranking trends.": "跨實例流量、使用者成長與排行趨勢。",
     "Review the registered task plugins and their bindings.": "檢視已註冊的任務外掛及其綁定情況。",
-    "Activity rankings and overlap between users and IP addresses.": "單一使用者與單一 IP 的活動排行與重合分析。"
+    "Activity rankings and overlap between users and IP addresses.": "單一使用者與單一 IP 的活動排行與重合分析。",
+    "Your account will be disabled in {{time}} unless you activate with a valid invitation code.": "請在 {{time}} 內用有效邀請碼完成啟用，否則該帳號將被停用。",
+    "The activation deadline has passed; this account will be disabled shortly.": "啟用時限已過，該帳號很快將被停用。"
   }
 }

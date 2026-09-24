@@ -94,6 +94,29 @@ var InviteCodeRegisterEnabled = false
 // （见 controller.setupLoginAtAuthVersion）。
 const TrapInviteCodeBanReason = "你真的是人类吗？"
 
+// DefaultInviteTrapGraceSeconds 钓鱼邀请码命中后的默认宽限秒数（15 分钟）。
+// 命中不再立刻停用账号：宽限期内用有效邀请码激活成功即免于停用，到期仍未激活的
+// 由定时任务统一停用（model.ListExpiredInviteTrapGraces → DisableUserByTrap）。
+const DefaultInviteTrapGraceSeconds = 15 * 60
+
+// MinInviteTrapGraceSeconds 宽限窗口下限：给得太短会让"提示都没来得及看"的真人被误伤，
+// 因此配置值低于此下限时按下限生效。
+const MinInviteTrapGraceSeconds = 60
+
+// InviteTrapGraceSeconds 钓鱼邀请码宽限秒数，可通过 option key InviteTrapGraceSeconds 调整。
+var InviteTrapGraceSeconds = DefaultInviteTrapGraceSeconds
+
+// InviteTrapGraceWindow 返回生效的宽限秒数（非法值回落默认，低于下限取下限）。
+func InviteTrapGraceWindow() int {
+	if InviteTrapGraceSeconds <= 0 {
+		return DefaultInviteTrapGraceSeconds
+	}
+	if InviteTrapGraceSeconds < MinInviteTrapGraceSeconds {
+		return MinInviteTrapGraceSeconds
+	}
+	return InviteTrapGraceSeconds
+}
+
 // MaxUserCount 站点最大非超管用户数,0 表示不限制。超管(root)不计入额度,
 // 因此配置值 N 意味着站点允许 N 个非超管用户(加上超管共 N+1)。
 var MaxUserCount = 0

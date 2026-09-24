@@ -264,6 +264,23 @@ export async function activateAccount(
   return res.data
 }
 
+// 激活页倒计时：本人若有未结的钓鱼码宽限（宽限期内提交有效邀请码即可免于停用），
+// 返回截止时间与剩余秒数；没有则 pending=false。读不到不报错，交给调用方兜底。
+export type ActivationDeadline = {
+  pending: boolean
+  expire_at?: number
+  remaining_seconds?: number
+}
+
+export async function getActivationDeadline(): Promise<ActivationDeadline> {
+  const res = await api.get('/api/user/activation_deadline')
+  const body = res?.data
+  if (body?.success && body.data) {
+    return body.data as ActivationDeadline
+  }
+  return { pending: false }
+}
+
 // Send email verification code
 export async function sendEmailVerification(
   email: string,

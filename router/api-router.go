@@ -88,6 +88,8 @@ func SetApiRouter(router *gin.Engine) {
 			// 激活页用接口：UserAuthPending 放行未激活（待激活）账号。
 			userRoute.GET("/self", middleware.UserAuthPending(), controller.GetSelf)
 			userRoute.POST("/activate", middleware.CriticalRateLimit(), middleware.UserAuthPending(), controller.ActivateInviteCode)
+			// 激活页倒计时用：本人若有未结的钓鱼码宽限，返回剩余秒数（待激活账号也要能读）。
+			userRoute.GET("/activation_deadline", middleware.UserAuthPending(), controller.GetInviteTrapGraceStatus)
 
 			selfRoute := userRoute.Group("/")
 			selfRoute.Use(middleware.DisableCache(), middleware.UserAuth())

@@ -8243,6 +8243,8 @@
     "{{n}} tests": "{{n}} 次",
     "Cross-instance traffic, user growth and ranking trends.": "跨实例流量、用户增长与排行趋势。",
     "Review the registered task plugins and their bindings.": "查看已注册的任务插件及其绑定情况。",
-    "Activity rankings and overlap between users and IP addresses.": "单用户与单 IP 的活动排行及重合分析。"
+    "Activity rankings and overlap between users and IP addresses.": "单用户与单 IP 的活动排行及重合分析。",
+    "Your account will be disabled in {{time}} unless you activate with a valid invitation code.": "请在 {{time}} 内用有效邀请码完成激活，否则该账号将被停用。",
+    "The activation deadline has passed; this account will be disabled shortly.": "激活时限已过，该账号很快将被停用。"
   }
 }

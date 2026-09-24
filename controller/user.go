@@ -427,23 +427,32 @@ func ActivateInviteCode(c *gin.Context) {
 		return
 	}
 	if isTrap {
-		// 钓鱼邀请码：占用、名额与审计流程同普通邀请码（占位与 MarkInviteCodeUsed 照走），
-		// 效果改为停用账号并把封禁原因写进 remark。对外仍按"无效邀请码"回复，不暴露钩子。
-		if err := model.DisableUserByTrap(id, common.TrapInviteCodeBanReason); err != nil {
+		// 钓鱼邀请码：占用、名额与审计流程同普通邀请码（占位与 MarkInviteCodeUsed 照走）。
+		// 处置不是立即停用，而是落一条宽限记录：用户在宽限期内用**有效邀请码**完成激活
+		// 即结清记录、免于停用；到期仍未激活的由定时任务统一停用（见
+		// system_task_handlers.go 的 inviteTrapGraceHandler）。对外仍按"无效邀请码"回复，
+		// 不暴露钩子；本人下次进激活页会看到剩余时间提示。
+		grace, err := model.StartInviteTrapGrace(id, codeId, c.ClientIP(), c.Request.UserAgent())
+		if err != nil {
 			_ = model.ReleaseInviteCode(codeId)
-			common.SysError("disable user by trap invite code failed: " + err.Error())
+			common.SysError("start invite trap grace failed: " + err.Error())
 			common.ApiErrorI18n(c, i18n.MsgDatabaseError)
 			return
 		}
 		if err := model.MarkInviteCodeUsed(codeId, id); err != nil {
 			common.SysError("mark invite code used failed: " + err.Error())
 		}
-		common.SysLog(fmt.Sprintf("钓到一条鱼: user_id=%d, code_id=%d, ip=%s", id, codeId, c.ClientIP()))
+		common.SysLog(fmt.Sprintf("钓到一条鱼: user_id=%d, code_id=%d, ip=%s, hit_count=%d, expire_at=%d",
+			id, codeId, c.ClientIP(), grace.HitCount, grace.ExpireAt))
 		model.RecordLog(id, model.LogTypeSystem, "钓到一条鱼")
 		// 审计独立落一条（category=security）：RecordAuditLog 自动补 IP/UA/路由/请求号，
 		// 便于在「使用日志 → 审计」按事件取证；action 机器可读，content 为展示文案。
 		model.RecordOperationAuditLog(id, c.GetInt("role"), "钓到一条鱼", c.ClientIP(),
-			"invite.trap_hit", map[string]any{"code_id": codeId}, nil, nil, c)
+			"invite.trap_hit", map[string]any{
+				"code_id":   codeId,
+				"hit_count": grace.HitCount,
+				"expire_at": grace.ExpireAt,
+			}, nil, nil, c)
 		common.ApiErrorI18n(c, i18n.MsgInviteCodeInvalid)
 		return
 	}
@@ -452,6 +461,11 @@ func ActivateInviteCode(c *gin.Context) {
 		common.SysError("activate user failed: " + err.Error())
 		common.ApiErrorI18n(c, i18n.MsgDatabaseError)
 		return
+	}
+	// 若该用户此前踩过钩子，用有效邀请码激活成功即结清宽限记录（免于到期停用）。
+	// 没有未结记录时是空操作，因此正常激活路径只是多一次无命中 UPDATE。
+	if err := model.ResolveInviteTrapGrace(id, model.InviteTrapGraceReasonActivated); err != nil {
+		common.SysError("resolve invite trap grace failed: " + err.Error())
 	}
 	// 登记该用户对邀请码的使用；失败不影响激活（仅影响管理端使用统计）。
 	if err := model.MarkInviteCodeUsed(codeId, id); err != nil {
@@ -469,6 +483,33 @@ func ActivateInviteCode(c *gin.Context) {
 		"success": true,
 		"message": "",
 		"data":    buildSelfUserData(updatedUser),
+	})
+}
+
+// GetInviteTrapGraceStatus 激活页用：返回本人是否有未结的钩子宽限、截止时间与剩余秒数。
+// 有宽限意味着本人提交过钓鱼邀请码——宽限期内用有效邀请码激活即可免于停用，前端据此
+// 显示倒计时提醒。到期仍未激活的处置由定时任务完成（本接口只读）。
+func GetInviteTrapGraceStatus(c *gin.Context) {
+	id := c.GetInt("id")
+	if id == 0 {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	record, err := model.GetUnresolvedInviteTrapGrace(id)
+	if err != nil {
+		common.SysError("get invite trap grace failed: " + err.Error())
+		common.ApiErrorI18n(c, i18n.MsgDatabaseError)
+		return
+	}
+	now := common.GetTimestamp()
+	if record == nil || record.ExpireAt <= now {
+		common.ApiSuccess(c, gin.H{"pending": false})
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"pending":           true,
+		"expire_at":         record.ExpireAt,
+		"remaining_seconds": record.ExpireAt - now,
 	})
 }
 

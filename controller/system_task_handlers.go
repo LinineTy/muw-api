@@ -31,6 +31,9 @@ func RegisterScheduledSystemTasks() {
 	// 通过 service.EnqueueSystemTask 触发。
 	service.RegisterSystemTaskHandler(creditMarkerAnalysisHandler{})
 	service.RegisterSystemTaskHandler(creditAuditCleanupHandler{})
+	// inviteTrapGraceHandler 到期处置：钓鱼邀请码宽限期已过、仍未用有效邀请码激活的账号
+	// 统一停用。每分钟一次，保证「超时」最多晚一分钟生效。
+	service.RegisterSystemTaskHandler(inviteTrapGraceHandler{})
 	// creditScoreResetHandler 非定时调度：由风控中心设置页「重置所有用户为当前满分」按钮
 	// 通过 service.EnqueueSystemTask 触发。
 	service.RegisterSystemTaskHandler(creditScoreResetHandler{})
@@ -539,4 +542,74 @@ func deleteInBatches(ctx context.Context, fn func(context.Context, int64, int) (
 		}
 	}
 	return total, nil
+}
+
+// inviteTrapGraceHandler 钓鱼邀请码宽限到期处置（自研）：命中钩子只落一条宽限记录，
+// 到期仍未用有效邀请码激活的账号在这里统一停用（status=2 + remark 写封禁原因）。
+// 一分钟一次：窗口默认 15 分钟，一分钟粒度足够，也避免用户在"能登录但进不去"的状态久挂。
+type inviteTrapGraceHandler struct{}
+
+func (inviteTrapGraceHandler) Type() string { return model.SystemTaskTypeInviteTrapGrace }
+
+func (inviteTrapGraceHandler) Enabled() bool { return true }
+
+func (inviteTrapGraceHandler) Interval() time.Duration { return time.Minute }
+
+func (inviteTrapGraceHandler) NewPayload() any { return nil }
+
+func (inviteTrapGraceHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	summary, err := runInviteTrapGraceExpiry(ctx)
+	if err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		return
+	}
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, summary, nil)
+	// 本任务每分钟一行，自行清理历史（只留最近 20 条终态行），否则 system_tasks 稳定增长。
+	if _, err := model.PruneSystemTaskHistoryByType(model.SystemTaskTypeInviteTrapGrace, 20); err != nil {
+		common.SysLog("[InviteTrap] prune system task history failed: " + err.Error())
+	}
+}
+
+// runInviteTrapGraceExpiry 扫描已到期未结清的宽限记录并停用账号。
+// 停用成功才结清记录：失败的行留到下一分钟重试（避免误停或漏停后无人补）。
+func runInviteTrapGraceExpiry(ctx context.Context) (map[string]int, error) {
+	now := common.GetTimestamp()
+	disabled, failed := 0, 0
+	for batch := 0; batch < 200; batch++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		records, err := model.ListExpiredInviteTrapGraces(now, 100)
+		if err != nil {
+			return nil, fmt.Errorf("list expired invite trap graces: %w", err)
+		}
+		if len(records) == 0 {
+			break
+		}
+		progressed := false
+		for _, record := range records {
+			if err := model.DisableUserByTrap(record.UserId, common.TrapInviteCodeBanReason); err != nil {
+				failed++
+				common.SysLog(fmt.Sprintf("[InviteTrap] disable user %d failed: %s", record.UserId, err.Error()))
+				continue
+			}
+			if err := model.ResolveInviteTrapGrace(record.UserId, model.InviteTrapGraceReasonExpired); err != nil {
+				common.SysLog(fmt.Sprintf("[InviteTrap] resolve grace for user %d failed: %s", record.UserId, err.Error()))
+			}
+			model.RecordLog(record.UserId, model.LogTypeSystem, "钓鱼码宽限期已过，账号已停用")
+			model.RecordOperationAuditLog(record.UserId, common.RoleCommonUser, "钓鱼码宽限期已过，账号已停用",
+				record.Ip, "invite.trap_expired", map[string]any{
+					"code_id":     record.RedemptionId,
+					"hit_count":   record.HitCount,
+					"expire_at":   record.ExpireAt,
+					"resolved_by": "system_task",
+				}, nil, nil)
+			disabled++
+			progressed = true
+		}
+		if !progressed || len(records) < 100 {
+			break
+		}
+	}
+	return map[string]int{"disabled": disabled, "failed": failed}, nil
 }

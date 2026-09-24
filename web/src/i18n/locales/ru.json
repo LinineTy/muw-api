@@ -8243,6 +8243,8 @@
     "{{n}} tests": "{{n}} тестов",
     "Cross-instance traffic, user growth and ranking trends.": "Трафик между инстансами, рост пользователей и рейтинги.",
     "Review the registered task plugins and their bindings.": "Просмотр зарегистрированных плагинов задач и их привязок.",
-    "Activity rankings and overlap between users and IP addresses.": "Рейтинги активности и пересечения между пользователями и IP-адресами."
+    "Activity rankings and overlap between users and IP addresses.": "Рейтинги активности и пересечения между пользователями и IP-адресами.",
+    "Your account will be disabled in {{time}} unless you activate with a valid invitation code.": "Аккаунт будет отключён через {{time}}, если вы не активируете его действующим кодом приглашения.",
+    "The activation deadline has passed; this account will be disabled shortly.": "Срок активации истёк; аккаунт вскоре будет отключён."
   }
 }

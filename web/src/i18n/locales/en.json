@@ -8243,6 +8243,8 @@
     "{{n}} tests": "{{n}} tests",
     "Cross-instance traffic, user growth and ranking trends.": "Cross-instance traffic, user growth and ranking trends.",
     "Review the registered task plugins and their bindings.": "Review the registered task plugins and their bindings.",
-    "Activity rankings and overlap between users and IP addresses.": "Activity rankings and overlap between users and IP addresses."
+    "Activity rankings and overlap between users and IP addresses.": "Activity rankings and overlap between users and IP addresses.",
+    "Your account will be disabled in {{time}} unless you activate with a valid invitation code.": "Your account will be disabled in {{time}} unless you activate with a valid invitation code.",
+    "The activation deadline has passed; this account will be disabled shortly.": "The activation deadline has passed; this account will be disabled shortly."
   }
 }

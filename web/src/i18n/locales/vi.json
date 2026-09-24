@@ -8243,6 +8243,8 @@
     "{{n}} tests": "{{n}} lượt",
     "Cross-instance traffic, user growth and ranking trends.": "Lưu lượng giữa các máy chủ, tăng trưởng người dùng và bảng xếp hạng.",
     "Review the registered task plugins and their bindings.": "Xem các plugin tác vụ đã đăng ký và liên kết của chúng.",
-    "Activity rankings and overlap between users and IP addresses.": "Bảng xếp hạng hoạt động và mức trùng lặp giữa người dùng và địa chỉ IP."
+    "Activity rankings and overlap between users and IP addresses.": "Bảng xếp hạng hoạt động và mức trùng lặp giữa người dùng và địa chỉ IP.",
+    "Your account will be disabled in {{time}} unless you activate with a valid invitation code.": "Tài khoản sẽ bị vô hiệu hóa sau {{time}} nếu bạn không kích hoạt bằng mã mời hợp lệ.",
+    "The activation deadline has passed; this account will be disabled shortly.": "Đã quá hạn kích hoạt; tài khoản này sẽ sớm bị vô hiệu hóa."
   }
 }
