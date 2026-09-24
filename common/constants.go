@@ -117,6 +117,37 @@ func InviteTrapGraceWindow() int {
 	return InviteTrapGraceSeconds
 }
 
+// HoneypotBanReason 隐形蜜罐命中（自动化提交）后写入 users.remark 的封禁原因。
+// 与钓鱼码不同：蜜罐字段真人看不到也填不到，命中即判自动化，无需宽限。
+const HoneypotBanReason = "检测到自动化提交，账号已停用"
+
+// DefaultActivationPoWBits 激活页人机校验（PoW）默认难度：要求 sha256(challenge:nonce)
+// 有这么多前导零位，期望计算量 2^bits 次哈希。
+//
+// 2026-09-24 实测（纯 JS 的 node-forge sha256）：容器内 node 单线程约 62.8 万次/秒，
+// 浏览器里更快 —— 22 位（约 420 万次期望）在 chromium 上端到端约 2.2 秒。取 20 位：
+// 桌面约 0.5~0.7 秒、低端手机约 3 秒以内，而批量试码要为每次尝试付一份同样的算力。
+// 它只抬高自动化成本，不构成"证明你是人"——判定自动化靠激活页的蜜罐字段。
+const DefaultActivationPoWBits = 20
+
+// MaxActivationPoWBits 难度上限：每 +1 位成本翻倍，再往上真人等待时间不可接受。
+const MaxActivationPoWBits = 24
+
+// ActivationPoWBits 生效难度，可通过 option key PoWChallengeBits 调整；
+// <=0 表示关闭校验（激活不再要求 PoW，用于出问题时的紧急开关）。
+var ActivationPoWBits = DefaultActivationPoWBits
+
+// ActivationPoWBitsEffective 返回生效难度（0 = 关闭；超过上限按上限生效）。
+func ActivationPoWBitsEffective() int {
+	if ActivationPoWBits <= 0 {
+		return 0
+	}
+	if ActivationPoWBits > MaxActivationPoWBits {
+		return MaxActivationPoWBits
+	}
+	return ActivationPoWBits
+}
+
 // MaxUserCount 站点最大非超管用户数,0 表示不限制。超管(root)不计入额度,
 // 因此配置值 N 意味着站点允许 N 个非超管用户(加上超管共 N+1)。
 var MaxUserCount = 0

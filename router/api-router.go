@@ -90,6 +90,8 @@ func SetApiRouter(router *gin.Engine) {
 			userRoute.POST("/activate", middleware.CriticalRateLimit(), middleware.UserAuthPending(), controller.ActivateInviteCode)
 			// 激活页倒计时用：本人若有未结的钓鱼码宽限，返回剩余秒数（待激活账号也要能读）。
 			userRoute.GET("/activation_deadline", middleware.UserAuthPending(), controller.GetInviteTrapGraceStatus)
+			// 激活页人机校验用：签发一次性 PoW 挑战（难度由 option PoWChallengeBits 控制）。
+			userRoute.POST("/activation_challenge", middleware.CriticalRateLimit(), middleware.UserAuthPending(), controller.IssueActivationChallenge)
 
 			selfRoute := userRoute.Group("/")
 			selfRoute.Use(middleware.DisableCache(), middleware.UserAuth())

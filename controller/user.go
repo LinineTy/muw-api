@@ -375,6 +375,12 @@ func Register(c *gin.Context) {
 
 type activateInviteRequest struct {
 	InviteCode string `json:"invite_code"`
+	// ChallengeId/Nonce 是激活页人机校验（PoW）凭据，见 controller/activation_pow.go。
+	ChallengeId string `json:"challenge_id"`
+	Nonce       string `json:"nonce"`
+	// Website 是隐形蜜罐字段：真人看不到也填不到（off-screen + tabindex=-1 + aria-hidden），
+	// 只有遍历表单的自动化脚本会填。非空即判自动化提交，直接处置且不消费邀请码名额。
+	Website string `json:"website"`
 }
 
 // ActivateInviteCode 激活制下，待激活账号在专属激活页提交邀请码转正。
@@ -409,6 +415,49 @@ func ActivateInviteCode(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgInviteCodeRequired)
 		return
 	}
+	// 1) 隐形蜜罐：命中即自动化（真人碰不到这个字段）。放在占位之前，命中不消耗名额；
+	// 对外仍回"无效邀请码"，不向脚本暴露自己踩了哪一道。
+	if strings.TrimSpace(req.Website) != "" {
+		if err := model.DisableUserByTrap(id, common.HoneypotBanReason); err != nil {
+			common.SysError("disable honeypot user failed: " + err.Error())
+			common.ApiErrorI18n(c, i18n.MsgDatabaseError)
+			return
+		}
+		common.SysLog(fmt.Sprintf("蜜罐命中: user_id=%d, ip=%s", id, c.ClientIP()))
+		model.RecordLog(id, model.LogTypeSystem, "蜜罐命中，账号已停用")
+		model.RecordOperationAuditLog(id, c.GetInt("role"), "蜜罐命中，账号已停用", c.ClientIP(),
+			"invite.honeypot_hit", map[string]any{
+				"field":  "website",
+				"length": len(strings.TrimSpace(req.Website)),
+			}, nil, nil, c)
+		common.ApiErrorI18n(c, i18n.MsgInviteCodeInvalid)
+		return
+	}
+
+	// 2) 人机校验（PoW）：开启时每次激活都要带一道通过校验的挑战（一次性、5 分钟有效）。
+	// 挑战池异常（例如签发接口不可用、难度配置为 0）不影响激活：只有"配置开启且挑战确实
+	// 不存在/过期/不过关"才拒绝，避免机制本身把真人挡在门外。
+	powPassed := false
+	if bits := common.ActivationPoWBitsEffective(); bits > 0 {
+		switch err := model.ConsumeActivationPoWChallenge(req.ChallengeId, id, req.Nonce); {
+		case err == nil:
+			powPassed = true
+		case errors.Is(err, model.ErrActivationPoWNotFound),
+			errors.Is(err, model.ErrActivationPoWExpired),
+			errors.Is(err, model.ErrActivationPoWInvalidNonce):
+			activationVerificationError(c, CodeActivationVerificationRequired)
+			return
+		case errors.Is(err, model.ErrActivationPoWUserMismatch):
+			common.SysLog(fmt.Sprintf("activation pow challenge user mismatch: user_id=%d", id))
+			activationVerificationError(c, CodeActivationVerificationFailed)
+			return
+		default:
+			common.SysError("consume activation pow challenge failed: " + err.Error())
+			common.ApiErrorI18n(c, i18n.MsgDatabaseError)
+			return
+		}
+	}
+
 	codeId, isTrap, err := model.OccupyInviteCode(inviteCode)
 	if err != nil {
 		switch {
@@ -442,8 +491,21 @@ func ActivateInviteCode(c *gin.Context) {
 		if err := model.MarkInviteCodeUsed(codeId, id); err != nil {
 			common.SysError("mark invite code used failed: " + err.Error())
 		}
-		common.SysLog(fmt.Sprintf("钓到一条鱼: user_id=%d, code_id=%d, ip=%s, hit_count=%d, expire_at=%d",
-			id, codeId, c.ClientIP(), grace.HitCount, grace.ExpireAt))
+		if powPassed {
+			// 本次提交通过了人机校验 ⇒ 判为真人误踩钩子：宽限记录当场结清，账号不会被到期停用。
+			// 对外回复不变（仍是"无效邀请码"），不向脚本暴露钩子位置。
+			if err := model.ResolveInviteTrapGrace(id, model.InviteTrapGraceReasonVerified); err != nil {
+				common.SysError("resolve invite trap grace (verified) failed: " + err.Error())
+			}
+			model.RecordOperationAuditLog(id, c.GetInt("role"), "钓鱼码命中并通过人机校验（真人误踩，不停用）",
+				c.ClientIP(), "invite.trap_verified", map[string]any{
+					"code_id":   codeId,
+					"hit_count": grace.HitCount,
+					"pow_bits":  common.ActivationPoWBitsEffective(),
+				}, nil, nil, c)
+		}
+		common.SysLog(fmt.Sprintf("钓到一条鱼: user_id=%d, code_id=%d, ip=%s, hit_count=%d, expire_at=%d, pow_passed=%v",
+			id, codeId, c.ClientIP(), grace.HitCount, grace.ExpireAt, powPassed))
 		model.RecordLog(id, model.LogTypeSystem, "钓到一条鱼")
 		// 审计独立落一条（category=security）：RecordAuditLog 自动补 IP/UA/路由/请求号，
 		// 便于在「使用日志 → 审计」按事件取证；action 机器可读，content 为展示文案。

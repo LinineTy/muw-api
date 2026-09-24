@@ -26,7 +26,8 @@ type InviteTrapGrace struct {
 	Ip           string `json:"ip" gorm:"type:varchar(64)"`
 	UserAgent    string `json:"user_agent" gorm:"type:varchar(255)"`
 	ResolvedAt   int64  `json:"resolved_at"`
-	// ResolvedReason: "" 进行中 / activated 用有效邀请码激活成功 / expired 到期未激活已停用
+	// ResolvedReason: "" 进行中 / activated 用有效邀请码激活成功 /
+	// verified 同一次提交通过人机校验（真人误踩）/ expired 到期未激活已停用
 	ResolvedReason string `json:"resolved_reason" gorm:"type:varchar(32)"`
 }
 
@@ -34,6 +35,9 @@ type InviteTrapGrace struct {
 const (
 	InviteTrapGraceReasonActivated = "activated"
 	InviteTrapGraceReasonExpired   = "expired"
+	// InviteTrapGraceReasonVerified 命中钩子的同一次提交里通过了人机校验（PoW）：
+	// 判为真人误踩，宽限记录当场结清，账号不会被到期停用。
+	InviteTrapGraceReasonVerified = "verified"
 )
 
 func (InviteTrapGrace) TableName() string { return "invite_trap_graces" }

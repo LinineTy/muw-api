@@ -81,6 +81,11 @@ export interface Login2FAResponse {
 export interface ApiResponse<T = unknown> {
   success: boolean
   message: string
+  /**
+   * 部分接口失败时附带的机器可读错误码（如登录被拒的 login-denied、
+   * 激活页人机校验的 ACTIVATION_VERIFICATION_*）：前端据此选分支，别去匹配提示文案。
+   */
+  code?: string
   data?: T
 }
 

@@ -2,9 +2,9 @@ package controller
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -24,6 +24,11 @@ func TestActivateInviteCodeTrapStartsGraceWithoutDisabling(t *testing.T) {
 	require.NoError(t, db.AutoMigrate(&model.Redemption{}, &model.RedemptionUse{}, &model.InviteTrapGrace{}))
 	restoreInviteFlag := enableInviteCodeRegisterForTest()
 	defer restoreInviteFlag()
+	// 本用例覆盖**未开启人机校验**的站点配置（难度 0）：钩子命中只落宽限、不秒封。
+	// 开启人机校验时命中会被当场判为真人误踩并结清，见 TestActivateInviteCodeTrapWithPoWResolvesGrace。
+	previousBits := common.ActivationPoWBits
+	common.ActivationPoWBits = 0
+	defer func() { common.ActivationPoWBits = previousBits }()
 
 	user := model.User{
 		Username: "trap-fish", Password: "password", Role: common.RoleCommonUser,
@@ -120,7 +125,10 @@ func TestInviteTrapGraceExpiryDisablesUserAfterWindow(t *testing.T) {
 		MaxUses: 1, IsTrap: true, CreatedTime: common.GetTimestamp(),
 	}
 	require.NoError(t, db.Create(&code).Error)
-	_ = performActivateInviteCodeRequest(t, user.Id, code.Key)
+	// 宽限记录直接由 model 层造：本条测的是"到期处置"机制，与提交侧的人机校验解耦
+	// （走控制器时，通过校验的提交会当场结清记录，测不到到期分支）。
+	_, err := model.StartInviteTrapGrace(user.Id, code.Id, "127.0.0.1", "test")
+	require.NoError(t, err)
 
 	// 宽限期内不处置。
 	summary, err := runInviteTrapGraceExpiry(context.Background())
@@ -186,7 +194,9 @@ func TestInviteTrapGraceClearedByValidInviteCode(t *testing.T) {
 	}
 	require.NoError(t, db.Create(&real).Error)
 
-	_ = performActivateInviteCodeRequest(t, user.Id, bait.Key)
+	// 命中钩子留下的宽限记录由 model 层直接造（见上一条用例的说明）；随后用有效邀请码激活。
+	_, err := model.StartInviteTrapGrace(user.Id, bait.Id, "127.0.0.1", "test")
+	require.NoError(t, err)
 	recorder := performActivateInviteCodeRequest(t, user.Id, real.Key)
 	assert.Contains(t, recorder.Body.String(), `"success":true`)
 
@@ -326,21 +336,215 @@ func TestActivateInviteCodeTrapDisabledReportedAsDisabled(t *testing.T) {
 
 func enableInviteCodeRegisterForTest() func() {
 	previous := common.InviteCodeRegisterEnabled
+	previousBits := common.ActivationPoWBits
 	common.InviteCodeRegisterEnabled = true
-	return func() { common.InviteCodeRegisterEnabled = previous }
+	// 人机校验默认 18 位；单测里真解挑战（见 performActivateInviteCodeRequest），
+	// 压到 8 位让每个用例快一个数量级，难度语义由 model 包的单测覆盖。
+	common.ActivationPoWBits = 8
+	return func() {
+		common.InviteCodeRegisterEnabled = previous
+		common.ActivationPoWBits = previousBits
+	}
 }
 
+// solveActivationPoWForTest 复刻浏览器端的求解循环（从 0 递增试 nonce）。
+func solveActivationPoWForTest(t *testing.T, challenge string, bits int) string {
+	t.Helper()
+	for nonce := 0; nonce < 10_000_000; nonce++ {
+		candidate := strconv.Itoa(nonce)
+		if model.VerifyActivationPoW(challenge, candidate, bits) {
+			return candidate
+		}
+	}
+	t.Fatalf("求解 PoW 失败：challenge=%s bits=%d", challenge, bits)
+	return ""
+}
+
+// performActivateInviteCodeRequest 模拟激活页的正常提交：带一道已解出的人机校验挑战
+// （PoW 开启时真实客户端就是这个形状）。
 func performActivateInviteCodeRequest(t *testing.T, userId int, inviteCode string) *httptest.ResponseRecorder {
 	t.Helper()
+	payload := map[string]any{"invite_code": inviteCode}
+	if bits := common.ActivationPoWBitsEffective(); bits > 0 {
+		challenge, err := model.IssueActivationPoWChallenge(userId, "127.0.0.1", bits)
+		require.NoError(t, err)
+		payload["challenge_id"] = challenge.Id
+		payload["nonce"] = solveActivationPoWForTest(t, challenge.Challenge, challenge.Bits)
+	}
+	return performActivateInviteCodeRequestWithBody(t, userId, payload)
+}
+
+// performActivateInviteCodeRequestWithBody 直接给请求体：用于测"没带挑战""蜜罐字段非空"这类
+// 客户端异常/自动化形状。
+func performActivateInviteCodeRequestWithBody(t *testing.T, userId int, payload map[string]any) *httptest.ResponseRecorder {
+	t.Helper()
+	body, err := common.Marshal(payload)
+	require.NoError(t, err)
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
-	c.Request = httptest.NewRequest(http.MethodPost, "/api/user/activate",
-		strings.NewReader(fmt.Sprintf(`{"invite_code":%q}`, inviteCode)))
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/user/activate", strings.NewReader(string(body)))
 	c.Request.Header.Set("Content-Type", "application/json")
 	c.Set("id", userId)
 	c.Set("role", common.RoleCommonUser)
 	c.Set("username", "trap-target")
 	ActivateInviteCode(c)
+	return recorder
+}
+
+// 隐形蜜罐：字段非空即判自动化提交 —— 立即停用、不消费邀请码名额、对外仍回"无效邀请码"。
+func TestActivateInviteCodeHoneypotDisablesUser(t *testing.T) {
+	db := setupManageUserTestDB(t)
+	require.NoError(t, db.AutoMigrate(&model.Redemption{}, &model.RedemptionUse{}, &model.InviteTrapGrace{}))
+	restoreInviteFlag := enableInviteCodeRegisterForTest()
+	defer restoreInviteFlag()
+
+	user := model.User{
+		Username: "honeypot-bot", Password: "password", Role: common.RoleCommonUser,
+		Status: common.UserStatusEnabled, Group: "default", Activated: 0, AuthVersion: 1,
+	}
+	require.NoError(t, db.Create(&user).Error)
+	// activated 带 default:1，GORM 插入时省略零值 → 显式回置为待激活（否则控制器在读请求体前就返回"已激活"）。
+	require.NoError(t, db.Model(&model.User{}).Where("id = ?", user.Id).Update("activated", 0).Error)
+	code := model.Redemption{
+		Name: "invite-plain", Key: "30000000000000000000000000000009",
+		Status: common.RedemptionCodeStatusEnabled, Type: common.RedemptionCodeTypeInvite,
+		MaxUses: 5, CreatedTime: common.GetTimestamp(),
+	}
+	require.NoError(t, db.Create(&code).Error)
+
+	// 模拟脚本：填了真人看不到的 website 字段，且没带人机校验
+	recorder := performActivateInviteCodeRequestWithBody(t, user.Id, map[string]any{
+		"invite_code": code.Key,
+		"website":     "http://spam.example.com",
+	})
+	assert.Contains(t, recorder.Body.String(), `"success":false`)
+	assert.NotContains(t, recorder.Body.String(), "honeypot") // 对外不解释原因
+
+	var updated model.User
+	require.NoError(t, db.First(&updated, user.Id).Error)
+	assert.Equal(t, common.UserStatusDisabled, updated.Status, "蜜罐命中应立即停用")
+	assert.Equal(t, common.HoneypotBanReason, updated.Remark)
+
+	// 名额不被消耗：蜜罐检查发生在占位之前
+	var after model.Redemption
+	require.NoError(t, db.First(&after, code.Id).Error)
+	assert.Equal(t, 0, after.UsedCount, "蜜罐命中不得消费邀请码名额")
+	assert.Equal(t, 0, after.UsedUserId)
+
+	var logs []model.Log
+	require.NoError(t, db.Where("user_id = ? AND type = ?", user.Id, model.LogTypeSystem).Find(&logs).Error)
+	require.Len(t, logs, 1)
+	assert.Equal(t, "蜜罐命中，账号已停用", logs[0].Content)
+}
+
+// 人机校验开启时，没带挑战的提交拿不到结果，且不消费名额（脚本必须为每次尝试算一遍）。
+func TestActivateInviteCodeRequiresPoW(t *testing.T) {
+	db := setupManageUserTestDB(t)
+	require.NoError(t, db.AutoMigrate(&model.Redemption{}, &model.RedemptionUse{}, &model.InviteTrapGrace{}))
+	restoreInviteFlag := enableInviteCodeRegisterForTest()
+	defer restoreInviteFlag()
+
+	user := model.User{
+		Username: "pow-missing", Password: "password", Role: common.RoleCommonUser,
+		Status: common.UserStatusEnabled, Group: "default", Activated: 0, AuthVersion: 1,
+	}
+	require.NoError(t, db.Create(&user).Error)
+	// activated 带 default:1，GORM 插入时省略零值 → 显式回置为待激活（否则控制器在读请求体前就返回"已激活"）。
+	require.NoError(t, db.Model(&model.User{}).Where("id = ?", user.Id).Update("activated", 0).Error)
+	code := model.Redemption{
+		Name: "invite-plain-2", Key: "30000000000000000000000000000010",
+		Status: common.RedemptionCodeStatusEnabled, Type: common.RedemptionCodeTypeInvite,
+		MaxUses: 5, CreatedTime: common.GetTimestamp(),
+	}
+	require.NoError(t, db.Create(&code).Error)
+
+	recorder := performActivateInviteCodeRequestWithBody(t, user.Id, map[string]any{"invite_code": code.Key})
+	assert.Contains(t, recorder.Body.String(), CodeActivationVerificationRequired)
+	assert.Contains(t, recorder.Body.String(), `"success":false`)
+
+	var after model.Redemption
+	require.NoError(t, db.First(&after, code.Id).Error)
+	assert.Equal(t, 0, after.UsedCount, "未通过人机校验不得消费名额")
+	var updated model.User
+	require.NoError(t, db.First(&updated, user.Id).Error)
+	assert.Equal(t, common.UserStatusEnabled, updated.Status, "单纯没算 PoW 不该被停用")
+	assert.Equal(t, 0, updated.Activated)
+}
+
+// 命中钩子但同一次提交通过了人机校验 ⇒ 判真人误踩：宽限记录当场结清，不会被到期停用。
+func TestActivateInviteCodeTrapWithPoWResolvesGrace(t *testing.T) {
+	db := setupManageUserTestDB(t)
+	require.NoError(t, db.AutoMigrate(&model.Redemption{}, &model.RedemptionUse{}, &model.InviteTrapGrace{}))
+	restoreInviteFlag := enableInviteCodeRegisterForTest()
+	defer restoreInviteFlag()
+
+	user := model.User{
+		Username: "trap-human", Password: "password", Role: common.RoleCommonUser,
+		Status: common.UserStatusEnabled, Group: "default", Activated: 0, AuthVersion: 1,
+	}
+	require.NoError(t, db.Create(&user).Error)
+	require.NoError(t, db.Model(&model.User{}).Where("id = ?", user.Id).Update("activated", 0).Error)
+	code := model.Redemption{
+		Name: "invite-bait-pow", Key: "30000000000000000000000000000011",
+		Status: common.RedemptionCodeStatusEnabled, Type: common.RedemptionCodeTypeInvite,
+		MaxUses: 2, IsTrap: true, CreatedTime: common.GetTimestamp(),
+	}
+	require.NoError(t, db.Create(&code).Error)
+
+	recorder := performActivateInviteCodeRequest(t, user.Id, code.Key)
+	assert.Contains(t, recorder.Body.String(), `"success":false`, "对外仍按无效邀请码回复")
+
+	var grace model.InviteTrapGrace
+	require.NoError(t, db.Where("user_id = ?", user.Id).First(&grace).Error)
+	assert.NotEqual(t, int64(0), grace.ResolvedAt, "通过人机校验后宽限记录应结清")
+	assert.Equal(t, model.InviteTrapGraceReasonVerified, grace.ResolvedReason)
+
+	// 结清后抓不到"未结"记录 ⇒ 到期任务不会再停用这个账号
+	unresolved, err := model.GetUnresolvedInviteTrapGrace(user.Id)
+	require.NoError(t, err)
+	assert.Nil(t, unresolved)
+
+	var updated model.User
+	require.NoError(t, db.First(&updated, user.Id).Error)
+	assert.Equal(t, common.UserStatusEnabled, updated.Status)
+	assert.Equal(t, "", updated.Remark)
+}
+
+// 签发的挑战形状与开关：bits=0 时返回 enabled=false（前端据此跳过校验）。
+func TestIssueActivationChallenge(t *testing.T) {
+	db := setupManageUserTestDB(t)
+	require.NoError(t, db.AutoMigrate(&model.User{}))
+	restoreInviteFlag := enableInviteCodeRegisterForTest()
+	defer restoreInviteFlag()
+
+	user := model.User{
+		Username: "pow-issuer", Password: "password", Role: common.RoleCommonUser,
+		Status: common.UserStatusEnabled, Group: "default", AuthVersion: 1,
+	}
+	require.NoError(t, db.Create(&user).Error)
+
+	recorder := performIssueActivationChallengeRequest(t, user.Id)
+	body := recorder.Body.String()
+	assert.Contains(t, body, `"enabled":true`)
+	assert.Contains(t, body, `"challenge_id"`)
+	assert.Contains(t, body, `"bits":8`)
+
+	previousBits := common.ActivationPoWBits
+	common.ActivationPoWBits = 0
+	defer func() { common.ActivationPoWBits = previousBits }()
+	recorder = performIssueActivationChallengeRequest(t, user.Id)
+	assert.Contains(t, recorder.Body.String(), `"enabled":false`)
+}
+
+func performIssueActivationChallengeRequest(t *testing.T, userId int) *httptest.ResponseRecorder {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/user/activation_challenge", nil)
+	c.Set("id", userId)
+	c.Set("role", common.RoleCommonUser)
+	IssueActivationChallenge(c)
 	return recorder
 }

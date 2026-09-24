@@ -256,12 +256,47 @@ export async function register(payload: RegisterPayload): Promise<ApiResponse> {
   return res.data
 }
 
-// 激活制：待激活账号提交邀请码转正，返回更新后的用户对象
-export async function activateAccount(
+// 激活制：待激活账号提交邀请码转正，返回更新后的用户对象。
+// 除邀请码外还带两类字段：
+//   - challenge_id/nonce：人机校验（PoW）凭据，服务端开启校验时必填；
+//   - website：隐形蜜罐字段，真人永远为空（服务端据此直接处置自动化提交）。
+// 失败响应可能带机器码 `code`（ACTIVATION_VERIFICATION_REQUIRED/FAILED），调用方据此重算。
+export type ActivateAccountPayload = {
   inviteCode: string
+  challengeId?: string
+  nonce?: string
+  website?: string
+}
+
+export async function activateAccount(
+  payload: ActivateAccountPayload
 ): Promise<ApiResponse> {
-  const res = await api.post('/api/user/activate', { invite_code: inviteCode })
+  const res = await api.post('/api/user/activate', {
+    invite_code: payload.inviteCode,
+    challenge_id: payload.challengeId,
+    nonce: payload.nonce,
+    website: payload.website,
+  })
   return res.data
+}
+
+// 激活页人机校验：提交前先领一道一次性挑战（5 分钟有效）。enabled=false 表示本站未开启校验，
+// 前端跳过即可；取不到挑战时调用方应提示"稍后重试"，不要用不带校验的提交去碰壁。
+export type ActivationChallenge = {
+  enabled: boolean
+  challenge_id?: string
+  challenge?: string
+  bits?: number
+  expires_in?: number
+}
+
+export async function getActivationChallenge(): Promise<ActivationChallenge> {
+  const res = await api.post('/api/user/activation_challenge')
+  const body = res?.data
+  if (body?.success && body.data) {
+    return body.data as ActivationChallenge
+  }
+  return { enabled: false }
 }
 
 // 激活页倒计时：本人若有未结的钓鱼码宽限（宽限期内提交有效邀请码即可免于停用），
