@@ -2,17 +2,11 @@
 /**
  * 激活页：待激活账号提交邀请码转正。
  *
- * 提交流程：先领一道人机校验挑战并在浮窗中求解，再带邀请码与蜜罐字段提交。
+ * 提交流程：勾选校验浮窗后领挑战并求解，再带邀请码与蜜罐字段提交。
  * 服务端按蜜罐、校验、邀请码的顺序处置（见 controller/user.go）。
  */
 import { Loader2 } from 'lucide-react'
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-} from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useNavigate } from '@tanstack/react-router'
@@ -32,17 +26,12 @@ import { useAuthStore } from '@/stores/auth-store'
 
 import { AuthLayout } from '../auth-layout'
 import { AuthCard } from '../components/auth-card'
-import { ActivationVerifyWindow } from './components/activation-verify-window'
-import { useActivationPow } from './lib/use-activation-pow'
+import { SecurityCheckWindow } from '../components/security-check-window'
+import { useSecurityCheck } from '../lib/use-security-check'
 
 /** 服务端回的人机校验机器码（见 controller/activation_pow.go）。 */
 const CODE_VERIFICATION_REQUIRED = 'ACTIVATION_VERIFICATION_REQUIRED'
 const CODE_VERIFICATION_FAILED = 'ACTIVATION_VERIFICATION_FAILED'
-
-/** 挑战本身都拿不到（接口异常）：不提交、不惩罚，提示稍后重试。 */
-class ChallengeUnavailableError extends Error {}
-
-type ActivationProof = { challengeId: string; nonce: string }
 
 /** 剩余秒数格式化成 m:ss，倒计时提示用。 */
 function formatCountdown(totalSeconds: number) {
@@ -61,12 +50,8 @@ export function Activate() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [deadline, setDeadline] = useState<number | null>(null)
   const [remaining, setRemaining] = useState(0)
-  const [verifyOpen, setVerifyOpen] = useState(false)
-  const [powBits, setPowBits] = useState(0)
-  const pow = useActivationPow()
-  // 解构出稳定的 solve 供 useCallback 依赖（直接依赖 pow 对象会每次渲染都变）。
-  const solvePow = pow.solve
-  const closeTimer = useRef<number | undefined>(undefined)
+  // 人机校验：勾选后开始计算，通过后提交才能取用凭据。
+  const check = useSecurityCheck(getActivationChallenge)
 
   // 有未结的钓鱼码宽限记录时显示倒计时；读不到则不提示。
   const refreshDeadline = useCallback(async () => {
@@ -97,30 +82,10 @@ export function Activate() {
     return () => window.clearInterval(timer)
   }, [deadline])
 
-  useEffect(() => () => window.clearTimeout(closeTimer.current), [])
-
-  // 领取并求解挑战；未开启校验返回 null，取不到挑战抛错由调用方提示。
-  const runVerification = useCallback(async (): Promise<ActivationProof | null> => {
-    let challenge
-    try {
-      challenge = await getActivationChallenge()
-    } catch {
-      throw new ChallengeUnavailableError()
-    }
-    if (!challenge.enabled || !challenge.challenge || !challenge.bits) {
-      return null
-    }
-    setPowBits(challenge.bits)
-    setVerifyOpen(true)
-    const nonce = await solvePow(challenge.challenge, challenge.bits)
-    // 通过后停留约 0.9 秒再收起
-    closeTimer.current = window.setTimeout(() => setVerifyOpen(false), 900)
-    return { challengeId: challenge.challenge_id ?? '', nonce }
-  }, [solvePow])
-
+  // 提交：取一份凭据（正在计算时等待其完成），带上邀请码与蜜罐字段。
   const submitOnce = useCallback(
     async (code: string) => {
-      const proof = await runVerification()
+      const proof = await check.ensureProof()
       return activateAccount({
         inviteCode: code,
         website: honeypot,
@@ -128,7 +93,7 @@ export function Activate() {
         nonce: proof?.nonce,
       })
     },
-    [honeypot, runVerification]
+    [check, honeypot]
   )
 
   const submit = async (rawCode: string) => {
@@ -137,10 +102,13 @@ export function Activate() {
       toast.error(t('Enter your invitation code'))
       return
     }
+    if (!check.ready) {
+      return
+    }
     setIsSubmitting(true)
     try {
       let res = await submitOnce(code)
-      // 挑战一次性消费：服务端回机器码时重算并重试一次。
+      // 凭据一次性消费：服务端回机器码时重算并重试一次。
       if (
         res?.code === CODE_VERIFICATION_REQUIRED ||
         res?.code === CODE_VERIFICATION_FAILED
@@ -148,8 +116,6 @@ export function Activate() {
         res = await submitOnce(code)
       }
       if (res?.success && isAuthUser(res.data)) {
-        window.clearTimeout(closeTimer.current)
-        setVerifyOpen(false)
         setUser(res.data)
         toast.success(t('Activated successfully'))
         navigate({ to: '/os-desktop', replace: true })
@@ -158,14 +124,6 @@ export function Activate() {
         // 失败后立即重取一次宽限信息（提交的若是钓鱼码，提示当场出现）。
         void refreshDeadline()
       }
-    } catch (error) {
-      if (error instanceof ChallengeUnavailableError) {
-        setVerifyOpen(false)
-        toast.error(
-          t('Security check is unavailable right now. Please try again later.')
-        )
-      }
-      // 求解失败：浮窗已经是失败态，等用户点「重试」，不额外提示。
     } finally {
       setIsSubmitting(false)
     }
@@ -173,12 +131,6 @@ export function Activate() {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    void submit(inviteCode)
-  }
-
-  // 浮窗「重试」：清掉失败态后重新领挑战再试。
-  const handleRetryVerification = () => {
-    pow.reset()
     void submit(inviteCode)
   }
 
@@ -248,7 +200,7 @@ export function Activate() {
           </div>
           <Button
             type='submit'
-            disabled={isSubmitting}
+            disabled={isSubmitting || !check.ready}
             className={cn(AUTH_PRIMARY_BUTTON, 'mt-1')}
           >
             {isSubmitting ? <Loader2 className='h-4 w-4 animate-spin' /> : null}
@@ -256,14 +208,7 @@ export function Activate() {
           </Button>
         </form>
       </AuthCard>
-      <ActivationVerifyWindow
-        open={verifyOpen}
-        onOpenChange={setVerifyOpen}
-        status={pow.status}
-        hashes={pow.hashes}
-        bits={powBits}
-        onRetry={handleRetryVerification}
-      />
+      <SecurityCheckWindow {...check.windowProps} />
     </AuthLayout>
   )
 }

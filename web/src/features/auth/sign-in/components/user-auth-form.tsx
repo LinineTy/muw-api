@@ -43,9 +43,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { login, wechatLoginByCode } from '@/features/auth/api'
 import { LegalConsent } from '@/features/auth/components/legal-consent'
-import { ActivationVerifyWindow } from '@/features/auth/activate/components/activation-verify-window'
+import { SecurityCheckWindow } from '@/features/auth/components/security-check-window'
 import { OAuthProviders } from '@/features/auth/components/oauth-providers'
-import { usePreAuthCheck } from '@/features/auth/lib/use-pre-auth-check'
+import { usePreAuthCheck } from '@/features/auth/lib/use-security-check'
 import { loginFormSchema } from '@/features/auth/constants'
 import { useAuthRedirect } from '@/features/auth/hooks/use-auth-redirect'
 import { useTurnstile } from '@/features/auth/hooks/use-turnstile'
@@ -398,7 +398,7 @@ export function UserAuthForm({
         isWeChatLoading={isWeChatSubmitting}
       />
       </div>
-      <ActivationVerifyWindow {...preAuthCheck.windowProps} />
+      <SecurityCheckWindow {...preAuthCheck.windowProps} />
     </>
   )
 

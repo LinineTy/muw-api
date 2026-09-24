@@ -36,7 +36,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import { ActivationVerifyWindow } from '@/features/auth/activate/components/activation-verify-window'
+import { SecurityCheckWindow } from '@/features/auth/components/security-check-window'
 import { register } from '@/features/auth/api'
 import { LegalConsent } from '@/features/auth/components/legal-consent'
 import { registerFormSchema } from '@/features/auth/constants'
@@ -54,7 +54,7 @@ import {
   saveAffiliateCode,
 } from '@/features/auth/lib/storage'
 import { useLegalConsent } from '@/features/auth/lib/use-legal-consent'
-import { usePreAuthCheck } from '@/features/auth/lib/use-pre-auth-check'
+import { usePreAuthCheck } from '@/features/auth/lib/use-security-check'
 import { useStatus } from '@/hooks/use-status'
 import { handleServerError } from '@/lib/handle-server-error'
 import { AuthOperationError } from '@/lib/secure-verification'
@@ -356,7 +356,7 @@ export function SignUpForm({
           {t('Create account')}
         </Button>
       </form>
-      <ActivationVerifyWindow {...preAuthCheck.windowProps} />
+      <SecurityCheckWindow {...preAuthCheck.windowProps} />
     </Form>
   )
 }

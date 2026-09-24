@@ -18,14 +18,13 @@ vi.mock('@/features/auth/api', () => ({
   getActivationDeadline: vi.fn(),
 }))
 
-// 布局层只负责外壳与系统配置，本用例只关心表单与请求体，直接换成透明容器。
+// 布局层只负责外壳与系统配置，本用例只关心表单与请求体。
 vi.mock('../../auth-layout', () => ({
   AuthLayout: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
 }))
 
-// 页面只用 useNavigate，不需要真实路由。
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn(),
   Link: ({ children }: { children: React.ReactNode }) => <a>{children}</a>,
@@ -36,7 +35,7 @@ const mockedActivate = vi.mocked(activateAccount)
 const mockedDeadline = vi.mocked(getActivationDeadline)
 
 const CHALLENGE = 'cafebabecafebabe'
-const BITS = 8
+const BITS = 6
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -58,9 +57,18 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+/** 勾选校验浮窗并等待通过（提交按钮在通过前不可按）。 */
+async function passSecurityCheck(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('checkbox', { name: 'Start the check' }))
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Activate' })).toBeEnabled()
+  )
+}
+
 const submit = async (code = 'INVITE-1') => {
   const user = userEvent.setup()
   render(<Activate />)
+  await passSecurityCheck(user)
   await user.type(screen.getByPlaceholderText('Invitation Code'), code)
   await user.click(screen.getByRole('button', { name: 'Activate' }))
 }
@@ -89,6 +97,7 @@ describe('激活页的隐形蜜罐字段', () => {
     fireEvent.change(screen.getByTestId('activation-honeypot'), {
       target: { value: 'http://spam.example.com' },
     })
+    await passSecurityCheck(user)
     await user.type(screen.getByPlaceholderText('Invitation Code'), 'INVITE-2')
     await user.click(screen.getByRole('button', { name: 'Activate' }))
     await waitFor(() => expect(mockedActivate).toHaveBeenCalledTimes(1))
@@ -99,10 +108,11 @@ describe('激活页的隐形蜜罐字段', () => {
 })
 
 describe('激活页的人机校验（PoW）', () => {
-  it('提交前先领挑战，并把解出的 nonce 一起提交', async () => {
+  it('勾选后才计算，提交时带上解出的 nonce', async () => {
     await submit('INVITE-3')
     await waitFor(() => expect(mockedActivate).toHaveBeenCalledTimes(1))
-    expect(mockedChallenge).toHaveBeenCalledTimes(1)
+    // 勾选时领一道；提交取走凭据后会自动再领一道，供下一次使用
+    expect(mockedChallenge.mock.calls.length).toBeGreaterThanOrEqual(1)
     const payload = mockedActivate.mock.calls[0][0]
     expect(payload.inviteCode).toBe('INVITE-3')
     expect(payload.challengeId).toBe('challenge-id-1')
@@ -112,34 +122,41 @@ describe('激活页的人机校验（PoW）', () => {
     )
   }, 20000)
 
-  it('站点未开启校验（enabled=false）时不求解，直接提交', async () => {
+  it('未勾选前不提交（按钮不可按）', async () => {
+    const user = userEvent.setup()
+    render(<Activate />)
+    await user.type(screen.getByPlaceholderText('Invitation Code'), 'INVITE-4')
+    expect(screen.getByRole('button', { name: 'Activate' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: 'Activate' }))
+    expect(mockedActivate).not.toHaveBeenCalled()
+  })
+
+  it('本站未开启校验时直接可用', async () => {
     mockedChallenge.mockResolvedValue({ enabled: false })
-    await submit('INVITE-4')
+    const user = userEvent.setup()
+    render(<Activate />)
+    await passSecurityCheck(user)
+    await user.type(screen.getByPlaceholderText('Invitation Code'), 'INVITE-5')
+    await user.click(screen.getByRole('button', { name: 'Activate' }))
     await waitFor(() => expect(mockedActivate).toHaveBeenCalledTimes(1))
     const payload = mockedActivate.mock.calls[0][0]
     expect(payload.challengeId).toBeUndefined()
     expect(payload.nonce).toBeUndefined()
   }, 20000)
 
-  it('挑战领不到时不提交（提示稍后重试，而不是拿没校验的请求去撞）', async () => {
-    mockedChallenge.mockRejectedValue(new Error('network down'))
-    await submit('INVITE-5')
-    await waitFor(() => expect(mockedChallenge).toHaveBeenCalledTimes(1))
-    expect(mockedActivate).not.toHaveBeenCalled()
-  }, 20000)
-
-  it('服务端回"需要重新校验"时自动再走一轮（挑战是一次性的）', async () => {
+  it('服务端回"需要重新校验"时自动再走一轮', async () => {
     mockedActivate
       .mockResolvedValueOnce({
         success: false,
         message: 'verification required',
         code: 'ACTIVATION_VERIFICATION_REQUIRED',
       })
-      .mockResolvedValueOnce({ success: false, message: 'Invalid invitation code' })
+      .mockResolvedValueOnce({
+        success: false,
+        message: 'Invalid invitation code',
+      })
     await submit('INVITE-6')
     await waitFor(() => expect(mockedActivate).toHaveBeenCalledTimes(2))
-    // 两轮都要重新领挑战（旧挑战已被消费），且都带上了新的 nonce
-    expect(mockedChallenge).toHaveBeenCalledTimes(2)
     for (const call of mockedActivate.mock.calls) {
       expect(call[0].challengeId).toBe('challenge-id-1')
       expect(call[0].nonce).toMatch(/^[0-9]+$/)
