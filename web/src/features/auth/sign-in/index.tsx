@@ -97,7 +97,7 @@ export function SignIn() {
                   >
                     {mode === 'oauth'
                       ? t('Sign in with username and password')
-                      : t('Sign in with OAuth')}
+                      : t('Sign in with a third-party account')}
                   </motion.span>
                 </AnimatePresence>
               </button>
