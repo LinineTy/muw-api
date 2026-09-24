@@ -3,7 +3,7 @@
  * 激活页（激活制）：待激活账号提交邀请码转正。
  *
  * 提交链路（2026-09-24 定）：
- *   1. 先领一道人机校验（PoW）挑战 → 在浮窗里求解（Worker，不卡界面）；
+ *   1. 先领一道人机校验（PoW）挑战 → 右上角浮窗里求解（Worker，不卡界面、不遮页面）；
  *   2. 带上 invite_code + challenge_id/nonce + 蜜罐字段提交；
  *   3. 服务端：蜜罐字段非空 ⇒ 直接判自动化并停用；PoW 未过 ⇒ 回机器码让前端重算；
  *      钓具码命中但 PoW 通过 ⇒ 判真人误踩，宽限记录当场结清（不会被到期停用）。
@@ -38,7 +38,7 @@ import { useAuthStore } from '@/stores/auth-store'
 
 import { AuthLayout } from '../auth-layout'
 import { AuthCard } from '../components/auth-card'
-import { ActivationVerifyDialog } from './components/activation-verify-dialog'
+import { ActivationVerifyWindow } from './components/activation-verify-window'
 import { useActivationPow } from './lib/use-activation-pow'
 
 /** 服务端回的人机校验机器码（见 controller/activation_pow.go）。 */
@@ -265,7 +265,7 @@ export function Activate() {
           </Button>
         </form>
       </AuthCard>
-      <ActivationVerifyDialog
+      <ActivationVerifyWindow
         open={verifyOpen}
         onOpenChange={setVerifyOpen}
         status={pow.status}
