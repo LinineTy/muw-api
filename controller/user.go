@@ -497,11 +497,9 @@ func ActivateInviteCode(c *gin.Context) {
 			common.SysError("mark invite code used failed: " + err.Error())
 		}
 		if powPassed {
-			// 通过校验的命中判为真人误踩：宽限记录当场结清，不会被到期停用；对外回复不变。
-			if err := model.ResolveInviteTrapGrace(id, model.InviteTrapGraceReasonVerified); err != nil {
-				common.SysError("resolve invite trap grace (verified) failed: " + err.Error())
-			}
-			model.RecordOperationAuditLog(id, c.GetInt("role"), "钓鱼码命中并通过人机校验（真人误踩，不停用）",
+			// 通过校验只作记录，不放行：人机校验只提高成本、不证明是真人（脚本同样算得出），
+			// 因此宽限照走 —— 窗口内仍须用有效邀请码激活，否则到期照旧停用。
+			model.RecordOperationAuditLog(id, c.GetInt("role"), "钓鱼码命中并通过人机校验",
 				c.ClientIP(), "invite.trap_verified", map[string]any{
 					"code_id":   codeId,
 					"hit_count": grace.HitCount,

@@ -25,7 +25,7 @@ func TestActivateInviteCodeTrapStartsGraceWithoutDisabling(t *testing.T) {
 	restoreInviteFlag := enableInviteCodeRegisterForTest()
 	defer restoreInviteFlag()
 	// 本用例覆盖**未开启人机校验**的站点配置（难度 0）：钩子命中只落宽限、不秒封。
-	// 开启人机校验时命中会被当场判为真人误踩并结清，见 TestActivateInviteCodeTrapWithPoWResolvesGrace。
+	// 开启人机校验时处置不变，只是多一条"通过校验"的审计，见 TestActivateInviteCodeTrapWithPoWKeepsGrace。
 	previousBits := common.ActivationPoWBits
 	common.ActivationPoWBits = 0
 	defer func() { common.ActivationPoWBits = previousBits }()
@@ -163,6 +163,51 @@ func TestInviteTrapGraceExpiryDisablesUserAfterWindow(t *testing.T) {
 	assert.Equal(t, int64(1), expiredAudits)
 
 	// 已结清的行不再被扫描，重复执行是幂等的。
+	summary, err = runInviteTrapGraceExpiry(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, 0, summary["disabled"])
+}
+
+// 到期扫描遇上"已经激活"的账号：只补结清记录，绝不停用（结清那一步失败或与扫描撞车时
+// 会出现这种残留，没有这道判断就会把已经转正的真人停掉）。
+func TestInviteTrapGraceExpirySkipsActivatedUser(t *testing.T) {
+	db := setupManageUserTestDB(t)
+	require.NoError(t, db.AutoMigrate(&model.Redemption{}, &model.RedemptionUse{}, &model.InviteTrapGrace{}))
+	restoreInviteFlag := enableInviteCodeRegisterForTest()
+	defer restoreInviteFlag()
+
+	user := model.User{
+		Username: "trap-activated", Password: "password", Role: common.RoleCommonUser,
+		Status: common.UserStatusEnabled, Group: "default", Activated: 1, AuthVersion: 1,
+	}
+	require.NoError(t, db.Create(&user).Error)
+	code := model.Redemption{
+		Name: "invite-bait-activated", Key: "30000000000000000000000000000012",
+		Status: common.RedemptionCodeStatusEnabled, Type: common.RedemptionCodeTypeInvite,
+		MaxUses: 1, IsTrap: true, CreatedTime: common.GetTimestamp(),
+	}
+	require.NoError(t, db.Create(&code).Error)
+	// 造一条"到期未结清"的残留记录（模拟结清失败），账号此时已激活。
+	_, err := model.StartInviteTrapGrace(user.Id, code.Id, "127.0.0.1", "test")
+	require.NoError(t, err)
+	require.NoError(t, db.Model(&model.InviteTrapGrace{}).Where("user_id = ?", user.Id).
+		Update("expire_at", common.GetTimestamp()-1).Error)
+
+	summary, err := runInviteTrapGraceExpiry(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, 0, summary["disabled"], "已激活的账号不得被到期扫描停用")
+
+	var updated model.User
+	require.NoError(t, db.First(&updated, user.Id).Error)
+	assert.Equal(t, common.UserStatusEnabled, updated.Status, "账号保持启用")
+	assert.Equal(t, "", updated.Remark, "不得写封禁原因")
+
+	var grace model.InviteTrapGrace
+	require.NoError(t, db.Where("user_id = ?", user.Id).First(&grace).Error)
+	assert.NotZero(t, grace.ResolvedAt, "残留记录应被补结清")
+	assert.Equal(t, model.InviteTrapGraceReasonActivated, grace.ResolvedReason)
+
+	// 结清后再扫一遍无事可做。
 	summary, err = runInviteTrapGraceExpiry(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, 0, summary["disabled"])
@@ -472,8 +517,9 @@ func TestActivateInviteCodeRequiresPoW(t *testing.T) {
 	assert.Equal(t, 0, updated.Activated)
 }
 
-// 命中钩子但同一次提交通过了人机校验 ⇒ 判真人误踩：宽限记录当场结清，不会被到期停用。
-func TestActivateInviteCodeTrapWithPoWResolvesGrace(t *testing.T) {
+// 命中钩子且同一次提交通过了人机校验 ⇒ 只多一条审计，**不放行**：宽限照走，
+// 窗口内仍须用有效邀请码激活（人机校验只提高成本、不证明是真人，脚本同样算得出）。
+func TestActivateInviteCodeTrapWithPoWKeepsGrace(t *testing.T) {
 	db := setupManageUserTestDB(t)
 	require.NoError(t, db.AutoMigrate(&model.Redemption{}, &model.RedemptionUse{}, &model.InviteTrapGrace{}))
 	restoreInviteFlag := enableInviteCodeRegisterForTest()
@@ -495,15 +541,20 @@ func TestActivateInviteCodeTrapWithPoWResolvesGrace(t *testing.T) {
 	recorder := performActivateInviteCodeRequest(t, user.Id, code.Key)
 	assert.Contains(t, recorder.Body.String(), `"success":false`, "对外仍按无效邀请码回复")
 
+	// 宽限记录仍是进行中：到期扫描照样会停用（除非本人用有效邀请码激活）。
 	var grace model.InviteTrapGrace
 	require.NoError(t, db.Where("user_id = ?", user.Id).First(&grace).Error)
-	assert.NotEqual(t, int64(0), grace.ResolvedAt, "通过人机校验后宽限记录应结清")
-	assert.Equal(t, model.InviteTrapGraceReasonVerified, grace.ResolvedReason)
+	assert.Equal(t, int64(0), grace.ResolvedAt, "通过人机校验不得提前结清宽限")
+	assert.Equal(t, "", grace.ResolvedReason)
 
-	// 结清后抓不到"未结"记录 ⇒ 到期任务不会再停用这个账号
 	unresolved, err := model.GetUnresolvedInviteTrapGrace(user.Id)
 	require.NoError(t, err)
-	assert.Nil(t, unresolved)
+	require.NotNil(t, unresolved, "记录仍挂在进行中，到期任务能看到它")
+
+	var verifiedAudits int64
+	require.NoError(t, db.Model(&model.AuditLog{}).
+		Where("user_id = ? AND action = ?", user.Id, "invite.trap_verified").Count(&verifiedAudits).Error)
+	assert.Equal(t, int64(1), verifiedAudits, "通过校验要留一条审计")
 
 	var updated model.User
 	require.NoError(t, db.First(&updated, user.Id).Error)

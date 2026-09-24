@@ -603,33 +603,49 @@ func GetUserById(id int, selectAll bool) (*User, error) {
 	return &user, err
 }
 
-// ActivateUserById 将用户置为已激活（activated=1）并刷新 UserBase 缓存，使鉴权
-// middleware 立即可见。激活制下由用户激活接口与管理端手动激活复用；幂等。
 // DisableUserByTrap 钓鱼邀请码命中的停用：状态置为禁用，并把封禁原因写入 remark
 // （本人登录被拒时作为 login_status.reason 展示）。走与后台停用同一套 User.Update
 // 流程，因此认证版本递增、浏览器会话撤销、用户哈希缓存同步发布；额度与令牌不动。
 func DisableUserByTrap(userId int, reason string) error {
+	_, err := disableUserByTrap(userId, reason, false)
+	return err
+}
+
+// DisablePendingUserByTrap 宽限到期处置专用：只停用**仍未激活**的账号，已激活则原样返回
+// (false, nil)。到期扫描与"结清记录"之间存在竞态（或结清失败留到下一分钟重试），没有这道
+// 判断就会把已经用有效邀请码转正的真人一并停掉。
+func DisablePendingUserByTrap(userId int, reason string) (bool, error) {
+	return disableUserByTrap(userId, reason, true)
+}
+
+// disableUserByTrap onlyIfPending 为真时，账号已激活则不停用（返回 false）。
+func disableUserByTrap(userId int, reason string, onlyIfPending bool) (bool, error) {
 	if userId == 0 {
-		return errors.New("id 为空！")
+		return false, errors.New("id 为空！")
 	}
 	user, err := GetUserById(userId, false)
 	if err != nil {
-		return err
+		return false, err
+	}
+	if onlyIfPending && user.Activated != 0 {
+		return false, nil
 	}
 	user.Status = common.UserStatusDisabled
 	if reason != "" {
 		user.Remark = reason
 	}
 	if err := user.Update(false); err != nil {
-		return err
+		return false, err
 	}
 	// Update 已递增认证版本并撤销浏览器会话，仅 PAT/中转令牌缓存需显式失效。
 	if err := InvalidateUserTokensCache(userId); err != nil {
 		common.SysLog(fmt.Sprintf("failed to invalidate tokens cache for user %d: %s", userId, err.Error()))
 	}
-	return nil
+	return true, nil
 }
 
+// ActivateUserById 将用户置为已激活（activated=1）并刷新 UserBase 缓存，使鉴权
+// middleware 立即可见。激活制下由用户激活接口与管理端手动激活复用；幂等。
 func ActivateUserById(id int) error {
 	if id == 0 {
 		return errors.New("id 为空！")

@@ -592,9 +592,21 @@ func runInviteTrapGraceExpiry(ctx context.Context) (map[string]int, error) {
 		}
 		progressed := false
 		for _, record := range records {
-			if err := model.DisableUserByTrap(record.UserId, common.TrapInviteCodeBanReason); err != nil {
+			// 只停用仍未激活的账号：已激活说明本人在窗口内用有效邀请码转正了
+			// （结清那一步失败或与本次扫描撞车），此时只补结清记录，绝不动账号。
+			banned, err := model.DisablePendingUserByTrap(record.UserId, common.TrapInviteCodeBanReason)
+			if err != nil {
 				failed++
 				common.SysLog(fmt.Sprintf("[InviteTrap] disable user %d failed: %s", record.UserId, err.Error()))
+				continue
+			}
+			if !banned {
+				if err := model.ResolveInviteTrapGrace(record.UserId, model.InviteTrapGraceReasonActivated); err != nil {
+					common.SysLog(fmt.Sprintf("[InviteTrap] resolve grace for user %d failed: %s", record.UserId, err.Error()))
+					continue
+				}
+				common.SysLog(fmt.Sprintf("[InviteTrap] user %d already activated, grace closed", record.UserId))
+				progressed = true
 				continue
 			}
 			if err := model.ResolveInviteTrapGrace(record.UserId, model.InviteTrapGraceReasonExpired); err != nil {
