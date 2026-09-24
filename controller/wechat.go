@@ -56,7 +56,12 @@ func getWeChatIdByCode(code string) (string, error) {
 	return res.Data, nil
 }
 
+// WeChatAuth 微信登录/首登建号（页面内验证码与公众号回跳共用本接口）：
+// 与其它第一因素入口一样要过前置人机校验，凭据走查询串。
 func WeChatAuth(c *gin.Context) {
+	if !requirePreAuthChallenge(c) {
+		return
+	}
 	if !common.WeChatAuthEnabled {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "管理员未开启通过微信登录以及注册",

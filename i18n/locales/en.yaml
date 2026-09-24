@@ -80,6 +80,7 @@ user.password_login_disabled: "Password login has been disabled by administrator
 user.register_disabled: "New user registration has been disabled by administrator"
 user.invite_code_required: "An invitation code is required to register"
 user.activation_verification_required: "Please complete the security check and try again"
+user.activation_verification_unavailable: "The security check is temporarily unavailable, please try again later"
 user.invite_code_invalid: "Invalid invitation code"
 user.invite_code_disabled: "This invitation code has been disabled"
 user.invite_code_used: "This invitation code has been used up"

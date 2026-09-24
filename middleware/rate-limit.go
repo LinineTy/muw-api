@@ -174,6 +174,14 @@ func CriticalRateLimit() func(c *gin.Context) {
 	return rateLimitFactory(&common.CriticalRateLimitEnable, &common.CriticalRateLimitNum, &common.CriticalRateLimitDuration, "CT")
 }
 
+// ChallengeRateLimit guards the human-verification challenge endpoints with their own
+// per-IP bucket. They share the "CT" bucket with the action they protect (sign-in,
+// registration, activation) otherwise, which doubles the tokens a single attempt costs
+// and halves the attempts a shared IP gets before being throttled.
+func ChallengeRateLimit() func(c *gin.Context) {
+	return rateLimitFactory(&common.CriticalRateLimitEnable, &common.CriticalRateLimitNum, &common.CriticalRateLimitDuration, "CH")
+}
+
 // UserCriticalRateLimit returns a per-user critical rate limiter for endpoints
 // where a shared per-IP bucket would let one user drain the critical bucket for
 // everyone behind the same IP (access-token minting, aff transfers).

@@ -224,3 +224,67 @@ func performLoginChallengeRequest(t *testing.T) *httptest.ResponseRecorder {
 	IssueLoginChallenge(c)
 	return recorder
 }
+
+// 一键 Passkey 登录（无用户名那套）与密码登录同属第一因素，必须同样过校验。
+func TestPasskeyLoginBeginRequiresChallenge(t *testing.T) {
+	restore := withLoginChallengeForTest(t)
+	defer restore()
+
+	recorder := performPasskeyLoginBeginRequest(t, "", "")
+	assert.Contains(t, recorder.Body.String(), CodeLoginVerificationRequired,
+		"不带校验打 passkey 登录起点必须被挡下")
+
+	challengeId, nonce := solvePreAuthChallengeForTest(t)
+	recorder = performPasskeyLoginBeginRequest(t, challengeId, nonce)
+	body := recorder.Body.String()
+	assert.NotContains(t, body, CodeLoginVerificationRequired, "过了校验就该放行到业务分支")
+	// 演示环境没开 passkey：放行后应落到"未启用"那条业务提示上。
+	assert.Contains(t, body, "Passkey")
+}
+
+// 微信登录/首登建号同样是第一因素（页面内验证码与公众号回跳共用），必须过校验。
+func TestWeChatAuthRequiresChallenge(t *testing.T) {
+	restore := withLoginChallengeForTest(t)
+	defer restore()
+
+	recorder := performWeChatAuthRequest(t, "code-1", "", "")
+	assert.Contains(t, recorder.Body.String(), CodeLoginVerificationRequired,
+		"不带校验打微信登录接口必须被挡下")
+
+	challengeId, nonce := solvePreAuthChallengeForTest(t)
+	recorder = performWeChatAuthRequest(t, "code-1", challengeId, nonce)
+	body := recorder.Body.String()
+	assert.NotContains(t, body, CodeLoginVerificationRequired, "过了校验就该放行到业务分支")
+	// 演示环境没开微信：放行后应落到"未开启"那条业务提示上。
+	assert.Contains(t, body, "微信")
+}
+
+func performPasskeyLoginBeginRequest(t *testing.T, challengeId, nonce string) *httptest.ResponseRecorder {
+	t.Helper()
+	url := "/api/user/passkey/login/begin"
+	if challengeId != "" {
+		url += "?challenge_id=" + challengeId + "&nonce=" + nonce
+	}
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, url, nil)
+	c.Request.RemoteAddr = "127.0.0.1:1234"
+	PasskeyLoginBegin(c)
+	return recorder
+}
+
+func performWeChatAuthRequest(t *testing.T, code, challengeId, nonce string) *httptest.ResponseRecorder {
+	t.Helper()
+	url := "/api/oauth/wechat?code=" + code
+	if challengeId != "" {
+		url += "&challenge_id=" + challengeId + "&nonce=" + nonce
+	}
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, url, nil)
+	c.Request.RemoteAddr = "127.0.0.1:1234"
+	WeChatAuth(c)
+	return recorder
+}

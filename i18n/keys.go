@@ -138,8 +138,11 @@ const (
 	MsgInviteCodeUsed                 = "user.invite_code_used"
 	MsgInviteCodeExpired              = "user.invite_code_expired"
 	MsgActivationVerificationRequired = "user.activation_verification_required"
-	MsgUserNotActivated               = "user.not_activated"
-	MsgUserAlreadyActivated           = "user.already_activated"
+	// MsgActivationVerificationUnavailable 挑战签发失败（如内存挑战池已满）：
+	// 与"没带/没过校验"区分开，提示稍后重试。
+	MsgActivationVerificationUnavailable = "user.activation_verification_unavailable"
+	MsgUserNotActivated                  = "user.not_activated"
+	MsgUserAlreadyActivated              = "user.already_activated"
 )
 
 // Quota related messages

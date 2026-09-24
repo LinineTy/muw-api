@@ -292,7 +292,12 @@ func PasskeyStatus(c *gin.Context) {
 	})
 }
 
+// PasskeyLoginBegin 无用户名的一键 Passkey 登录起点：与密码登录同属第一因素，
+// 因此同样要过前置人机校验（凭据走查询串，见 controller/activation_pow.go）。
 func PasskeyLoginBegin(c *gin.Context) {
+	if !requirePreAuthChallenge(c) {
+		return
+	}
 	if !system_setting.PasskeySettingsSnapshot().Enabled {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,

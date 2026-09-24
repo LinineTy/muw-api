@@ -106,6 +106,10 @@ func GetStatus(c *gin.Context) {
 		"password_register_enabled":     common.PasswordRegisterEnabled,
 		"invite_code_register_enabled":  common.InviteCodeRegisterEnabled,
 		"invite_activation_enabled":     common.InviteCodeRegisterEnabled,
+		// 人机校验是否实际生效（开关开着且难度非 0）。前端据此决定要不要出示校验浮窗：
+		// 关着就直接放行，不必让用户先点一下再发现无事可做。
+		"login_challenge_required":      common.LoginChallengeEnabled && common.ActivationPoWBitsEffective() > 0,
+		"activation_challenge_required": common.InviteCodeRegisterEnabled && common.ActivationPoWBitsEffective() > 0,
 		"default_use_auto_group":        setting.DefaultUseAutoGroup,
 
 		"password_login_encryption_enabled": common.PasswordLoginEncryptionEnabled,

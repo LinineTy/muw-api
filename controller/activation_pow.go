@@ -63,8 +63,9 @@ func writePoWChallenge(c *gin.Context, purpose string, userId int) {
 	}
 	challenge, err := model.IssuePoWChallenge(purpose, userId, c.ClientIP(), bits)
 	if err != nil {
+		// 签发失败（挑战池满）：与"没带/没过校验"区分开，让客户端知道可以稍后重试。
 		common.SysError("issue pow challenge failed: " + err.Error())
-		common.ApiErrorI18n(c, i18n.MsgDatabaseError)
+		common.ApiErrorI18n(c, i18n.MsgActivationVerificationUnavailable)
 		return
 	}
 	common.ApiSuccess(c, activationChallengeData{
