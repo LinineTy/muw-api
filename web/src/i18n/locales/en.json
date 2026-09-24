@@ -8248,7 +8248,6 @@
     "The activation deadline has passed; this account will be disabled shortly.": "The activation deadline has passed; this account will be disabled shortly.",
     "Sign in with a third-party account": "Sign in with a third-party account",
     "Security check": "Security check",
-    "Security check passed": "Security check passed",
     "Security check failed. Please try again.": "Security check failed. Please try again.",
     "Security check is unavailable right now. Please try again later.": "Security check is unavailable right now. Please try again later.",
     "Activation Protection": "Activation Protection",
@@ -8262,6 +8261,7 @@
     "Require the check for password sign-in, sign-up and third-party sign-in.": "Require the check for password sign-in, sign-up and third-party sign-in.",
     "Adds a field that is hidden from users; only automation fills it. A filled value disables the account.": "Adds a field that is hidden from users; only automation fills it. A filled value disables the account.",
     "Start the check": "Start the check",
-    "Verifying...": "Verifying..."
+    "Verifying...": "Verifying...",
+    "Verified": "Verified"
   }
 }

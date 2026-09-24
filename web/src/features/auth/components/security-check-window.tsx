@@ -1,17 +1,19 @@
 // @muw-owned
-import { Check, Loader2, RotateCcw, ShieldAlert } from 'lucide-react'
+import { Check, Loader2, ShieldAlert } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
+
+import { cn } from '@/lib/utils'
 
 export type SecurityCheckStatus = 'idle' | 'solving' | 'done' | 'failed'
 
 type SecurityCheckWindowProps = {
   open: boolean
   status: SecurityCheckStatus
-  /** 勾选后开始校验。 */
+  /** 勾选后开始校验 */
   onStart: () => void
-  /** 失败后重新校验。 */
+  /** 校验未通过后重新校验 */
   onRetry: () => void
 }
 
@@ -23,7 +25,7 @@ const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), Math.max(min, max))
 
 /**
- * 校验浮窗：勾选框 + 状态文字，整块可拖动，无遮罩、不锁页面。
+ * 校验浮窗：勾选框 + 状态文字，除勾选框外整块可拖动，无遮罩、不锁页面。
  *
  * 必须挂到 document.body：卡片是 transform 元素，fixed 会以它为参照系而被裁切。
  */
@@ -39,8 +41,8 @@ export function SecurityCheckWindow({
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null)
 
   const handlePointerDown = useCallback((event: React.PointerEvent) => {
-    // 勾选框与按钮正常点击，不参与拖动
-    if ((event.target as HTMLElement).closest('button,input,label,a')) {
+    // 勾选框与重试按钮正常点击，不参与拖动
+    if ((event.target as HTMLElement).closest('button')) {
       return
     }
     const rect = cardRef.current?.getBoundingClientRect()
@@ -90,26 +92,27 @@ export function SecurityCheckWindow({
   if (solving) {
     label = t('Verifying...')
   } else if (passed) {
-    label = t('Security check passed')
+    label = t('Verified')
   } else if (failed) {
-    label = t('Security check failed. Please try again.')
+    label = t('Failed')
   }
 
-  let indicator = (
-    <input
-      type='checkbox'
-      checked={false}
-      onChange={onStart}
-      aria-label={t('Start the check')}
-      className='accent-primary size-4 shrink-0 cursor-pointer'
-    />
-  )
+  let mark = null
   if (solving) {
-    indicator = <Loader2 className='text-primary size-4 shrink-0 animate-spin' />
+    mark = <Loader2 className='text-primary size-4 animate-spin' />
   } else if (passed) {
-    indicator = <Check className='size-4 shrink-0 text-emerald-500' />
+    mark = <Check className='text-primary-foreground size-4' />
   } else if (failed) {
-    indicator = <ShieldAlert className='text-destructive size-4 shrink-0' />
+    mark = <ShieldAlert className='text-destructive size-4' />
+  }
+
+  let boxClass = 'border-primary/35 bg-primary/5 hover:border-primary/60 hover:bg-primary/10'
+  if (passed) {
+    boxClass = 'border-primary bg-primary'
+  } else if (failed) {
+    boxClass = 'border-destructive/40 bg-destructive/10'
+  } else if (solving) {
+    boxClass = 'border-primary/45 bg-primary/10'
   }
 
   const windowNode = (
@@ -127,22 +130,40 @@ export function SecurityCheckWindow({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
-      className='bg-popover text-popover-foreground ring-foreground/10 fixed z-[70] w-[228px] cursor-grab touch-none rounded-xl px-3 py-2.5 shadow-lg ring-1 select-none backdrop-blur-md active:cursor-grabbing'
+      className='bg-popover text-popover-foreground ring-foreground/10 fixed z-[70] flex min-h-14 w-[190px] cursor-grab touch-none items-center gap-3 rounded-xl px-3.5 py-2.5 shadow-xl ring-1 select-none backdrop-blur-md active:cursor-grabbing'
     >
-      <div className='flex items-center gap-2.5'>
-        {indicator}
-        <span className='text-[13px] leading-5'>{label}</span>
-        {failed ? (
-          <button
-            type='button'
-            onClick={onRetry}
-            aria-label={t('Retry')}
-            className='text-primary ml-auto shrink-0'
-          >
-            <RotateCcw className='size-4' />
-          </button>
-        ) : null}
-      </div>
+      <button
+        type='button'
+        role='checkbox'
+        aria-checked={passed}
+        aria-label={t('Start the check')}
+        data-testid='security-check-start'
+        onClick={onStart}
+        disabled={solving || passed || failed}
+        className={cn(
+          'grid size-7 shrink-0 place-items-center rounded-lg border transition-all duration-200 disabled:cursor-default',
+          boxClass
+        )}
+      >
+        {mark}
+      </button>
+      <span
+        className={cn(
+          'min-w-0 text-[13px] leading-5 font-medium',
+          failed ? 'text-muted-foreground' : 'text-foreground'
+        )}
+      >
+        {label}
+      </span>
+      {failed ? (
+        <button
+          type='button'
+          onClick={onRetry}
+          className='text-primary ml-auto shrink-0 text-[12px] font-medium'
+        >
+          {t('Retry')}
+        </button>
+      ) : null}
     </div>
   )
 

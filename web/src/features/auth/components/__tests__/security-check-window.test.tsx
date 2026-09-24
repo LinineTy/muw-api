@@ -44,7 +44,8 @@ describe('校验浮窗', () => {
 
   it('勾选后开始校验，状态文字随状态变化', () => {
     const props = renderWindow()
-    const checkbox = screen.getByRole('checkbox', { name: 'Start the check' })
+    const checkbox = screen.getByTestId('security-check-start')
+    expect(checkbox).toHaveAttribute('role', 'checkbox')
     expect(screen.getByText('Start the check')).toBeInTheDocument()
     fireEvent.click(checkbox)
     expect(props.onStart).toHaveBeenCalledTimes(1)
@@ -63,8 +64,12 @@ describe('校验浮窗', () => {
     unmount()
 
     const passed = renderWindow({ status: 'done' })
-    expect(screen.getByText('Security check passed')).toBeInTheDocument()
-    expect(screen.queryByRole('checkbox')).toBeNull()
+    expect(screen.getByText('Verified')).toBeInTheDocument()
+    expect(screen.getByTestId('security-check-start')).toHaveAttribute(
+      'aria-checked',
+      'true'
+    )
+    expect(screen.getByTestId('security-check-start')).toBeDisabled()
     passed.onRetry()
 
     const failed = renderWindow({ status: 'failed' })
@@ -83,7 +88,7 @@ describe('校验浮窗', () => {
 
     // 勾选框上的按下不移动窗口
     const before = card.style.left
-    const checkbox = screen.getByRole('checkbox', { name: 'Start the check' })
+    const checkbox = screen.getByTestId('security-check-start')
     fireEvent.pointerDown(checkbox, { clientX: 100, clientY: 100, pointerId: 2 })
     fireEvent.pointerMove(checkbox, { clientX: 400, clientY: 400, pointerId: 2 })
     expect(card.style.left).toBe(before)

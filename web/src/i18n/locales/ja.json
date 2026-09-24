@@ -2334,7 +2334,7 @@
     "Factory plugins cannot be deleted or disabled individually. A custom version can override them; deleting or disabling that version restores the factory plugin. Third-party-only platforms become unavailable when their plugin is deleted or disabled.": "組み込みプラグインは個別に削除・無効化できません。カスタム版で上書きでき、その版を削除または無効化すると組み込み版に戻ります。サードパーティ専用プラットフォームはプラグインを削除または無効化すると利用できなくなります。",
     "Fail Reason": "失敗理由",
     "Fail Reason Details": "失敗理由の詳細",
-    "Failed": "失敗",
+    "Failed": "確認に失敗",
     "Failed to adjust quota": "クォータの調整に失敗しました",
     "Failed to apply overwrite.": "オーバーライトの適用に失敗しました。",
     "Failed to apply vendor changes": "プロバイダーの変更を適用できませんでした",
@@ -8248,7 +8248,6 @@
     "The activation deadline has passed; this account will be disabled shortly.": "有効化の期限を過ぎました。このアカウントはまもなく無効化されます。",
     "Sign in with a third-party account": "サードパーティでログイン",
     "Security check": "セキュリティ確認",
-    "Security check passed": "確認に合格しました",
     "Security check failed. Please try again.": "確認に失敗しました。もう一度お試しください。",
     "Security check is unavailable right now. Please try again later.": "セキュリティ確認を現在利用できません。しばらくしてから再試行してください。",
     "Activation Protection": "有効化の保護",
@@ -8262,6 +8261,7 @@
     "Require the check for password sign-in, sign-up and third-party sign-in.": "パスワードログイン・新規登録・第三者ログインにも確認を要求します。",
     "Adds a field that is hidden from users; only automation fills it. A filled value disables the account.": "ユーザーから見えない項目を追加します。自動化のみが記入し、記入があるとアカウントは無効化されます。",
     "Start the check": "確認を開始",
-    "Verifying...": "確認中…"
+    "Verifying...": "確認中…",
+    "Verified": "確認済み"
   }
 }
