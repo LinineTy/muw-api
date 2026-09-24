@@ -415,9 +415,9 @@ func ActivateInviteCode(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgInviteCodeRequired)
 		return
 	}
-	// 1) 隐形蜜罐：命中即自动化（真人碰不到这个字段）。放在占位之前，命中不消耗名额；
+	// 1) 隐形蜜罐（受 option ActivationHoneypotEnabled 控制）：命中即自动化（真人碰不到这个字段）。
 	// 对外仍回"无效邀请码"，不向脚本暴露自己踩了哪一道。
-	if strings.TrimSpace(req.Website) != "" {
+	if common.ActivationHoneypotEnabled && strings.TrimSpace(req.Website) != "" {
 		if err := model.DisableUserByTrap(id, common.HoneypotBanReason); err != nil {
 			common.SysError("disable honeypot user failed: " + err.Error())
 			common.ApiErrorI18n(c, i18n.MsgDatabaseError)

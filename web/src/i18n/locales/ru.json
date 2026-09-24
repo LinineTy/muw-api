@@ -8252,6 +8252,14 @@
     "Security check passed": "Проверка пройдена",
     "Security check failed. Please try again.": "Проверка не пройдена. Повторите попытку.",
     "Computing hashes: {{count}}": "Вычислено хешей: {{count}}",
-    "Security check is unavailable right now. Please try again later.": "Проверка безопасности сейчас недоступна. Повторите попытку позже."
+    "Security check is unavailable right now. Please try again later.": "Проверка безопасности сейчас недоступна. Повторите попытку позже.",
+    "Activation Protection": "Защита активации",
+    "Proof-of-work difficulty": "Сложность проверки",
+    "Trap code grace period (seconds)": "Льготный период для trap-кода (сек)",
+    "How long an account that submitted a trap invite code stays usable before it is disabled. Minimum 60 seconds, default 900. Activating with a valid code inside the window (or passing the check) clears it.": "Сколько времени аккаунт, отправивший trap-код, остаётся доступным до отключения. Минимум 60 секунд, по умолчанию 900. Активация valid-кодом внутри окна (или прохождение проверки) снимает его.",
+    "Hidden honeypot field": "Скрытое поле-ловушка",
+    "Adds a form field that people cannot see or reach by keyboard, so only automation fills it. A filled value disables that account right away. Leave it on unless you are investigating a false positive.": "Добавляет поле, которое человек не видит и не может выбрать с клавиатуры, поэтому заполняет его только автоматика. Заполненное значение сразу отключает аккаунт. Оставляйте включённым, кроме случаев разбора ложного срабатывания.",
+    "Save activation protection": "Сохранить защиту активации",
+    "Leading zero bits of sha256(challenge:nonce) that each activation must solve. 0 disables the check; 24 is the maximum. Default 18: a fraction of a second on a desktop, a second or two on a low-end phone.": "Сколько ведущих нулевых бит sha256(challenge:nonce) должна решить каждая активация. 0 отключает проверку, максимум 24, по умолчанию 18 (доли секунды на ПК, секунда-две на слабом смартфоне)."
   }
 }

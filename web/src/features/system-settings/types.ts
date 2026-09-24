@@ -435,6 +435,12 @@ export type SecuritySettings = {
   'fetch_setting.allowed_ports': number[]
   'fetch_setting.apply_ip_filter_for_domain': boolean
   'token_setting.max_user_tokens': number
+  /** 激活页人机校验（PoW）难度：sha256 前导零位数，0 = 关闭 */
+  PoWChallengeBits: number
+  /** 钓鱼邀请码命中后的宽限秒数（下限 60） */
+  InviteTrapGraceSeconds: number
+  /** 激活页隐形蜜罐字段开关 */
+  ActivationHoneypotEnabled: boolean
   'credit_score_setting.enabled': boolean
   'credit_score_setting.auto_freeze_enabled': boolean
   'credit_score_setting.full_score': number

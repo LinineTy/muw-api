@@ -8252,6 +8252,14 @@
     "Security check passed": "Vérification réussie",
     "Security check failed. Please try again.": "Vérification échouée. Veuillez réessayer.",
     "Computing hashes: {{count}}": "Hachages calculés : {{count}}",
-    "Security check is unavailable right now. Please try again later.": "La vérification de sécurité est momentanément indisponible. Réessayez plus tard."
+    "Security check is unavailable right now. Please try again later.": "La vérification de sécurité est momentanément indisponible. Réessayez plus tard.",
+    "Activation Protection": "Protection de l'activation",
+    "Proof-of-work difficulty": "Difficulté de la vérification",
+    "Trap code grace period (seconds)": "Délai de grâce du code piège (secondes)",
+    "How long an account that submitted a trap invite code stays usable before it is disabled. Minimum 60 seconds, default 900. Activating with a valid code inside the window (or passing the check) clears it.": "Durée pendant laquelle un compte ayant soumis un code piège reste utilisable avant d'être désactivé. Minimum 60 secondes, 900 par défaut. Une activation avec un code valide dans ce délai (ou la réussite de la vérification) l'annule.",
+    "Hidden honeypot field": "Champ leurre invisible",
+    "Adds a form field that people cannot see or reach by keyboard, so only automation fills it. A filled value disables that account right away. Leave it on unless you are investigating a false positive.": "Ajoute un champ invisible et inaccessible au clavier : seule une automatisation le remplit. Une valeur remplie désactive immédiatement le compte. Laissez-le activé sauf pour analyser un faux positif.",
+    "Save activation protection": "Enregistrer la protection de l'activation",
+    "Leading zero bits of sha256(challenge:nonce) that each activation must solve. 0 disables the check; 24 is the maximum. Default 18: a fraction of a second on a desktop, a second or two on a low-end phone.": "Nombre de bits de tête à zéro de sha256(challenge:nonce) à résoudre à chaque activation. 0 désactive la vérification, 24 est le maximum, 18 par défaut (une fraction de seconde sur ordinateur, une à deux secondes sur un téléphone d'entrée de gamme)."
   }
 }

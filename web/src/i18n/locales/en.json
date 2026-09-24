@@ -8252,6 +8252,14 @@
     "Security check passed": "Security check passed",
     "Security check failed. Please try again.": "Security check failed. Please try again.",
     "Computing hashes: {{count}}": "Computing hashes: {{count}}",
-    "Security check is unavailable right now. Please try again later.": "Security check is unavailable right now. Please try again later."
+    "Security check is unavailable right now. Please try again later.": "Security check is unavailable right now. Please try again later.",
+    "Activation Protection": "Activation Protection",
+    "Proof-of-work difficulty": "Proof-of-work difficulty",
+    "Trap code grace period (seconds)": "Trap code grace period (seconds)",
+    "How long an account that submitted a trap invite code stays usable before it is disabled. Minimum 60 seconds, default 900. Activating with a valid code inside the window (or passing the check) clears it.": "How long an account that submitted a trap invite code stays usable before it is disabled. Minimum 60 seconds, default 900. Activating with a valid code inside the window (or passing the check) clears it.",
+    "Hidden honeypot field": "Hidden honeypot field",
+    "Adds a form field that people cannot see or reach by keyboard, so only automation fills it. A filled value disables that account right away. Leave it on unless you are investigating a false positive.": "Adds a form field that people cannot see or reach by keyboard, so only automation fills it. A filled value disables that account right away. Leave it on unless you are investigating a false positive.",
+    "Save activation protection": "Save activation protection",
+    "Leading zero bits of sha256(challenge:nonce) that each activation must solve. 0 disables the check; 24 is the maximum. Default 18: a fraction of a second on a desktop, a second or two on a low-end phone.": "Leading zero bits of sha256(challenge:nonce) that each activation must solve. 0 disables the check; 24 is the maximum. Default 18: a fraction of a second on a desktop, a second or two on a low-end phone."
   }
 }

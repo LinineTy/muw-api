@@ -548,3 +548,50 @@ func performIssueActivationChallengeRequest(t *testing.T, userId int) *httptest.
 	IssueActivationChallenge(c)
 	return recorder
 }
+
+// 蜜罐开关关掉时（option ActivationHoneypotEnabled=false）：填了隐藏字段的提交按普通提交处理 ——
+// 不停用、正常消费名额。用于误伤排查或临时关掉这一层。
+func TestActivateInviteCodeHoneypotDisabledStillActivates(t *testing.T) {
+	db := setupManageUserTestDB(t)
+	require.NoError(t, db.AutoMigrate(&model.Redemption{}, &model.RedemptionUse{}, &model.InviteTrapGrace{}))
+	restoreInviteFlag := enableInviteCodeRegisterForTest()
+	defer restoreInviteFlag()
+	previousHoneypot := common.ActivationHoneypotEnabled
+	common.ActivationHoneypotEnabled = false
+	defer func() { common.ActivationHoneypotEnabled = previousHoneypot }()
+
+	user := model.User{
+		Username: "honeypot-off", Password: "password", Role: common.RoleCommonUser,
+		Status: common.UserStatusEnabled, Group: "default", Activated: 0, AuthVersion: 1,
+	}
+	require.NoError(t, db.Create(&user).Error)
+	require.NoError(t, db.Model(&model.User{}).Where("id = ?", user.Id).Update("activated", 0).Error)
+	code := model.Redemption{
+		Name: "invite-plain-off", Key: "30000000000000000000000000000012",
+		Status: common.RedemptionCodeStatusEnabled, Type: common.RedemptionCodeTypeInvite,
+		MaxUses: 2, CreatedTime: common.GetTimestamp(),
+	}
+	require.NoError(t, db.Create(&code).Error)
+
+	bits := common.ActivationPoWBitsEffective()
+	challenge, err := model.IssueActivationPoWChallenge(user.Id, "127.0.0.1", bits)
+	require.NoError(t, err)
+	recorder := performActivateInviteCodeRequestWithBody(t, user.Id, map[string]any{
+		"invite_code":  code.Key,
+		"website":      "http://spam.example.com",
+		"challenge_id": challenge.Id,
+		"nonce":        solveActivationPoWForTest(t, challenge.Challenge, challenge.Bits),
+	})
+	assert.Contains(t, recorder.Body.String(), `"success":true`, "关掉蜜罐后应按普通提交成功")
+
+	var updated model.User
+	require.NoError(t, db.First(&updated, user.Id).Error)
+	assert.Equal(t, common.UserStatusEnabled, updated.Status)
+	assert.Equal(t, "", updated.Remark)
+	assert.Equal(t, 1, updated.Activated)
+
+	var honeypotAudits int64
+	require.NoError(t, db.Model(&model.AuditLog{}).
+		Where("user_id = ? AND action = ?", user.Id, "invite.honeypot_hit").Count(&honeypotAudits).Error)
+	assert.Equal(t, int64(0), honeypotAudits, "关掉开关后不该再落蜜罐审计")
+}

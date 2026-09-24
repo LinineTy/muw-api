@@ -121,14 +121,20 @@ func InviteTrapGraceWindow() int {
 // 与钓鱼码不同：蜜罐字段真人看不到也填不到，命中即判自动化，无需宽限。
 const HoneypotBanReason = "检测到自动化提交，账号已停用"
 
+// ActivationHoneypotEnabled 激活页隐形蜜罐字段开关（默认开）：真人对这个字段既看不到也 tab 不到，
+// 只有遍历表单的自动化会填；命中即判自动化并停用账号。关掉它等于放弃这一层判定
+// （只剩 PoW 的算力成本），一般只在排查误伤时临时关。可通过 option key ActivationHoneypotEnabled 调整。
+var ActivationHoneypotEnabled = true
+
 // DefaultActivationPoWBits 激活页人机校验（PoW）默认难度：要求 sha256(challenge:nonce)
 // 有这么多前导零位，期望计算量 2^bits 次哈希。
 //
-// 2026-09-24 实测（纯 JS 的 node-forge sha256）：容器内 node 单线程约 62.8 万次/秒，
-// 浏览器里更快 —— 22 位（约 420 万次期望）在 chromium 上端到端约 2.2 秒。取 20 位：
-// 桌面约 0.5~0.7 秒、低端手机约 3 秒以内，而批量试码要为每次尝试付一份同样的算力。
-// 它只抬高自动化成本，不构成"证明你是人"——判定自动化靠激活页的蜜罐字段。
-const DefaultActivationPoWBits = 20
+// 2026-09-24 实测（纯 JS 的 node-forge sha256，容器内单线程约 62.8 万次/秒；浏览器同量级）：
+// 18 位期望 26 万次 ≈ 桌面 0.3~0.5 秒、低端手机 1~2 秒；20 位要翻 4 倍（弱机 5 秒上下，
+// 太慢）。取 18 位：真人几乎无感，而批量试码要为每次尝试付一份同样算力
+// （1 万次尝试 ≈ 26 亿次哈希 ≈ 单核 1 小时以上）。它只抬高自动化成本，
+// 不构成"证明你是人"——判定自动化靠激活页的蜜罐字段。
+const DefaultActivationPoWBits = 18
 
 // MaxActivationPoWBits 难度上限：每 +1 位成本翻倍，再往上真人等待时间不可接受。
 const MaxActivationPoWBits = 24

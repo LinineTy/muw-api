@@ -8252,6 +8252,14 @@
     "Security check passed": "安全驗證通過",
     "Security check failed. Please try again.": "安全驗證未通過，請重試。",
     "Computing hashes: {{count}}": "已計算 {{count}} 次雜湊",
-    "Security check is unavailable right now. Please try again later.": "安全驗證暫時無法使用，請稍後重試。"
+    "Security check is unavailable right now. Please try again later.": "安全驗證暫時無法使用，請稍後重試。",
+    "Activation Protection": "啟用防護",
+    "Proof-of-work difficulty": "人機驗證難度",
+    "Trap code grace period (seconds)": "釣魚碼寬限時間（秒）",
+    "How long an account that submitted a trap invite code stays usable before it is disabled. Minimum 60 seconds, default 900. Activating with a valid code inside the window (or passing the check) clears it.": "送出釣魚邀請碼的帳號在被停用前仍可使用的時間。下限 60 秒、預設 900。在時間內用有效邀請碼啟用（或通過人機驗證）即結清。",
+    "Hidden honeypot field": "隱藏蜜罐欄位",
+    "Adds a form field that people cannot see or reach by keyboard, so only automation fills it. A filled value disables that account right away. Leave it on unless you are investigating a false positive.": "表單中加入一個真人看不到、鍵盤也到不了的欄位，只有自動化程式會填；一旦被填就立即停用該帳號。除排查誤判外建議保持開啟。",
+    "Save activation protection": "儲存啟用防護",
+    "Leading zero bits of sha256(challenge:nonce) that each activation must solve. 0 disables the check; 24 is the maximum. Default 18: a fraction of a second on a desktop, a second or two on a low-end phone.": "每次啟用都要解的 sha256(challenge:nonce) 前導零位數。0 = 關閉驗證；24 為上限；預設 18（桌面零點幾秒，低階手機一兩秒）。"
   }
 }

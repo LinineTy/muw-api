@@ -8252,6 +8252,14 @@
     "Security check passed": "安全校验通过",
     "Security check failed. Please try again.": "安全校验未通过，请重试。",
     "Computing hashes: {{count}}": "已计算 {{count}} 次哈希",
-    "Security check is unavailable right now. Please try again later.": "安全校验暂时不可用，请稍后重试。"
+    "Security check is unavailable right now. Please try again later.": "安全校验暂时不可用，请稍后重试。",
+    "Activation Protection": "激活防护",
+    "Proof-of-work difficulty": "人机校验难度",
+    "Trap code grace period (seconds)": "钓鱼码宽限时间（秒）",
+    "How long an account that submitted a trap invite code stays usable before it is disabled. Minimum 60 seconds, default 900. Activating with a valid code inside the window (or passing the check) clears it.": "提交钓鱼邀请码的账号在被停用前仍可用的时长。下限 60 秒、默认 900。窗口内用有效邀请码激活（或通过人机校验）即结清。",
+    "Hidden honeypot field": "隐藏蜜罐字段",
+    "Adds a form field that people cannot see or reach by keyboard, so only automation fills it. A filled value disables that account right away. Leave it on unless you are investigating a false positive.": "表单里加一个真人看不到、键盘也到不了的字段，只有自动化会填；一旦被填就立即停用该账号。除排查误伤外建议保持开启。",
+    "Save activation protection": "保存激活防护",
+    "Leading zero bits of sha256(challenge:nonce) that each activation must solve. 0 disables the check; 24 is the maximum. Default 18: a fraction of a second on a desktop, a second or two on a low-end phone.": "每次激活都要解的 sha256(challenge:nonce) 前导零位数。0 = 关闭校验；24 为上限；默认 18（桌面零点几秒，低端手机一两秒）。"
   }
 }

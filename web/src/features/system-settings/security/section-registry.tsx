@@ -21,6 +21,7 @@ import { SSRFSection } from '../request-limits/ssrf-section'
 import { TokenLimitSection } from '../request-limits/token-limit-section'
 import type { SecuritySettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
+import { ActivationGuardSection } from './activation-guard-section'
 import { RiskControlSection } from './risk-control-section'
 
 const SECURITY_SECTIONS = [
@@ -154,6 +155,19 @@ const SECURITY_SECTIONS = [
             5368709120,
           'conversation_retention_setting.ttl_days':
             settings['conversation_retention_setting.ttl_days'] ?? 30,
+        }}
+      />
+    ),
+  },
+  {
+    id: 'activation-guard',
+    titleKey: 'Activation Protection',
+    build: (settings: SecuritySettings) => (
+      <ActivationGuardSection
+        defaultValues={{
+          PoWChallengeBits: settings.PoWChallengeBits,
+          InviteTrapGraceSeconds: settings.InviteTrapGraceSeconds,
+          ActivationHoneypotEnabled: settings.ActivationHoneypotEnabled,
         }}
       />
     ),

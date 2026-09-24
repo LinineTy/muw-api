@@ -8252,6 +8252,14 @@
     "Security check passed": "確認に合格しました",
     "Security check failed. Please try again.": "確認に失敗しました。もう一度お試しください。",
     "Computing hashes: {{count}}": "ハッシュ計算中：{{count}}",
-    "Security check is unavailable right now. Please try again later.": "セキュリティ確認を現在利用できません。しばらくしてから再試行してください。"
+    "Security check is unavailable right now. Please try again later.": "セキュリティ確認を現在利用できません。しばらくしてから再試行してください。",
+    "Activation Protection": "有効化の保護",
+    "Proof-of-work difficulty": "人機確認の難易度",
+    "Trap code grace period (seconds)": "トラップコードの猶予時間（秒）",
+    "How long an account that submitted a trap invite code stays usable before it is disabled. Minimum 60 seconds, default 900. Activating with a valid code inside the window (or passing the check) clears it.": "トラップコードを送信したアカウントが無効化されるまで利用できる時間。最小 60 秒、既定 900 秒。時間内に有効なコードで有効化する（または人機確認を通る）と解除されます。",
+    "Hidden honeypot field": "隠しハニーポット項目",
+    "Adds a form field that people cannot see or reach by keyboard, so only automation fills it. A filled value disables that account right away. Leave it on unless you are investigating a false positive.": "人が見えずキーボードでも到達できない項目を追加します。自動化だけが記入するため、記入があればそのアカウントを即時無効化します。誤検知を調べる場合以外はオンのままにしてください。",
+    "Save activation protection": "有効化の保護を保存",
+    "Leading zero bits of sha256(challenge:nonce) that each activation must solve. 0 disables the check; 24 is the maximum. Default 18: a fraction of a second on a desktop, a second or two on a low-end phone.": "有効化のたびに解く sha256(challenge:nonce) の先頭ゼロビット数。0 で無効、上限は 24、既定は 18（デスクトップで 1 秒未満、低性能スマホでも 1〜2 秒）。"
   }
 }

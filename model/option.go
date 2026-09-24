@@ -133,6 +133,7 @@ func InitOptionMap() {
 	common.OptionMap["PreConsumedQuota"] = strconv.Itoa(common.PreConsumedQuota)
 	common.OptionMap["InviteTrapGraceSeconds"] = strconv.Itoa(common.DefaultInviteTrapGraceSeconds)
 	common.OptionMap["PoWChallengeBits"] = strconv.Itoa(common.DefaultActivationPoWBits)
+	common.OptionMap["ActivationHoneypotEnabled"] = strconv.FormatBool(common.ActivationHoneypotEnabled)
 	common.OptionMap["ModelRequestRateLimitCount"] = strconv.Itoa(setting.ModelRequestRateLimitCount)
 	common.OptionMap["ModelRequestRateLimitDurationMinutes"] = strconv.Itoa(setting.ModelRequestRateLimitDurationMinutes)
 	common.OptionMap["ModelRequestRateLimitSuccessCount"] = strconv.Itoa(setting.ModelRequestRateLimitSuccessCount)
@@ -466,12 +467,9 @@ func updateOptionMap(key string, value string) (err error) {
 			common.RegisterEnabled = boolValue
 		case "InviteCodeRegisterEnabled":
 			common.InviteCodeRegisterEnabled = boolValue
-		case "InviteTrapGraceSeconds":
-			// 钓鱼邀请码宽限秒数（0/负数由 common.InviteTrapGraceWindow 回落默认）。
-			common.InviteTrapGraceSeconds, _ = strconv.Atoi(value)
-		case "PoWChallengeBits":
-			// 激活页人机校验（PoW）难度：sha256 前导零位数；0/负数 = 关闭校验。
-			common.ActivationPoWBits, _ = strconv.Atoi(value)
+		case "ActivationHoneypotEnabled":
+			// 激活页隐形蜜罐字段开关：关掉则不再因蜜罐命中停用账号。
+			common.ActivationHoneypotEnabled = boolValue
 		case "EmailDomainRestrictionEnabled":
 			common.EmailDomainRestrictionEnabled = boolValue
 		case "EmailAliasRestrictionEnabled":
@@ -565,6 +563,12 @@ func updateOptionMap(key string, value string) (err error) {
 		jsplugin.DefaultRegistry.SetDisabledFactoryKeys(setting.ParseTaskPluginDisabledFactoryKeys(value))
 	}
 	switch key {
+	case "InviteTrapGraceSeconds":
+		// 钓鱼邀请码宽限秒数（0/负数由 common.InviteTrapGraceWindow 回落默认）。
+		common.InviteTrapGraceSeconds, _ = strconv.Atoi(value)
+	case "PoWChallengeBits":
+		// 激活页人机校验（PoW）难度：sha256 前导零位数；0/负数 = 关闭校验。
+		common.ActivationPoWBits, _ = strconv.Atoi(value)
 	case "EmailDomainWhitelist":
 		common.EmailDomainWhitelist = strings.Split(value, ",")
 	case "SMTPServer":
