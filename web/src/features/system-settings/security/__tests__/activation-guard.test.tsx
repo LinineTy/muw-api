@@ -2,19 +2,19 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import { ActivationGuardSection } from '../activation-guard-section'
 import {
   MAX_POW_BITS,
   MIN_GRACE_SECONDS,
   pickChangedActivationGuardOptions,
 } from '../activation-guard'
+import { ActivationGuardSection } from '../activation-guard-section'
 
 vi.mock('../../hooks/use-update-option', () => ({
   useUpdateOption: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }))
 
 const defaults = {
-  PoWChallengeBits: 20,
+  PoWChallengeBits: 18,
   InviteTrapGraceSeconds: 900,
   ActivationHoneypotEnabled: true,
   LoginChallengeEnabled: false,
@@ -71,7 +71,7 @@ describe('激活防护设置页', () => {
     // 三个数值输入：难度 / 宽限秒数（都是 number 输入）
     const numbers = document.querySelectorAll('input[type="number"]')
     expect(numbers).toHaveLength(2)
-    expect((numbers[0] as HTMLInputElement).value).toBe('20')
+    expect((numbers[0] as HTMLInputElement).value).toBe('18')
     expect((numbers[1] as HTMLInputElement).value).toBe('900')
   })
 })

@@ -1,6 +1,8 @@
 // @muw-owned
 import type { SystemStatus } from '@/features/auth/types'
 
+import { hasOAuthProviders } from './oauth'
+
 /**
  * 登录页可用能力：登录页与表单都要用它，抽出来避免两处各写一份判断而漂移。
  * 判定口径与既有的 `UserAuthForm` 内联判断保持一致（`status.x ?? status.data.x ?? 默认`）。
@@ -27,11 +29,11 @@ export function hasOAuthProvider(
 ): boolean {
   return Boolean(
     status?.github_oauth ||
-      status?.discord_oauth ||
-      status?.oidc_enabled ||
-      status?.linuxdo_oauth ||
-      status?.telegram_oauth ||
-      (status?.custom_oauth_providers?.length ?? 0) > 0
+    status?.discord_oauth ||
+    status?.oidc_enabled ||
+    status?.linuxdo_oauth ||
+    status?.telegram_oauth ||
+    (status?.custom_oauth_providers?.length ?? 0) > 0
   )
 }
 
@@ -39,11 +41,13 @@ export function hasOAuthProvider(
  * 是否有任一「第三方」登录方式：OAuth 提供方（GitHub/Discord/OIDC/LinuxDO/Telegram/自定义）
  * 或微信。注册页卡脚那一条入口（「使用第三方登录」）用它判断——账号密码留在注册页，
  * 第三方一律走登录页。
+ *
+ * 直接复用 `lib/oauth.ts` 的提供方清单（它已含微信），避免同一份清单在两处各写一遍后漂移。
  */
 export function hasThirdPartyLogin(
   status: SystemStatus | null | undefined
 ): boolean {
-  return hasOAuthProvider(status) || Boolean(status?.wechat_login)
+  return hasOAuthProviders(status ?? null)
 }
 
 /**

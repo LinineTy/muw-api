@@ -15,7 +15,9 @@ import (
 
 // 人机校验（PoW）挑战，供激活页与登录/注册入口使用。
 //
-// 挑战只存在内存中：一次性、5 分钟有效，绑定用途（激活 / 前置）与用户（未登录按 IP 计数）。
+// 挑战只存在内存中：一次性、5 分钟有效，绑定用途（激活 / 前置）；已登录按用户计数，
+// 未登录按 IP 计数（Ip 只用于"每 IP 保留几条"的淘汰，不参与校验 —— 同一 IP 要领多道
+// 挑战是正常行为，把消费也钉在 IP 上反而会误伤切换网络/多标签的用户）。
 // 校验方式为找出 nonce，使 sha256(challenge:nonce) 具有足够的前导零位。
 // 实例重启后未用挑战即失效，客户端会重新领取。
 // 挑战用途：不同入口签发的挑战不通用。
@@ -134,21 +136,9 @@ func ConsumePoWChallenge(id string, purpose string, userId int, nonce string) er
 	return nil
 }
 
-// VerifyPoW 判断 nonce 是否满足难度要求（纯函数，便于单测）。
-func VerifyPoW(challenge string, nonce string, bits int) bool {
-	if challenge == "" || bits <= 0 {
-		return false
-	}
-	if !isDecimalNonce(nonce) {
-		return false
-	}
-	sum := sha256.Sum256([]byte(challenge + ":" + nonce))
-	return CountLeadingZeroBits(sum[:]) >= bits
-}
-
-// VerifyActivationPoW 校验 nonce 是否让 sha256(challenge:nonce) 达到难度要求。
+// VerifyPoW 校验 nonce 是否让 sha256(challenge:nonce) 达到难度要求。
 // 纯函数，便于单测。
-func VerifyActivationPoW(challenge string, nonce string, bits int) bool {
+func VerifyPoW(challenge string, nonce string, bits int) bool {
 	if challenge == "" || bits <= 0 {
 		return false
 	}
