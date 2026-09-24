@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { MOTION_TRANSITION } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 
-import { BADGE, CARD_FOOT } from '../lib/auth-card-geometry'
+import { BADGE, BADGE_CLEARANCE, CARD_FOOT } from '../lib/auth-card-geometry'
 import { useAuthEnter } from '../lib/auth-motion'
 import { AuthCardBadge, type AuthCardBadgeKind } from './auth-card-badge'
 
@@ -61,6 +61,17 @@ export function AuthCard({
     return () => observer.disconnect()
   }, [])
 
+  // 底部区域（设计稿 .card-foot）：
+  // - 有底部入口 → 文字带，右侧让出 136px 给右下角标；
+  // - 没有入口但有角标 → 只留角标向上侵入的高度（BADGE_CLEARANCE），
+  //   否则角标会压住最后一个内容块（实测：无 OAuth 的登录页压住主按钮 22px）；
+  // - 都没有 → 紧凑留白。
+  const emptyFootBand = badge ? (
+    <div style={{ height: BADGE_CLEARANCE }} />
+  ) : (
+    <div className='h-4' />
+  )
+
   return (
     <div className={cn('w-full', className)}>
       <motion.div className='mb-4' {...enterTitle}>
@@ -108,7 +119,7 @@ export function AuthCard({
                 {footer}
               </div>
             ) : (
-              <div className='h-4' />
+              emptyFootBand
             )}
           </Card>
         </motion.div>

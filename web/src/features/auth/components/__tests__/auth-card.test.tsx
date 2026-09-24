@@ -2,6 +2,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import { BADGE_CLEARANCE } from '../../lib/auth-card-geometry'
 import { AuthCard } from '../auth-card'
 
 describe('AuthCard（认证页卡壳）', () => {
@@ -34,5 +35,32 @@ describe('AuthCard（认证页卡壳）', () => {
 
     expect(screen.queryByText('连接安全')).toBeNull()
     expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  it('有角标但没有底部入口时，底留区仍要留出角标侵入的高度', () => {
+    const { container } = render(
+      <AuthCard title='登录' badge='secure' badgeLabel='连接安全'>
+        <div>表单内容</div>
+      </AuthCard>
+    )
+
+    const card = container.querySelector('[data-slot=card]') as HTMLElement
+    const spacer = card.lastElementChild as HTMLElement
+    expect(Number.parseFloat(spacer.style.height)).toBeGreaterThanOrEqual(
+      BADGE_CLEARANCE
+    )
+  })
+
+  it('既无角标也无底部入口时底留区保持紧凑', () => {
+    const { container } = render(
+      <AuthCard title='登录'>
+        <div>表单内容</div>
+      </AuthCard>
+    )
+
+    const card = container.querySelector('[data-slot=card]') as HTMLElement
+    const spacer = card.lastElementChild as HTMLElement
+    expect(spacer.style.height).toBe('')
+    expect(spacer.className).toContain('h-4')
   })
 })
