@@ -25,7 +25,7 @@ import { cn } from '@/lib/utils'
 import { AuthLayout } from '../auth-layout'
 import { AuthCard } from '../components/auth-card'
 import { AUTH_MINOR_TEXT } from '../lib/auth-styles'
-import { hasOAuthProvider } from '../lib/sign-in-capabilities'
+import { hasThirdPartyLogin } from '../lib/sign-in-capabilities'
 import { SignUpForm } from './components/sign-up-form'
 
 export function SignUp() {
@@ -35,8 +35,8 @@ export function SignUp() {
   if (status && status.password_register_enabled === false) {
     return <Navigate to='/sign-in' replace />
   }
-  // OAuth 出口只在真的配了提供方时给；文案也不写死 LinuxDO（可能是 GitHub / Telegram / 自定义 OAuth）
-  const hasOAuth = hasOAuthProvider(status)
+  // 第三方（OAuth / 微信…）统一走登录页；注册页只留账号密码。没配任何第三方时不给这条入口。
+  const hasThirdParty = hasThirdPartyLogin(status)
 
   return (
     <AuthLayout>
@@ -58,7 +58,7 @@ export function SignUp() {
           badge='secure'
           badgeLabel={t('Connection secure')}
           footer={
-            hasOAuth ? (
+            hasThirdParty ? (
               <Link
                 to='/sign-in'
                 className={cn(
@@ -66,7 +66,7 @@ export function SignUp() {
                   'text-muted-foreground hover:text-foreground'
                 )}
               >
-                {t('Sign in with OAuth')}
+                {t('Sign in with a third-party account')}
               </Link>
             ) : null
           }

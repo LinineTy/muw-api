@@ -36,6 +36,17 @@ export function hasOAuthProvider(
 }
 
 /**
+ * 是否有任一「第三方」登录方式：OAuth 提供方（GitHub/Discord/OIDC/LinuxDO/Telegram/自定义）
+ * 或微信。注册页卡脚那一条入口（「使用第三方登录」）用它判断——账号密码留在注册页，
+ * 第三方一律走登录页。
+ */
+export function hasThirdPartyLogin(
+  status: SystemStatus | null | undefined
+): boolean {
+  return hasOAuthProvider(status) || Boolean(status?.wechat_login)
+}
+
+/**
  * 是否还能走到「注册」页：自用模式关闭 + 注册总开关打开 + 密码注册打开。
  * 与 `/sign-up` 自身的回跳口径一致（`password_register_enabled === false` ⇒ 回登录页），
  * 避免出现「链接点进去又被弹回来」的死链。

@@ -45,12 +45,6 @@ type OAuthProvidersProps = {
   onWeChatLogin?: () => void
   isWeChatLoading?: boolean
   redirectTo?: string
-  /**
-   * 只渲染列出的提供方（`wechat` / `github` / `discord` / `oidc` / `linuxdo` /
-   * `telegram` / `custom-<slug>`）。不传 = 渲染全部已配置的（登录页行为）；
-   * 注册页只保留微信登录，不放其它第三方入口。
-   */
-  only?: string[]
 }
 
 type ProviderButton = {
@@ -70,7 +64,6 @@ export function OAuthProviders({
   onWeChatLogin,
   isWeChatLoading = false,
   redirectTo,
-  only,
 }: OAuthProvidersProps) {
   const { t } = useTranslation()
   const {
@@ -157,11 +150,7 @@ export function OAuthProviders({
     }
   }
 
-  const visibleButtons = only
-    ? providerButtons.filter((button) => only.includes(button.key))
-    : providerButtons
-
-  if (visibleButtons.length === 0) return null
+  if (providerButtons.length === 0) return null
 
   return (
     <div className={cn('space-y-3', className)}>
@@ -179,7 +168,7 @@ export function OAuthProviders({
       )}
 
       <div className='flex flex-col gap-2'>
-        {visibleButtons.map(
+        {providerButtons.map(
           ({ key, label, onClick, icon, disabled: extraDisabled }) => (
             <Button
               key={key}

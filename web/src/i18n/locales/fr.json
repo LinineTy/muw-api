@@ -8245,6 +8245,7 @@
     "Review the registered task plugins and their bindings.": "Consulter les plugins de tâches enregistrés et leurs associations.",
     "Activity rankings and overlap between users and IP addresses.": "Classements d’activité et recoupements entre utilisateurs et adresses IP.",
     "Your account will be disabled in {{time}} unless you activate with a valid invitation code.": "Votre compte sera désactivé dans {{time}} si vous ne l'activez pas avec un code d'invitation valide.",
-    "The activation deadline has passed; this account will be disabled shortly.": "Le délai d'activation est dépassé ; ce compte sera bientôt désactivé."
+    "The activation deadline has passed; this account will be disabled shortly.": "Le délai d'activation est dépassé ; ce compte sera bientôt désactivé.",
+    "Sign in with a third-party account": "Se connecter avec un service tiers"
   }
 }

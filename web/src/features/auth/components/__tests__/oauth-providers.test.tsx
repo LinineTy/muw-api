@@ -29,22 +29,13 @@ const expectLabels = (expected: string[]) => {
   )
 }
 
-describe('OAuthProviders 的 only 过滤', () => {
-  it('only=[wechat] 时只渲染微信入口，其它第三方一个都不放（注册页用）', () => {
+describe('OAuthProviders 渲染哪些入口', () => {
+  it('渲染全部已配置的提供方，顺序稳定', () => {
     render(
       <OAuthProviders
         status={asStatus(ALL_PROVIDERS)}
-        only={['wechat']}
         onWeChatLogin={() => undefined}
       />
-    )
-
-    expectLabels(['Continue with WeChat'])
-  })
-
-  it('不传 only 时渲染全部已配置的提供方（登录页行为不变）', () => {
-    render(
-      <OAuthProviders status={asStatus(ALL_PROVIDERS)} onWeChatLogin={() => undefined} />
     )
 
     expectLabels([
@@ -57,15 +48,13 @@ describe('OAuthProviders 的 only 过滤', () => {
     ])
   })
 
-  it('only 里的提供方没配置（或没给回调）时不渲染任何东西，也不留分隔线', () => {
-    const noProvider = render(
-      <OAuthProviders status={asStatus({})} only={['wechat']} onWeChatLogin={() => undefined} />
-    )
-    expect(noProvider.container.textContent).toBe('')
+  it('什么都没配（或没给微信回调）时不渲染，也不留分隔线', () => {
+    const none = render(<OAuthProviders status={asStatus({})} />)
+    expect(none.container.textContent).toBe('')
 
-    const noCallback = render(
-      <OAuthProviders status={asStatus({ wechat_login: true })} only={['wechat']} />
+    const wechatWithoutCallback = render(
+      <OAuthProviders status={asStatus({ wechat_login: true })} />
     )
-    expect(noCallback.container.textContent).toBe('')
+    expect(wechatWithoutCallback.container.textContent).toBe('')
   })
 })
