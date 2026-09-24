@@ -19,7 +19,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Combobox } from '@/components/ui/combobox'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 import { CompactDateTimeRangePicker } from '../../components/compact-date-time-range-picker'
 import {
@@ -29,23 +36,45 @@ import {
 } from '../../components/logs-filter-toolbar'
 import type { AuditFilters, AuditLog } from '../api'
 
+// 与其它日志页的筛选一致用 SelectTrigger（老版本这里是 Combobox）：选项都是固定短列表，
+// 不需要输入检索；换成统一组件后也不会再跟着 InputGroup/Input 这类共享件的尺寸调整而变形。
 function AuditFilterSelect(props: {
   label: string
   value: string
   options: { value: string; label: string; disabled?: boolean }[]
   onChange: (value: string) => void
 }) {
+  const selected = props.options.find((option) => option.value === props.value)
   return (
     <LogsFilterField>
-      <Combobox
-        options={props.options}
+      <Select
         value={props.value}
         onValueChange={(value) => {
-          if (value !== null) props.onChange(value)
+          if (typeof value === 'string') props.onChange(value)
         }}
-        aria-label={props.label}
-        className='w-full'
-      />
+      >
+        <SelectTrigger aria-label={props.label}>
+          <SelectValue>
+            <span className='truncate'>{selected?.label ?? props.label}</span>
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent
+          alignItemWithTrigger={false}
+          className='max-w-[calc(100vw-2rem)] min-w-52'
+        >
+          <SelectGroup>
+            {props.options.map((option) => (
+              <SelectItem
+                key={option.value}
+                value={option.value}
+                disabled={option.disabled}
+              >
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
     </LogsFilterField>
   )
 }
