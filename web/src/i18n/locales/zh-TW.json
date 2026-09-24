@@ -8260,6 +8260,8 @@
     "Hidden honeypot field": "隱藏蜜罐欄位",
     "Adds a form field that people cannot see or reach by keyboard, so only automation fills it. A filled value disables that account right away. Leave it on unless you are investigating a false positive.": "表單中加入一個真人看不到、鍵盤也到不了的欄位，只有自動化程式會填；一旦被填就立即停用該帳號。除排查誤判外建議保持開啟。",
     "Save activation protection": "儲存啟用防護",
-    "Leading zero bits of sha256(challenge:nonce) that each activation must solve. 0 disables the check; 24 is the maximum. Default 18: a fraction of a second on a desktop, a second or two on a low-end phone.": "每次啟用都要解的 sha256(challenge:nonce) 前導零位數。0 = 關閉驗證；24 為上限；預設 18（桌面零點幾秒，低階手機一兩秒）。"
+    "Require the check on sign-in": "登入也要過這道驗證",
+    "Applies the same check to password sign-in, sign-up and the third-party sign-in entry (the check is enforced when the provider state is issued, so a crafted callback is rejected too). Off by default: turning it on adds a short computation to every sign-in, and a device that cannot run it cannot sign in, so enable it when you are ready.": "密碼登入、註冊、第三方登入入口都套同一道驗證（第三方那道在簽發 state 時驗證，因此繞過前端自行構造回呼也會被拒）。預設關閉：開啟後每次登入都要多算一小段時間，且本機跑不動驗證就登不進來，請自行挑時機開啟。",
+    "Leading zero bits of sha256(challenge:nonce) that each check must solve. 0 disables the check everywhere; 24 is the maximum. Default 18: roughly a second or less on a desktop, a few seconds on a low-end phone.": "每次驗證都要解的 sha256(challenge:nonce) 前導零位數。0 = 全部關閉；24 為上限；預設 18（桌面一秒以內，低階手機幾秒）。"
   }
 }

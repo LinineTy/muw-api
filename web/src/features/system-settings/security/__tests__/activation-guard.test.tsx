@@ -17,6 +17,7 @@ const defaults = {
   PoWChallengeBits: 20,
   InviteTrapGraceSeconds: 900,
   ActivationHoneypotEnabled: true,
+  LoginChallengeEnabled: false,
 }
 
 describe('激活防护设置页', () => {
@@ -46,6 +47,7 @@ describe('激活防护设置页', () => {
           PoWChallengeBits: 0,
           InviteTrapGraceSeconds: 300,
           ActivationHoneypotEnabled: false,
+          LoginChallengeEnabled: true,
         },
         defaults
       )
@@ -53,6 +55,7 @@ describe('激活防护设置页', () => {
       { key: 'PoWChallengeBits', value: 0 },
       { key: 'InviteTrapGraceSeconds', value: 300 },
       { key: 'ActivationHoneypotEnabled', value: false },
+      { key: 'LoginChallengeEnabled', value: true },
     ])
   })
 
@@ -63,7 +66,8 @@ describe('激活防护设置页', () => {
       screen.getByText('Trap code grace period (seconds)')
     ).toBeInTheDocument()
     expect(screen.getByText('Hidden honeypot field')).toBeInTheDocument()
-    expect(screen.getByRole('switch')).toBeInTheDocument()
+    expect(screen.getByText('Require the check on sign-in')).toBeInTheDocument()
+    expect(screen.getAllByRole('switch')).toHaveLength(2)
     // 三个数值输入：难度 / 宽限秒数（都是 number 输入）
     const numbers = document.querySelectorAll('input[type="number"]')
     expect(numbers).toHaveLength(2)

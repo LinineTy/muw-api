@@ -27,6 +27,7 @@ import {
   clearPasswordEncryptionCache,
   encryptPassword,
 } from './lib/password-encryption'
+import { getPreAuthProof, takePreAuthProof } from './lib/pre-auth-proof'
 import { getAffiliateCode } from './lib/storage'
 import type { TelegramAuthorization } from './lib/telegram-login'
 import type { VerificationOperation } from './secure-verification/types'
@@ -38,6 +39,17 @@ import type {
   RegisterPayload,
   ApiResponse,
 } from './types'
+
+// 前置校验凭据拼成查询串（服务端从 query 读，三个入口统一口径）。
+function preAuthProofQuery(): string {
+  const proof = getPreAuthProof()
+  if (!proof) return ''
+  const params = new URLSearchParams({
+    challenge_id: proof.challengeId,
+    nonce: proof.nonce,
+  })
+  return `&${params.toString()}`
+}
 
 // ============================================================================
 // Authentication APIs
@@ -64,7 +76,7 @@ export async function login(payload: LoginPayload): Promise<LoginResponse> {
       passwordFields = { password: payload.password }
     }
     const res = await api.post<LoginResponse>(
-      `/api/user/login?turnstile=${turnstile}`,
+      `/api/user/login?turnstile=${turnstile}${preAuthProofQuery()}`,
       {
         username: payload.username,
         ...passwordFields,
@@ -74,6 +86,8 @@ export async function login(payload: LoginPayload): Promise<LoginResponse> {
     if (payload.passwordEncryptionEnabled && !res.data?.success) {
       clearPasswordEncryptionCache()
     }
+    // 服务端在门禁通过时就消费掉挑战，客户端跟着作废，下一拍要重新算
+    takePreAuthProof()
     return res.data
   } catch (error: unknown) {
     if (payload.passwordEncryptionEnabled) {
@@ -177,7 +191,9 @@ export async function createOAuthAuthorization(
 ): Promise<{ state: string; authorizationUrl?: string }> {
   const aff = intent === 'login' ? getAffiliateCode() : ''
   const res = await api.post(
-    '/api/oauth/state',
+    // 第三方登录同样要过前置校验：服务端在签发 state 这一步校验，回调侧必须消费服务端签发的
+    // state，所以绕过前端直接构造回调也会被挡下。
+    `/api/oauth/state${intent === 'login' ? preAuthProofQuery() : ''}`,
     {
       provider,
       intent,
@@ -194,6 +210,10 @@ export async function createOAuthAuthorization(
       skipErrorHandler: true,
     }
   )
+  if (intent === 'login') {
+    // 同登录/注册：state 签发成功即代表挑战已被服务端消费
+    takePreAuthProof()
+  }
   if (res.data?.success) {
     if (typeof res.data.data === 'string') return { state: res.data.data }
     if (typeof res.data.data?.flow_token === 'string') {
@@ -250,9 +270,14 @@ export async function telegramLogin(
 // User registration
 export async function register(payload: RegisterPayload): Promise<ApiResponse> {
   const res = await api.post(`/api/user/register`, payload, {
-    params: { turnstile: payload.turnstile ?? '' },
+    params: {
+      turnstile: payload.turnstile ?? '',
+      challenge_id: getPreAuthProof()?.challengeId,
+      nonce: getPreAuthProof()?.nonce,
+    },
     skipBusinessError: true,
   })
+  takePreAuthProof()
   return res.data
 }
 
@@ -278,6 +303,20 @@ export async function activateAccount(
     website: payload.website,
   })
   return res.data
+}
+
+// 登录/注册/第三方登录入口的前置人机校验挑战（匿名可领，绑 IP + 用途）。
+// 与激活页挑战不通用（服务端按 purpose 判定）；enabled=false 表示本站没开校验，直接跳过。
+export async function getLoginChallenge(): Promise<ActivationChallenge> {
+  const res = await api.post('/api/user/login_challenge', undefined, {
+    skipAuthRefresh: true,
+    skipBusinessError: true,
+  })
+  const body = res?.data
+  if (body?.success && body.data) {
+    return body.data as ActivationChallenge
+  }
+  return { enabled: false }
 }
 
 // 激活页人机校验：提交前先领一道一次性挑战（5 分钟有效）。enabled=false 表示本站未开启校验，

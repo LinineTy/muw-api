@@ -8260,6 +8260,8 @@
     "Hidden honeypot field": "隠しハニーポット項目",
     "Adds a form field that people cannot see or reach by keyboard, so only automation fills it. A filled value disables that account right away. Leave it on unless you are investigating a false positive.": "人が見えずキーボードでも到達できない項目を追加します。自動化だけが記入するため、記入があればそのアカウントを即時無効化します。誤検知を調べる場合以外はオンのままにしてください。",
     "Save activation protection": "有効化の保護を保存",
-    "Leading zero bits of sha256(challenge:nonce) that each activation must solve. 0 disables the check; 24 is the maximum. Default 18: a fraction of a second on a desktop, a second or two on a low-end phone.": "有効化のたびに解く sha256(challenge:nonce) の先頭ゼロビット数。0 で無効、上限は 24、既定は 18（デスクトップで 1 秒未満、低性能スマホでも 1〜2 秒）。"
+    "Require the check on sign-in": "ログイン時にも確認を必須にする",
+    "Applies the same check to password sign-in, sign-up and the third-party sign-in entry (the check is enforced when the provider state is issued, so a crafted callback is rejected too). Off by default: turning it on adds a short computation to every sign-in, and a device that cannot run it cannot sign in, so enable it when you are ready.": "パスワードログイン・新規登録・第三者ログインの入口に同じ確認を適用します（第三者ログインは state の発行時に検証するため、コールバックを自作しても拒否されます）。既定はオフ：オンにすると毎回のログインで少し計算が入り、動かせない端末ではログインできなくなるため、任意のタイミングで有効にしてください。",
+    "Leading zero bits of sha256(challenge:nonce) that each check must solve. 0 disables the check everywhere; 24 is the maximum. Default 18: roughly a second or less on a desktop, a few seconds on a low-end phone.": "各確認で解く sha256(challenge:nonce) の先頭ゼロビット数。0 で全て無効、上限 24、既定 18（デスクトップで 1 秒以内、低性能スマホで数秒）。"
   }
 }

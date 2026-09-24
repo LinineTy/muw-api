@@ -70,6 +70,8 @@ export interface LoginResponse {
   success: boolean
   message: string
   data?: LoginResult
+  /** 失败时可能带的机器码（如 LOGIN_VERIFICATION_REQUIRED：需先过前置人机校验） */
+  code?: string
 }
 
 export interface Login2FAResponse {

@@ -441,6 +441,8 @@ export type SecuritySettings = {
   InviteTrapGraceSeconds: number
   /** 激活页隐形蜜罐字段开关 */
   ActivationHoneypotEnabled: boolean
+  /** 登录/注册/第三方登录入口的前置人机校验开关（默认关） */
+  LoginChallengeEnabled: boolean
   'credit_score_setting.enabled': boolean
   'credit_score_setting.auto_freeze_enabled': boolean
   'credit_score_setting.full_score': number

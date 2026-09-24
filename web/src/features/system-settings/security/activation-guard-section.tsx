@@ -40,6 +40,7 @@ const activationGuardSchema = z.object({
   PoWChallengeBits: z.number().min(0).max(MAX_POW_BITS),
   InviteTrapGraceSeconds: z.number().min(MIN_GRACE_SECONDS),
   ActivationHoneypotEnabled: z.boolean(),
+  LoginChallengeEnabled: z.boolean(),
 })
 
 type ActivationGuardFormValues = z.output<typeof activationGuardSchema>
@@ -49,6 +50,7 @@ type NormalizedActivationGuardValues = {
   PoWChallengeBits: number
   InviteTrapGraceSeconds: number
   ActivationHoneypotEnabled: boolean
+  LoginChallengeEnabled: boolean
 }
 
 type ActivationGuardSectionProps = {
@@ -61,6 +63,7 @@ const buildFormDefaults = (
   PoWChallengeBits: defaults.PoWChallengeBits,
   InviteTrapGraceSeconds: defaults.InviteTrapGraceSeconds,
   ActivationHoneypotEnabled: defaults.ActivationHoneypotEnabled,
+  LoginChallengeEnabled: defaults.LoginChallengeEnabled,
 })
 
 export function ActivationGuardSection({
@@ -123,7 +126,7 @@ export function ActivationGuardSection({
                 </FormControl>
                 <FormDescription>
                   {t(
-                    'Leading zero bits of sha256(challenge:nonce) that each activation must solve. 0 disables the check; 24 is the maximum. Default 18: a fraction of a second on a desktop, a second or two on a low-end phone.'
+                    'Leading zero bits of sha256(challenge:nonce) that each check must solve. 0 disables the check everywhere; 24 is the maximum. Default 18: roughly a second or less on a desktop, a few seconds on a low-end phone.'
                   )}
                 </FormDescription>
                 <FormMessage />
@@ -155,6 +158,29 @@ export function ActivationGuardSection({
                   )}
                 </FormDescription>
                 <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='LoginChallengeEnabled'
+            render={({ field }) => (
+              <FormItem className='flex flex-row items-center justify-between gap-4 rounded-xl border p-4'>
+                <div className='space-y-1'>
+                  <FormLabel>{t('Require the check on sign-in')}</FormLabel>
+                  <FormDescription>
+                    {t(
+                      'Applies the same check to password sign-in, sign-up and the third-party sign-in entry (the check is enforced when the provider state is issued, so a crafted callback is rejected too). Off by default: turning it on adds a short computation to every sign-in, and a device that cannot run it cannot sign in, so enable it when you are ready.'
+                    )}
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
               </FormItem>
             )}
           />

@@ -63,6 +63,9 @@ func Login(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
+	if !requirePreAuthChallenge(c) {
+		return
+	}
 	username := loginRequest.Username
 	password := loginRequest.Password
 	if common.PasswordLoginEncryptionEnabled {
@@ -243,6 +246,9 @@ func Register(c *gin.Context) {
 	}
 	if !common.PasswordRegisterEnabled {
 		common.ApiErrorI18n(c, i18n.MsgUserPasswordRegisterDisabled)
+		return
+	}
+	if !requirePreAuthChallenge(c) {
 		return
 	}
 	var user model.User
@@ -435,21 +441,21 @@ func ActivateInviteCode(c *gin.Context) {
 	}
 
 	// 2) 人机校验（PoW）：开启时每次激活都要带一道通过校验的挑战（一次性、5 分钟有效）。
-	// 挑战池异常（例如签发接口不可用、难度配置为 0）不影响激活：只有"配置开启且挑战确实
-	// 不存在/过期/不过关"才拒绝，避免机制本身把真人挡在门外。
+	// 难度为 0（校验关闭）时整段跳过 —— 这也是出问题时的紧急开关。
 	powPassed := false
-	if bits := common.ActivationPoWBitsEffective(); bits > 0 {
-		switch err := model.ConsumeActivationPoWChallenge(req.ChallengeId, id, req.Nonce); {
+	if common.ActivationPoWBitsEffective() > 0 {
+		switch err := model.ConsumePoWChallenge(req.ChallengeId, model.PoWPurposeActivation, id, req.Nonce); {
 		case err == nil:
 			powPassed = true
-		case errors.Is(err, model.ErrActivationPoWNotFound),
-			errors.Is(err, model.ErrActivationPoWExpired),
-			errors.Is(err, model.ErrActivationPoWInvalidNonce):
-			activationVerificationError(c, CodeActivationVerificationRequired)
+		case errors.Is(err, model.ErrPoWNotFound), errors.Is(err, model.ErrPoWExpired):
+			securityCheckError(c, CodeActivationVerificationRequired)
 			return
-		case errors.Is(err, model.ErrActivationPoWUserMismatch):
+		case errors.Is(err, model.ErrPoWInvalidNonce):
+			securityCheckError(c, CodeActivationVerificationFailed)
+			return
+		case errors.Is(err, model.ErrPoWUserMismatch):
 			common.SysLog(fmt.Sprintf("activation pow challenge user mismatch: user_id=%d", id))
-			activationVerificationError(c, CodeActivationVerificationFailed)
+			securityCheckError(c, CodeActivationVerificationFailed)
 			return
 		default:
 			common.SysError("consume activation pow challenge failed: " + err.Error())

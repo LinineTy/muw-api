@@ -14,12 +14,14 @@ export type ActivationGuardValues = {
   PoWChallengeBits: number
   InviteTrapGraceSeconds: number
   ActivationHoneypotEnabled: boolean
+  LoginChallengeEnabled: boolean
 }
 
 export const ACTIVATION_GUARD_KEYS = [
   'PoWChallengeBits',
   'InviteTrapGraceSeconds',
   'ActivationHoneypotEnabled',
+  'LoginChallengeEnabled',
 ] as const
 
 /**

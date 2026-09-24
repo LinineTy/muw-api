@@ -36,6 +36,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { ActivationVerifyWindow } from '@/features/auth/activate/components/activation-verify-window'
 import { register } from '@/features/auth/api'
 import { LegalConsent } from '@/features/auth/components/legal-consent'
 import { registerFormSchema } from '@/features/auth/constants'
@@ -53,6 +54,7 @@ import {
   saveAffiliateCode,
 } from '@/features/auth/lib/storage'
 import { useLegalConsent } from '@/features/auth/lib/use-legal-consent'
+import { usePreAuthCheck } from '@/features/auth/lib/use-pre-auth-check'
 import { useStatus } from '@/hooks/use-status'
 import { handleServerError } from '@/lib/handle-server-error'
 import { AuthOperationError } from '@/lib/secure-verification'
@@ -105,6 +107,8 @@ export function SignUpForm({
   const hasPrivacyPolicy = Boolean(status?.privacy_policy_enabled)
   const requiresLegalConsent = hasUserAgreement || hasPrivacyPolicy
   const turnstileReady = !isTurnstileEnabled || Boolean(turnstileToken)
+  // 注册同样要过前置人机校验（开放注册的站点上不门禁注册等于白做）。
+  const preAuthCheck = usePreAuthCheck()
 
   useEffect(() => {
     const aff = new URLSearchParams(window.location.search).get('aff')?.trim()
@@ -131,11 +135,16 @@ export function SignUpForm({
       }
     }
 
+    if (!preAuthCheck.ready) {
+      preAuthCheck.guard()
+      return
+    }
+
     if (!validateTurnstile()) return
 
     setIsLoading(true)
     try {
-      const res = await register({
+      let res = await register({
         username: data.username,
         password: data.password,
         email: data.email || undefined,
@@ -143,6 +152,19 @@ export function SignUpForm({
         aff_code: getAffiliateCode(),
         turnstile: turnstileToken,
       })
+
+      // 凭据一次性且 5 分钟过期：被服务端退回时重算一道再试一次。
+      if (res?.code === 'LOGIN_VERIFICATION_REQUIRED') {
+        await preAuthCheck.refresh()
+        res = await register({
+          username: data.username,
+          password: data.password,
+          email: data.email || undefined,
+          verification_code: verificationCode || undefined,
+          aff_code: getAffiliateCode(),
+          turnstile: turnstileToken,
+        })
+      }
 
       if (res?.success) {
         toast.success(t('Account created! Please sign in'))
@@ -325,6 +347,7 @@ export function SignUpForm({
           className={cn(AUTH_PRIMARY_BUTTON, 'mt-1')}
           disabled={
             isLoading ||
+            !preAuthCheck.ready ||
             (requiresLegalConsent && !agreedToLegal) ||
             !turnstileReady
           }
@@ -333,6 +356,7 @@ export function SignUpForm({
           {t('Create account')}
         </Button>
       </form>
+      <ActivationVerifyWindow {...preAuthCheck.windowProps} />
     </Form>
   )
 }

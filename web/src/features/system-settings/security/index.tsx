@@ -55,6 +55,7 @@ const defaultSecuritySettings: SecuritySettings = {
   PoWChallengeBits: 18,
   InviteTrapGraceSeconds: 900,
   ActivationHoneypotEnabled: true,
+  LoginChallengeEnabled: false,
   'credit_score_setting.enabled': false,
   'credit_score_setting.auto_freeze_enabled': true,
   'credit_score_setting.full_score': 650,

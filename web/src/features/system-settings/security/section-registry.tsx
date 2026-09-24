@@ -168,6 +168,7 @@ const SECURITY_SECTIONS = [
           PoWChallengeBits: settings.PoWChallengeBits,
           InviteTrapGraceSeconds: settings.InviteTrapGraceSeconds,
           ActivationHoneypotEnabled: settings.ActivationHoneypotEnabled,
+          LoginChallengeEnabled: settings.LoginChallengeEnabled,
         }}
       />
     ),

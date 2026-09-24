@@ -43,7 +43,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { login, wechatLoginByCode } from '@/features/auth/api'
 import { LegalConsent } from '@/features/auth/components/legal-consent'
+import { ActivationVerifyWindow } from '@/features/auth/activate/components/activation-verify-window'
 import { OAuthProviders } from '@/features/auth/components/oauth-providers'
+import { usePreAuthCheck } from '@/features/auth/lib/use-pre-auth-check'
 import { loginFormSchema } from '@/features/auth/constants'
 import { useAuthRedirect } from '@/features/auth/hooks/use-auth-redirect'
 import { useTurnstile } from '@/features/auth/hooks/use-turnstile'
@@ -120,6 +122,8 @@ export function UserAuthForm({
   const hasUserAgreement = Boolean(status?.user_agreement_enabled)
   const hasPrivacyPolicy = Boolean(status?.privacy_policy_enabled)
   const requiresLegalConsent = hasUserAgreement || hasPrivacyPolicy
+  // 登录/注册/第三方入口的前置人机校验：服务端把关，这里负责"没过之前按钮不给按"。
+  const preAuthCheck = usePreAuthCheck()
   const passkeyButtonDisabled =
     isPasskeyLoading ||
     !passkeySupported ||
@@ -161,6 +165,12 @@ export function UserAuthForm({
       return
     }
 
+    if (!preAuthCheck.ready) {
+      // 与第三方按钮同款提示：校验没过时不给提交
+      preAuthCheck.guard()
+      return
+    }
+
     if (!validateTurnstile()) return
 
     const submittedTurnstileToken = turnstileToken
@@ -171,12 +181,23 @@ export function UserAuthForm({
 
     setIsLoading(true)
     try {
-      const res = await login({
+      let res = await login({
         username: data.username,
         password: data.password,
         turnstile: submittedTurnstileToken,
         passwordEncryptionEnabled: passwordLoginEncryptionEnabled,
       })
+
+      // 挑战一次性且 5 分钟过期：带着已失效的凭据被服务端退回时，重算一道再试一次。
+      if (res?.code === 'LOGIN_VERIFICATION_REQUIRED') {
+        await preAuthCheck.refresh()
+        res = await login({
+          username: data.username,
+          password: data.password,
+          turnstile: submittedTurnstileToken,
+          passwordEncryptionEnabled: passwordLoginEncryptionEnabled,
+        })
+      }
 
       if (res.success) {
         form.setValue('password', '')
@@ -359,6 +380,15 @@ export function UserAuthForm({
       )}
 
       {/* OAuth Providers */}
+      {/* 第三方登录同样要先过校验：服务端在签发 state 时校验；这里拦住点击并给出提示。
+          用捕获阶段拦截，避免为此改动 OAuthProviders 内部各 provider 的处理器。 */}
+      <div
+        onClickCapture={(event) => {
+          if (preAuthCheck.guard()) return
+          event.preventDefault()
+          event.stopPropagation()
+        }}
+      >
       <OAuthProviders
         appearance={mode === 'oauth' ? 'primary' : 'secondary'}
         status={status}
@@ -367,6 +397,8 @@ export function UserAuthForm({
         onWeChatLogin={hasWeChatLogin ? handleOpenWeChatDialog : undefined}
         isWeChatLoading={isWeChatSubmitting}
       />
+      </div>
+      <ActivationVerifyWindow {...preAuthCheck.windowProps} />
     </>
   )
 
@@ -463,7 +495,9 @@ export function UserAuthForm({
                     type='submit'
                     className={cn(AUTH_PRIMARY_BUTTON, 'mt-1')}
                     disabled={
-                      isLoading || (requiresLegalConsent && !agreedToLegal)
+                      isLoading ||
+                      !preAuthCheck.ready ||
+                      (requiresLegalConsent && !agreedToLegal)
                     }
                   >
                     {isLoading ? (

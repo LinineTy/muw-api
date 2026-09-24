@@ -352,7 +352,7 @@ func solveActivationPoWForTest(t *testing.T, challenge string, bits int) string 
 	t.Helper()
 	for nonce := 0; nonce < 10_000_000; nonce++ {
 		candidate := strconv.Itoa(nonce)
-		if model.VerifyActivationPoW(challenge, candidate, bits) {
+		if model.VerifyPoW(challenge, candidate, bits) {
 			return candidate
 		}
 	}
@@ -366,7 +366,7 @@ func performActivateInviteCodeRequest(t *testing.T, userId int, inviteCode strin
 	t.Helper()
 	payload := map[string]any{"invite_code": inviteCode}
 	if bits := common.ActivationPoWBitsEffective(); bits > 0 {
-		challenge, err := model.IssueActivationPoWChallenge(userId, "127.0.0.1", bits)
+		challenge, err := model.IssuePoWChallenge(model.PoWPurposeActivation, userId, "127.0.0.1", bits)
 		require.NoError(t, err)
 		payload["challenge_id"] = challenge.Id
 		payload["nonce"] = solveActivationPoWForTest(t, challenge.Challenge, challenge.Bits)
@@ -574,7 +574,7 @@ func TestActivateInviteCodeHoneypotDisabledStillActivates(t *testing.T) {
 	require.NoError(t, db.Create(&code).Error)
 
 	bits := common.ActivationPoWBitsEffective()
-	challenge, err := model.IssueActivationPoWChallenge(user.Id, "127.0.0.1", bits)
+	challenge, err := model.IssuePoWChallenge(model.PoWPurposeActivation, user.Id, "127.0.0.1", bits)
 	require.NoError(t, err)
 	recorder := performActivateInviteCodeRequestWithBody(t, user.Id, map[string]any{
 		"invite_code":  code.Key,

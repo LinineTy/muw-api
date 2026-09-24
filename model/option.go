@@ -133,6 +133,7 @@ func InitOptionMap() {
 	common.OptionMap["PreConsumedQuota"] = strconv.Itoa(common.PreConsumedQuota)
 	common.OptionMap["InviteTrapGraceSeconds"] = strconv.Itoa(common.DefaultInviteTrapGraceSeconds)
 	common.OptionMap["PoWChallengeBits"] = strconv.Itoa(common.DefaultActivationPoWBits)
+	common.OptionMap["LoginChallengeEnabled"] = strconv.FormatBool(common.LoginChallengeEnabled)
 	common.OptionMap["ActivationHoneypotEnabled"] = strconv.FormatBool(common.ActivationHoneypotEnabled)
 	common.OptionMap["ModelRequestRateLimitCount"] = strconv.Itoa(setting.ModelRequestRateLimitCount)
 	common.OptionMap["ModelRequestRateLimitDurationMinutes"] = strconv.Itoa(setting.ModelRequestRateLimitDurationMinutes)
@@ -467,6 +468,9 @@ func updateOptionMap(key string, value string) (err error) {
 			common.RegisterEnabled = boolValue
 		case "InviteCodeRegisterEnabled":
 			common.InviteCodeRegisterEnabled = boolValue
+		case "LoginChallengeEnabled":
+			// 登录/注册/第三方入口的人机校验开关。
+			common.LoginChallengeEnabled = boolValue
 		case "ActivationHoneypotEnabled":
 			// 激活页隐形蜜罐字段开关：关掉则不再因蜜罐命中停用账号。
 			common.ActivationHoneypotEnabled = boolValue

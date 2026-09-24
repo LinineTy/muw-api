@@ -65,6 +65,12 @@ func GenerateOAuthCode(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
+	if request.Intent == model.AuthFlowIntentLogin && !requirePreAuthChallenge(c) {
+		// 第三方登录也走同一道前置校验：挑战绑定在"签发 state"这一步，
+		// 回调侧本来就必须消费服务端签发过的 state（model.ConsumeAuthFlow），
+		// 所以绕过前端直接构造回调一样会被挡下。
+		return
+	}
 	userID := 0
 	sessionID := ""
 	flowPayload := oauthFlowPayload{AffiliateCode: request.Aff}
