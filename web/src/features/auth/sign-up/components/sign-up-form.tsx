@@ -46,6 +46,7 @@ import {
   AUTH_HINT_TEXT,
   AUTH_INPUT,
   AUTH_PRIMARY_BUTTON,
+  AUTH_SECONDARY_BUTTON,
 } from '@/features/auth/lib/auth-styles'
 import {
   getAffiliateCode,
@@ -273,6 +274,7 @@ export function SignUpForm({
                 <Input
                   placeholder={t('Verification code')}
                   autoComplete='one-time-code'
+                  className={AUTH_INPUT}
                   value={verificationCode}
                   onChange={(e) => setVerificationCode(e.target.value)}
                 />
@@ -280,6 +282,7 @@ export function SignUpForm({
               <Button
                 variant='outline'
                 type='button'
+                className={cn(AUTH_SECONDARY_BUTTON, 'w-auto shrink-0 px-4')}
                 disabled={
                   isLoading ||
                   isSendingCode ||

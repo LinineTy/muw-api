@@ -9,8 +9,9 @@ export const AUTH_PRIMARY_BUTTON =
   'h-[46px] w-full justify-center gap-2.5 rounded-xl text-base font-semibold'
 
 /**
- * 卡内次要按钮（描边，如注册页的微信扫码入口）：与输入框/主按钮同高同圆角，
- * 只靠填充与描边区分主次（设计稿 ghosts 与主按钮同为 46px/12px 圆角）。
+ * 卡内次要按钮（描边）：与输入框/主按钮同高同圆角，只靠填充与描边区分主次
+ * （设计稿 ghosts 与主按钮同为 46px/12px 圆角）。默认占满整行；
+ * 与输入框并排时用 `cn(AUTH_SECONDARY_BUTTON, 'w-auto shrink-0 px-4')` 让它按内容取宽。
  */
 export const AUTH_SECONDARY_BUTTON =
   'h-[46px] w-full justify-center gap-2.5 rounded-xl'
