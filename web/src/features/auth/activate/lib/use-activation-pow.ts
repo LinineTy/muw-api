@@ -17,10 +17,8 @@ export type ActivationPowState = {
 }
 
 /**
- * 激活页人机校验（PoW）求解器：默认在 Worker 里算（界面不卡），环境不支持时回落到主线程。
- *
- * 失败/取消都只是状态，**不影响激活资格**：调用方据此决定重试或提示，
- * 绝不会因为"算不出 PoW"而去停用账号（服务端同样只把它当通过/未通过，不做加罚）。
+ * 人机校验求解器：默认在 Worker 中计算，环境不支持时回落到主线程。
+ * 失败与取消只是状态，不影响账号处置。
  */
 export function useActivationPow() {
   const workerRef = useRef<Worker | null>(null)
@@ -68,8 +66,7 @@ export function useActivationPow() {
           try {
             nonce = await solveWithWorker(worker, challenge, bits, onProgress, cancelRef)
           } catch {
-            // Worker 只是优化：它挂了（打包/加载/运行异常）就退回主线程算一遍，
-            // 不让"算力分发"这种实现细节挡住真人激活。
+            // Worker 异常时退回主线程重算
             nonce = await solveActivationPoWInline(challenge, bits, {
               shouldStop: () => cancelRef.current,
               onProgress,

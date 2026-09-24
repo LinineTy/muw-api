@@ -1,12 +1,6 @@
 // @muw-owned
-/**
- * 「激活防护」设置页的纯逻辑：边界常量与"只提交改动项"的比对。
- *
- * ⚠️ 这两个上限/下限必须与后端常量一致（改了要一起改）：
- *   `MAX_POW_BITS` ↔ `common.MaxActivationPoWBits`
- *   `MIN_GRACE_SECONDS` ↔ `common.MinInviteTrapGraceSeconds`
- * 由 `security/__tests__/activation-guard.test.ts` 兜底断言。
- */
+// 激活防护设置页的边界常量与"只提交改动项"的比对。
+// 上限/下限需与后端一致：common.MaxActivationPoWBits、common.MinInviteTrapGraceSeconds。
 export const MAX_POW_BITS = 24
 export const MIN_GRACE_SECONDS = 60
 
@@ -24,10 +18,7 @@ export const ACTIVATION_GUARD_KEYS = [
   'LoginChallengeEnabled',
 ] as const
 
-/**
- * 挑出与默认值不同的项：设置页保存是逐项 `PUT /api/option/`，
- * 回写没动过的键既多余、又有被别处并发修改后覆盖的风险。
- */
+/** 挑出与默认值不同的项：保存是逐项 `PUT /api/option/`，只提交改动过的键。 */
 export function pickChangedActivationGuardOptions(
   values: ActivationGuardValues,
   defaults: ActivationGuardValues

@@ -8256,12 +8256,12 @@
     "Activation Protection": "激活防护",
     "Proof-of-work difficulty": "人机校验难度",
     "Trap code grace period (seconds)": "钓鱼码宽限时间（秒）",
-    "How long an account that submitted a trap invite code stays usable before it is disabled. Minimum 60 seconds, default 900. Activating with a valid code inside the window (or passing the check) clears it.": "提交钓鱼邀请码的账号在被停用前仍可用的时长。下限 60 秒、默认 900。窗口内用有效邀请码激活（或通过人机校验）即结清。",
     "Hidden honeypot field": "隐藏蜜罐字段",
-    "Adds a form field that people cannot see or reach by keyboard, so only automation fills it. A filled value disables that account right away. Leave it on unless you are investigating a false positive.": "表单里加一个真人看不到、键盘也到不了的字段，只有自动化会填；一旦被填就立即停用该账号。除排查误伤外建议保持开启。",
     "Save activation protection": "保存激活防护",
     "Require the check on sign-in": "登录也要过这道校验",
-    "Applies the same check to password sign-in, sign-up and the third-party sign-in entry (the check is enforced when the provider state is issued, so a crafted callback is rejected too). Off by default: turning it on adds a short computation to every sign-in, and a device that cannot run it cannot sign in, so enable it when you are ready.": "密码登录、注册、第三方登录入口都套同一道校验（第三方那道在签发 state 时校验，所以绕过前端手工构造回调也会被拒）。默认关闭：开启后每次登录都要多算一小会儿，且本机跑不动校验就登不进来，所以由你自己挑时机打开。",
-    "Leading zero bits of sha256(challenge:nonce) that each check must solve. 0 disables the check everywhere; 24 is the maximum. Default 18: roughly a second or less on a desktop, a few seconds on a low-end phone.": "每次校验都要解的 sha256(challenge:nonce) 前导零位数。0 = 全部关掉；24 为上限；默认 18（桌面一秒以内，低端手机几秒）。"
+    "Leading zero bits each challenge must solve. 0 disables the check, 24 is the maximum, default 18.": "每次校验需计算的前导零位数。0 为关闭校验，上限 24，默认 18。",
+    "How long an account that used a trap invite code stays usable before it is disabled. Minimum 60 seconds, default 900; activating with a valid code clears it.": "提交钓鱼邀请码的账号在被停用前的可用时长。下限 60 秒，默认 900；用有效邀请码激活即结清。",
+    "Require the check for password sign-in, sign-up and third-party sign-in.": "密码登录、注册和第三方登录也需要通过校验。",
+    "Adds a field that is hidden from users; only automation fills it. A filled value disables the account.": "添加一个对用户隐藏的字段，仅自动化会填写；填写后账号将被停用。"
   }
 }

@@ -421,7 +421,7 @@ func ActivateInviteCode(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgInviteCodeRequired)
 		return
 	}
-	// 1) 隐形蜜罐（受 option ActivationHoneypotEnabled 控制）：命中即自动化（真人碰不到这个字段）。
+	// 1) 隐形蜜罐（option ActivationHoneypotEnabled）：命中即自动化（真人碰不到这个字段）。
 	// 对外仍回"无效邀请码"，不向脚本暴露自己踩了哪一道。
 	if common.ActivationHoneypotEnabled && strings.TrimSpace(req.Website) != "" {
 		if err := model.DisableUserByTrap(id, common.HoneypotBanReason); err != nil {
@@ -440,8 +440,7 @@ func ActivateInviteCode(c *gin.Context) {
 		return
 	}
 
-	// 2) 人机校验（PoW）：开启时每次激活都要带一道通过校验的挑战（一次性、5 分钟有效）。
-	// 难度为 0（校验关闭）时整段跳过 —— 这也是出问题时的紧急开关。
+	// 2) 人机校验（PoW）：难度非 0 时每次激活都要带一道通过校验的挑战。
 	powPassed := false
 	if common.ActivationPoWBitsEffective() > 0 {
 		switch err := model.ConsumePoWChallenge(req.ChallengeId, model.PoWPurposeActivation, id, req.Nonce); {
@@ -498,8 +497,7 @@ func ActivateInviteCode(c *gin.Context) {
 			common.SysError("mark invite code used failed: " + err.Error())
 		}
 		if powPassed {
-			// 本次提交通过了人机校验 ⇒ 判为真人误踩钩子：宽限记录当场结清，账号不会被到期停用。
-			// 对外回复不变（仍是"无效邀请码"），不向脚本暴露钩子位置。
+			// 通过校验的命中判为真人误踩：宽限记录当场结清，不会被到期停用；对外回复不变。
 			if err := model.ResolveInviteTrapGrace(id, model.InviteTrapGraceReasonVerified); err != nil {
 				common.SysError("resolve invite trap grace (verified) failed: " + err.Error())
 			}
@@ -530,8 +528,7 @@ func ActivateInviteCode(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgDatabaseError)
 		return
 	}
-	// 若该用户此前踩过钩子，用有效邀请码激活成功即结清宽限记录（免于到期停用）。
-	// 没有未结记录时是空操作，因此正常激活路径只是多一次无命中 UPDATE。
+	// 激活成功即结清宽限记录（没有未结记录时是空操作）。
 	if err := model.ResolveInviteTrapGrace(id, model.InviteTrapGraceReasonActivated); err != nil {
 		common.SysError("resolve invite trap grace failed: " + err.Error())
 	}

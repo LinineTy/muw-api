@@ -66,9 +66,7 @@ func GenerateOAuthCode(c *gin.Context) {
 		return
 	}
 	if request.Intent == model.AuthFlowIntentLogin && !requirePreAuthChallenge(c) {
-		// 第三方登录也走同一道前置校验：挑战绑定在"签发 state"这一步，
-		// 回调侧本来就必须消费服务端签发过的 state（model.ConsumeAuthFlow），
-		// 所以绕过前端直接构造回调一样会被挡下。
+		// 前置校验放在签发 state 这一步：回调必须消费服务端签发的 state，无法绕过。
 		return
 	}
 	userID := 0

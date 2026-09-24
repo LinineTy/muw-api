@@ -1,15 +1,9 @@
 // @muw-owned
 /**
- * 激活页（激活制）：待激活账号提交邀请码转正。
+ * 激活页：待激活账号提交邀请码转正。
  *
- * 提交链路（2026-09-24 定）：
- *   1. 先领一道人机校验（PoW）挑战 → 右上角浮窗里求解（Worker，不卡界面、不遮页面）；
- *   2. 带上 invite_code + challenge_id/nonce + 蜜罐字段提交；
- *   3. 服务端：蜜罐字段非空 ⇒ 直接判自动化并停用；PoW 未过 ⇒ 回机器码让前端重算；
- *      钓具码命中但 PoW 通过 ⇒ 判真人误踩，宽限记录当场结清（不会被到期停用）。
- *
- * 界面上另有一样东西不显眼但关键：表单里的隐形蜜罐字段（真人看不到、tab 不到），
- * 只有遍历表单的自动化脚本会填它。
+ * 提交流程：先领一道人机校验挑战并在浮窗中求解，再带邀请码与蜜罐字段提交。
+ * 服务端按蜜罐、校验、邀请码的顺序处置（见 controller/user.go）。
  */
 import { Loader2 } from 'lucide-react'
 import {
@@ -62,8 +56,7 @@ export function Activate() {
   const navigate = useNavigate()
   const setUser = useAuthStore((state) => state.auth.setUser)
   const [inviteCode, setInviteCode] = useState('')
-  // 隐形蜜罐：真人看不到也填不到，非空即自动化（服务端处置）。状态放在这里是为了
-  // 让"脚本按字段名遍历表单"这件事在 DOM 与请求体里都成立。
+  // 隐形蜜罐字段值：非空即被服务端判为自动化提交。
   const [honeypot, setHoneypot] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [deadline, setDeadline] = useState<number | null>(null)
@@ -75,8 +68,7 @@ export function Activate() {
   const solvePow = pow.solve
   const closeTimer = useRef<number | undefined>(undefined)
 
-  // 提交过钓鱼邀请码的账号会有一条宽限记录（后端只读接口），据此显示倒计时：
-  // 宽限期内用有效邀请码激活即免于停用。读不到就不提示，不阻断激活流程。
+  // 有未结的钓鱼码宽限记录时显示倒计时；读不到则不提示。
   const refreshDeadline = useCallback(async () => {
     try {
       const info = await getActivationDeadline()
@@ -107,7 +99,7 @@ export function Activate() {
 
   useEffect(() => () => window.clearTimeout(closeTimer.current), [])
 
-  // 领挑战 + 求解。返回 null = 本站未开启人机校验；挑战拿不到抛 ChallengeUnavailableError。
+  // 领取并求解挑战；未开启校验返回 null，取不到挑战抛错由调用方提示。
   const runVerification = useCallback(async (): Promise<ActivationProof | null> => {
     let challenge
     try {
@@ -121,7 +113,7 @@ export function Activate() {
     setPowBits(challenge.bits)
     setVerifyOpen(true)
     const nonce = await solvePow(challenge.challenge, challenge.bits)
-    // 求解完让浮窗停在"校验通过"约 0.9 秒再自动关，用户也能自己关。
+    // 通过后停留约 0.9 秒再收起
     closeTimer.current = window.setTimeout(() => setVerifyOpen(false), 900)
     return { challengeId: challenge.challenge_id ?? '', nonce }
   }, [solvePow])
@@ -148,7 +140,7 @@ export function Activate() {
     setIsSubmitting(true)
     try {
       let res = await submitOnce(code)
-      // 挑战一次性消费：过期/被换人时服务端会回机器码，这里自动再走一轮（最多一次）。
+      // 挑战一次性消费：服务端回机器码时重算并重试一次。
       if (
         res?.code === CODE_VERIFICATION_REQUIRED ||
         res?.code === CODE_VERIFICATION_FAILED
@@ -163,7 +155,7 @@ export function Activate() {
         navigate({ to: '/os-desktop', replace: true })
       } else {
         toast.error(res?.message || t('Activation failed'))
-        // 失败后立刻重取一次：若这次提交的正是钓鱼码，提示当场出现（不用刷新页面）。
+        // 失败后立即重取一次宽限信息（提交的若是钓鱼码，提示当场出现）。
         void refreshDeadline()
       }
     } catch (error) {
@@ -184,7 +176,7 @@ export function Activate() {
     void submit(inviteCode)
   }
 
-  // 浮窗里的「重试」：清掉失败态，用同一个邀请码再跑一轮（重新领挑战）。
+  // 浮窗「重试」：清掉失败态后重新领挑战再试。
   const handleRetryVerification = () => {
     pow.reset()
     void submit(inviteCode)
@@ -213,8 +205,7 @@ export function Activate() {
         }
       >
         <form onSubmit={handleSubmit} className='relative grid gap-4'>
-          {/* 隐形蜜罐：真人看不到、tab 不到、读屏忽略；只有遍历表单的自动化会填。
-              非空即由服务端判为自动化提交（立即停用），真人不会触发。 */}
+          {/* 隐形蜜罐：不可见、不可聚焦，自动化脚本会填写；服务端据此判定 */}
           <input
             type='text'
             name='website_url'

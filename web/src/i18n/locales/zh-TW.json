@@ -8256,12 +8256,12 @@
     "Activation Protection": "啟用防護",
     "Proof-of-work difficulty": "人機驗證難度",
     "Trap code grace period (seconds)": "釣魚碼寬限時間（秒）",
-    "How long an account that submitted a trap invite code stays usable before it is disabled. Minimum 60 seconds, default 900. Activating with a valid code inside the window (or passing the check) clears it.": "送出釣魚邀請碼的帳號在被停用前仍可使用的時間。下限 60 秒、預設 900。在時間內用有效邀請碼啟用（或通過人機驗證）即結清。",
     "Hidden honeypot field": "隱藏蜜罐欄位",
-    "Adds a form field that people cannot see or reach by keyboard, so only automation fills it. A filled value disables that account right away. Leave it on unless you are investigating a false positive.": "表單中加入一個真人看不到、鍵盤也到不了的欄位，只有自動化程式會填；一旦被填就立即停用該帳號。除排查誤判外建議保持開啟。",
     "Save activation protection": "儲存啟用防護",
     "Require the check on sign-in": "登入也要過這道驗證",
-    "Applies the same check to password sign-in, sign-up and the third-party sign-in entry (the check is enforced when the provider state is issued, so a crafted callback is rejected too). Off by default: turning it on adds a short computation to every sign-in, and a device that cannot run it cannot sign in, so enable it when you are ready.": "密碼登入、註冊、第三方登入入口都套同一道驗證（第三方那道在簽發 state 時驗證，因此繞過前端自行構造回呼也會被拒）。預設關閉：開啟後每次登入都要多算一小段時間，且本機跑不動驗證就登不進來，請自行挑時機開啟。",
-    "Leading zero bits of sha256(challenge:nonce) that each check must solve. 0 disables the check everywhere; 24 is the maximum. Default 18: roughly a second or less on a desktop, a few seconds on a low-end phone.": "每次驗證都要解的 sha256(challenge:nonce) 前導零位數。0 = 全部關閉；24 為上限；預設 18（桌面一秒以內，低階手機幾秒）。"
+    "Leading zero bits each challenge must solve. 0 disables the check, 24 is the maximum, default 18.": "每次驗證需計算的前導零位數。0 為關閉驗證，上限 24，預設 18。",
+    "How long an account that used a trap invite code stays usable before it is disabled. Minimum 60 seconds, default 900; activating with a valid code clears it.": "送出釣魚邀請碼的帳號在被停用前的可用時間。下限 60 秒，預設 900；用有效邀請碼啟用即結清。",
+    "Require the check for password sign-in, sign-up and third-party sign-in.": "密碼登入、註冊和第三方登入也需要通過驗證。",
+    "Adds a field that is hidden from users; only automation fills it. A filled value disables the account.": "新增一個對使用者隱藏的欄位，僅自動化程式會填寫；填寫後帳號將被停用。"
   }
 }

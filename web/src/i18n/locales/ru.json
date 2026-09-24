@@ -8256,12 +8256,12 @@
     "Activation Protection": "Защита активации",
     "Proof-of-work difficulty": "Сложность проверки",
     "Trap code grace period (seconds)": "Льготный период для trap-кода (сек)",
-    "How long an account that submitted a trap invite code stays usable before it is disabled. Minimum 60 seconds, default 900. Activating with a valid code inside the window (or passing the check) clears it.": "Сколько времени аккаунт, отправивший trap-код, остаётся доступным до отключения. Минимум 60 секунд, по умолчанию 900. Активация valid-кодом внутри окна (или прохождение проверки) снимает его.",
     "Hidden honeypot field": "Скрытое поле-ловушка",
-    "Adds a form field that people cannot see or reach by keyboard, so only automation fills it. A filled value disables that account right away. Leave it on unless you are investigating a false positive.": "Добавляет поле, которое человек не видит и не может выбрать с клавиатуры, поэтому заполняет его только автоматика. Заполненное значение сразу отключает аккаунт. Оставляйте включённым, кроме случаев разбора ложного срабатывания.",
     "Save activation protection": "Сохранить защиту активации",
     "Require the check on sign-in": "Требовать проверку при входе",
-    "Applies the same check to password sign-in, sign-up and the third-party sign-in entry (the check is enforced when the provider state is issued, so a crafted callback is rejected too). Off by default: turning it on adds a short computation to every sign-in, and a device that cannot run it cannot sign in, so enable it when you are ready.": "Та же проверка применяется ко входу по паролю, регистрации и входу через сторонние сервисы (для сторонних она проверяется при выдаче state, поэтому подделанный callback тоже отклоняется). По умолчанию выключено: при включении каждый вход требует короткого вычисления, а устройство, которое не может его выполнить, не сможет войти — включайте, когда готовы.",
-    "Leading zero bits of sha256(challenge:nonce) that each check must solve. 0 disables the check everywhere; 24 is the maximum. Default 18: roughly a second or less on a desktop, a few seconds on a low-end phone.": "Сколько ведущих нулевых бит sha256(challenge:nonce) нужно решить при каждой проверке. 0 отключает всё, максимум 24, по умолчанию 18 (около секунды или меньше на ПК, несколько секунд на слабом смартфоне)."
+    "Leading zero bits each challenge must solve. 0 disables the check, 24 is the maximum, default 18.": "Сколько ведущих нулевых бит нужно решить. 0 отключает проверку, максимум 24, по умолчанию 18.",
+    "How long an account that used a trap invite code stays usable before it is disabled. Minimum 60 seconds, default 900; activating with a valid code clears it.": "Сколько времени аккаунт с trap-кодом остаётся доступным до отключения. Минимум 60 секунд, по умолчанию 900; активация valid-кодом снимает ограничение.",
+    "Require the check for password sign-in, sign-up and third-party sign-in.": "Требовать проверку для входа по паролю, регистрации и входа через сторонние сервисы.",
+    "Adds a field that is hidden from users; only automation fills it. A filled value disables the account.": "Добавляет скрытое от пользователей поле; заполняет его только автоматика, и тогда аккаунт отключается."
   }
 }

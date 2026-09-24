@@ -8256,12 +8256,12 @@
     "Activation Protection": "有効化の保護",
     "Proof-of-work difficulty": "人機確認の難易度",
     "Trap code grace period (seconds)": "トラップコードの猶予時間（秒）",
-    "How long an account that submitted a trap invite code stays usable before it is disabled. Minimum 60 seconds, default 900. Activating with a valid code inside the window (or passing the check) clears it.": "トラップコードを送信したアカウントが無効化されるまで利用できる時間。最小 60 秒、既定 900 秒。時間内に有効なコードで有効化する（または人機確認を通る）と解除されます。",
     "Hidden honeypot field": "隠しハニーポット項目",
-    "Adds a form field that people cannot see or reach by keyboard, so only automation fills it. A filled value disables that account right away. Leave it on unless you are investigating a false positive.": "人が見えずキーボードでも到達できない項目を追加します。自動化だけが記入するため、記入があればそのアカウントを即時無効化します。誤検知を調べる場合以外はオンのままにしてください。",
     "Save activation protection": "有効化の保護を保存",
     "Require the check on sign-in": "ログイン時にも確認を必須にする",
-    "Applies the same check to password sign-in, sign-up and the third-party sign-in entry (the check is enforced when the provider state is issued, so a crafted callback is rejected too). Off by default: turning it on adds a short computation to every sign-in, and a device that cannot run it cannot sign in, so enable it when you are ready.": "パスワードログイン・新規登録・第三者ログインの入口に同じ確認を適用します（第三者ログインは state の発行時に検証するため、コールバックを自作しても拒否されます）。既定はオフ：オンにすると毎回のログインで少し計算が入り、動かせない端末ではログインできなくなるため、任意のタイミングで有効にしてください。",
-    "Leading zero bits of sha256(challenge:nonce) that each check must solve. 0 disables the check everywhere; 24 is the maximum. Default 18: roughly a second or less on a desktop, a few seconds on a low-end phone.": "各確認で解く sha256(challenge:nonce) の先頭ゼロビット数。0 で全て無効、上限 24、既定 18（デスクトップで 1 秒以内、低性能スマホで数秒）。"
+    "Leading zero bits each challenge must solve. 0 disables the check, 24 is the maximum, default 18.": "各確認で解く先頭ゼロビット数。0 で無効、上限 24、既定 18。",
+    "How long an account that used a trap invite code stays usable before it is disabled. Minimum 60 seconds, default 900; activating with a valid code clears it.": "トラップコードを使用したアカウントが無効化されるまでの利用可能時間。最小 60 秒、既定 900。有効なコードで有効化すると解除されます。",
+    "Require the check for password sign-in, sign-up and third-party sign-in.": "パスワードログイン・新規登録・第三者ログインにも確認を要求します。",
+    "Adds a field that is hidden from users; only automation fills it. A filled value disables the account.": "ユーザーから見えない項目を追加します。自動化のみが記入し、記入があるとアカウントは無効化されます。"
   }
 }

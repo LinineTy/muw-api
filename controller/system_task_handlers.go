@@ -568,8 +568,7 @@ func (inviteTrapGraceHandler) Run(ctx context.Context, task *model.SystemTask, r
 	if _, err := model.PruneSystemTaskHistoryByType(model.SystemTaskTypeInviteTrapGrace, 20); err != nil {
 		common.SysLog("[InviteTrap] prune system task history failed: " + err.Error())
 	}
-	// 同一条任务顺手清理过期的人机校验挑战（内存池，5 分钟 TTL，激活页与登录/注册共用）：
-	// 不为它单独加一个任务类型。
+	// 顺带清理过期的人机校验挑战（内存池）。
 	if removed := model.PrunePoWChallenges(); removed > 0 {
 		common.SysLog(fmt.Sprintf("[InviteTrap] pruned %d expired pow challenges", removed))
 	}

@@ -1,17 +1,10 @@
 // @muw-owned
 /**
- * 激活页人机校验（PoW）：找 nonce 使 sha256("{challenge}:{nonce}") 具有足够的前导零位。
+ * 人机校验（PoW）求解：找出 nonce，使 sha256("{challenge}:{nonce}") 具有足够的前导零位。
  *
- * 与后端 `model/activation_pow.go` 同款判别，难度由服务端下发（option `PoWChallengeBits`，
- * 默认 18 位 ≈ 26 万次哈希）。它抬高批量试码的算力成本，不构成"证明你是人"——判定自动化
- * 靠激活页的隐形蜜罐字段。
- *
- * 为什么用 node-forge 而不是 crypto.subtle：`crypto.subtle` 只在安全上下文（HTTPS/localhost）
- * 可用，HTTP 站点上直接是 undefined（147 实测），而 forge 是纯 JS、两种环境都能跑，且项目里
- * 已经打包了它（`password-encryption.ts` 在用），不新增依赖。实测约 62.8 万次/秒（i5-1250P）。
+ * 判别方式与后端 `model/pow_challenge.go` 一致，难度由服务端下发。
+ * 使用 node-forge 的纯 JS sha256（已随项目打包）：HTTP 环境下 `crypto.subtle` 不可用。
  */
-
-/** 每次循环检查取消/上报进度的批大小：够大以摊薄开销，够小以保证响应。 */
 export const POW_BATCH_SIZE = 2000
 
 export type PowProgress = {
@@ -28,10 +21,10 @@ export type PowWorkerResponse =
   | { type: 'done'; nonce: string; hashes: number; elapsedMs: number }
   | { type: 'failed'; message: string }
 
-/** 同步 sha256（十六进制小写），由调用方注入：Worker 里用 forge，测试里可用假实现。 */
+/** 同步 sha256（十六进制小写），由调用方注入（Worker 用 forge，测试可用假实现）。 */
 export type Sha256Hex = (input: string) => string
 
-/** 统计十六进制摘要的前导零位数（与后端 CountLeadingZeroBits 等价）。 */
+/** 统计十六进制摘要的前导零位数。 */
 export function countLeadingZeroBits(hex: string): number {
   let bits = 0
   for (const char of hex) {
@@ -51,10 +44,7 @@ export function countLeadingZeroBits(hex: string): number {
   return bits
 }
 
-/**
- * 期望哈希数 2^bits 的指数分布：用已算次数估个进度给用户看，
- * 封顶 0.98 以免"进度满了却还没过"的观感落差。
- */
+/** 按期望工作量估算进度，封顶 0.98。 */
 export function estimatePowProgress(hashes: number, bits: number): number {
   if (bits <= 0) return 0
   const expected = 2 ** bits
@@ -74,10 +64,7 @@ export type SolveOptions = {
   reportIntervalMs?: number
 }
 
-/**
- * 纯函数形态的求解循环：从 nonce=0 递增试到满足难度为止。
- * 找不到（或中途被取消）返回 null。
- */
+/** 求解循环：nonce 从 0 递增到满足难度；被取消返回 null。 */
 export function solveWithSha256(
   sha256: Sha256Hex,
   challenge: string,
@@ -110,14 +97,14 @@ export function solveWithSha256(
   }
 }
 
-/** 加载 forge 并返回同步 sha256（懒加载：不进主 bundle，与密码加密同款做法）。 */
+/** 懒加载 forge 并返回同步 sha256（不进主 bundle）。 */
 export async function createForgeSha256(): Promise<Sha256Hex> {
   const forge = await import('node-forge')
   return (input: string) =>
     forge.md.sha256.create().update(input, 'utf8').digest().toHex()
 }
 
-/** 主线程兜底求解（Worker 不可用或报错时用；18 位约 0.4 秒，可接受）。 */
+/** 主线程兜底求解（Worker 不可用或报错时使用）。 */
 export async function solveActivationPoWInline(
   challenge: string,
   bits: number,
@@ -131,7 +118,7 @@ export async function solveActivationPoWInline(
   return result.nonce
 }
 
-/** 校验一次解（前端自检用；服务端仍会独立校验）。 */
+/** 校验一次解（前端自检；服务端仍会独立校验）。 */
 export async function verifyActivationPoW(
   challenge: string,
   nonce: string,
@@ -149,13 +136,13 @@ type WorkerScope = {
   postMessage: (message: PowWorkerResponse) => void
 }
 
-/** 创建 PoW Worker；环境不支持（如单测的 jsdom）时返回 null，由调用方走主线程兜底。 */
+/** 创建 Worker；环境不支持时返回 null，由调用方走主线程兜底。 */
 export function createActivationPowWorker(): Worker | null {
   if (typeof Worker === 'undefined') {
     return null
   }
   try {
-    // 注意路径：本文件在 activate/lib/ 下，worker 入口在上一层。
+    // worker 入口在上一层目录
     return new Worker(new URL('../pow.worker.ts', import.meta.url), {
       type: 'module',
     })
@@ -164,7 +151,7 @@ export function createActivationPowWorker(): Worker | null {
   }
 }
 
-/** Worker 入口使用的运行时作用域（避免为 worker 单独引入 webworker lib 类型）。 */
+/** Worker 入口的运行时作用域（避免引入 webworker 类型库）。 */
 export function activationPowScope(): {
   scope: WorkerScope
   solve: (challenge: string, bits: number) => Promise<void>

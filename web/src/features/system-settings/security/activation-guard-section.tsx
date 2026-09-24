@@ -1,13 +1,5 @@
 // @muw-owned
-/**
- * 「激活防护」设置页：邀请码激活页的三个人机/自动化相关开关。
- *
- *   - `PoWChallengeBits` 人机校验难度（0 = 关；上限 24）
- *   - `InviteTrapGraceSeconds` 钓鱼码命中后的宽限秒数（下限 60）
- *   - `ActivationHoneypotEnabled` 隐形蜜罐字段开关
- *
- * 都用 `PUT /api/option/` 保存（即时生效，不必重启）。
- */
+/** 激活防护设置页：人机校验难度、钓鱼码宽限时间、蜜罐与登录入口校验开关。 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
@@ -126,7 +118,7 @@ export function ActivationGuardSection({
                 </FormControl>
                 <FormDescription>
                   {t(
-                    'Leading zero bits of sha256(challenge:nonce) that each check must solve. 0 disables the check everywhere; 24 is the maximum. Default 18: roughly a second or less on a desktop, a few seconds on a low-end phone.'
+                    'Leading zero bits each challenge must solve. 0 disables the check, 24 is the maximum, default 18.'
                   )}
                 </FormDescription>
                 <FormMessage />
@@ -154,7 +146,7 @@ export function ActivationGuardSection({
                 </FormControl>
                 <FormDescription>
                   {t(
-                    'How long an account that submitted a trap invite code stays usable before it is disabled. Minimum 60 seconds, default 900. Activating with a valid code inside the window (or passing the check) clears it.'
+                    'How long an account that used a trap invite code stays usable before it is disabled. Minimum 60 seconds, default 900; activating with a valid code clears it.'
                   )}
                 </FormDescription>
                 <FormMessage />
@@ -171,7 +163,7 @@ export function ActivationGuardSection({
                   <FormLabel>{t('Require the check on sign-in')}</FormLabel>
                   <FormDescription>
                     {t(
-                      'Applies the same check to password sign-in, sign-up and the third-party sign-in entry (the check is enforced when the provider state is issued, so a crafted callback is rejected too). Off by default: turning it on adds a short computation to every sign-in, and a device that cannot run it cannot sign in, so enable it when you are ready.'
+                      'Require the check for password sign-in, sign-up and third-party sign-in.'
                     )}
                   </FormDescription>
                 </div>
@@ -194,7 +186,7 @@ export function ActivationGuardSection({
                   <FormLabel>{t('Hidden honeypot field')}</FormLabel>
                   <FormDescription>
                     {t(
-                      'Adds a form field that people cannot see or reach by keyboard, so only automation fills it. A filled value disables that account right away. Leave it on unless you are investigating a false positive.'
+                      'Adds a field that is hidden from users; only automation fills it. A filled value disables the account.'
                     )}
                   </FormDescription>
                 </div>

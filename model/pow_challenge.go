@@ -13,38 +13,29 @@ import (
 	"github.com/QuantumNous/new-api/common"
 )
 
-// 人机校验（PoW）挑战：目前服务于"激活页"和"登录/注册前置校验"两个关口。
+// 人机校验（PoW）挑战，供激活页与登录/注册入口使用。
 //
-// 设计取舍（2026-09-24 定）：
-//   - 挑战只存在**内存**里：生命周期 5 分钟、一次性，实例重启即失效——用户重进激活页会自动
-//     重新签发，不影响激活；相比落库省掉一张表和一套清理任务。
-//   - 挑战绑定签发时的 user_id 与 purpose：换人或换用途（拿激活页的挑战去登录）直接拒绝。
-//   - 校验是"挑战 + nonce"的 sha256 前导零位，纯 CPU 工作：真人在浏览器里跑 1~2 秒，
-//     批量试码的脚本要为每次尝试付同样的算力。它挡不住 GPU 农场，只抬高自动化成本，
-//     真正的自动化判定看蜜罐字段（见 controller.ActivateInviteCode）。
-//
-// 注意：这是自研机制，不属于上游 new-api，改上游代码时不要指望这里有对应实现。
-
-// 挑战用途：不同关口签发的挑战不通用（否则激活页领的挑战能拿去登录）。
+// 挑战只存在内存中：一次性、5 分钟有效，绑定用途（激活 / 前置）与用户（未登录按 IP 计数）。
+// 校验方式为找出 nonce，使 sha256(challenge:nonce) 具有足够的前导零位。
+// 实例重启后未用挑战即失效，客户端会重新领取。
+// 挑战用途：不同入口签发的挑战不通用。
 const (
 	// PoWPurposeActivation 激活页提交邀请码。
 	PoWPurposeActivation = "activation"
-	// PoWPurposePreAuth 登录/注册等未登录场景的前置校验。
+	// PoWPurposePreAuth 登录、注册与第三方登录的前置校验。
 	PoWPurposePreAuth = "preauth"
 )
 
 // ActivationPoWChallengeTTL 单个挑战的有效期。
 const ActivationPoWChallengeTTL = 5 * time.Minute
 
-// activationPoWMaxPerUser 同一用户最多保留几个未用挑战：超出淘汰最旧的，
-// 而不是拒绝签发——真人反复提交失败（或页面刷新）不该被自己的挑战额度卡住。
+// activationPoWMaxPerUser 同一用户保留的未用挑战上限（超出淘汰最旧的）。
 const activationPoWMaxPerUser = 5
 
-// poWMaxPerIP 同一 IP 最多保留几个未用挑战（登录页每次打开都会领一道，真人够用；
-// 批量刷挑战的脚本会被这条压住）。超出淘汰该 IP 最旧的。
+// poWMaxPerIP 同一 IP 保留的未用挑战上限（超出淘汰最旧的）。
 const poWMaxPerIP = 12
 
-// activationPoWMaxTotal 全局上限，避免被批量签发撑爆内存；超出时先清理过期项。
+// activationPoWMaxTotal 挑战池全局上限，防止内存被批量签发撑爆。
 const activationPoWMaxTotal = 50000
 
 // ErrPoWNotFound 挑战不存在（伪造、用途不符、已清理或重启后失效）。
@@ -76,8 +67,7 @@ var (
 	poWChallenges = map[string]*PoWChallenge{}
 )
 
-// IssuePoWChallenge 签发一道挑战（bits <= 0 时由调用方直接跳过校验）。
-// userId 为 0 表示未登录场景（登录/注册），此时按 IP 计数。
+// IssuePoWChallenge 签发一道挑战。userId 为 0 表示未登录场景，按 IP 计数。
 func IssuePoWChallenge(purpose string, userId int, ip string, bits int) (*PoWChallenge, error) {
 	if purpose == "" {
 		return nil, errors.New("pow purpose 不能为空")
@@ -116,8 +106,7 @@ func IssuePoWChallenge(purpose string, userId int, ip string, bits int) (*PoWCha
 	return &challenge, nil
 }
 
-// ConsumePoWChallenge 校验并消费一道挑战（一次性：校验通过即失效）。
-// 用途或用户不符一律按"不存在"处理，不向调用方区分原因。
+// ConsumePoWChallenge 校验并消费一道挑战（一次性）。用途或用户不符按"不存在"处理。
 func ConsumePoWChallenge(id string, purpose string, userId int, nonce string) error {
 	if id == "" {
 		return ErrPoWNotFound
@@ -145,8 +134,7 @@ func ConsumePoWChallenge(id string, purpose string, userId int, nonce string) er
 	return nil
 }
 
-// VerifyPoW 校验 nonce 是否让 sha256(challenge:nonce) 达到难度要求。
-// 纯函数，便于单测。
+// VerifyPoW 判断 nonce 是否满足难度要求（纯函数，便于单测）。
 func VerifyPoW(challenge string, nonce string, bits int) bool {
 	if challenge == "" || bits <= 0 {
 		return false
@@ -171,7 +159,7 @@ func VerifyActivationPoW(challenge string, nonce string, bits int) bool {
 	return CountLeadingZeroBits(sum[:]) >= bits
 }
 
-// CountLeadingZeroBits 返回字节序列的前导零位数（用于难度比较）。
+// CountLeadingZeroBits 返回字节序列的前导零位数。
 func CountLeadingZeroBits(data []byte) int {
 	count := 0
 	for _, b := range data {
@@ -190,7 +178,7 @@ func CountLeadingZeroBits(data []byte) int {
 	return count
 }
 
-// CountPoWChallenges 当前池中的挑战数（运维核对/测试用）。
+// CountPoWChallenges 返回当前池中的挑战数（测试用）。
 func CountPoWChallenges() int {
 	poWMu.Lock()
 	defer poWMu.Unlock()
@@ -198,14 +186,14 @@ func CountPoWChallenges() int {
 	return len(poWChallenges)
 }
 
-// PrunePoWChallenges 清理过期挑战，返回清理条数（每分钟由系统任务调用）。
+// PrunePoWChallenges 清理过期挑战，返回清理条数。
 func PrunePoWChallenges() int {
 	poWMu.Lock()
 	defer poWMu.Unlock()
 	return prunePoWChallengesLocked(time.Now())
 }
 
-// ResetPoWChallengesForTest 清空挑战池（跨包单测用：controller 的用例要先清干净）。
+// ResetPoWChallengesForTest 清空挑战池（单测用）。
 func ResetPoWChallengesForTest() {
 	resetPoWChallenges()
 }
@@ -228,7 +216,7 @@ func prunePoWChallengesLocked(now time.Time) int {
 	return removed
 }
 
-// evictOldestPoWChallengesLocked 按 match 选出一组挑战，压到 keep 条以内（淘汰最旧的）。
+// evictOldestPoWChallengesLocked 按 match 选出的挑战压到 keep 条以内，淘汰最旧的。
 func evictOldestPoWChallengesLocked(keep int, match func(*PoWChallenge) bool) {
 	if keep < 0 {
 		keep = 0
@@ -266,14 +254,14 @@ func removePoWChallenge(list []*PoWChallenge, id string) []*PoWChallenge {
 func randomPoWToken(bytes int) string {
 	buf := make([]byte, bytes)
 	if _, err := rand.Read(buf); err != nil {
-		// crypto/rand 失败极罕见；用时间戳兜底，宁可挑战弱一点也不要整条激活链路挂掉。
+		// 兜底：随机源异常时退化为时间戳，避免整条链路不可用。
 		common.SysError("pow token rand failed: " + err.Error())
 		return hex.EncodeToString([]byte(strconv.FormatInt(time.Now().UnixNano(), 10)))
 	}
 	return hex.EncodeToString(buf)
 }
 
-// isDecimalNonce nonce 必须是不超过 20 位的十进制串：防超长输入，也让客户端实现简单。
+// isDecimalNonce nonce 为不超过 20 位的十进制串。
 func isDecimalNonce(nonce string) bool {
 	if nonce == "" || len(nonce) > 20 {
 		return false

@@ -8256,12 +8256,12 @@
     "Activation Protection": "Bảo vệ kích hoạt",
     "Proof-of-work difficulty": "Độ khó xác minh",
     "Trap code grace period (seconds)": "Thời gian gia hạn cho mã bẫy (giây)",
-    "How long an account that submitted a trap invite code stays usable before it is disabled. Minimum 60 seconds, default 900. Activating with a valid code inside the window (or passing the check) clears it.": "Thời gian tài khoản đã gửi mã bẫy còn dùng được trước khi bị vô hiệu hoá. Tối thiểu 60 giây, mặc định 900. Kích hoạt bằng mã hợp lệ trong thời gian này (hoặc vượt qua xác minh) sẽ xoá bỏ.",
     "Hidden honeypot field": "Trường bẫy ẩn",
-    "Adds a form field that people cannot see or reach by keyboard, so only automation fills it. A filled value disables that account right away. Leave it on unless you are investigating a false positive.": "Thêm một trường mà người thật không thể thấy hay truy cập bằng bàn phím, nên chỉ bot mới điền. Nếu có giá trị thì tài khoản đó bị vô hiệu hoá ngay. Hãy để bật trừ khi đang kiểm tra báo nhầm.",
     "Save activation protection": "Lưu bảo vệ kích hoạt",
     "Require the check on sign-in": "Bắt buộc xác minh khi đăng nhập",
-    "Applies the same check to password sign-in, sign-up and the third-party sign-in entry (the check is enforced when the provider state is issued, so a crafted callback is rejected too). Off by default: turning it on adds a short computation to every sign-in, and a device that cannot run it cannot sign in, so enable it when you are ready.": "Áp dụng cùng kiểm tra cho đăng nhập bằng mật khẩu, đăng ký và lối vào đăng nhập bên thứ ba (với bên thứ ba thì kiểm tra ngay khi phát state, nên callback tự tạo cũng bị từ chối). Mặc định tắt: bật lên thì mỗi lần đăng nhập thêm một phép tính ngắn, và thiết bị không chạy được sẽ không đăng nhập được.",
-    "Leading zero bits of sha256(challenge:nonce) that each check must solve. 0 disables the check everywhere; 24 is the maximum. Default 18: roughly a second or less on a desktop, a few seconds on a low-end phone.": "Số bit 0 ở đầu của sha256(challenge:nonce) cần giải mỗi lần kiểm tra. 0 là tắt tất cả, tối đa 24, mặc định 18 (khoảng một giây hoặc ít hơn trên máy tính, vài giây trên điện thoại yếu)."
+    "Leading zero bits each challenge must solve. 0 disables the check, 24 is the maximum, default 18.": "Số bit 0 ở đầu cần giải. 0 là tắt kiểm tra, tối đa 24, mặc định 18.",
+    "How long an account that used a trap invite code stays usable before it is disabled. Minimum 60 seconds, default 900; activating with a valid code clears it.": "Thời gian tài khoản dùng mã bẫy còn dùng được trước khi bị vô hiệu hoá. Tối thiểu 60 giây, mặc định 900; kích hoạt bằng mã hợp lệ sẽ xoá bỏ.",
+    "Require the check for password sign-in, sign-up and third-party sign-in.": "Yêu cầu xác minh cho đăng nhập bằng mật khẩu, đăng ký và đăng nhập bên thứ ba.",
+    "Adds a field that is hidden from users; only automation fills it. A filled value disables the account.": "Thêm một trường ẩn với người dùng; chỉ bot điền vào, và tài khoản sẽ bị vô hiệu hoá."
   }
 }

@@ -117,44 +117,27 @@ func InviteTrapGraceWindow() int {
 	return InviteTrapGraceSeconds
 }
 
-// HoneypotBanReason 隐形蜜罐命中（自动化提交）后写入 users.remark 的封禁原因。
-// 与钓鱼码不同：蜜罐字段真人看不到也填不到，命中即判自动化，无需宽限。
+// HoneypotBanReason 隐形蜜罐命中后写入 users.remark 的封禁原因。
 const HoneypotBanReason = "检测到自动化提交，账号已停用"
 
-// LoginChallengeEnabled 登录/注册/第三方登录入口的人机校验开关（**默认关**，需在设置页「激活防护」里开）。
-//
-// 为什么默认关：它会给每个登录者加一道 0.4 秒级的计算，且一旦本机环境跑不动校验就登不进来
-// （能救场的是这个开关本身和难度 0 —— 两者都在设置页里，也就是"先能登录才能关"）。
-// 所以让部署者自己选时机打开，而不是发版即生效。
-// 开启且 PoWChallengeBits > 0 时，这三个入口都要带一道通过校验的挑战：
-// 服务端在签发前校验（登录/注册直接挡，第三方登录挡在 /api/oauth/state 的 intent=login 上）。
-// 关掉它（或把难度设为 0）则这些入口恢复"只凭账号密码/第三方授权"。
+// LoginChallengeEnabled 登录、注册、第三方登录入口的人机校验开关（默认关）。
+// 开启且 PoWChallengeBits > 0 时，三处入口都要带一道通过校验的挑战。
 var LoginChallengeEnabled = false
 
-// ActivationHoneypotEnabled 激活页隐形蜜罐字段开关（默认开）：真人对这个字段既看不到也 tab 不到，
-// 只有遍历表单的自动化会填；命中即判自动化并停用账号。关掉它等于放弃这一层判定
-// （只剩 PoW 的算力成本），一般只在排查误伤时临时关。可通过 option key ActivationHoneypotEnabled 调整。
+// ActivationHoneypotEnabled 激活页隐形蜜罐字段开关（默认开）：
+// 字段对用户不可见也不可聚焦，非空即判为自动化提交。
 var ActivationHoneypotEnabled = true
 
-// DefaultActivationPoWBits 激活页人机校验（PoW）默认难度：要求 sha256(challenge:nonce)
-// 有这么多前导零位，期望计算量 2^bits 次哈希。
-//
-// 2026-09-24 实测（纯 JS 的 node-forge sha256）：容器内 node 单线程约 63 万次/秒，
-// 容器内 headless chromium 约 23 万次/秒（负载重、被限流，偏悲观的一档）。
-// 18 位期望 26 万次 ≈ 悲观环境下约 1 秒、正常桌面更快；20 位要翻 4 倍（弱机 4 秒上下，偏慢）。
-// 取 18 位：真人几乎无感，而批量试码要为每次尝试付一份同样算力
-// （1 万次尝试 ≈ 26 亿次哈希 ≈ 单核至少一小时）。它只抬高自动化成本，
-// 不构成"证明你是人"——判定自动化靠激活页的蜜罐字段。
+// DefaultActivationPoWBits 人机校验默认难度（sha256 前导零位数，期望 2^n 次哈希）。
 const DefaultActivationPoWBits = 18
 
-// MaxActivationPoWBits 难度上限：每 +1 位成本翻倍，再往上真人等待时间不可接受。
+// MaxActivationPoWBits 难度上限；每 +1 位成本翻倍，再高会影响真人等待时间。
 const MaxActivationPoWBits = 24
 
-// ActivationPoWBits 生效难度，可通过 option key PoWChallengeBits 调整；
-// <=0 表示关闭校验（激活不再要求 PoW，用于出问题时的紧急开关）。
+// ActivationPoWBits 生效难度，可通过 option key PoWChallengeBits 调整；<=0 表示关闭校验。
 var ActivationPoWBits = DefaultActivationPoWBits
 
-// ActivationPoWBitsEffective 返回生效难度（0 = 关闭；超过上限按上限生效）。
+// ActivationPoWBitsEffective 返回生效难度：0 表示关闭，超过上限按上限生效。
 func ActivationPoWBitsEffective() int {
 	if ActivationPoWBits <= 0 {
 		return 0

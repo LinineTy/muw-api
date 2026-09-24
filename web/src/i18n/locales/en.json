@@ -8256,12 +8256,12 @@
     "Activation Protection": "Activation Protection",
     "Proof-of-work difficulty": "Proof-of-work difficulty",
     "Trap code grace period (seconds)": "Trap code grace period (seconds)",
-    "How long an account that submitted a trap invite code stays usable before it is disabled. Minimum 60 seconds, default 900. Activating with a valid code inside the window (or passing the check) clears it.": "How long an account that submitted a trap invite code stays usable before it is disabled. Minimum 60 seconds, default 900. Activating with a valid code inside the window (or passing the check) clears it.",
     "Hidden honeypot field": "Hidden honeypot field",
-    "Adds a form field that people cannot see or reach by keyboard, so only automation fills it. A filled value disables that account right away. Leave it on unless you are investigating a false positive.": "Adds a form field that people cannot see or reach by keyboard, so only automation fills it. A filled value disables that account right away. Leave it on unless you are investigating a false positive.",
     "Save activation protection": "Save activation protection",
     "Require the check on sign-in": "Require the check on sign-in",
-    "Applies the same check to password sign-in, sign-up and the third-party sign-in entry (the check is enforced when the provider state is issued, so a crafted callback is rejected too). Off by default: turning it on adds a short computation to every sign-in, and a device that cannot run it cannot sign in, so enable it when you are ready.": "Applies the same check to password sign-in, sign-up and the third-party sign-in entry (the check is enforced when the provider state is issued, so a crafted callback is rejected too). Off by default: turning it on adds a short computation to every sign-in, and a device that cannot run it cannot sign in, so enable it when you are ready.",
-    "Leading zero bits of sha256(challenge:nonce) that each check must solve. 0 disables the check everywhere; 24 is the maximum. Default 18: roughly a second or less on a desktop, a few seconds on a low-end phone.": "Leading zero bits of sha256(challenge:nonce) that each check must solve. 0 disables the check everywhere; 24 is the maximum. Default 18: roughly a second or less on a desktop, a few seconds on a low-end phone."
+    "Leading zero bits each challenge must solve. 0 disables the check, 24 is the maximum, default 18.": "Leading zero bits each challenge must solve. 0 disables the check, 24 is the maximum, default 18.",
+    "How long an account that used a trap invite code stays usable before it is disabled. Minimum 60 seconds, default 900; activating with a valid code clears it.": "How long an account that used a trap invite code stays usable before it is disabled. Minimum 60 seconds, default 900; activating with a valid code clears it.",
+    "Require the check for password sign-in, sign-up and third-party sign-in.": "Require the check for password sign-in, sign-up and third-party sign-in.",
+    "Adds a field that is hidden from users; only automation fills it. A filled value disables the account.": "Adds a field that is hidden from users; only automation fills it. A filled value disables the account."
   }
 }

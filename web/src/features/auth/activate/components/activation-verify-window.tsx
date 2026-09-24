@@ -24,7 +24,7 @@ const RING_SIZE = 76
 const RING_STROKE = 6
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
-/** 初始位置：右上角、让开顶部 toast 的位置（拖走后按拖动位置固定）。 */
+/** 初始位置：让开顶部提示条。 */
 const DEFAULT_OFFSET = { top: 72, right: 24 }
 const EDGE_MARGIN = 8
 
@@ -32,12 +32,9 @@ const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), Math.max(min, max))
 
 /**
- * 人机校验浮窗：右上角弹出的小窗，**不带遮罩、不锁页面**，鼠标/触摸都能拖着走，
- * 校验通过后自动收起、也能随手关掉。求解本身在 Worker 里跑，关掉窗口不影响它。
+ * 人机校验浮窗：右上角的小窗，无遮罩、不锁页面，可拖动，通过后自动收起。
  *
- * ⚠️ 必须 portal 到 document.body：登录/注册页把它挂在卡片内部，而卡片是 framer-motion 的
- * `transform` 元素（会造层叠上下文）⇒ `position: fixed` 会以卡片为参照系，小窗被压进卡片里
- * 且被卡片裁掉（2026-09-25 手机端实测到的就是这一幕）。挂到 body 上才真正相对视口定位。
+ * 必须挂到 document.body：卡片是 transform 元素，fixed 会以它为参照系而被裁切。
  */
 export function ActivationVerifyWindow({
   open,
@@ -57,11 +54,11 @@ export function ActivationVerifyWindow({
     const rect = cardRef.current?.getBoundingClientRect()
     if (!rect) return
     dragRef.current = { dx: event.clientX - rect.left, dy: event.clientY - rect.top }
-    // jsdom/老浏览器没有 setPointerCapture，缺了它拖动照样成立（这里只是让指针移出窗口也不丢）
+    // 不支持指针捕获时仍可拖动，仅指针移出窗口后会断开
     try {
       event.currentTarget.setPointerCapture(event.pointerId)
     } catch {
-      // 忽略：不支持指针捕获不影响拖动
+      // 忽略
     }
   }, [])
 
@@ -115,10 +112,10 @@ export function ActivationVerifyWindow({
           ? { left: position.x, top: position.y }
           : { top: DEFAULT_OFFSET.top, right: DEFAULT_OFFSET.right }
       }
-      // 浮层底色走势沿用项目里其它浮层（下拉/选择器）的配方：bg-popover + ring + shadow
+      // 与下拉、选择器等浮层一致的底色。
       className='bg-popover text-popover-foreground ring-foreground/10 fixed z-[70] w-[290px] rounded-2xl shadow-lg ring-1 backdrop-blur-md'
     >
-      {/* 标题栏即拖拽把手：整条都能拖，鼠标/触摸都走 pointer 事件 */}
+      {/* 标题栏即拖拽把手（pointer 事件，鼠标与触摸通用） */}
       <div
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -222,7 +219,7 @@ export function ActivationVerifyWindow({
     </div>
   )
 
-  // 单测（jsdom）里 document 一定存在；服务端渲染场景下直接不渲染。
+  // 非浏览器环境不渲染
   if (typeof document === 'undefined') {
     return null
   }
