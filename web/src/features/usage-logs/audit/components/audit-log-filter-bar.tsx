@@ -19,14 +19,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 
 import { CompactDateTimeRangePicker } from '../../components/compact-date-time-range-picker'
 import {
@@ -36,45 +29,26 @@ import {
 } from '../../components/logs-filter-toolbar'
 import type { AuditFilters, AuditLog } from '../api'
 
-// 与其它日志页的筛选一致用 SelectTrigger（老版本这里是 Combobox）：选项都是固定短列表，
-// 不需要输入检索；换成统一组件后也不会再跟着 InputGroup/Input 这类共享件的尺寸调整而变形。
+// 与通用日志页的「分组」筛选同款：可输入下拉，但**高度必须在使用点钉死**——
+// 它内部走 InputGroup/InputGroupInput 那条共享链，默认高度由共享件决定，不钉就会跟着共享件变
+// （2026-09-24：登录页调共享输入件时，只有这处没钉高度的筛选跟着变形）。
 function AuditFilterSelect(props: {
   label: string
   value: string
   options: { value: string; label: string; disabled?: boolean }[]
   onChange: (value: string) => void
 }) {
-  const selected = props.options.find((option) => option.value === props.value)
   return (
     <LogsFilterField>
-      <Select
+      <Combobox
+        options={props.options}
         value={props.value}
         onValueChange={(value) => {
-          if (typeof value === 'string') props.onChange(value)
+          if (value !== null) props.onChange(value)
         }}
-      >
-        <SelectTrigger aria-label={props.label}>
-          <SelectValue>
-            <span className='truncate'>{selected?.label ?? props.label}</span>
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent
-          alignItemWithTrigger={false}
-          className='max-w-[calc(100vw-2rem)] min-w-52'
-        >
-          <SelectGroup>
-            {props.options.map((option) => (
-              <SelectItem
-                key={option.value}
-                value={option.value}
-                disabled={option.disabled}
-              >
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
+        aria-label={props.label}
+        className='h-8 w-full min-w-0 text-sm leading-5'
+      />
     </LogsFilterField>
   )
 }
