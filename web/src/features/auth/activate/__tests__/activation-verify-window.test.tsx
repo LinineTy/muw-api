@@ -19,6 +19,24 @@ const renderWindow = (overrides: Partial<React.ComponentProps<typeof ActivationV
 }
 
 describe('人机校验浮窗（右上角、可拖、不遮页面）', () => {
+  it('挂在 document.body 上（否则会被卡片的 transform 层叠上下文困住）', () => {
+    // 把组件放进一个带 transform 的容器里模拟登录卡
+    render(
+      <div style={{ transform: 'translateZ(0)' }}>
+        <ActivationVerifyWindow
+          open
+          onOpenChange={vi.fn()}
+          status='solving'
+          hashes={0}
+          bits={20}
+          onRetry={vi.fn()}
+        />
+      </div>
+    )
+    const card = screen.getByTestId('activation-verify-window')
+    expect(card.parentElement).toBe(document.body)
+  })
+
   it('默认停在右上角，且不渲染任何遮罩（页面照旧可点）', () => {
     renderWindow()
     const card = screen.getByTestId('activation-verify-window')

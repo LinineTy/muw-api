@@ -1,6 +1,7 @@
 // @muw-owned
 import { Check, GripVertical, ShieldAlert, ShieldCheck, X } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -31,8 +32,12 @@ const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), Math.max(min, max))
 
 /**
- * 人机校验浮窗（激活页）：右上角弹出的小窗，**不带遮罩、不锁页面**，鼠标/触摸都能拖着走，
+ * 人机校验浮窗：右上角弹出的小窗，**不带遮罩、不锁页面**，鼠标/触摸都能拖着走，
  * 校验通过后自动收起、也能随手关掉。求解本身在 Worker 里跑，关掉窗口不影响它。
+ *
+ * ⚠️ 必须 portal 到 document.body：登录/注册页把它挂在卡片内部，而卡片是 framer-motion 的
+ * `transform` 元素（会造层叠上下文）⇒ `position: fixed` 会以卡片为参照系，小窗被压进卡片里
+ * 且被卡片裁掉（2026-09-25 手机端实测到的就是这一幕）。挂到 body 上才真正相对视口定位。
  */
 export function ActivationVerifyWindow({
   open,
@@ -99,7 +104,7 @@ export function ActivationVerifyWindow({
     statusText = t('Security check failed. Please try again.')
   }
 
-  return (
+  const windowNode = (
     <div
       ref={cardRef}
       role='dialog'
@@ -216,4 +221,10 @@ export function ActivationVerifyWindow({
       ) : null}
     </div>
   )
+
+  // 单测（jsdom）里 document 一定存在；服务端渲染场景下直接不渲染。
+  if (typeof document === 'undefined') {
+    return null
+  }
+  return createPortal(windowNode, document.body)
 }
