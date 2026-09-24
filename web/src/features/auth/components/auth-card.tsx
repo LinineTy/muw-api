@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { MOTION_TRANSITION } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 
-import { BADGE, BADGE_CLEARANCE, CARD_FOOT } from '../lib/auth-card-geometry'
+import { BADGE, CARD_FOOT, CARD_FOOT_RESERVED } from '../lib/auth-card-geometry'
 import { useAuthEnter } from '../lib/auth-motion'
 import { AuthCardBadge, type AuthCardBadgeKind } from './auth-card-badge'
 
@@ -63,11 +63,11 @@ export function AuthCard({
 
   // 底部区域（设计稿 .card-foot）：
   // - 有底部入口 → 文字带，右侧让出 136px 给右下角标；
-  // - 没有入口但有角标 → 只留角标向上侵入的高度（BADGE_CLEARANCE），
-  //   否则角标会压住最后一个内容块（实测：无 OAuth 的登录页压住主按钮 22px）；
+  // - 没有入口但有角标 → 留出与有入口时**同样高**的底留区（CARD_FOOT_RESERVED 46），
+  //   角标才既压不到内容块、又与其保持 8px 视觉间距（只留 38 会正好贴住，实测过）；
   // - 都没有 → 紧凑留白。
   const emptyFootBand = badge ? (
-    <div style={{ height: BADGE_CLEARANCE }} />
+    <div style={{ height: CARD_FOOT_RESERVED }} />
   ) : (
     <div className='h-4' />
   )

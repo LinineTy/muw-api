@@ -2,7 +2,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
-import { BADGE_CLEARANCE } from '../../lib/auth-card-geometry'
+import { CARD_FOOT_RESERVED } from '../../lib/auth-card-geometry'
 import { AuthCard } from '../auth-card'
 
 describe('AuthCard（认证页卡壳）', () => {
@@ -37,7 +37,7 @@ describe('AuthCard（认证页卡壳）', () => {
     expect(screen.queryByRole('button')).toBeNull()
   })
 
-  it('有角标但没有底部入口时，底留区仍要留出角标侵入的高度', () => {
+  it('有角标但没有底部入口时，底留区仍要留出与有入口时同高的余量', () => {
     const { container } = render(
       <AuthCard title='登录' badge='secure' badgeLabel='连接安全'>
         <div>表单内容</div>
@@ -46,9 +46,8 @@ describe('AuthCard（认证页卡壳）', () => {
 
     const card = container.querySelector('[data-slot=card]') as HTMLElement
     const spacer = card.lastElementChild as HTMLElement
-    expect(Number.parseFloat(spacer.style.height)).toBeGreaterThanOrEqual(
-      BADGE_CLEARANCE
-    )
+    // 必须留满「有底部入口时」的同等高度：光留角标侵入高度(38)会让角标贴住内容块
+    expect(Number.parseFloat(spacer.style.height)).toBe(CARD_FOOT_RESERVED)
   })
 
   it('既无角标也无底部入口时底留区保持紧凑', () => {
