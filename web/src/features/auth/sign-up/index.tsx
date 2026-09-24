@@ -25,14 +25,18 @@ import { cn } from '@/lib/utils'
 import { AuthLayout } from '../auth-layout'
 import { AuthCard } from '../components/auth-card'
 import { AUTH_MINOR_TEXT } from '../lib/auth-styles'
-import { hasThirdPartyLogin } from '../lib/sign-in-capabilities'
+import {
+  hasThirdPartyLogin,
+  isPasswordSignUpAvailable,
+} from '../lib/sign-in-capabilities'
 import { SignUpForm } from './components/sign-up-form'
 
 export function SignUp() {
   const { t } = useTranslation()
   const { status } = useStatus()
-  // 密码注册关掉时注册页自动关闭（回到登录页；新账号走 OAuth 首登自动建号）
-  if (status && status.password_register_enabled === false) {
+  // 注册总开关 / 自用模式 / 密码注册任一关掉都别开注册页（与后端 controller/user.go 的拦截一致，
+  // 否则会出现「能填表、提交必失败」）；关掉时回登录页，新账号走 OAuth 首登自动建号。
+  if (status && !isPasswordSignUpAvailable(status)) {
     return <Navigate to='/sign-in' replace />
   }
   // 第三方（OAuth / 微信…）统一走登录页；注册页只留账号密码。没配任何第三方时不给这条入口。

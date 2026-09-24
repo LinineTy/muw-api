@@ -22,6 +22,7 @@ import { ArrowRight, BookOpen } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
+import { getSignUpTarget } from '@/features/auth/lib/sign-in-capabilities'
 import { useStatus } from '@/hooks/use-status'
 
 import { HeroTerminalDemo } from '../hero-terminal-demo'
@@ -50,6 +51,8 @@ export function Hero(props: HeroProps) {
   const { status } = useStatus()
   const docsUrl =
     (status?.docs_link as string | undefined) || 'https://docs.newapi.pro'
+  // 注册页被关掉时，主 CTA 直接指登录页（否则点进去会被弹回来）
+  const signUpTarget = getSignUpTarget(status)
 
   const renderDocsButton = () => {
     const isExternal = docsUrl.startsWith('http')
@@ -152,7 +155,7 @@ export function Hero(props: HeroProps) {
               <>
                 <Button
                   className='group h-11 rounded-lg px-5 text-sm font-medium'
-                  render={<Link to='/sign-up' />}
+                  render={<Link to={signUpTarget} />}
                 >
                   {t('Get Started')}
                   <ArrowRight className='ml-1.5 size-4 transition-transform duration-200 group-hover:translate-x-0.5' />

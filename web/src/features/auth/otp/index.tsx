@@ -20,21 +20,21 @@ import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { AuthLayout } from '../auth-layout'
+import { AuthCard } from '../components/auth-card'
+import { AUTH_MINOR_TEXT } from '../lib/auth-styles'
 import { OtpForm } from './components/otp-form'
 
 export function Otp() {
   const { t } = useTranslation()
   return (
     <AuthLayout>
-      <div className='w-full space-y-8'>
-        <div className='space-y-3'>
-          <h2 className='text-center text-2xl font-semibold tracking-tight sm:text-left'>
-            {t('Security verification')}
-          </h2>
-          <p className='text-muted-foreground text-left text-sm sm:text-base'>
-            {t('Verify your identity to finish signing in.')}
-          </p>
-          <p className='text-muted-foreground text-left text-sm sm:text-base'>
+      <AuthCard
+        title={t('Security verification')}
+        subtitle={t('Verify your identity to finish signing in.')}
+        badge='secure'
+        badgeLabel={t('Connection secure')}
+        footer={
+          <span className={AUTH_MINOR_TEXT}>
             {t('Session expired?')}{' '}
             <Link
               to='/sign-in'
@@ -43,11 +43,11 @@ export function Otp() {
               {t('Re-login')}
             </Link>
             .
-          </p>
-        </div>
-
+          </span>
+        }
+      >
         <OtpForm />
-      </div>
+      </AuthCard>
     </AuthLayout>
   )
 }

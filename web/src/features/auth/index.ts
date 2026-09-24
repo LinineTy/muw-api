@@ -62,8 +62,6 @@ export {
   registerFormSchema,
   forgotPasswordFormSchema,
   otpFormSchema,
-  PASSWORD_MIN_LENGTH,
-  PASSWORD_MAX_LENGTH,
   OTP_LENGTH,
   BACKUP_CODE_LENGTH,
   BACKUP_CODE_REGEX,
@@ -110,7 +108,6 @@ export { useEmailVerification } from './hooks/use-email-verification'
 
 export { AuthLayout } from './auth-layout'
 export { OAuthProviders } from './components/oauth-providers'
-export { TermsFooter } from './components/terms-footer'
 export { LegalConsent } from './components/legal-consent'
 export { SignIn } from './sign-in'
 export { SignUp } from './sign-up'

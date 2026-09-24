@@ -117,7 +117,9 @@ export function ForgotPasswordForm({
               <FormControl>
                 <Input
                   placeholder={t('name@example.com')}
+                  autoComplete='email'
                   className={AUTH_INPUT}
+                  type='email'
                   {...field}
                 />
               </FormControl>

@@ -410,6 +410,7 @@ export function UserAuthForm({
                         <FormControl>
                           <Input
                             placeholder={t('Enter your username or email')}
+                            autoComplete='username'
                             className={AUTH_INPUT}
                             {...field}
                           />
@@ -431,6 +432,7 @@ export function UserAuthForm({
                         <FormControl>
                           <PasswordInput
                             placeholder={t('Enter password')}
+                            autoComplete='current-password'
                             inputClassName={AUTH_INPUT}
                             {...field}
                           />

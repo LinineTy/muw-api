@@ -191,6 +191,7 @@ export function SignUpForm({
               <FormControl>
                 <Input
                   placeholder={t('Enter your username')}
+                  autoComplete='username'
                   className={AUTH_INPUT}
                   {...field}
                 />
@@ -210,6 +211,7 @@ export function SignUpForm({
               <FormControl>
                 <PasswordInput
                   placeholder={t('Enter password (8–128 characters)')}
+                  autoComplete='new-password'
                   inputClassName={AUTH_INPUT}
                   {...field}
                 />
@@ -229,6 +231,7 @@ export function SignUpForm({
               <FormControl>
                 <PasswordInput
                   placeholder={t('Confirm password')}
+                  autoComplete='new-password'
                   inputClassName={AUTH_INPUT}
                   {...field}
                 />
@@ -253,6 +256,7 @@ export function SignUpForm({
                   <FormControl>
                     <Input
                       placeholder={t('name@example.com')}
+                      autoComplete='email'
                       className={AUTH_INPUT}
                       type='email'
                       {...field}
@@ -268,6 +272,7 @@ export function SignUpForm({
               <div className='flex-1'>
                 <Input
                   placeholder={t('Verification code')}
+                  autoComplete='one-time-code'
                   value={verificationCode}
                   onChange={(e) => setVerificationCode(e.target.value)}
                 />

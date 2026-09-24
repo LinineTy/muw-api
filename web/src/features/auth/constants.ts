@@ -32,7 +32,14 @@ export const loginFormSchema = z.object({
 export const registerFormSchema = z
   .object({
     username: z.string().min(1, 'Please enter your username'),
-    email: z.string().optional(),
+    // 只在填了的时候校验格式（空串合法：邮箱仅开启邮件验证时必填）
+    email: z
+      .string()
+      .optional()
+      .refine(
+        (value) => !value || z.string().email().safeParse(value).success,
+        { message: 'Please enter a valid email address' }
+      ),
     password: accountPasswordSchema,
     confirmPassword: z.string().min(1, 'Please confirm your password'),
   })
@@ -55,8 +62,6 @@ export const otpFormSchema = z.object({
 // Validation Constants
 // ============================================================================
 
-export const PASSWORD_MIN_LENGTH = 8
-export const PASSWORD_MAX_LENGTH = 20
 export const OTP_LENGTH = 6
 export const BACKUP_CODE_LENGTH = 9 // XXXX-XXXX format
 export const BACKUP_CODE_REGEX = /^[A-Z0-9]{4}-[A-Z0-9]{4}$/i

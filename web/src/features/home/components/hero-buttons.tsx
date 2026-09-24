@@ -21,6 +21,8 @@ import { ArrowRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
+import { getSignUpTarget } from '@/features/auth/lib/sign-in-capabilities'
+import { useStatus } from '@/hooks/use-status'
 
 interface HeroButtonsProps {
   isAuthenticated: boolean
@@ -31,6 +33,9 @@ interface HeroButtonsProps {
  */
 export function HeroButtons({ isAuthenticated }: HeroButtonsProps) {
   const { t } = useTranslation()
+  const { status } = useStatus()
+  // 注册页被关掉时，主 CTA 直接指登录页（否则点进去会被弹回来）
+  const signUpTarget = getSignUpTarget(status)
   if (isAuthenticated) {
     return (
       <Button size='lg' render={<Link to='/os-desktop' />}>
@@ -41,7 +46,7 @@ export function HeroButtons({ isAuthenticated }: HeroButtonsProps) {
 
   return (
     <>
-      <Button size='lg' render={<Link to='/sign-up' />}>
+      <Button size='lg' render={<Link to={signUpTarget} />}>
         {t('Get Started')}
         <ArrowRight className='ml-2 h-5 w-5' />
       </Button>

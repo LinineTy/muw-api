@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { CheckIcon, CopyIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -32,8 +32,11 @@ import { copyToClipboard } from '@/lib/copy-to-clipboard'
 import { handleServerError } from '@/lib/handle-server-error'
 import { AuthOperationError } from '@/lib/secure-verification'
 import { createServerError } from '@/lib/server-error-message'
+import { cn } from '@/lib/utils'
 
 import { AuthLayout } from '../auth-layout'
+import { AuthCard } from '../components/auth-card'
+import { AUTH_INPUT, AUTH_PRIMARY_BUTTON } from '../lib/auth-styles'
 
 export type ResetPasswordSearchParams = {
   email?: string
@@ -112,18 +115,27 @@ export function ResetPasswordConfirm({
 
   return (
     <AuthLayout>
-      <div className='w-full space-y-8'>
-        <div className='space-y-2'>
-          <h2 className='text-center text-2xl font-semibold tracking-tight sm:text-left'>
-            {t('Reset password')}
-          </h2>
-          <p className='text-muted-foreground text-left text-sm sm:text-base'>
-            {newPassword
-              ? t('auth.resetPasswordConfirm.success')
-              : t('auth.resetPasswordConfirm.description')}
-          </p>
-        </div>
-
+      <AuthCard
+        title={t('Reset password')}
+        subtitle={
+          newPassword
+            ? t('auth.resetPasswordConfirm.success')
+            : t('auth.resetPasswordConfirm.description')
+        }
+        badge='secure'
+        badgeLabel={t('Connection secure')}
+        footer={
+          // 重置成功后主按钮本身就是「回到登录」，底部不再重复一条
+          !newPassword ? (
+            <Link
+              to='/sign-in'
+              className='text-muted-foreground hover:text-foreground text-[12.5px]'
+            >
+              {t('Back to login')}
+            </Link>
+          ) : null
+        }
+      >
         <div className='space-y-4'>
           {!isValidResetLink && (
             <Alert variant='destructive'>
@@ -140,6 +152,7 @@ export function ResetPasswordConfirm({
               type='email'
               value={email || ''}
               disabled
+              className={AUTH_INPUT}
               placeholder={t('Waiting for email...')}
             />
           </div>
@@ -152,12 +165,13 @@ export function ResetPasswordConfirm({
                   id='password'
                   value={newPassword}
                   disabled
-                  className='font-mono'
+                  className={cn(AUTH_INPUT, 'font-mono')}
                 />
                 <Button
                   type='button'
                   size='icon'
                   variant='outline'
+                  className='h-[46px] w-[46px] shrink-0 rounded-xl'
                   onClick={handleCopy}
                 >
                   {copied ? (
@@ -174,7 +188,7 @@ export function ResetPasswordConfirm({
           )}
 
           <Button
-            className='w-full'
+            className={AUTH_PRIMARY_BUTTON}
             onClick={
               newPassword
                 ? () => navigate({ to: '/sign-in', replace: true })
@@ -194,18 +208,8 @@ export function ResetPasswordConfirm({
               !isActive &&
               t('auth.resetPasswordConfirm.confirm')}
           </Button>
-
-          {!newPassword && (
-            <Button
-              variant='link'
-              className='w-full'
-              onClick={() => navigate({ to: '/sign-in', replace: true })}
-            >
-              {t('Back to login')}
-            </Button>
-          )}
         </div>
-      </div>
+      </AuthCard>
     </AuthLayout>
   )
 }

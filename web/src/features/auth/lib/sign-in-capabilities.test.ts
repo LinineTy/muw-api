@@ -5,7 +5,9 @@ import type { SystemStatus } from '@/features/auth/types'
 
 import {
   getSignInCapabilities,
+  getSignUpTarget,
   hasOAuthProvider,
+  hasThirdPartyLogin,
   isPasswordSignUpAvailable,
 } from './sign-in-capabilities'
 
@@ -96,5 +98,40 @@ describe('isPasswordSignUpAvailable', () => {
   it('状态还没拉到时按"不给注册入口"处理', () => {
     expect(isPasswordSignUpAvailable(null)).toBe(false)
     expect(isPasswordSignUpAvailable(undefined)).toBe(false)
+  })
+})
+
+describe('hasThirdPartyLogin', () => {
+  it('OAuth 或微信任一配了即为 true（注册页卡脚那条「使用第三方登录」）', () => {
+    expect(hasThirdPartyLogin(asStatus({}))).toBe(false)
+    expect(hasThirdPartyLogin(null)).toBe(false)
+    expect(hasThirdPartyLogin(asStatus({ linuxdo_oauth: true }))).toBe(true)
+    expect(hasThirdPartyLogin(asStatus({ wechat_login: true }))).toBe(true)
+  })
+})
+
+describe('getSignUpTarget', () => {
+  it('能注册就去 /sign-up', () => {
+    expect(
+      getSignUpTarget(
+        asStatus({ register_enabled: true, password_register_enabled: true })
+      )
+    ).toBe('/sign-up')
+  })
+
+  it('注册关掉时改指 /sign-in（免得主 CTA 点进去被弹回来）', () => {
+    expect(
+      getSignUpTarget(
+        asStatus({ register_enabled: false, password_register_enabled: true })
+      )
+    ).toBe('/sign-in')
+    expect(getSignUpTarget(asStatus({ self_use_mode_enabled: true }))).toBe(
+      '/sign-in'
+    )
+  })
+
+  it('status 还没到位时先给 /sign-up（注册页自己会回跳，不会留死链）', () => {
+    expect(getSignUpTarget(null)).toBe('/sign-up')
+    expect(getSignUpTarget(undefined)).toBe('/sign-up')
   })
 })

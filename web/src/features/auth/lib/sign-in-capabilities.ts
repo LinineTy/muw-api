@@ -61,6 +61,17 @@ export function isPasswordSignUpAvailable(
   return true
 }
 
+/**
+ * 「注册」CTA 的目标：能走到注册页就给 `/sign-up`，否则给 `/sign-in`（免得主 CTA 点进去又被弹回来）。
+ * status 还没到位时先给 `/sign-up` —— 注册页自身会在开关关闭时回跳，不会留死链。
+ */
+export function getSignUpTarget(
+  status: SystemStatus | null | undefined
+): '/sign-up' | '/sign-in' {
+  if (!status) return '/sign-up'
+  return isPasswordSignUpAvailable(status) ? '/sign-up' : '/sign-in'
+}
+
 export function getSignInCapabilities(
   status: SystemStatus | null | undefined
 ): SignInCapabilities {
