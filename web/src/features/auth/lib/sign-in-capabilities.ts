@@ -21,6 +21,35 @@ export type SignInCapabilities = {
   hasAlternativeLogin: boolean
 }
 
+/** 是否配置了任一 OAuth 提供方（GitHub / Discord / OIDC / LinuxDO / Telegram / 自定义） */
+export function hasOAuthProvider(
+  status: SystemStatus | null | undefined
+): boolean {
+  return Boolean(
+    status?.github_oauth ||
+      status?.discord_oauth ||
+      status?.oidc_enabled ||
+      status?.linuxdo_oauth ||
+      status?.telegram_oauth ||
+      (status?.custom_oauth_providers?.length ?? 0) > 0
+  )
+}
+
+/**
+ * 是否还能走到「注册」页：自用模式关闭 + 注册总开关打开 + 密码注册打开。
+ * 与 `/sign-up` 自身的回跳口径一致（`password_register_enabled === false` ⇒ 回登录页），
+ * 避免出现「链接点进去又被弹回来」的死链。
+ */
+export function isPasswordSignUpAvailable(
+  status: SystemStatus | null | undefined
+): boolean {
+  if (!status) return false
+  if (status.self_use_mode_enabled) return false
+  if (status.register_enabled === false) return false
+  if (status.password_register_enabled === false) return false
+  return true
+}
+
 export function getSignInCapabilities(
   status: SystemStatus | null | undefined
 ): SignInCapabilities {
@@ -32,14 +61,7 @@ export function getSignInCapabilities(
       status?.data?.password_login_enabled ??
       true) !== false
   const hasWeChatLogin = Boolean(status?.wechat_login)
-  const hasOAuthLogin = Boolean(
-    status?.github_oauth ||
-    status?.discord_oauth ||
-    status?.oidc_enabled ||
-    status?.linuxdo_oauth ||
-    status?.telegram_oauth ||
-    (status?.custom_oauth_providers?.length ?? 0) > 0
-  )
+  const hasOAuthLogin = hasOAuthProvider(status)
 
   return {
     passwordLoginEnabled,

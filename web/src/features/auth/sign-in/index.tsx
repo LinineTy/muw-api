@@ -30,6 +30,7 @@ import { AuthCard } from '../components/auth-card'
 import { AUTH_MINOR_TEXT } from '../lib/auth-styles'
 import {
   getSignInCapabilities,
+  isPasswordSignUpAvailable,
   type SignInMode,
 } from '../lib/sign-in-capabilities'
 import { UserAuthForm } from './components/user-auth-form'
@@ -55,10 +56,8 @@ export function SignIn() {
         <AuthCard
           title={t('Sign in')}
           subtitle={
-            !status?.self_use_mode_enabled &&
-            status?.register_enabled !== false &&
-            // 密码注册关掉时注册页会回跳登录页，这里就不再引导去注册
-            status?.password_register_enabled !== false ? (
+            // 密码注册关掉时注册页会回跳登录页，这里就不再引导去注册（口径见 isPasswordSignUpAvailable）
+            isPasswordSignUpAvailable(status) ? (
               <>
                 {t("Don't have an account?")}{' '}
                 <Link
