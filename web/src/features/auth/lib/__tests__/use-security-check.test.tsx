@@ -53,9 +53,11 @@ describe('校验流程 hook', () => {
 
   it('ensureProof 交出凭据后自动重算下一份', async () => {
     const fetcher = vi.fn().mockResolvedValue(enabled())
-    const { result } = renderHook(() => useSecurityCheck(fetcher, {
-      onProof: () => undefined,
-    }))
+    const { result } = renderHook(() =>
+      useSecurityCheck(fetcher, {
+        onProof: () => undefined,
+      })
+    )
     act(() => result.current.windowProps.onStart())
     await waitFor(() => expect(result.current.ready).toBe(true))
 
@@ -75,6 +77,29 @@ describe('校验流程 hook', () => {
     act(() => result.current.windowProps.onStart())
     await waitFor(() => expect(result.current.ready).toBe(true))
     expect(result.current.windowProps.open).toBe(false)
+  })
+
+  it('服务端没要求校验（enabled=false）时连挑战都不领，浮窗不出现、直接放行', async () => {
+    const fetcher = vi.fn().mockResolvedValue(enabled())
+    const { result } = renderHook(() =>
+      useSecurityCheck(fetcher, { enabled: false })
+    )
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(result.current.ready).toBe(true)
+    expect(result.current.windowProps.open).toBe(false)
+    expect(result.current.guard()).toBe(true)
+    expect(fetcher).not.toHaveBeenCalled()
+  })
+
+  it('取挑战失败时不放行（不把"取不到"当成"没开校验"）', async () => {
+    const fetcher = vi.fn().mockRejectedValue(new Error('unavailable'))
+    const { result } = renderHook(() => useSecurityCheck(fetcher))
+    act(() => result.current.windowProps.onStart())
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1))
+    expect(result.current.ready).toBe(false)
+    expect(result.current.guard()).toBe(false)
   })
 
   it('凭据被 api 层取走时（订阅通知）自动重算', async () => {

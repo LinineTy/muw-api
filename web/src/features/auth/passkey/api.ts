@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { api } from '@/lib/api'
 import { authRequestOptions, authResult } from '@/lib/secure-verification'
 
+import { getPreAuthProof, takePreAuthProof } from '../lib/pre-auth-proof'
 import type {
   SecurityProof,
   VerificationOperation,
@@ -84,13 +85,25 @@ export function beginPasskeyLogin(
   rpID?: string,
   signal?: AbortSignal
 ): Promise<PasskeyOptionsPayload> {
+  const proof = getPreAuthProof()
   return authResult(
     api.post<ApiResponse<PasskeyOptionsPayload>>(
       '/api/user/passkey/login/begin',
       rpID ? { rp_id: rpID } : undefined,
-      { ...authRequestOptions, signal, skipAuthRefresh: true }
+      {
+        ...authRequestOptions,
+        params: {
+          challenge_id: proof?.challengeId,
+          nonce: proof?.nonce,
+        },
+        signal,
+        skipAuthRefresh: true,
+      }
     )
-  )
+  ).finally(() => {
+    // 一键 Passkey 与密码登录同属第一因素：服务端在起点就消费挑战，本地跟着作废。
+    takePreAuthProof()
+  })
 }
 
 export async function finishPasskeyLogin(

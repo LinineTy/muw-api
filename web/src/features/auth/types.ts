@@ -144,6 +144,10 @@ export interface SystemStatus {
     password_register_enabled?: boolean
     invite_code_register_enabled?: boolean
     invite_activation_enabled?: boolean
+    /** 登录/注册/第三方入口是否真需要人机校验（开关开着且难度非 0） */
+    login_challenge_required?: boolean
+    /** 激活页是否真需要人机校验（同上） */
+    activation_challenge_required?: boolean
     custom_oauth_providers?: CustomOAuthProviderInfo[]
     visual_fallback_enabled?: boolean
     [key: string]: unknown
@@ -194,6 +198,10 @@ export interface SystemStatus {
   password_register_enabled?: boolean
   invite_code_register_enabled?: boolean
   invite_activation_enabled?: boolean
+  /** 登录/注册/第三方入口是否真需要人机校验（开关开着且难度非 0） */
+  login_challenge_required?: boolean
+  /** 激活页是否真需要人机校验（同上） */
+  activation_challenge_required?: boolean
   custom_oauth_providers?: CustomOAuthProviderInfo[]
   visual_fallback_enabled?: boolean
   system_load_enabled?: boolean

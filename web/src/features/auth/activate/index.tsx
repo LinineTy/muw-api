@@ -1,3 +1,4 @@
+import { useNavigate } from '@tanstack/react-router'
 // @muw-owned
 /**
  * 激活页：待激活账号提交邀请码转正。
@@ -9,7 +10,6 @@ import { Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { useNavigate } from '@tanstack/react-router'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,7 +19,12 @@ import {
   getActivationChallenge,
   getActivationDeadline,
 } from '@/features/auth/api'
-import { AUTH_INPUT, AUTH_MINOR_TEXT, AUTH_PRIMARY_BUTTON } from '@/features/auth/lib/auth-styles'
+import {
+  AUTH_INPUT,
+  AUTH_MINOR_TEXT,
+  AUTH_PRIMARY_BUTTON,
+} from '@/features/auth/lib/auth-styles'
+import { useStatus } from '@/hooks/use-status'
 import { isAuthUser } from '@/lib/auth-session'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
@@ -43,6 +48,7 @@ function formatCountdown(totalSeconds: number) {
 export function Activate() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const { status } = useStatus()
   const setUser = useAuthStore((state) => state.auth.setUser)
   const [inviteCode, setInviteCode] = useState('')
   // 隐形蜜罐字段值：非空即被服务端判为自动化提交。
@@ -50,8 +56,11 @@ export function Activate() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [deadline, setDeadline] = useState<number | null>(null)
   const [remaining, setRemaining] = useState(0)
-  // 人机校验：勾选后开始计算，通过后提交才能取用凭据。
-  const check = useSecurityCheck(getActivationChallenge)
+  // 人机校验：服务端要求时（未关校验）勾选后开始计算，通过后提交才能取用凭据；
+  // 关掉校验的站点不出示浮窗，按钮直接可用。
+  const check = useSecurityCheck(getActivationChallenge, {
+    enabled: status?.activation_challenge_required === true,
+  })
 
   // 有未结的钓鱼码宽限记录时显示倒计时；读不到则不提示。
   const refreshDeadline = useCallback(async () => {
@@ -167,12 +176,12 @@ export function Activate() {
             tabIndex={-1}
             autoComplete='off'
             aria-hidden='true'
-            className='pointer-events-none absolute -left-[9999px] top-0 h-0 w-0 opacity-0'
+            className='pointer-events-none absolute top-0 -left-[9999px] h-0 w-0 opacity-0'
           />
           {deadline !== null ? (
             <p
               role='status'
-              className='text-destructive rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs leading-5'
+              className='text-destructive border-destructive/30 bg-destructive/5 rounded-lg border px-3 py-2 text-xs leading-5'
             >
               {remaining > 0
                 ? t(

@@ -25,6 +25,17 @@ vi.mock('../../auth-layout', () => ({
   ),
 }))
 
+// 页面按 /api/status 的开关决定要不要出示校验浮窗（默认按"要求校验"跑），
+// 保持用例聚焦在表单与请求体上。
+const statusMock = vi.hoisted(() => ({
+  status: { activation_challenge_required: true } as
+    | Record<string, unknown>
+    | undefined,
+}))
+vi.mock('@/hooks/use-status', () => ({
+  useStatus: () => ({ status: statusMock.status }),
+}))
+
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn(),
   Link: ({ children }: { children: React.ReactNode }) => <a>{children}</a>,
@@ -39,6 +50,7 @@ const BITS = 6
 
 beforeEach(() => {
   vi.clearAllMocks()
+  statusMock.status = { activation_challenge_required: true }
   mockedDeadline.mockResolvedValue({ pending: false })
   mockedChallenge.mockResolvedValue({
     enabled: true,
@@ -108,6 +120,16 @@ describe('激活页的隐形蜜罐字段', () => {
 })
 
 describe('激活页的人机校验（PoW）', () => {
+  it('服务端没要求校验时不出示浮窗，提交按钮直接可用（不必白点一下）', () => {
+    statusMock.status = { activation_challenge_required: false }
+    render(<Activate />)
+    expect(
+      screen.queryByRole('checkbox', { name: 'Start the check' })
+    ).toBeNull()
+    expect(screen.getByRole('button', { name: 'Activate' })).toBeEnabled()
+    expect(mockedChallenge).not.toHaveBeenCalled()
+  })
+
   it('勾选后才计算，提交时带上解出的 nonce', async () => {
     await submit('INVITE-3')
     await waitFor(() => expect(mockedActivate).toHaveBeenCalledTimes(1))
@@ -117,9 +139,9 @@ describe('激活页的人机校验（PoW）', () => {
     expect(payload.inviteCode).toBe('INVITE-3')
     expect(payload.challengeId).toBe('challenge-id-1')
     expect(payload.nonce).toMatch(/^[0-9]+$/)
-    expect(await verifyActivationPoW(CHALLENGE, payload.nonce ?? '', BITS)).toBe(
-      true
-    )
+    expect(
+      await verifyActivationPoW(CHALLENGE, payload.nonce ?? '', BITS)
+    ).toBe(true)
   }, 20000)
 
   it('未勾选前不提交（按钮不可按）', async () => {

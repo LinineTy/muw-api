@@ -43,9 +43,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { login, wechatLoginByCode } from '@/features/auth/api'
 import { LegalConsent } from '@/features/auth/components/legal-consent'
-import { SecurityCheckWindow } from '@/features/auth/components/security-check-window'
 import { OAuthProviders } from '@/features/auth/components/oauth-providers'
-import { usePreAuthCheck } from '@/features/auth/lib/use-security-check'
+import { SecurityCheckWindow } from '@/features/auth/components/security-check-window'
 import { loginFormSchema } from '@/features/auth/constants'
 import { useAuthRedirect } from '@/features/auth/hooks/use-auth-redirect'
 import { useTurnstile } from '@/features/auth/hooks/use-turnstile'
@@ -61,6 +60,7 @@ import {
   getLoginDeniedInfo,
 } from '@/features/auth/lib/login-denied'
 import { useLegalConsent } from '@/features/auth/lib/use-legal-consent'
+import { usePreAuthCheck } from '@/features/auth/lib/use-security-check'
 import { beginPasskeyLogin, finishPasskeyLogin } from '@/features/auth/passkey'
 import type { AuthFormProps } from '@/features/auth/types'
 import { useStatus } from '@/hooks/use-status'
@@ -123,10 +123,14 @@ export function UserAuthForm({
   const hasPrivacyPolicy = Boolean(status?.privacy_policy_enabled)
   const requiresLegalConsent = hasUserAgreement || hasPrivacyPolicy
   // 登录/注册/第三方入口的前置人机校验：服务端把关，这里负责"没过之前按钮不给按"。
-  const preAuthCheck = usePreAuthCheck()
+  // 服务端没开校验（login_challenge_required=false）时不出示浮窗，用户直接就能提交。
+  const preAuthCheck = usePreAuthCheck(
+    status?.login_challenge_required === true
+  )
   const passkeyButtonDisabled =
     isPasskeyLoading ||
     !passkeySupported ||
+    !preAuthCheck.ready ||
     (requiresLegalConsent && !agreedToLegal)
   const hasWeChatLogin = caps.hasWeChatLogin
   const hasAlternativeLogin = caps.hasAlternativeLogin
@@ -189,7 +193,9 @@ export function UserAuthForm({
       })
 
       // 挑战一次性且 5 分钟过期：带着已失效的凭据被服务端退回时，重算一道再试一次。
-      if (res?.code === 'LOGIN_VERIFICATION_REQUIRED') {
+      // Turnstile 开着时不能自动重试 —— token 一次性，第一次已经花掉，重发会被 Turnstile 挡下；
+      // 这种情况把服务端的提示照常弹出，用户重新提交即可（浮窗已自动重算下一道凭据）。
+      if (res?.code === 'LOGIN_VERIFICATION_REQUIRED' && !isTurnstileEnabled) {
         await preAuthCheck.refresh()
         res = await login({
           username: data.username,
@@ -231,6 +237,11 @@ export function UserAuthForm({
       return
     }
 
+    if (!preAuthCheck.ready) {
+      preAuthCheck.guard()
+      return
+    }
+
     setIsWeChatDialogOpen(true)
   }
 
@@ -243,6 +254,12 @@ export function UserAuthForm({
   }
 
   async function handleWeChatLogin() {
+    if (!preAuthCheck.ready) {
+      // 微信也是一级入口：没过校验不给提交（服务端同样会拦）
+      preAuthCheck.guard()
+      return
+    }
+
     if (!wechatCode.trim()) {
       toast.error(t('Please enter the verification code'))
       return
@@ -250,7 +267,12 @@ export function UserAuthForm({
 
     setIsWeChatSubmitting(true)
     try {
-      const res = await wechatLoginByCode(wechatCode)
+      let res = await wechatLoginByCode(wechatCode)
+      // 同登录/注册：凭据一次性，被服务端退回时重算一道再试一次（Turnstile 不在此列）。
+      if (res?.code === 'LOGIN_VERIFICATION_REQUIRED') {
+        await preAuthCheck.refresh()
+        res = await wechatLoginByCode(wechatCode)
+      }
       if (res?.success) {
         handleWeChatDialogChange(false)
         if (await handleLoginResult(res.data, redirectTo)) {
@@ -280,6 +302,11 @@ export function UserAuthForm({
   async function handlePasskeyLogin() {
     if (requiresLegalConsent && !agreedToLegal) {
       toast.error(legalConsentErrorMessage)
+      return
+    }
+
+    if (!preAuthCheck.ready) {
+      preAuthCheck.guard()
       return
     }
 
@@ -389,14 +416,14 @@ export function UserAuthForm({
           event.stopPropagation()
         }}
       >
-      <OAuthProviders
-        appearance={mode === 'oauth' ? 'primary' : 'secondary'}
-        status={status}
-        redirectTo={redirectTo}
-        disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
-        onWeChatLogin={hasWeChatLogin ? handleOpenWeChatDialog : undefined}
-        isWeChatLoading={isWeChatSubmitting}
-      />
+        <OAuthProviders
+          appearance={mode === 'oauth' ? 'primary' : 'secondary'}
+          status={status}
+          redirectTo={redirectTo}
+          disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
+          onWeChatLogin={hasWeChatLogin ? handleOpenWeChatDialog : undefined}
+          isWeChatLoading={isWeChatSubmitting}
+        />
       </div>
     </>
   )
@@ -563,6 +590,7 @@ export function UserAuthForm({
                 onClick={handleWeChatLogin}
                 disabled={
                   isWeChatSubmitting ||
+                  !preAuthCheck.ready ||
                   !wechatCode.trim() ||
                   (requiresLegalConsent && !agreedToLegal)
                 }

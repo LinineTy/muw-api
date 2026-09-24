@@ -38,7 +38,9 @@ export function SecurityCheckWindow({
   const { t } = useTranslation()
   const cardRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ dx: number; dy: number } | null>(null)
-  const [position, setPosition] = useState<{ x: number; y: number } | null>(null)
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(
+    null
+  )
 
   const handlePointerDown = useCallback((event: React.PointerEvent) => {
     // 勾选框与重试按钮正常点击，不参与拖动
@@ -94,7 +96,7 @@ export function SecurityCheckWindow({
   } else if (passed) {
     label = t('Verified')
   } else if (failed) {
-    label = t('Failed')
+    label = t('Check failed')
   }
 
   let mark = null
@@ -106,7 +108,8 @@ export function SecurityCheckWindow({
     mark = <ShieldAlert className='text-destructive size-4' />
   }
 
-  let boxClass = 'border-primary/35 bg-primary/5 hover:border-primary/60 hover:bg-primary/10'
+  let boxClass =
+    'border-primary/35 bg-primary/5 hover:border-primary/60 hover:bg-primary/10'
   if (passed) {
     boxClass = 'border-primary bg-primary'
   } else if (failed) {
@@ -130,7 +133,7 @@ export function SecurityCheckWindow({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
-      className='bg-popover text-popover-foreground ring-foreground/10 fixed z-[70] flex min-h-14 w-[190px] cursor-grab touch-none items-center gap-3 rounded-xl px-3.5 py-2.5 shadow-xl ring-1 select-none backdrop-blur-md active:cursor-grabbing'
+      className='bg-popover text-popover-foreground ring-foreground/10 fixed z-[70] flex min-h-14 w-[190px] cursor-grab touch-none items-center gap-3 rounded-xl px-3.5 py-2.5 shadow-xl ring-1 backdrop-blur-md select-none active:cursor-grabbing'
     >
       <button
         type='button'

@@ -36,9 +36,9 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import { SecurityCheckWindow } from '@/features/auth/components/security-check-window'
 import { register } from '@/features/auth/api'
 import { LegalConsent } from '@/features/auth/components/legal-consent'
+import { SecurityCheckWindow } from '@/features/auth/components/security-check-window'
 import { registerFormSchema } from '@/features/auth/constants'
 import { useAuthRedirect } from '@/features/auth/hooks/use-auth-redirect'
 import { useEmailVerification } from '@/features/auth/hooks/use-email-verification'
@@ -107,8 +107,11 @@ export function SignUpForm({
   const hasPrivacyPolicy = Boolean(status?.privacy_policy_enabled)
   const requiresLegalConsent = hasUserAgreement || hasPrivacyPolicy
   const turnstileReady = !isTurnstileEnabled || Boolean(turnstileToken)
-  // 注册同样要过前置人机校验（开放注册的站点上不门禁注册等于白做）。
-  const preAuthCheck = usePreAuthCheck()
+  // 注册同样要过前置人机校验（开放注册的站点上不门禁注册等于白做）；
+  // 服务端没开校验时不出示浮窗，用户直接就能提交。
+  const preAuthCheck = usePreAuthCheck(
+    status?.login_challenge_required === true
+  )
 
   useEffect(() => {
     const aff = new URLSearchParams(window.location.search).get('aff')?.trim()
@@ -154,7 +157,8 @@ export function SignUpForm({
       })
 
       // 凭据一次性且 5 分钟过期：被服务端退回时重算一道再试一次。
-      if (res?.code === 'LOGIN_VERIFICATION_REQUIRED') {
+      // Turnstile 开着时不自动重试：token 一次性，重发会被 Turnstile 挡下。
+      if (res?.code === 'LOGIN_VERIFICATION_REQUIRED' && !isTurnstileEnabled) {
         await preAuthCheck.refresh()
         res = await register({
           username: data.username,

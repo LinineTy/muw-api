@@ -242,11 +242,18 @@ export async function createOAuthFlow(
 }
 
 // WeChat login by authorization code
+// 微信登录/首登建号同属第一因素，服务端同样要前置校验凭据（凭据走查询串）。
 export async function wechatLoginByCode(code: string): Promise<ApiResponse> {
+  const proof = getPreAuthProof()
   const res = await api.get('/api/oauth/wechat', {
-    params: { code },
+    params: {
+      code,
+      challenge_id: proof?.challengeId,
+      nonce: proof?.nonce,
+    },
     skipBusinessError: true,
   })
+  takePreAuthProof()
   return res.data
 }
 
@@ -305,8 +312,10 @@ export async function activateAccount(
   return res.data
 }
 
-// 登录/注册/第三方登录入口的前置人机校验挑战（匿名可领，绑 IP + 用途）。
+// 登录/注册/第三方登录入口的前置人机校验挑战（匿名可领，按 IP 计数，一次性 5 分钟）。
 // 与激活页挑战不通用（服务端按 purpose 判定）；enabled=false 表示本站没开校验，直接跳过。
+// 取挑战失败必须抛出去：把"取不到"当成"没开校验"会让客户端静默放行，用户提交后才被
+// 服务端挡下、却看不到原因（见 use-security-check.ts 的失败提示）。
 export async function getLoginChallenge(): Promise<ActivationChallenge> {
   const res = await api.post('/api/user/login_challenge', undefined, {
     skipAuthRefresh: true,
@@ -316,7 +325,7 @@ export async function getLoginChallenge(): Promise<ActivationChallenge> {
   if (body?.success && body.data) {
     return body.data as ActivationChallenge
   }
-  return { enabled: false }
+  throw new Error(body?.message || 'login challenge unavailable')
 }
 
 // 激活页人机校验：提交前先领一道一次性挑战（5 分钟有效）。enabled=false 表示本站未开启校验，
@@ -330,12 +339,14 @@ export type ActivationChallenge = {
 }
 
 export async function getActivationChallenge(): Promise<ActivationChallenge> {
-  const res = await api.post('/api/user/activation_challenge')
+  const res = await api.post('/api/user/activation_challenge', undefined, {
+    skipBusinessError: true,
+  })
   const body = res?.data
   if (body?.success && body.data) {
     return body.data as ActivationChallenge
   }
-  return { enabled: false }
+  throw new Error(body?.message || 'activation challenge unavailable')
 }
 
 // 激活页倒计时：本人若有未结的钓鱼码宽限（宽限期内提交有效邀请码即可免于停用），

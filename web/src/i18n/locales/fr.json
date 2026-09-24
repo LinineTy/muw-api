@@ -8248,8 +8248,6 @@
     "The activation deadline has passed; this account will be disabled shortly.": "Le délai d'activation est dépassé ; ce compte sera bientôt désactivé.",
     "Sign in with a third-party account": "Se connecter avec un service tiers",
     "Security check": "Vérification de sécurité",
-    "Security check failed. Please try again.": "Vérification échouée. Veuillez réessayer.",
-    "Security check is unavailable right now. Please try again later.": "La vérification de sécurité est momentanément indisponible. Réessayez plus tard.",
     "Activation Protection": "Protection de l'activation",
     "Proof-of-work difficulty": "Difficulté de la vérification",
     "Trap code grace period (seconds)": "Délai de grâce du code piège (secondes)",
@@ -8262,6 +8260,9 @@
     "Adds a field that is hidden from users; only automation fills it. A filled value disables the account.": "Ajoute un champ masqué aux utilisateurs ; seule une automatisation le remplit, et le compte est alors désactivé.",
     "Start the check": "Lancer la vérification",
     "Verifying...": "Vérification…",
-    "Verified": "Vérifié"
+    "Verified": "Vérifié",
+    "Check failed": "Échec de la vérification",
+    "Complete the security check first": "Veuillez d'abord effectuer la vérification",
+    "Security check is unavailable right now. Please try again later.": "La vérification est momentanément indisponible. Veuillez réessayer plus tard."
   }
 }
