@@ -398,7 +398,6 @@ export function UserAuthForm({
         isWeChatLoading={isWeChatSubmitting}
       />
       </div>
-      <SecurityCheckWindow {...preAuthCheck.windowProps} />
     </>
   )
 
@@ -408,6 +407,7 @@ export function UserAuthForm({
 
   return (
     <Form {...form}>
+      <SecurityCheckWindow {...preAuthCheck.windowProps} />
       <form
         onSubmit={form.handleSubmit(onSubmit)}
         className={cn('grid gap-4', className)}
