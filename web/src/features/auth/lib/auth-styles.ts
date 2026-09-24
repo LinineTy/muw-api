@@ -8,6 +8,13 @@
 export const AUTH_PRIMARY_BUTTON =
   'h-[46px] w-full justify-center gap-2.5 rounded-xl text-base font-semibold'
 
+/**
+ * 卡内次要按钮（描边，如注册页的微信扫码入口）：与输入框/主按钮同高同圆角，
+ * 只靠填充与描边区分主次（设计稿 ghosts 与主按钮同为 46px/12px 圆角）。
+ */
+export const AUTH_SECONDARY_BUTTON =
+  'h-[46px] w-full justify-center gap-2.5 rounded-xl'
+
 export const AUTH_INPUT =
   // Input 组件自带 text-base + md:text-sm，要覆盖得把断点变体也写上
   'h-[46px] rounded-xl text-[14.5px] md:text-[14.5px]'

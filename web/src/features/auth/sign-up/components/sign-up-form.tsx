@@ -40,6 +40,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { register, wechatLoginByCode } from '@/features/auth/api'
 import { LegalConsent } from '@/features/auth/components/legal-consent'
+import { OAuthProviders } from '@/features/auth/components/oauth-providers'
 import { registerFormSchema } from '@/features/auth/constants'
 import { useAuthRedirect } from '@/features/auth/hooks/use-auth-redirect'
 import { useEmailVerification } from '@/features/auth/hooks/use-email-verification'
@@ -183,6 +184,15 @@ export function SignUpForm({
       setTurnstileToken('')
       setTurnstileWidgetKey((current) => current + 1)
     }
+  }
+
+  const handleOpenWeChatDialog = () => {
+    if (requiresLegalConsent && !agreedToLegal) {
+      toast.error(legalConsentErrorMessage)
+      return
+    }
+
+    setIsWeChatDialogOpen(true)
   }
 
   const handleWeChatDialogChange = (open: boolean) => {
@@ -378,6 +388,19 @@ export function SignUpForm({
           {isLoading ? <Loader2 className='h-4 w-4 animate-spin' /> : null}
           {t('Create account')}
         </Button>
+
+        {/* 微信扫码登录/注册：注册页只留这一条第三方入口（其余 OAuth 走登录页）。
+            微信首次授权同样会自动建号，激活制下建出来是待激活账号。 */}
+        {hasWeChatLogin && (
+          <OAuthProviders
+            status={status}
+            only={['wechat']}
+            disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
+            onWeChatLogin={handleOpenWeChatDialog}
+            isWeChatLoading={isWeChatSubmitting}
+            className='pt-2'
+          />
+        )}
       </form>
 
       {hasWeChatLogin && (

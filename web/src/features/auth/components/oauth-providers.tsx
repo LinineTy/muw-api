@@ -30,7 +30,10 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 import { useOAuthLogin } from '../hooks/use-oauth-login'
-import { AUTH_PRIMARY_BUTTON } from '../lib/auth-styles'
+import {
+  AUTH_PRIMARY_BUTTON,
+  AUTH_SECONDARY_BUTTON,
+} from '../lib/auth-styles'
 import type { SystemStatus } from '../types'
 
 type OAuthProvidersProps = {
@@ -42,6 +45,12 @@ type OAuthProvidersProps = {
   onWeChatLogin?: () => void
   isWeChatLoading?: boolean
   redirectTo?: string
+  /**
+   * 只渲染列出的提供方（`wechat` / `github` / `discord` / `oidc` / `linuxdo` /
+   * `telegram` / `custom-<slug>`）。不传 = 渲染全部已配置的（登录页行为）；
+   * 注册页只保留微信登录，不放其它第三方入口。
+   */
+  only?: string[]
 }
 
 type ProviderButton = {
@@ -61,6 +70,7 @@ export function OAuthProviders({
   onWeChatLogin,
   isWeChatLoading = false,
   redirectTo,
+  only,
 }: OAuthProvidersProps) {
   const { t } = useTranslation()
   const {
@@ -147,7 +157,11 @@ export function OAuthProviders({
     }
   }
 
-  if (providerButtons.length === 0) return null
+  const visibleButtons = only
+    ? providerButtons.filter((button) => only.includes(button.key))
+    : providerButtons
+
+  if (visibleButtons.length === 0) return null
 
   return (
     <div className={cn('space-y-3', className)}>
@@ -165,7 +179,7 @@ export function OAuthProviders({
       )}
 
       <div className='flex flex-col gap-2'>
-        {providerButtons.map(
+        {visibleButtons.map(
           ({ key, label, onClick, icon, disabled: extraDisabled }) => (
             <Button
               key={key}
@@ -177,7 +191,7 @@ export function OAuthProviders({
                 'w-full justify-center gap-2.5',
                 appearance === 'primary'
                   ? AUTH_PRIMARY_BUTTON
-                  : 'h-11 rounded-lg'
+                  : AUTH_SECONDARY_BUTTON
               )}
             >
               {icon}
