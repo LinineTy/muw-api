@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -29,7 +30,7 @@ func setupOIDCTest(t *testing.T) *gorm.DB {
 	dsn := os.Getenv("TEST_SQLITE_DSN")
 	if dsn == "" {
 		// 每个用例一个独立内存库：共享 DSN 会让前一个用例的数据（例如使用计数）串进来。
-		slot := strings.NewReplacer("/", "_", " ", "_").Replace(t.Name())
+		slot := strings.NewReplacer("/", "_", " ", "_").Replace(t.Name()) + "_" + strconv.FormatInt(time.Now().UnixNano(), 36)
 		dsn = "file:oidc_provider_" + slot + "?mode=memory&cache=shared"
 	}
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
