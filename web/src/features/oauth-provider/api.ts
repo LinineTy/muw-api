@@ -24,6 +24,8 @@ export type OAuthApplication = {
   review_note: string
   created_at: number
   last_used_at: number
+  homepage_url?: string
+  icon_url?: string
   owner_username?: string
   apply_reason?: string
   allowed_groups?: string[]
@@ -35,6 +37,20 @@ export type OAuthConsent = {
   scopes: string[]
   silent: boolean
   updated_at: number
+}
+
+export type OAuthStats = {
+  applications: number
+  authorizations: number
+  token_issued: number
+  last_issued_at: number
+  active_users: number
+}
+
+export type OAuthApplicationUsageRow = {
+  user_id: number
+  token_count: number
+  last_issued_at: number
 }
 
 export type OAuthApplicationPayload = {
@@ -78,6 +94,39 @@ export async function submitApplication(
   requireServerSuccess(res.data)
 }
 
+export async function updateApplication(
+  id: number,
+  payload: {
+    name: string
+    description: string
+    homepage_url: string
+    icon_url: string
+    redirect_uris: string[]
+  }
+): Promise<string> {
+  const res = await api.post(`/api/oauth/applications/${id}/update`, payload)
+  return (requireServerSuccess(res.data).data as { status: string }).status
+}
+
+export async function deleteMyApplication(id: number): Promise<void> {
+  const res = await api.delete(`/api/oauth/applications/${id}`)
+  requireServerSuccess(res.data)
+}
+
+export async function getApplicationUsage(
+  id: number
+): Promise<OAuthApplicationUsageRow[]> {
+  const res = await api.get(`/api/oauth/applications/${id}/usage`)
+  return (
+    requireServerSuccess(res.data).data as { items: OAuthApplicationUsageRow[] }
+  ).items
+}
+
+export async function getOAuthStats(scope: 'self' | 'all'): Promise<OAuthStats> {
+  const res = await api.get('/api/oauth/stats', { params: { scope } })
+  return requireServerSuccess(res.data).data as OAuthStats
+}
+
 export async function getMyConsents(): Promise<OAuthConsent[]> {
   const res = await api.get('/api/oauth/consents')
   return (requireServerSuccess(res.data).data as { items: OAuthConsent[] }).items
@@ -101,6 +150,18 @@ export async function revokeConsent(clientId: string): Promise<void> {
   requireServerSuccess(res.data)
 }
 
+export async function revealApplicationSecret(id: number): Promise<string> {
+  const res = await api.get(`/api/oauth/applications/${id}/secret`)
+  return (requireServerSuccess(res.data).data as { client_secret: string })
+    .client_secret
+}
+
+export async function rotateApplicationSecret(id: number): Promise<string> {
+  const res = await api.post(`/api/oauth/applications/${id}/rotate-secret`)
+  return (requireServerSuccess(res.data).data as { client_secret: string })
+    .client_secret
+}
+
 export async function listApplicationsForReview(
   status: string
 ): Promise<OAuthApplication[]> {
@@ -120,12 +181,12 @@ export async function reviewApplication(
     allowed_groups?: string[]
     note?: string
   }
-): Promise<{ client_id: string; client_secret: string }> {
-  const res = await api.post(`/api/oauth/admin/applications/${id}/review`, payload)
-  return requireServerSuccess(res.data).data as {
-    client_id: string
-    client_secret: string
-  }
+): Promise<{ client_id: string }> {
+  const res = await api.post(
+    `/api/oauth/admin/applications/${id}/review`,
+    payload
+  )
+  return requireServerSuccess(res.data).data as { client_id: string }
 }
 
 export async function updateApplicationStatus(
@@ -143,16 +204,4 @@ export async function updateApplicationStatus(
 export async function deleteApplication(id: number): Promise<void> {
   const res = await api.delete(`/api/oauth/admin/applications/${id}`)
   requireServerSuccess(res.data)
-}
-
-export async function revealApplicationSecret(id: number): Promise<string> {
-  const res = await api.get(`/api/oauth/applications/${id}/secret`)
-  return (requireServerSuccess(res.data).data as { client_secret: string })
-    .client_secret
-}
-
-export async function rotateApplicationSecret(id: number): Promise<string> {
-  const res = await api.post(`/api/oauth/applications/${id}/rotate-secret`)
-  return (requireServerSuccess(res.data).data as { client_secret: string })
-    .client_secret
 }
