@@ -124,6 +124,11 @@ export function useSidebarData(): SidebarData {
         id: 'personal',
         title: t('Personal'),
         items: [
+            {
+              title: t('Developer applications'),
+              url: '/oauth/applications',
+              icon: PlugZap,
+            },
           {
             title: t('Wallet'),
             url: '/wallet',
@@ -155,6 +160,12 @@ export function useSidebarData(): SidebarData {
         id: 'admin',
         title: t('Admin'),
         items: [
+            {
+              title: t('Application review'),
+              url: '/oauth/admin-applications',
+              icon: ShieldCheck,
+              requiredRole: ROLE.ADMIN,
+            },
           {
             title: t('Channels'),
             url: '/channels',
