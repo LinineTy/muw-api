@@ -469,3 +469,93 @@ func oidcRecordSecretAudit(c *gin.Context, userId, clientDbId int, action string
 		Content:   "application_id=" + strconv.Itoa(clientDbId),
 	})
 }
+
+// OIDCUpdateApplication 申请人（或管理员）改应用资料；回调地址被申请人改动会退回待审核。
+func OIDCUpdateApplication(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiErrorMsg(c, "应用 id 不合法")
+		return
+	}
+	var req struct {
+		Name         string   `json:"name"`
+		Description  string   `json:"description"`
+		HomepageUrl  string   `json:"homepage_url"`
+		IconUrl      string   `json:"icon_url"`
+		RedirectUris []string `json:"redirect_uris"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	role := c.GetInt("role")
+	client, err := service.OIDCUpdateApplicationProfile(id, c.GetInt("id"), service.OIDCApplicationProfile{
+		Name: req.Name, Description: req.Description, HomepageUrl: req.HomepageUrl,
+		IconUrl: req.IconUrl, RedirectUris: req.RedirectUris,
+	}, role >= common.RoleAdminUser)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"status": client.Status, "client_id": client.ClientId})
+}
+
+// OIDCDeleteApplicationSelf 申请人删除自己的应用（管理员也允许）。
+func OIDCDeleteApplicationSelf(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiErrorMsg(c, "应用 id 不合法")
+		return
+	}
+	role := c.GetInt("role")
+	if err := service.OIDCDeleteOwnApplication(id, c.GetInt("id"), role >= common.RoleAdminUser); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	oidcRecordConsentAudit(c, c.GetInt("id"), strconv.Itoa(id), false, "application_deleted")
+	common.ApiSuccess(c, nil)
+}
+
+// OIDCApplicationUsage 应用详情页的"谁在用"列表（申请人本人或管理员）。
+func OIDCApplicationUsage(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiErrorMsg(c, "应用 id 不合法")
+		return
+	}
+	client, err := model.GetOIDCClientById(id)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	role := c.GetInt("role")
+	if role < common.RoleAdminUser && client.OwnerUserId != c.GetInt("id") {
+		common.ApiErrorMsg(c, "只能查看自己应用的使用记录")
+		return
+	}
+	rows, err := model.OIDCApplicationUsage(client.ClientId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	items := make([]gin.H, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, gin.H{"user_id": row.UserId, "token_count": row.TokenCount, "last_issued_at": row.LastIssuedAt})
+	}
+	common.ApiSuccess(c, gin.H{"items": items})
+}
+
+// OIDCUsageStats 统计：scope=self 只看自己；scope=all 仅管理员可用（照数据统计的做法）。
+func OIDCUsageStats(c *gin.Context) {
+	scope := strings.TrimSpace(c.DefaultQuery("scope", "self"))
+	if scope == "all" && c.GetInt("role") < common.RoleAdminUser {
+		common.ApiErrorMsg(c, "只有管理员可以查看全站统计")
+		return
+	}
+	summary, err := service.OIDCUsageSummaryFor(scope, c.GetInt("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, summary)
+}

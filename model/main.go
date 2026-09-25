@@ -402,8 +402,14 @@ func migrateDB() error {
 	if err := ensureOIDCProviderTables(DB); err != nil {
 		return err
 	}
-	// oidc_clients.secret_cipher 列：已有表上的新列，同样要幂等补。
+	// oidc_clients.secret_cipher / homepage_url / icon_url 列 + oidc_usage_stats 表：同样幂等补。
 	if err := ensureOIDCClientSecretCipherColumn(DB); err != nil {
+		return err
+	}
+	if err := ensureOIDCApplicationProfileColumns(DB); err != nil {
+		return err
+	}
+	if err := EnsureOIDCUsageStatTable(DB); err != nil {
 		return err
 	}
 	// channel_accounts 表（渠道↔账户 N:N 绑定）+ 存量绑定回填:幂等，每次启动执行。
@@ -622,6 +628,7 @@ func autoMigrateAll() error {
 		&OIDCRefreshToken{},
 		&OIDCConsent{},
 		&OIDCSigningKey{},
+		&OIDCUsageStat{},
 		&ConversationRecord{},
 		&CreditMarkerSuggestion{},
 		&CreditMarkerAnalysisLog{},
@@ -1301,6 +1308,22 @@ func ensureOIDCClientSecretCipherColumn(db *gorm.DB) error {
 		return nil
 	}
 	return db.Migrator().AddColumn(&OIDCClient{}, "secret_cipher")
+}
+
+// ensureOIDCApplicationProfileColumns 幂等补 oidc_clients 的展示字段列。
+func ensureOIDCApplicationProfileColumns(db *gorm.DB) error {
+	if !db.Migrator().HasTable(&OIDCClient{}) {
+		return nil
+	}
+	for _, column := range []string{"homepage_url", "icon_url"} {
+		if db.Migrator().HasColumn(&OIDCClient{}, column) {
+			continue
+		}
+		if err := db.Migrator().AddColumn(&OIDCClient{}, column); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ensureAccountsTable 幂等建 accounts 表（凭证与渠道解耦）。理由同

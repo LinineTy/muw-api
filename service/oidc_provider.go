@@ -571,6 +571,9 @@ func oidcIssueTokenResult(client *model.OIDCClient, sessionId string, identity A
 	if err := model.TouchOIDCClientLastUsed(client.ClientId); err != nil {
 		common.SysLog("oidc: touch last_used failed: " + err.Error())
 	}
+	if err := model.RecordOIDCTokenIssued(client.ClientId, identity.UserID, common.GetTimestamp()); err != nil {
+		common.SysLog("oidc: record token usage failed: " + err.Error())
+	}
 	return result, nil
 }
 
@@ -873,3 +876,71 @@ func OIDCParseAuthorizeRequestToken(raw string) (*oidcAuthorizeRequestClaims, er
 
 // hashOIDCToken 用站点密钥派生 HMAC：令牌只存哈希，库被读走也无法还原可用令牌。
 func hashOIDCToken(raw string) string { return common.GenerateHMAC(raw) }
+
+// OIDCApplicationProfile 是应用资料里允许申请人自行修改的部分。
+type OIDCApplicationProfile struct {
+	Name         string
+	Description  string
+	HomepageUrl  string
+	IconUrl      string
+	RedirectUris []string
+}
+
+// OIDCUpdateApplicationProfile 申请人改自己的应用资料。回调地址属于安全边界：
+// 申请人一改就退回 pending 重新审核；管理员改则直接生效（控制器传 asAdmin）。
+func OIDCUpdateApplicationProfile(id, actorUserId int, profile OIDCApplicationProfile, asAdmin bool) (*model.OIDCClient, error) {
+	client, err := model.GetOIDCClientById(id)
+	if err != nil {
+		return nil, err
+	}
+	if !asAdmin && client.OwnerUserId != actorUserId {
+		return nil, errors.New("只能修改自己申请的应用")
+	}
+	req := OIDCApplicationRequest{
+		Name:         profile.Name,
+		Description:  profile.Description,
+		RedirectUris: profile.RedirectUris,
+		Scopes:       client.ScopeList(),
+		ClientType:   client.ClientType,
+	}
+	if err := OIDCValidateApplicationRequest(&req); err != nil {
+		return nil, err
+	}
+	fields := map[string]any{
+		"name":          req.Name,
+		"description":   req.Description,
+		"homepage_url":  strings.TrimSpace(profile.HomepageUrl),
+		"icon_url":      strings.TrimSpace(profile.IconUrl),
+		"redirect_uris": strings.Join(req.RedirectUris, "\n"),
+		"updated_at":    common.GetTimestamp(),
+	}
+	if !asAdmin && strings.Join(req.RedirectUris, "\n") != client.RedirectUris &&
+		client.Status == model.OIDCClientStatusApproved {
+		// 回调地址变了 ⇒ 回到待审核，改动不能绕过管理员。
+		fields["status"] = model.OIDCClientStatusPending
+	}
+	if err := model.UpdateOIDCClientFields(id, fields); err != nil {
+		return nil, err
+	}
+	return model.GetOIDCClientById(id)
+}
+
+// OIDCDeleteOwnApplication 申请人删除自己的应用（连带授权与令牌）。
+func OIDCDeleteOwnApplication(id, actorUserId int, asAdmin bool) error {
+	client, err := model.GetOIDCClientById(id)
+	if err != nil {
+		return err
+	}
+	if !asAdmin && client.OwnerUserId != actorUserId {
+		return errors.New("只能删除自己申请的应用")
+	}
+	return OIDCDeleteApplication(id)
+}
+
+// OIDCUsageSummaryFor scope=self 只看自己；scope=all 需要管理员（控制器已校验角色）。
+func OIDCUsageSummaryFor(scope string, userId int) (*model.OIDCUsageSummary, error) {
+	if scope == "all" {
+		return model.OIDCUsageAll()
+	}
+	return model.OIDCUsageForUser(userId)
+}

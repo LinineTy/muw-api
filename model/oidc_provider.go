@@ -48,6 +48,8 @@ type OIDCClient struct {
 	OwnerUserId   int    `json:"owner_user_id" gorm:"index"`              // 申请人（站内用户）
 	AllowedGroups string `json:"allowed_groups" gorm:"type:varchar(255)"` // 空=不限制；否则逗号分隔的用户分组
 	ApplyReason   string `json:"apply_reason" gorm:"type:text"`
+	HomepageUrl   string `json:"homepage_url" gorm:"type:varchar(255)"`
+	IconUrl       string `json:"icon_url" gorm:"type:varchar(512)"`
 	ReviewNote    string `json:"review_note" gorm:"type:varchar(255)"` // 驳回/禁用原因，回给申请人看
 	ReviewedBy    int    `json:"reviewed_by"`
 	ReviewedAt    int64  `json:"reviewed_at"`

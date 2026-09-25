@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,12 +28,14 @@ func setupOIDCTest(t *testing.T) *gorm.DB {
 
 	dsn := os.Getenv("TEST_SQLITE_DSN")
 	if dsn == "" {
-		dsn = "file:oidc_provider_test?mode=memory&cache=shared"
+		// 每个用例一个独立内存库：共享 DSN 会让前一个用例的数据（例如使用计数）串进来。
+		slot := strings.NewReplacer("/", "_", " ", "_").Replace(t.Name())
+		dsn = "file:oidc_provider_" + slot + "?mode=memory&cache=shared"
 	}
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSession{}, &model.OIDCClient{},
-		&model.OIDCAuthCode{}, &model.OIDCRefreshToken{}, &model.OIDCConsent{}, &model.OIDCSigningKey{}))
+		&model.OIDCAuthCode{}, &model.OIDCRefreshToken{}, &model.OIDCConsent{}, &model.OIDCSigningKey{}, &model.OIDCUsageStat{}))
 
 	model.DB = db
 	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
@@ -354,4 +357,73 @@ func TestOIDCClientSecretOnlyVisibleToOwner(t *testing.T) {
 	again, err := OIDCRevealClientSecret(client.Id, owner.Id)
 	require.NoError(t, err)
 	assert.Equal(t, rotated, again)
+}
+
+func TestOIDCApplicationProfileEditRependsOnRedirectChange(t *testing.T) {
+	setupOIDCTest(t)
+	owner := createOIDCTestUser(t, "profileowner", "default")
+	other := createOIDCTestUser(t, "profileother", "default")
+	client := &model.OIDCClient{ClientId: "muw_profile_client", Name: "改资料", ClientType: model.OIDCClientTypePublic,
+		Status: model.OIDCClientStatusApproved, OwnerUserId: owner.Id, RedirectUris: "https://app.example.com/cb",
+		Scopes: "openid profile", CreatedAt: common.GetTimestamp(), UpdatedAt: common.GetTimestamp()}
+	require.NoError(t, model.DB.Create(client).Error)
+
+	// 只改描述与主页：状态不变
+	updated, err := OIDCUpdateApplicationProfile(client.Id, owner.Id, OIDCApplicationProfile{
+		Name: "改资料", Description: "新描述", HomepageUrl: "https://app.example.com",
+		RedirectUris: []string{"https://app.example.com/cb"},
+	}, false)
+	require.NoError(t, err)
+	assert.Equal(t, model.OIDCClientStatusApproved, updated.Status)
+	assert.Equal(t, "https://app.example.com", updated.HomepageUrl)
+
+	// 改回调地址：退回待审核（改动不能绕过管理员）
+	updated, err = OIDCUpdateApplicationProfile(client.Id, owner.Id, OIDCApplicationProfile{
+		Name: "改资料", RedirectUris: []string{"https://app.example.com/cb2"},
+	}, false)
+	require.NoError(t, err)
+	assert.Equal(t, model.OIDCClientStatusPending, updated.Status, "申请人改回调地址必须重新审核")
+
+	// 别人不能改
+	_, err = OIDCUpdateApplicationProfile(client.Id, other.Id, OIDCApplicationProfile{
+		Name: "越权", RedirectUris: []string{"https://app.example.com/cb"},
+	}, false)
+	assert.Error(t, err)
+	// 管理员可以直接改（不需重审）
+	updated, err = OIDCUpdateApplicationProfile(client.Id, 999, OIDCApplicationProfile{
+		Name: "管理员改", RedirectUris: []string{"https://app.example.com/cb3"},
+	}, true)
+	require.NoError(t, err)
+	assert.Equal(t, model.OIDCClientStatusPending, updated.Status, "此前已被退回，管理员改后仍需显式批准")
+}
+
+func TestOIDCUsageCounters(t *testing.T) {
+	setupOIDCTest(t)
+	user := createOIDCTestUser(t, "usageuser", "default")
+	client := &model.OIDCClient{ClientId: "muw_usage_client", Name: "计数", ClientType: model.OIDCClientTypePublic,
+		Status: model.OIDCClientStatusApproved, OwnerUserId: user.Id, RedirectUris: "https://app.example.com/cb",
+		Scopes: "openid", CreatedAt: common.GetTimestamp(), UpdatedAt: common.GetTimestamp()}
+	require.NoError(t, model.DB.Create(client).Error)
+	require.NoError(t, model.UpsertOIDCConsent(user.Id, client.ClientId, "openid", false))
+
+	now := common.GetTimestamp()
+	for i := range 3 {
+		require.NoError(t, model.RecordOIDCTokenIssued(client.ClientId, user.Id, now+int64(i)))
+	}
+	require.NoError(t, model.RecordOIDCTokenIssued(client.ClientId, 4242, now))
+
+	self, err := OIDCUsageSummaryFor("self", user.Id)
+	require.NoError(t, err)
+	assert.EqualValues(t, 3, self.TokenIssued, "只统计自己的签发次数")
+	assert.EqualValues(t, 1, self.Applications)
+	assert.EqualValues(t, 1, self.Authorizations)
+
+	all, err := OIDCUsageSummaryFor("all", user.Id)
+	require.NoError(t, err)
+	assert.EqualValues(t, 4, all.TokenIssued, "全站口径应含其他用户")
+	assert.EqualValues(t, 2, all.ActiveUsers)
+
+	rows, err := model.OIDCApplicationUsage(client.ClientId)
+	require.NoError(t, err)
+	require.Len(t, rows, 2)
 }

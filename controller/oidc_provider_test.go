@@ -46,7 +46,7 @@ func setupOIDCEndToEnd(t *testing.T) (*model.User, *model.UserSession, *model.OI
 	common.SetDatabaseTypes(oidcDialectType(kind), oidcDialectType(kind))
 	t.Cleanup(func() { common.SetDatabaseTypes(previousMain, previousLog) })
 	require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSession{}, &model.OIDCClient{},
-		&model.OIDCAuthCode{}, &model.OIDCRefreshToken{}, &model.OIDCConsent{}, &model.OIDCSigningKey{}, &model.AuditLog{}))
+		&model.OIDCAuthCode{}, &model.OIDCRefreshToken{}, &model.OIDCConsent{}, &model.OIDCSigningKey{}, &model.OIDCUsageStat{}, &model.AuditLog{}))
 	previousLogDB := model.LOG_DB
 	model.DB = db
 	model.LOG_DB = db

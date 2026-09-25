@@ -199,6 +199,9 @@ var migrations = []Migration{
 	// oidc_clients.secret_cipher 列（存加密后的客户端密钥，供申请人自己查看；管理员看不到）：
 	// 已有表上的新列，存量库走"跳过 AutoMigrate"路径，由 ensureOIDCClientSecretCipherColumn 幂等补齐。
 	{Name: "260926-oidc-client-secret-cipher", Up: func(db *gorm.DB) error { return nil }},
+	// oidc_clients.homepage_url / icon_url 列 + oidc_usage_stats 表（使用计数）：
+	// 纯加列 + 建表，存量库由 ensureOIDCApplicationProfileColumns / ensureOIDCUsageStatTable 补齐。
+	{Name: "260926-oidc-app-profile-and-usage", Up: func(db *gorm.DB) error { return nil }},
 }
 
 // ensureSchemaMigrationsTable 用纯 SQL 建 schema_migrations（主键 name，自带日期前缀），
