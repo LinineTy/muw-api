@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,6 +22,8 @@ import (
 func openOIDCTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	kind := strings.ToLower(strings.TrimSpace(os.Getenv("TEST_OIDC_DIALECT")))
+	previousMain, previousLog := common.MainDatabaseType(), common.LogDatabaseType()
+	dialect := common.DatabaseTypeSQLite
 	var (
 		db  *gorm.DB
 		err error
@@ -29,13 +32,20 @@ func openOIDCTestDB(t *testing.T) *gorm.DB {
 	case "", "sqlite":
 		db, err = gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	case "mysql":
+		dialect = common.DatabaseTypeMySQL
 		db, err = gorm.Open(mysql.Open(os.Getenv("TEST_MYSQL_DSN")), &gorm.Config{})
 	case "postgres":
+		dialect = common.DatabaseTypePostgreSQL
 		db, err = gorm.Open(postgres.Open(os.Getenv("TEST_POSTGRES_DSN")), &gorm.Config{})
 	default:
 		t.Fatalf("不支持的 TEST_OIDC_DIALECT：%s", kind)
 	}
 	require.NoError(t, err)
+	// 必须同步告诉应用当前方言：一批 ensure* 靠它选分支（例如 subscription_plans 的
+	// SQLite 手工 DDL 只在 SQLite 执行）。漏设会把 SQLite 版 DDL 直接发给 MySQL，
+	// 报 "TEXT column can't have a default value" 这类假故障。
+	common.SetDatabaseTypes(dialect, dialect)
+	t.Cleanup(func() { common.SetDatabaseTypes(previousMain, previousLog) })
 	return db
 }
 
@@ -84,13 +94,6 @@ func TestOIDCMigrationEntryIsRegistered(t *testing.T) {
 // 仓库规范要求的"存量库升级"场景：库由上一个版本建好（已打最新迁移戳，启动会跳过
 // autoMigrateAll），此时升级到带 OIDC 的版本，必须靠 migrateDB 里的幂等 ensure 补表。
 func TestMigrateDBCreatesOIDCTablesOnExistingUpToDateDatabase(t *testing.T) {
-	// 只在 SQLite 上模拟"存量库升级"：这条路径要先 autoMigrateAll() 造出上一个版本的库，
-	// 而当前代码在**全新 MySQL 库**上建 subscription_plans 会失败（TEXT 列带 DEFAULT '',
-	// MySQL 不允许）——那是与本功能无关的既有问题，见待办。MySQL/PostgreSQL 侧改用
-	// "全新库建表 + 约束 + ensure 幂等 + 端到端流程"作为等价证据。
-	if kind := strings.ToLower(strings.TrimSpace(os.Getenv("TEST_OIDC_DIALECT"))); kind != "" && kind != "sqlite" {
-		t.Skipf("存量库升级模拟仅支持 sqlite（%s 上 autoMigrateAll 触发既有的 subscription_plans DDL 问题）", kind)
-	}
 	db := openOIDCTestDB(t)
 	previous := DB
 	DB = db

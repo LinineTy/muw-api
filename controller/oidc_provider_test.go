@@ -41,6 +41,10 @@ func setupOIDCEndToEnd(t *testing.T) (*model.User, *model.UserSession, *model.OI
 	}
 	// 复用仓库既有的三方言建库助手：每个用例一个独立库（MySQL/PostgreSQL 必须 loopback）。
 	db, _ := newAuditTestDatabase(t, kind, os.Getenv("TEST_"+strings.ToUpper(kind)+"_DSN"))
+	// 方言类型必须与真实连接一致：一批 ensure*/迁移分支靠它判断（漏设会把 SQLite DDL 发给 MySQL）。
+	previousMain, previousLog := common.MainDatabaseType(), common.LogDatabaseType()
+	common.SetDatabaseTypes(oidcDialectType(kind), oidcDialectType(kind))
+	t.Cleanup(func() { common.SetDatabaseTypes(previousMain, previousLog) })
 	require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSession{}, &model.OIDCClient{},
 		&model.OIDCAuthCode{}, &model.OIDCRefreshToken{}, &model.OIDCConsent{}, &model.OIDCSigningKey{}, &model.AuditLog{}))
 	previousLogDB := model.LOG_DB
@@ -325,4 +329,15 @@ func TestOIDCRejectsNonApprovedClient(t *testing.T) {
 	query.Set("code_challenge_method", "S256")
 	response := oidcE2ERequest(t, engine, http.MethodGet, "/oauth/authorize?"+query.Encode(), "", "")
 	assert.Equal(t, http.StatusBadRequest, response.Code, "待审核/禁用的应用不得进入授权流程")
+}
+
+func oidcDialectType(kind string) common.DatabaseType {
+	switch kind {
+	case "mysql":
+		return common.DatabaseTypeMySQL
+	case "postgres":
+		return common.DatabaseTypePostgreSQL
+	default:
+		return common.DatabaseTypeSQLite
+	}
 }
