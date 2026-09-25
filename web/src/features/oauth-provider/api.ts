@@ -12,6 +12,40 @@ export type OAuthConsentPreview = {
   remember_silent: boolean
 }
 
+export type OAuthApplication = {
+  id: number
+  client_id: string
+  name: string
+  description: string
+  client_type: string
+  status: string
+  scopes: string[]
+  redirect_uris: string[]
+  review_note: string
+  created_at: number
+  last_used_at: number
+  owner_username?: string
+  apply_reason?: string
+  allowed_groups?: string[]
+}
+
+export type OAuthConsent = {
+  client_id: string
+  client_name: string
+  scopes: string[]
+  silent: boolean
+  updated_at: number
+}
+
+export type OAuthApplicationPayload = {
+  name: string
+  description: string
+  redirect_uris: string[]
+  scopes: string[]
+  client_type: string
+  apply_reason: string
+}
+
 export async function getConsentPreview(
   request: string
 ): Promise<OAuthConsentPreview> {
@@ -29,4 +63,84 @@ export async function submitConsentDecision(payload: {
   const res = await api.post('/api/oauth/consent/decision', payload)
   return (requireServerSuccess(res.data).data as { redirect_url: string })
     .redirect_url
+}
+
+export async function getMyApplications(): Promise<OAuthApplication[]> {
+  const res = await api.get('/api/oauth/applications/mine')
+  return (requireServerSuccess(res.data).data as { items: OAuthApplication[] })
+    .items
+}
+
+export async function submitApplication(
+  payload: OAuthApplicationPayload
+): Promise<void> {
+  const res = await api.post('/api/oauth/applications', payload)
+  requireServerSuccess(res.data)
+}
+
+export async function getMyConsents(): Promise<OAuthConsent[]> {
+  const res = await api.get('/api/oauth/consents')
+  return (requireServerSuccess(res.data).data as { items: OAuthConsent[] }).items
+}
+
+export async function setConsentSilent(
+  clientId: string,
+  silent: boolean
+): Promise<void> {
+  const res = await api.post('/api/oauth/consents/silent', {
+    client_id: clientId,
+    silent,
+  })
+  requireServerSuccess(res.data)
+}
+
+export async function revokeConsent(clientId: string): Promise<void> {
+  const res = await api.delete(
+    `/api/oauth/consents/${encodeURIComponent(clientId)}`
+  )
+  requireServerSuccess(res.data)
+}
+
+export async function listApplicationsForReview(
+  status: string
+): Promise<OAuthApplication[]> {
+  const res = await api.get('/api/oauth/admin/applications', {
+    params: { status, page: 1, page_size: 100 },
+  })
+  return (requireServerSuccess(res.data).data as { items: OAuthApplication[] })
+    .items
+}
+
+export async function reviewApplication(
+  id: number,
+  payload: {
+    action: 'approve' | 'reject'
+    scopes?: string[]
+    redirect_uris?: string[]
+    allowed_groups?: string[]
+    note?: string
+  }
+): Promise<{ client_id: string; client_secret: string }> {
+  const res = await api.post(`/api/oauth/admin/applications/${id}/review`, payload)
+  return requireServerSuccess(res.data).data as {
+    client_id: string
+    client_secret: string
+  }
+}
+
+export async function updateApplicationStatus(
+  id: number,
+  action: 'approve' | 'disable',
+  note = ''
+): Promise<void> {
+  const res = await api.post(`/api/oauth/admin/applications/${id}/status`, {
+    action,
+    note,
+  })
+  requireServerSuccess(res.data)
+}
+
+export async function deleteApplication(id: number): Promise<void> {
+  const res = await api.delete(`/api/oauth/admin/applications/${id}`)
+  requireServerSuccess(res.data)
 }

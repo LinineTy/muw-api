@@ -18,17 +18,10 @@ import {
   submitConsentDecision,
   type OAuthConsentPreview,
 } from './api'
+import { SCOPE_LABELS } from './scopes'
 
 // 授权确认页：第三方应用拿本站账号登录时，用户在这里决定给不给。
 // 默认每次都会问；用户勾了「以后不再询问」才会静默放行，且应用新增 scope 时仍会回来问。
-const SCOPE_LABELS: Record<string, string> = {
-  openid: 'Confirm that you are signed in to this site',
-  profile: 'Read your username, display name and avatar',
-  email: 'Read your email address',
-  group: 'Read your group and subscription tier',
-  offline_access: 'Keep access while the application refreshes it in the background',
-}
-
 export function OAuthConsentPage({ request }: { request: string }) {
   const { t } = useTranslation()
   const [preview, setPreview] = useState<OAuthConsentPreview | null>(null)
