@@ -38,7 +38,7 @@ export function OAuthAdminApplicationsPage() {
   const [status, setStatus] = useState<string>('pending')
   const [items, setItems] = useState<OAuthApplication[]>([])
   const [notes, setNotes] = useState<Record<number, string>>({})
-  const [secret, setSecret] = useState('')
+  const [approved, setApproved] = useState<{ clientId: string; secret: string } | null>(null)
   const [busy, setBusy] = useState(false)
 
   const reload = useCallback(async (next: string) => {
@@ -75,7 +75,7 @@ export function OAuthAdminApplicationsPage() {
         allowed_groups: item.allowed_groups ?? [],
         note: notes[item.id] ?? '',
       })
-      setSecret(result.client_secret ?? '')
+      setApproved({ clientId: result.client_id, secret: result.client_secret ?? '' })
     }, t('Approved'))
 
   const reject = (item: OAuthApplication) =>
@@ -131,12 +131,25 @@ export function OAuthAdminApplicationsPage() {
             ))}
           </div>
 
-          {secret ? (
+          {approved ? (
             <div className='border-primary/40 bg-primary/5 flex flex-col gap-1 rounded-md border p-3'>
               <span className='text-sm font-medium'>
-                {t('Client secret, shown only once')}
+                {t('Application approved')}
               </span>
-              <code className='font-mono text-xs break-all'>{secret}</code>
+              {/* client_id 必须留在这里：批准后条目会从「待审核」列表消失，不给出来就没地方看了 */}
+              <code className='font-mono text-xs break-all'>
+                {approved.clientId}
+              </code>
+              {approved.secret ? (
+                <>
+                  <span className='text-sm font-medium'>
+                    {t('Client secret, shown only once')}
+                  </span>
+                  <code className='font-mono text-xs break-all'>
+                    {approved.secret}
+                  </code>
+                </>
+              ) : null}
             </div>
           ) : null}
 
