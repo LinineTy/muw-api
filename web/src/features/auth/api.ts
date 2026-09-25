@@ -40,15 +40,16 @@ import type {
   ApiResponse,
 } from './types'
 
-// 前置校验凭据拼成查询串（服务端从 query 读，三个入口统一口径）。
-function preAuthProofQuery(): string {
+// 前置校验凭据拼成查询串（服务端从 query 读）。
+// separator 由调用方按当前 URL 给出：路径上已有查询串用 '&'，还没有的用 '?'。
+function preAuthProofQuery(separator: '?' | '&'): string {
   const proof = getPreAuthProof()
   if (!proof) return ''
   const params = new URLSearchParams({
     challenge_id: proof.challengeId,
     nonce: proof.nonce,
   })
-  return `&${params.toString()}`
+  return `${separator}${params.toString()}`
 }
 
 // ============================================================================
@@ -76,7 +77,7 @@ export async function login(payload: LoginPayload): Promise<LoginResponse> {
       passwordFields = { password: payload.password }
     }
     const res = await api.post<LoginResponse>(
-      `/api/user/login?turnstile=${turnstile}${preAuthProofQuery()}`,
+      `/api/user/login?turnstile=${turnstile}${preAuthProofQuery('&')}`,
       {
         username: payload.username,
         ...passwordFields,
@@ -193,7 +194,7 @@ export async function createOAuthAuthorization(
   const res = await api.post(
     // 第三方登录同样要过前置校验：服务端在签发 state 这一步校验，回调侧必须消费服务端签发的
     // state，所以绕过前端直接构造回调也会被挡下。
-    `/api/oauth/state${intent === 'login' ? preAuthProofQuery() : ''}`,
+    `/api/oauth/state${intent === 'login' ? preAuthProofQuery('?') : ''}`,
     {
       provider,
       intent,

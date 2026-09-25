@@ -23,9 +23,10 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { api, type RefreshOutcome } from '@/lib/api'
 import type { AuthBundle } from '@/stores/auth-store'
 
-import { executeLogout } from './api'
+import { createOAuthFlow, executeLogout, login } from './api'
 import { useOAuthLogin } from './hooks/use-oauth-login'
 import { consumeOAuthLoginRedirect } from './lib/oauth-callback-mode'
+import { setPreAuthProof } from './lib/pre-auth-proof'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -177,5 +178,42 @@ describe('logout coordination', () => {
         refresh: async () => transient,
       })
     ).rejects.toBe(originalError)
+  })
+})
+
+describe('pre-auth proof query', () => {
+  afterEach(() => setPreAuthProof(null))
+
+  test('appends the proof to the OAuth state path with a question mark', async () => {
+    setPreAuthProof({ challengeId: 'cid-1', nonce: '42' })
+    const post = vi
+      .spyOn(api, 'post')
+      .mockResolvedValue({ data: { success: true, data: 'state-1' } })
+
+    await expect(createOAuthFlow('linuxdo', 'login')).resolves.toBe('state-1')
+    expect(post.mock.calls[0]?.[0]).toBe(
+      '/api/oauth/state?challenge_id=cid-1&nonce=42'
+    )
+  })
+
+  test('keeps the OAuth state path bare while no proof is held', async () => {
+    const post = vi
+      .spyOn(api, 'post')
+      .mockResolvedValue({ data: { success: true, data: 'state-2' } })
+
+    await expect(createOAuthFlow('linuxdo', 'login')).resolves.toBe('state-2')
+    expect(post.mock.calls[0]?.[0]).toBe('/api/oauth/state')
+  })
+
+  test('keeps the ampersand separator on the password login URL', async () => {
+    setPreAuthProof({ challengeId: 'cid-2', nonce: '7' })
+    const post = vi
+      .spyOn(api, 'post')
+      .mockResolvedValue({ data: { success: true } })
+
+    await login({ username: 'test-user', password: 'secret' })
+    expect(post.mock.calls[0]?.[0]).toBe(
+      '/api/user/login?turnstile=&challenge_id=cid-2&nonce=7'
+    )
   })
 })
