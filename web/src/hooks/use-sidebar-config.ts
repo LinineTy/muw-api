@@ -142,7 +142,6 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/risk-control': { section: 'addon', module: 'risk_control' },
   '/ip-analysis': { section: 'addon', module: 'ip_analysis' },
   '/oauth/applications': { section: 'personal', module: 'security' },
-  '/oauth/admin-applications': { section: 'admin', module: 'setting' },
 }
 
 /**

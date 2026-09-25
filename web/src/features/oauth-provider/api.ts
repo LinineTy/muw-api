@@ -122,14 +122,17 @@ export async function getApplicationUsage(
   ).items
 }
 
-export async function getOAuthStats(scope: 'self' | 'all'): Promise<OAuthStats> {
+export async function getOAuthStats(
+  scope: 'self' | 'all'
+): Promise<OAuthStats> {
   const res = await api.get('/api/oauth/stats', { params: { scope } })
   return requireServerSuccess(res.data).data as OAuthStats
 }
 
 export async function getMyConsents(): Promise<OAuthConsent[]> {
   const res = await api.get('/api/oauth/consents')
-  return (requireServerSuccess(res.data).data as { items: OAuthConsent[] }).items
+  return (requireServerSuccess(res.data).data as { items: OAuthConsent[] })
+    .items
 }
 
 export async function setConsentSilent(
@@ -162,14 +165,23 @@ export async function rotateApplicationSecret(id: number): Promise<string> {
     .client_secret
 }
 
-export async function listApplicationsForReview(
+export async function listApplicationsForReview(params: {
   status: string
-): Promise<OAuthApplication[]> {
+  page: number
+  pageSize: number
+}): Promise<{ items: OAuthApplication[]; total: number }> {
   const res = await api.get('/api/oauth/admin/applications', {
-    params: { status, page: 1, page_size: 100 },
+    params: {
+      status: params.status,
+      page: params.page,
+      page_size: params.pageSize,
+    },
   })
-  return (requireServerSuccess(res.data).data as { items: OAuthApplication[] })
-    .items
+  const data = requireServerSuccess(res.data).data as {
+    items: OAuthApplication[]
+    total: number
+  }
+  return { items: data.items, total: data.total }
 }
 
 export async function reviewApplication(

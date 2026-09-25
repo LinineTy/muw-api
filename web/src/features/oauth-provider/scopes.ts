@@ -1,4 +1,6 @@
 // @muw-owned
+import type { TFunction } from 'i18next'
+
 // 同意页与申请页共享的 scope 文案（key 即英文原文，翻译在 locales 里）。
 export const SUPPORTED_SCOPES = [
   'openid',
@@ -15,4 +17,9 @@ export const SCOPE_LABELS: Record<string, string> = {
   group: 'Read your group and subscription tier',
   offline_access:
     'Keep access while the application refreshes it in the background',
+}
+
+// scope 列表 → 展示文案（未知 scope 原样输出）。
+export function scopeTextList(scopes: string[], t: TFunction): string[] {
+  return scopes.map((scope) => t(SCOPE_LABELS[scope] ?? scope))
 }

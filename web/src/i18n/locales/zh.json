@@ -8337,6 +8337,10 @@
     "© 2025 Your Company. All rights reserved.": "© 2025 您的公司。保留所有权利。",
     "、": "、",
     "，": "，",
-    "，and ": "，并"
+    "，and ": "，并",
+    "Redirect URIs": "回调地址",
+    "Are you sure you want to delete application \"{{name}}\"? This action cannot be undone.": "确定要删除应用 \"{{name}}\" 吗？此操作无法撤销。",
+    "Are you sure you want to disable application \"{{name}}\"? Users can no longer sign in with it.": "确定要停用应用 \"{{name}}\" 吗？用户将无法再用它登录。",
+    "Stop letting {{name}} sign users in with your account.": "不再允许 \"{{name}}\" 使用你的账号登录。"
   }
 }

@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import {
   Activity,
+  AppWindow,
   BarChart3,
   Box,
   ClipboardList,
@@ -124,11 +125,11 @@ export function useSidebarData(): SidebarData {
         id: 'personal',
         title: t('Personal'),
         items: [
-            {
-              title: t('Developer applications'),
-              url: '/oauth/applications',
-              icon: PlugZap,
-            },
+          {
+            title: t('Developer applications'),
+            url: '/oauth/applications',
+            icon: AppWindow,
+          },
           {
             title: t('Wallet'),
             url: '/wallet',

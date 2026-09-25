@@ -11,7 +11,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 
 import {
   getConsentPreview,
@@ -71,7 +72,9 @@ export function OAuthConsentPage({ request }: { request: string }) {
   }
 
   // 三种状态各给一句话，避免在 JSX 里套三元（可读性 + lint）。
-  let description = t('Start the sign-in from the application that sent you here.')
+  let description = t(
+    'Start the sign-in from the application that sent you here.'
+  )
   if (request) {
     description = t('Checking the authorization request…')
   }
@@ -87,7 +90,9 @@ export function OAuthConsentPage({ request }: { request: string }) {
         <CardHeader>
           <CardTitle>
             {preview
-              ? t('{{name}} wants to sign you in', { name: preview.client_name })
+              ? t('{{name}} wants to sign you in', {
+                  name: preview.client_name,
+                })
               : t('Authorize application')}
           </CardTitle>
           <CardDescription>{description}</CardDescription>
@@ -125,14 +130,20 @@ export function OAuthConsentPage({ request }: { request: string }) {
                   ))}
                 </ul>
               </div>
-              <label className='flex items-center gap-2 text-sm'>
-                <Checkbox
+              <div className='flex items-center gap-2'>
+                <Switch
+                  id='oauth-consent-silent'
                   checked={silent}
-                  onCheckedChange={(checked) => setSilent(checked === true)}
+                  onCheckedChange={setSilent}
                   disabled={busy}
                 />
-                {t('Do not ask me again for this application')}
-              </label>
+                <Label
+                  htmlFor='oauth-consent-silent'
+                  className='cursor-pointer text-sm'
+                >
+                  {t('Do not ask me again for this application')}
+                </Label>
+              </div>
               <p className='text-muted-foreground text-xs'>
                 {t(
                   'New permissions always ask again, even when this is enabled.'
@@ -142,18 +153,18 @@ export function OAuthConsentPage({ request }: { request: string }) {
           ) : null}
         </CardContent>
         {preview ? (
-        <CardFooter className='flex justify-end gap-2'>
-          <Button
-            variant='outline'
-            disabled={busy || !preview}
-            onClick={() => decide(false)}
-          >
-            {t('Deny')}
-          </Button>
-          <Button disabled={busy || !preview} onClick={() => decide(true)}>
-            {t('Allow')}
-          </Button>
-        </CardFooter>
+          <CardFooter className='flex justify-end gap-2'>
+            <Button
+              variant='outline'
+              disabled={busy || !preview}
+              onClick={() => decide(false)}
+            >
+              {t('Deny')}
+            </Button>
+            <Button disabled={busy || !preview} onClick={() => decide(true)}>
+              {t('Allow')}
+            </Button>
+          </CardFooter>
         ) : null}
       </Card>
     </div>
