@@ -858,12 +858,14 @@ export function parseTaskResult() { return {}; }
 				change.Pricing["billing_setting.billing_expr"] = `tier("base", u("undeclared") * 1)`
 				assert.Error(t, model.UpdateModelPricing([]model.ModelPricingChange{change}))
 				{
+					// No built-in expression defaults in this fork: a model nobody
+					// configured stays without an expression, before and after a
+					// configure-then-reset round trip.
 					const name = "gpt-6-astra"
-					builtin, exists := billing_setting.GetBuiltinBillingExpr(name)
-					require.True(t, exists)
 					before, err := model.GetModelPricingSnapshot([]string{name})
 					require.NoError(t, err)
 					require.Empty(t, before.Entries[0].Configured)
+					assert.Empty(t, before.Entries[0].Effective["billing_setting.billing_expr"])
 					change = model.ModelPricingChange{ModelName: name, ExpectedVersion: before.Entries[0].Version, Pricing: model.PricingValues{"ModelPrice": float64(0)}}
 					require.NoError(t, model.UpdateModelPricing([]model.ModelPricingChange{change}))
 					custom, err := model.GetModelPricingSnapshot([]string{name})
@@ -874,7 +876,7 @@ export function parseTaskResult() { return {}; }
 					reset, err := model.GetModelPricingSnapshot([]string{name})
 					require.NoError(t, err)
 					assert.Empty(t, reset.Entries[0].Configured)
-					assert.Equal(t, builtin, reset.Entries[0].Effective["billing_setting.billing_expr"])
+					assert.Empty(t, reset.Entries[0].Effective["billing_setting.billing_expr"])
 				}
 			})
 			t.Run("concurrent_import_creates_one_record", func(t *testing.T) {

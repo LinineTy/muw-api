@@ -4,7 +4,7 @@ Mandatory conventions for quota, pricing, pre-consume, settlement, refund, and u
 
 **Billing expression system:** When working on tiered/dynamic billing (expression-based pricing), MUST read `pkg/billingexpr/expr.md` first. It documents the design philosophy, expression language, full architecture, token normalization rules, quota conversion, and expression versioning. All billing expression changes must follow that document.
 
-**Built-in model pricing:** New built-in model prices MUST be defined as self-contained billing expressions in `setting/billing_setting/builtin_billing.go`, using real USD per million tokens. Do not add new built-in prices to the legacy model/completion/cache ratio tables. Preserve explicit administrator pricing overrides. Existing legacy prices are migrated only when explicitly requested. Verify published prices and cover applicable context-length thresholds and cache categories.
+**No built-in model pricing:** This fork has no code-level pricing defaults — `setting/billing_setting/builtin_billing.go` does not exist. A model is billed exactly the way an administrator configured it: an explicit billing mode plus expression, a model price, or the legacy ratio tables; a model nobody configured is billed by the ratio path and never by a hidden default. Do NOT reintroduce per-model defaults in Go code: they show up as pricing rows nobody configured and cannot be removed from the settings editor. Adding or repricing a model is an admin-side change (settings editor or the option keys), not a code change.
 
 **Billing safety invariants:** Quota/billing code MUST never produce a negative charge (a credit) from arithmetic overflow or unvalidated input. Apply defense in depth:
 
