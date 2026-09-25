@@ -299,7 +299,7 @@ export function OperationsStats() {
             title={t('Trust Levels')}
             isLoading={distributionsQuery.isLoading}
             rows={(distributions?.trust_levels ?? []).map((r) => ({
-              key: `L${r.level}`,
+              key: r.level === null ? t('Not synced') : `L${r.level}`,
               count: r.count,
             }))}
           />

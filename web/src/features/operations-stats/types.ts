@@ -24,7 +24,8 @@ export interface DistributionRow {
 }
 
 export interface TrustLevelRow {
-  level: number
+  /** null = 该用户的信任等级从未同步过（linux_do_trust_level 为 NULL） */
+  level: number | null
   count: number
 }
 

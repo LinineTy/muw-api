@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -140,6 +141,44 @@ func TestGetOperationsDistributionsMapsRowKey(t *testing.T) {
 	}
 	assert.EqualValues(t, 2, groupCounts["tier0"])
 	assert.EqualValues(t, 1, groupCounts["tier1"])
+}
+
+// 信任等级:linux_do_trust_level 可空,NULL 组必须能与真正的 L0 区分 ——
+// 扫进 int 会让两者都变成 0,前端两行都显示 L0(2026-09-25 线上截图现象)。
+func TestGetOperationsDistributionsDistinguishesNullTrustLevel(t *testing.T) {
+	db := openOperationsStatsTestDB(t)
+
+	// 两个从未同步过等级的 LinuxDO 用户 + 一个真 L0 + 一个 L2。
+	require.NoError(t, db.Create(&User{Username: "null1", AffCode: "l1", LinuxDOId: "11"}).Error)
+	require.NoError(t, db.Create(&User{Username: "null2", AffCode: "l2", LinuxDOId: "12"}).Error)
+	require.NoError(t, db.Create(&User{Username: "zero", AffCode: "l3", LinuxDOId: "13", LinuxDOTrustLevel: 0}).Error)
+	require.NoError(t, db.Create(&User{Username: "two", AffCode: "l4", LinuxDOId: "14", LinuxDOTrustLevel: 2}).Error)
+	// 建表列非空时把前者置回 NULL,模拟旧行(列是后加的)。
+	require.NoError(t, db.Exec("UPDATE users SET linux_do_trust_level = NULL WHERE username IN ('null1', 'null2')").Error)
+
+	d, err := GetOperationsDistributions()
+	require.NoError(t, err)
+
+	nullRows, nullCount := 0, int64(0)
+	levels := map[int]int64{}
+	for _, row := range d.TrustLevels {
+		if row.Level == nil {
+			nullRows++
+			nullCount += row.Count
+			continue
+		}
+		levels[*row.Level] = row.Count
+	}
+
+	assert.Equal(t, 1, nullRows, "NULL 组应当只有一个(不能与 L0 合并成 int 0)")
+	assert.EqualValues(t, 2, nullCount, "两个未同步用户应落在 NULL 组")
+	assert.EqualValues(t, 1, levels[0], "真正的 L0 只有一个")
+	assert.EqualValues(t, 1, levels[2])
+
+	// 前端按 level === null 判「未同步」⇒ 契约必须是 JSON null,不能是 0 或缺字段。
+	payload, err := json.Marshal(d.TrustLevels)
+	require.NoError(t, err)
+	assert.Contains(t, string(payload), `"level":null`, "NULL 组必须序列化成 null")
 }
 
 // 整除运算符按方言选择:SQLite/PG 用 `/`,MySQL 用 DIV。

@@ -42,8 +42,10 @@ type DistributionRow struct {
 }
 
 // TrustLevelRow 信任等级分布行。
+// Level 用指针:linux_do_trust_level 是可空列,没同步过等级的用户是 NULL,
+// 扫进 int 会变成 0、与真正的 L0 撞成同一行(前端标签都是 L0)。
 type TrustLevelRow struct {
-	Level int   `json:"level" gorm:"column:level"`
+	Level *int  `json:"level" gorm:"column:level"`
 	Count int64 `json:"count" gorm:"column:count"`
 }
 
