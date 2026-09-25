@@ -49,6 +49,7 @@ import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authentica
 import { Route as AuthenticatedModelHealthIndexRouteImport } from './routes/_authenticated/model-health/index'
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedModelsSectionRouteImport } from './routes/_authenticated/models/$section'
+import { Route as AuthenticatedOauthAdminApplicationsRouteImport } from './routes/_authenticated/oauth/admin-applications'
 import { Route as AuthenticatedOauthApplicationsRouteImport } from './routes/_authenticated/oauth/applications'
 import { Route as AuthenticatedOauthConsentRouteImport } from './routes/_authenticated/oauth/consent'
 import { Route as AuthenticatedOperationsStatsIndexRouteImport } from './routes/_authenticated/operations-stats/index'
@@ -292,6 +293,12 @@ const AuthenticatedModelsSectionRoute =
   AuthenticatedModelsSectionRouteImport.update({
     id: '/models/$section',
     path: '/models/$section',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedOauthAdminApplicationsRoute =
+  AuthenticatedOauthAdminApplicationsRouteImport.update({
+    id: '/oauth/admin-applications',
+    path: '/oauth/admin-applications',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedOauthApplicationsRoute =
@@ -539,6 +546,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
+  '/oauth/admin-applications': typeof AuthenticatedOauthAdminApplicationsRoute
   '/oauth/applications': typeof AuthenticatedOauthApplicationsRoute
   '/oauth/consent': typeof AuthenticatedOauthConsentRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
@@ -614,6 +622,7 @@ export interface FileRoutesByTo {
   '/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
+  '/oauth/admin-applications': typeof AuthenticatedOauthAdminApplicationsRoute
   '/oauth/applications': typeof AuthenticatedOauthApplicationsRoute
   '/oauth/consent': typeof AuthenticatedOauthConsentRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
@@ -693,6 +702,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/_authenticated/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/_authenticated/models/$section': typeof AuthenticatedModelsSectionRoute
+  '/_authenticated/oauth/admin-applications': typeof AuthenticatedOauthAdminApplicationsRoute
   '/_authenticated/oauth/applications': typeof AuthenticatedOauthApplicationsRoute
   '/_authenticated/oauth/consent': typeof AuthenticatedOauthConsentRoute
   '/_authenticated/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
@@ -771,6 +781,7 @@ export interface FileRouteTypes {
     | '/dashboard/$section'
     | '/errors/$error'
     | '/models/$section'
+    | '/oauth/admin-applications'
     | '/oauth/applications'
     | '/oauth/consent'
     | '/usage-logs/$section'
@@ -846,6 +857,7 @@ export interface FileRouteTypes {
     | '/dashboard/$section'
     | '/errors/$error'
     | '/models/$section'
+    | '/oauth/admin-applications'
     | '/oauth/applications'
     | '/oauth/consent'
     | '/usage-logs/$section'
@@ -924,6 +936,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard/$section'
     | '/_authenticated/errors/$error'
     | '/_authenticated/models/$section'
+    | '/_authenticated/oauth/admin-applications'
     | '/_authenticated/oauth/applications'
     | '/_authenticated/oauth/consent'
     | '/_authenticated/usage-logs/$section'
@@ -1270,6 +1283,13 @@ declare module '@tanstack/react-router' {
       path: '/models/$section'
       fullPath: '/models/$section'
       preLoaderRoute: typeof AuthenticatedModelsSectionRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/oauth/admin-applications': {
+      id: '/_authenticated/oauth/admin-applications'
+      path: '/oauth/admin-applications'
+      fullPath: '/oauth/admin-applications'
+      preLoaderRoute: typeof AuthenticatedOauthAdminApplicationsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/oauth/applications': {
@@ -1626,6 +1646,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardSectionRoute: typeof AuthenticatedDashboardSectionRoute
   AuthenticatedErrorsErrorRoute: typeof AuthenticatedErrorsErrorRoute
   AuthenticatedModelsSectionRoute: typeof AuthenticatedModelsSectionRoute
+  AuthenticatedOauthAdminApplicationsRoute: typeof AuthenticatedOauthAdminApplicationsRoute
   AuthenticatedOauthApplicationsRoute: typeof AuthenticatedOauthApplicationsRoute
   AuthenticatedOauthConsentRoute: typeof AuthenticatedOauthConsentRoute
   AuthenticatedUsageLogsSectionRoute: typeof AuthenticatedUsageLogsSectionRoute
@@ -1663,6 +1684,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardSectionRoute: AuthenticatedDashboardSectionRoute,
   AuthenticatedErrorsErrorRoute: AuthenticatedErrorsErrorRoute,
   AuthenticatedModelsSectionRoute: AuthenticatedModelsSectionRoute,
+  AuthenticatedOauthAdminApplicationsRoute:
+    AuthenticatedOauthAdminApplicationsRoute,
   AuthenticatedOauthApplicationsRoute: AuthenticatedOauthApplicationsRoute,
   AuthenticatedOauthConsentRoute: AuthenticatedOauthConsentRoute,
   AuthenticatedUsageLogsSectionRoute: AuthenticatedUsageLogsSectionRoute,
