@@ -254,6 +254,10 @@ var (
 
 	// updateMu 串行化更新任务（下载耗时长，多个请求同时点"立即更新"时排队而不是互相踩）
 	updateMu sync.Mutex
+
+	// bgFetch 计数 Apply 起的那次后台补齐。它和手动更新共用 updateMu，
+	// 所以测试要等它收尾再自己发更新请求，否则后到的那个必然拿到"已有更新任务正在进行中"。
+	bgFetch sync.WaitGroup
 )
 
 // DBStatus 单个数据文件的状态（设置页展示用）。
@@ -300,7 +304,9 @@ func Apply(next Config) Status {
 	mu.Unlock()
 
 	if needFetch {
+		bgFetch.Add(1)
 		go func() {
+			defer bgFetch.Done()
 			if _, err := Update(""); err != nil {
 				log.Printf("[ipgeo] 归属地库拉取失败（继续用本地旧库或空库）：%v", err)
 			}

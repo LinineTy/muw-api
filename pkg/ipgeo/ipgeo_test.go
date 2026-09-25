@@ -100,6 +100,7 @@ func isolateState(t *testing.T) {
 	lastCheckAt, lastLoadAt = 0, 0
 	mu.Unlock()
 	t.Cleanup(func() {
+		awaitPendingFetch(t)
 		mu.Lock()
 		curV4, curV6 := v4db, v6db
 		cfg, applied, loaded = prevCfg, prevApplied, prevLoaded
@@ -109,6 +110,27 @@ func isolateState(t *testing.T) {
 		_ = curV4.Close()
 		_ = curV6.Close()
 	})
+}
+
+// awaitPendingFetch 等 Apply 起的后台补齐任务收尾。
+// 它和测试自己发的 Update 抢 updateMu，不等它，后到的那个会随机拿到"已有更新任务正在进行中"。
+func awaitPendingFetch(t *testing.T) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() { defer close(done); bgFetch.Wait() }()
+	select {
+	case <-done:
+	case <-time.After(15 * time.Second):
+		t.Fatal("等待 Apply 的后台补齐任务结束超时")
+	}
+}
+
+// applyAndSettle 应用配置并等后台补齐结束 —— 测试里驱动更新前的前置动作。
+func applyAndSettle(t *testing.T, next Config) Status {
+	t.Helper()
+	st := Apply(next)
+	awaitPendingFetch(t)
+	return st
 }
 
 // ---- 基础函数 ----
@@ -134,7 +156,7 @@ func TestLookupSyntheticV4Xdb(t *testing.T) {
 	path := writeTestXdb(t, dir, "v4.xdb",
 		buildTestXdb(t, [4]byte{1, 2, 3, 0}, [4]byte{1, 2, 3, 255}, "中国|0|测试省|测试市|测试ISP", 1700000000))
 
-	Apply(Config{Enabled: true, URLv4: "http://127.0.0.1:9/unused", URLv6: "http://127.0.0.1:9/unused", PathV4: path, PathV6: filepath.Join(dir, "v6.xdb")})
+	applyAndSettle(t, Config{Enabled: true, URLv4: "http://127.0.0.1:9/unused", URLv6: "http://127.0.0.1:9/unused", PathV4: path, PathV6: filepath.Join(dir, "v6.xdb")})
 
 	assert.Equal(t, "中国 测试省 测试市 测试ISP", Lookup("1.2.3.4"))
 	assert.Equal(t, "中国 测试省 测试市 测试ISP", Lookup("1.2.3.255"))
@@ -150,7 +172,7 @@ func TestLookupSyntheticV6Xdb(t *testing.T) {
 	path := writeTestXdb(t, dir, "v6.xdb",
 		buildTestXdbV6(t, v6Bytes(t, "2001:db8::"), v6Bytes(t, "2001:db8::ffff"), "中国|0|测试省|测试市|测试ISP", 1700000000))
 
-	Apply(Config{Enabled: true, PathV4: filepath.Join(dir, "v4.xdb"), PathV6: path, URLv4: "http://127.0.0.1:9/x", URLv6: "http://127.0.0.1:9/x"})
+	applyAndSettle(t, Config{Enabled: true, PathV4: filepath.Join(dir, "v4.xdb"), PathV6: path, URLv4: "http://127.0.0.1:9/x", URLv6: "http://127.0.0.1:9/x"})
 
 	assert.Equal(t, "中国 测试省 测试市 测试ISP", Lookup("2001:db8::1"))
 	assert.Equal(t, "", Lookup("2001:db9::1"), "段外地址不应命中")
@@ -162,7 +184,7 @@ func TestConcurrentLookup(t *testing.T) {
 	dir := t.TempDir()
 	path := writeTestXdb(t, dir, "v4.xdb",
 		buildTestXdb(t, [4]byte{1, 2, 3, 0}, [4]byte{1, 2, 3, 255}, "中国|0|测试省|测试市|测试ISP", 1700000000))
-	Apply(Config{Enabled: true, PathV4: path, PathV6: filepath.Join(dir, "v6.xdb"), URLv4: "http://127.0.0.1:9/x", URLv6: "http://127.0.0.1:9/x"})
+	applyAndSettle(t, Config{Enabled: true, PathV4: path, PathV6: filepath.Join(dir, "v6.xdb"), URLv4: "http://127.0.0.1:9/x", URLv6: "http://127.0.0.1:9/x"})
 
 	var wg sync.WaitGroup
 	for i := 0; i < 16; i++ {
@@ -202,10 +224,10 @@ func TestApplyDisabledUnloads(t *testing.T) {
 	dir := t.TempDir()
 	path := writeTestXdb(t, dir, "v4.xdb",
 		buildTestXdb(t, [4]byte{1, 2, 3, 0}, [4]byte{1, 2, 3, 255}, "中国|0|测试省|测试市|测试ISP", 1700000000))
-	Apply(Config{Enabled: true, PathV4: path, PathV6: filepath.Join(dir, "v6.xdb"), URLv4: "http://127.0.0.1:9/x", URLv6: "http://127.0.0.1:9/x"})
+	applyAndSettle(t, Config{Enabled: true, PathV4: path, PathV6: filepath.Join(dir, "v6.xdb"), URLv4: "http://127.0.0.1:9/x", URLv6: "http://127.0.0.1:9/x"})
 	require.Equal(t, "中国 测试省 测试市 测试ISP", Lookup("1.2.3.4"))
 
-	st := Apply(Config{Enabled: false, PathV4: path, PathV6: filepath.Join(dir, "v6.xdb")})
+	st := applyAndSettle(t, Config{Enabled: false, PathV4: path, PathV6: filepath.Join(dir, "v6.xdb")})
 	assert.False(t, st.Enabled)
 	assert.Equal(t, "", Lookup("1.2.3.4"), "关掉开关后不再返回归属地")
 }
@@ -228,7 +250,7 @@ func TestUpdateHotReloads(t *testing.T) {
 
 	targetV4 := filepath.Join(dir, "ip2region_v4.xdb")
 	targetV6 := filepath.Join(dir, "ip2region_v6.xdb")
-	Apply(Config{
+	applyAndSettle(t, Config{
 		Enabled: true,
 		PathV4:  targetV4, PathV6: targetV6,
 		URLv4: srv.URL + "/v4.xdb", URLv6: srv.URL + "/v6.xdb",
@@ -261,7 +283,7 @@ func TestUpdateKeepsOldDbOnFailure(t *testing.T) {
 	defer srv.Close()
 
 	target := filepath.Join(dir, "ip2region_v4.xdb")
-	Apply(Config{Enabled: true, PathV4: target, PathV6: filepath.Join(dir, "v6.xdb"), URLv4: srv.URL + "/v4.xdb", URLv6: srv.URL + "/v4.xdb"})
+	applyAndSettle(t, Config{Enabled: true, PathV4: target, PathV6: filepath.Join(dir, "v6.xdb"), URLv4: srv.URL + "/v4.xdb", URLv6: srv.URL + "/v4.xdb"})
 	_, err := Update("v4")
 	require.NoError(t, err)
 
@@ -284,7 +306,7 @@ func TestUpdateRejectsWrongProtocol(t *testing.T) {
 	srv := httptest.NewServer(http.FileServer(http.Dir(serveDir)))
 	defer srv.Close()
 
-	Apply(Config{Enabled: true, PathV4: filepath.Join(dir, "v4.xdb"), PathV6: filepath.Join(dir, "v6.xdb"), URLv4: srv.URL + "/v4.xdb", URLv6: srv.URL + "/v4.xdb"})
+	applyAndSettle(t, Config{Enabled: true, PathV4: filepath.Join(dir, "v4.xdb"), PathV6: filepath.Join(dir, "v6.xdb"), URLv4: srv.URL + "/v4.xdb", URLv6: srv.URL + "/v4.xdb"})
 	_, err := Update("v6")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "IPv6")
@@ -303,7 +325,12 @@ func TestCheckForUpdate(t *testing.T) {
 	srv := httptest.NewServer(http.FileServer(http.Dir(serveDir)))
 	defer srv.Close()
 
-	Apply(Config{Enabled: true, PathV4: filepath.Join(dir, "v4.xdb"), PathV6: filepath.Join(dir, "v6.xdb"), URLv4: srv.URL + "/v4.xdb", URLv6: srv.URL + "/v6.xdb"})
+	applyAndSettle(t, Config{Enabled: true, PathV4: filepath.Join(dir, "v4.xdb"), PathV6: filepath.Join(dir, "v6.xdb"), URLv4: srv.URL + "/v4.xdb", URLv6: srv.URL + "/v6.xdb"})
+
+	// 回到"本地还没有库"的起点：Apply 起的后台补齐刚下过一轮，删掉它落盘的文件。
+	for _, name := range []string{"v4.xdb", "v6.xdb"} {
+		require.NoError(t, os.Remove(filepath.Join(dir, name)))
+	}
 
 	needV4, needV6, err := CheckForUpdate()
 	require.NoError(t, err)
@@ -338,7 +365,7 @@ func TestLookupRealXdb(t *testing.T) {
 		t.Skip("未设置 IP_GEO_TEST_DB_V4，跳过真实库联调")
 	}
 	isolateState(t)
-	Apply(Config{Enabled: true, PathV4: path, PathV6: filepath.Join(t.TempDir(), "v6.xdb"), URLv4: "http://127.0.0.1:9/x", URLv6: "http://127.0.0.1:9/x"})
+	applyAndSettle(t, Config{Enabled: true, PathV4: path, PathV6: filepath.Join(t.TempDir(), "v6.xdb"), URLv4: "http://127.0.0.1:9/x", URLv6: "http://127.0.0.1:9/x"})
 
 	cn := Lookup("114.114.114.114")
 	t.Logf("114.114.114.114 -> %q", cn)
@@ -362,7 +389,7 @@ func TestLookupRealXdbV6(t *testing.T) {
 		t.Skip("未设置 IP_GEO_TEST_DB_V6，跳过真实 v6 库联调")
 	}
 	isolateState(t)
-	Apply(Config{Enabled: true, PathV4: filepath.Join(t.TempDir(), "v4.xdb"), PathV6: path, URLv4: "http://127.0.0.1:9/x", URLv6: "http://127.0.0.1:9/x"})
+	applyAndSettle(t, Config{Enabled: true, PathV4: filepath.Join(t.TempDir(), "v4.xdb"), PathV6: path, URLv4: "http://127.0.0.1:9/x", URLv6: "http://127.0.0.1:9/x"})
 
 	// 生产日志里出现过的真实地址（联通/移动段）
 	for _, ip := range []string{
