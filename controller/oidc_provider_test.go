@@ -22,12 +22,9 @@ import (
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
-	"github.com/glebarez/sqlite"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 // 端到端：本测试同时扮演"第三方应用"与"浏览器"，把 OIDC 授权码 + PKCE 全流程走完，
@@ -38,14 +35,12 @@ func setupOIDCEndToEnd(t *testing.T) (*model.User, *model.UserSession, *model.OI
 	previousIssuer := system_setting.ServerAddress
 	previousRedis, previousCache := common.RedisEnabled, common.MemoryCacheEnabled
 
-	dsn := os.Getenv("TEST_SQLITE_DSN")
-	if dsn == "" {
-		// 每个用例一个独立内存库：共享 DSN 会让前一个用例的数据撞唯一索引。
-		slot := strings.NewReplacer("/", "_", " ", "_").Replace(t.Name())
-		dsn = "file:oidc_e2e_" + slot + "?mode=memory&cache=shared"
+	kind := strings.ToLower(strings.TrimSpace(os.Getenv("TEST_OIDC_DIALECT")))
+	if kind == "" {
+		kind = "sqlite"
 	}
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
-	require.NoError(t, err)
+	// 复用仓库既有的三方言建库助手：每个用例一个独立库（MySQL/PostgreSQL 必须 loopback）。
+	db, _ := newAuditTestDatabase(t, kind, os.Getenv("TEST_"+strings.ToUpper(kind)+"_DSN"))
 	require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSession{}, &model.OIDCClient{},
 		&model.OIDCAuthCode{}, &model.OIDCRefreshToken{}, &model.OIDCConsent{}, &model.OIDCSigningKey{}, &model.AuditLog{}))
 	previousLogDB := model.LOG_DB
