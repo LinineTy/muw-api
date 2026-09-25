@@ -6649,6 +6649,7 @@
     "Upstream model detection task started. Track progress in System Info, then refresh to review staged updates.": "Tâche de détection des modèles en amont démarrée. Suivez la progression dans Infos système, puis actualisez pour examiner les mises à jour en attente.",
     "Upstream model list": "Liste des modèles en amont",
     "Upstream model updates applied: {{added}} added, {{removed}} removed, {{ignored}} ignored this time, {{totalIgnored}} total ignored models": "Mises à jour des modèles en amont appliquées : {{added}} ajoutés, {{removed}} supprimés, {{ignored}} ignorés cette fois, {{totalIgnored}} modèles ignorés au total",
+    "Upstream models not available": "Modèles amont indisponibles",
     "Upstream path": "Chemin amont",
     "Upstream path is required": "Le chemin amont est requis",
     "Upstream path must be a full URL or a path starting with /": "Le chemin amont doit être une URL complète ou un chemin commençant par /",

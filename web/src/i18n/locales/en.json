@@ -6649,6 +6649,7 @@
     "Upstream model detection task started. Track progress in System Info, then refresh to review staged updates.": "Upstream model detection task started. Track progress in System Info, then refresh to review staged updates.",
     "Upstream model list": "Upstream model list",
     "Upstream model updates applied: {{added}} added, {{removed}} removed, {{ignored}} ignored this time, {{totalIgnored}} total ignored models": "Upstream model updates applied: {{added}} added, {{removed}} removed, {{ignored}} ignored this time, {{totalIgnored}} total ignored models",
+    "Upstream models not available": "Upstream models not available",
     "Upstream path": "Upstream path",
     "Upstream path is required": "Upstream path is required",
     "Upstream path must be a full URL or a path starting with /": "Upstream path must be a full URL or a path starting with /",

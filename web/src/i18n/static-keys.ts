@@ -498,6 +498,7 @@ export const STATIC_I18N_KEYS = [
 
   // Upstream model updates
   'Upstream Model Updates',
+  'Upstream models not available',
   'Sync Fields',
   'Add Models',
   'Remove Models',

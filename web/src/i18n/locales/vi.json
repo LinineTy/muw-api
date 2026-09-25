@@ -6649,6 +6649,7 @@
     "Upstream model detection task started. Track progress in System Info, then refresh to review staged updates.": "Đã bắt đầu tác vụ phát hiện mô hình thượng nguồn. Theo dõi tiến trình trong Thông tin hệ thống, sau đó làm mới để xem các cập nhật đang chờ.",
     "Upstream model list": "Danh sách mô hình thượng nguồn",
     "Upstream model updates applied: {{added}} added, {{removed}} removed, {{ignored}} ignored this time, {{totalIgnored}} total ignored models": "Đã áp dụng cập nhật mô hình upstream: {{added}} đã thêm, {{removed}} đã xóa, {{ignored}} bỏ qua lần này, {{totalIgnored}} tổng mô hình đã bỏ qua",
+    "Upstream models not available": "Chưa lấy được mô hình từ nguồn",
     "Upstream path": "Đường dẫn upstream",
     "Upstream path is required": "Cần nhập đường dẫn upstream",
     "Upstream path must be a full URL or a path starting with /": "Đường dẫn upstream phải là URL đầy đủ hoặc đường dẫn bắt đầu bằng /",

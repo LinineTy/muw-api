@@ -6649,6 +6649,7 @@
     "Upstream model detection task started. Track progress in System Info, then refresh to review staged updates.": "Задача обнаружения моделей вышестоящего источника запущена. Следите за ходом в разделе «Информация о системе», затем обновите, чтобы просмотреть подготовленные изменения.",
     "Upstream model list": "Список моделей провайдера",
     "Upstream model updates applied: {{added}} added, {{removed}} removed, {{ignored}} ignored this time, {{totalIgnored}} total ignored models": "Обновления моделей применены: {{added}} добавлено, {{removed}} удалено, {{ignored}} проигнорировано, всего {{totalIgnored}} проигнорированных моделей",
+    "Upstream models not available": "Модели источника недоступны",
     "Upstream path": "Путь upstream",
     "Upstream path is required": "Путь upstream обязателен",
     "Upstream path must be a full URL or a path starting with /": "Путь upstream должен быть полным URL или путем, начинающимся с /",

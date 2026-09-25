@@ -270,7 +270,7 @@ test('commit fires once an edit settles on Enter or when focus leaves, not per k
   expect(onCommit).toHaveBeenCalledTimes(2)
 })
 
-test('上游模型下拉展开时拉取真实上游模型，并与渠道预设合并', async () => {
+test('上游模型下拉展开时拉取真实上游模型，有上游列表就不再列出预设', async () => {
   fetchUpstreamModelsMock.mockReset()
   fetchUpstreamModelsMock.mockResolvedValue({
     success: true,
@@ -282,7 +282,7 @@ test('上游模型下拉展开时拉取真实上游模型，并与渠道预设�
       value='{"client-a":"upstream-a"}'
       onChange={vi.fn()}
       channelId={7}
-      targetModelOptions={['preset-model']}
+      targetModelOptions={['discovery-model']}
     />
   )
   await user.click(screen.getByDisplayValue('upstream-a'))
@@ -290,7 +290,10 @@ test('上游模型下拉展开时拉取真实上游模型，并与渠道预设�
   await waitFor(() =>
     expect(screen.getByText('upstream-live-model')).toBeInTheDocument()
   )
-  expect(screen.getByText('preset-model')).toBeInTheDocument()
+  expect(screen.getByText('discovery-model')).toBeInTheDocument()
+  expect(
+    screen.queryByText('Upstream models not available')
+  ).not.toBeInTheDocument()
 
   // 关掉再展开：作废缓存，重新拉一次
   await user.keyboard('{Escape}')
@@ -303,17 +306,39 @@ test('上游模型下拉展开时拉取真实上游模型，并与渠道预设�
   )
 })
 
-test('没有 channelId（新建渠道）时不发请求，只用预设', async () => {
+test('拉不到上游模型时如实说没获取到，不拿站点模型目录凑数', async () => {
   fetchUpstreamModelsMock.mockReset()
+  fetchUpstreamModelsMock.mockResolvedValue({ success: false })
   const user = userEvent.setup()
   render(
     <ModelMappingEditor
       value='{"client-a":"upstream-a"}'
       onChange={vi.fn()}
-      targetModelOptions={['preset-model']}
+      channelId={7}
     />
   )
   await user.click(screen.getByDisplayValue('upstream-a'))
-  await waitFor(() => expect(screen.getByText('preset-model')).toBeInTheDocument())
+  await waitFor(() => expect(fetchUpstreamModelsMock).toHaveBeenCalledWith(7))
+  await waitFor(() =>
+    expect(
+      screen.getByText('Upstream models not available')
+    ).toBeInTheDocument()
+  )
+  // 空候选就是空候选：一个可选项都不给
+  expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+})
+
+test('没有 channelId（新建渠道）时不发请求，直接说没获取到', async () => {
+  fetchUpstreamModelsMock.mockReset()
+  const user = userEvent.setup()
+  render(
+    <ModelMappingEditor value='{"client-a":"upstream-a"}' onChange={vi.fn()} />
+  )
+  await user.click(screen.getByDisplayValue('upstream-a'))
+  await waitFor(() =>
+    expect(
+      screen.getByText('Upstream models not available')
+    ).toBeInTheDocument()
+  )
   expect(fetchUpstreamModelsMock).not.toHaveBeenCalled()
 })

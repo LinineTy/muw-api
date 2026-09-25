@@ -128,6 +128,7 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
   )
   // 展开时拉到的真实上游模型（弹层不关就复用这一份；关掉即作废，下次展开重新拉）
   const [liveTargetModels, setLiveTargetModels] = useState<string[] | null>(null)
+  const [targetFetching, setTargetFetching] = useState(false)
   const handleTargetOpenChange = useCallback(
     (open: boolean) => {
       if (!open) {
@@ -135,17 +136,22 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
         return
       }
       if (liveTargetModels || !props.channelId) return
-      fetchUpstreamModels(props.channelId)
+      const channelId = props.channelId
+      setTargetFetching(true)
+      void fetchUpstreamModels(channelId)
         .then((res) => {
           if (res?.success && Array.isArray(res.data)) setLiveTargetModels(res.data)
         })
         .catch(() => {
-          // 拉不到（未配置密钥/网络失败）就继续用渠道预设列表兜底
+          // 拉不到（未配置密钥 / 网络失败）就如实显示"未获取到上游模型"
         })
+        .finally(() => setTargetFetching(false))
     },
     [liveTargetModels, props.channelId]
   )
   const targetOptions = useMemo(() => {
+    // 上游模型列只列真实上游：展开时拉到的实时列表 + 调用方已获取到的上游列表。
+    // 两者都没有就是没获取到，不拿站点模型目录凑数。
     const seen = new Set<string>()
     const merged: { value: string; label: string }[] = []
     for (const model of [
@@ -158,6 +164,10 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
     }
     return merged
   }, [liveTargetModels, props.targetModelOptions])
+  // 没有候选时说清是"没获取到"，不要伪装成搜索无结果
+  let targetEmptyText = 'Upstream models not available'
+  if (targetFetching) targetEmptyText = 'Loading...'
+  if (targetOptions.length > 0) targetEmptyText = 'No matching items'
 
   const createRowId = () => {
     nextRowIdRef.current += 1
@@ -522,7 +532,7 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
                       handleRowChange(row.id, 'to', value)
                     }
                     placeholder='gpt-3.5-turbo-0125'
-                    emptyText='No matching items'
+                    emptyText={targetEmptyText}
                     allowCustomValue
                     disabled={props.disabled}
                     aria-label={t('Upstream Model Name')}

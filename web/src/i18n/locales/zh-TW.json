@@ -6649,6 +6649,7 @@
     "Upstream model detection task started. Track progress in System Info, then refresh to review staged updates.": "上游模型檢測任務已開始。可在「系統資訊」中查看進度，完成後重新整理以查看待處理的更新。",
     "Upstream model list": "上游模型清單",
     "Upstream model updates applied: {{added}} added, {{removed}} removed, {{ignored}} ignored this time, {{totalIgnored}} total ignored models": "已處理上游模型更新：加入 {{added}} 個，刪除 {{removed}} 個，本次忽略 {{ignored}} 個，目前已忽略模型 {{totalIgnored}} 個",
+    "Upstream models not available": "未取得上游模型",
     "Upstream path": "上游路徑",
     "Upstream path is required": "上游路徑不能為空",
     "Upstream path must be a full URL or a path starting with /": "上游路徑必須是完整 URL，或以 / 開頭的路徑",
