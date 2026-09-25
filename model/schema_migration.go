@@ -192,6 +192,10 @@ var migrations = []Migration{
 	// 创建；存量绑定（channels.account_id → 一条 order=0 绑定）由 ensureChannelAccountBindings
 	// 幂等回填。均为纯建表 + 幂等回填，无破坏性转换，只打名称戳。
 	{Name: "260910-account-multibind", Up: func(db *gorm.DB) error { return nil }},
+	// oidc_clients / oidc_auth_codes / oidc_refresh_tokens / oidc_consents / oidc_signing_keys
+	// （对外提供 OAuth2/OIDC 身份验证）：纯建表、无数据转换，由 AutoMigrate（升日期路径）或
+	// ensureOIDCProviderTables（已最新库的跳过路径）创建，只打名称戳。
+	{Name: "260926-oidc-provider", Up: func(db *gorm.DB) error { return nil }},
 }
 
 // ensureSchemaMigrationsTable 用纯 SQL 建 schema_migrations（主键 name，自带日期前缀），

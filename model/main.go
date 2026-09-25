@@ -397,6 +397,11 @@ func migrateDB() error {
 	if err := ensureChannelAccountBackfill(DB); err != nil {
 		return err
 	}
+	// oidc_* 表（对外提供 OAuth2/OIDC 身份验证，自研）：新表，存量库走"跳过
+	// AutoMigrate"路径，必须在这里幂等建表，否则 OIDC 端点报 no such table。
+	if err := ensureOIDCProviderTables(DB); err != nil {
+		return err
+	}
 	// channel_accounts 表（渠道↔账户 N:N 绑定）+ 存量绑定回填:幂等，每次启动执行。
 	// 顺序固定——先建表、再回填，最后才允许读路径依赖绑定表。
 	if err := ensureChannelAccountsTable(DB); err != nil {
@@ -608,6 +613,11 @@ func autoMigrateAll() error {
 		&CasbinRule{},
 		&AuthzRole{},
 		&CreditScoreLog{},
+		&OIDCClient{},
+		&OIDCAuthCode{},
+		&OIDCRefreshToken{},
+		&OIDCConsent{},
+		&OIDCSigningKey{},
 		&ConversationRecord{},
 		&CreditMarkerSuggestion{},
 		&CreditMarkerAnalysisLog{},
@@ -1262,6 +1272,20 @@ func ensureUserNotificationTable(db *gorm.DB) error {
 		return nil
 	}
 	return db.Migrator().CreateTable(&UserNotification{})
+}
+
+// ensureOIDCProviderTables 幂等建 OIDC Provider 的 5 张表。理由同
+// ensureChannelModelSettingsTable：已最新版本库走跳过路径，需显式补表。
+func ensureOIDCProviderTables(db *gorm.DB) error {
+	for _, table := range []any{&OIDCClient{}, &OIDCAuthCode{}, &OIDCRefreshToken{}, &OIDCConsent{}, &OIDCSigningKey{}} {
+		if db.Migrator().HasTable(table) {
+			continue
+		}
+		if err := db.Migrator().CreateTable(table); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ensureAccountsTable 幂等建 accounts 表（凭证与渠道解耦）。理由同

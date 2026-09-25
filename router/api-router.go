@@ -201,6 +201,27 @@ func SetApiRouter(router *gin.Engine) {
 			groupPinRoute.POST("/balance/pay", middleware.SubscriptionActionRateLimit(), controller.GroupPinBalancePay)
 			groupPinRoute.POST("/epay/pay", middleware.SubscriptionActionRateLimit(), controller.GroupPinRequestEpay)
 		}
+		// 对外提供 OIDC 身份验证：站内用户申请/自助授权管理 + 管理员审核。
+		oidcRoute := apiRouter.Group("/oauth")
+		oidcRoute.Use(middleware.UserAuth())
+		{
+			oidcRoute.GET("/consent/preview", controller.OIDCConsentPreview)
+			oidcRoute.POST("/consent/decision", middleware.SessionCookieOriginGuard(), controller.OIDCConsentDecision)
+			oidcRoute.GET("/applications/mine", controller.OIDCListMyApplications)
+			oidcRoute.POST("/applications", middleware.SessionCookieOriginGuard(), controller.OIDCSubmitApplication)
+			oidcRoute.GET("/consents", controller.OIDCListConsents)
+			oidcRoute.POST("/consents/silent", middleware.SessionCookieOriginGuard(), controller.OIDCUpdateConsentSilent)
+			oidcRoute.DELETE("/consents/:clientId", middleware.SessionCookieOriginGuard(), controller.OIDCRevokeConsent)
+		}
+		oidcAdminRoute := apiRouter.Group("/oauth/admin")
+		oidcAdminRoute.Use(middleware.AdminAuth())
+		{
+			oidcAdminRoute.GET("/applications", controller.OIDCAdminListApplications)
+			oidcAdminRoute.POST("/applications/:id/review", controller.OIDCAdminReviewApplication)
+			oidcAdminRoute.POST("/applications/:id/status", controller.OIDCAdminUpdateApplicationStatus)
+			oidcAdminRoute.DELETE("/applications/:id", controller.OIDCAdminDeleteApplication)
+		}
+
 		groupPinAdminRoute := apiRouter.Group("/group_pin/admin")
 		groupPinAdminRoute.Use(middleware.AdminAuth())
 		{
