@@ -144,3 +144,15 @@ export async function deleteApplication(id: number): Promise<void> {
   const res = await api.delete(`/api/oauth/admin/applications/${id}`)
   requireServerSuccess(res.data)
 }
+
+export async function revealApplicationSecret(id: number): Promise<string> {
+  const res = await api.get(`/api/oauth/applications/${id}/secret`)
+  return (requireServerSuccess(res.data).data as { client_secret: string })
+    .client_secret
+}
+
+export async function rotateApplicationSecret(id: number): Promise<string> {
+  const res = await api.post(`/api/oauth/applications/${id}/rotate-secret`)
+  return (requireServerSuccess(res.data).data as { client_secret: string })
+    .client_secret
+}

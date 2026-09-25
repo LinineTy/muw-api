@@ -35,8 +35,10 @@ var (
 type OIDCClient struct {
 	Id       int    `json:"id"`
 	ClientId string `json:"client_id" gorm:"type:varchar(64);uniqueIndex"`
-	// SecretHash 只在 confidential 应用上非空；批准时明文只返回一次，库里只存哈希。
+	// SecretHash 用于校验（只存哈希）；SecretCipher 是 AES-GCM 加密的明文，
+	// 仅用于"申请人本人在自己页面查看密钥"——管理员永远看不到密钥。
 	SecretHash    string `json:"-" gorm:"type:varchar(128)"`
+	SecretCipher  string `json:"-" gorm:"type:text"`
 	Name          string `json:"name" gorm:"type:varchar(128)"`
 	Description   string `json:"description" gorm:"type:text"`
 	RedirectUris  string `json:"redirect_uris" gorm:"type:text"`          // 每行一个，精确匹配

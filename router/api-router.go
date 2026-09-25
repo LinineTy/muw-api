@@ -208,6 +208,8 @@ func SetApiRouter(router *gin.Engine) {
 			oidcRoute.GET("/consent/preview", controller.OIDCConsentPreview)
 			oidcRoute.POST("/consent/decision", middleware.SessionCookieOriginGuard(), controller.OIDCConsentDecision)
 			oidcRoute.GET("/applications/mine", controller.OIDCListMyApplications)
+			oidcRoute.GET("/applications/:id/secret", controller.OIDCRevealApplicationSecret)
+			oidcRoute.POST("/applications/:id/rotate-secret", middleware.SessionCookieOriginGuard(), controller.OIDCRotateApplicationSecret)
 			oidcRoute.POST("/applications", middleware.SessionCookieOriginGuard(), controller.OIDCSubmitApplication)
 			oidcRoute.GET("/consents", controller.OIDCListConsents)
 			oidcRoute.POST("/consents/silent", middleware.SessionCookieOriginGuard(), controller.OIDCUpdateConsentSilent)

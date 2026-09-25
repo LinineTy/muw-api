@@ -196,6 +196,9 @@ var migrations = []Migration{
 	// （对外提供 OAuth2/OIDC 身份验证）：纯建表、无数据转换，由 AutoMigrate（升日期路径）或
 	// ensureOIDCProviderTables（已最新库的跳过路径）创建，只打名称戳。
 	{Name: "260926-oidc-provider", Up: func(db *gorm.DB) error { return nil }},
+	// oidc_clients.secret_cipher 列（存加密后的客户端密钥，供申请人自己查看；管理员看不到）：
+	// 已有表上的新列，存量库走"跳过 AutoMigrate"路径，由 ensureOIDCClientSecretCipherColumn 幂等补齐。
+	{Name: "260926-oidc-client-secret-cipher", Up: func(db *gorm.DB) error { return nil }},
 }
 
 // ensureSchemaMigrationsTable 用纯 SQL 建 schema_migrations（主键 name，自带日期前缀），

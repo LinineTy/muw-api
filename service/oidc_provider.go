@@ -183,13 +183,13 @@ func OIDCSubmitApplication(userId int, req OIDCApplicationRequest) (*model.OIDCC
 
 // OIDCApproveApplication 批准申请：可当场改 scope 与回调地址（回调地址改动等于换目标，
 // 必须由审核者确认）。confidential 应用返回一次性明文密钥，库里只留哈希。
-func OIDCApproveApplication(id, reviewerId int, scopes, redirectUris, allowedGroups []string) (*model.OIDCClient, string, error) {
+func OIDCApproveApplication(id, reviewerId int, scopes, redirectUris, allowedGroups []string) (*model.OIDCClient, error) {
 	client, err := model.GetOIDCClientById(id)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	if client.Status == model.OIDCClientStatusApproved {
-		return nil, "", errors.New("该应用已通过审核")
+		return nil, errors.New("该应用已通过审核")
 	}
 	req := OIDCApplicationRequest{
 		Name:         client.Name,
@@ -199,7 +199,7 @@ func OIDCApproveApplication(id, reviewerId int, scopes, redirectUris, allowedGro
 		ClientType:   client.ClientType,
 	}
 	if err := OIDCValidateApplicationRequest(&req); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	fields := map[string]any{
 		"name":           req.Name,
@@ -213,26 +213,76 @@ func OIDCApproveApplication(id, reviewerId int, scopes, redirectUris, allowedGro
 		"review_note":    "",
 		"updated_at":     common.GetTimestamp(),
 	}
-	plainSecret := ""
 	if client.ClientType == model.OIDCClientTypeConfidential {
-		plainSecret, err = oidcRandomToken(32)
+		hash, cipher, err := oidcGenerateClientSecret()
 		if err != nil {
-			return nil, "", err
-		}
-		hash, err := common.Password2Hash(plainSecret)
-		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
 		fields["secret_hash"] = hash
+		fields["secret_cipher"] = cipher
 	}
 	if err := model.UpdateOIDCClientFields(id, fields); err != nil {
-		return nil, "", err
+		return nil, err
 	}
-	client, err = model.GetOIDCClientById(id)
+	return model.GetOIDCClientById(id)
+}
+
+// oidcGenerateClientSecret 生成客户端密钥：一份哈希用于校验、一份 AES-GCM 密文用于
+// 申请人自己查看。管理员只能看到元数据，看不到密钥。
+func oidcGenerateClientSecret() (hash string, cipher string, err error) {
+	plain, err := oidcRandomToken(32)
 	if err != nil {
-		return nil, "", err
+		return "", "", err
 	}
-	return client, plainSecret, nil
+	hash, err = common.Password2Hash(plain)
+	if err != nil {
+		return "", "", err
+	}
+	cipher, err = common.AESGCMEncrypt(plain)
+	if err != nil {
+		return "", "", err
+	}
+	return hash, cipher, nil
+}
+
+// OIDCRevealClientSecret 申请人查看自己应用的密钥（只允许 owner；控制器侧记审计）。
+func OIDCRevealClientSecret(id, ownerUserId int) (string, error) {
+	client, err := model.GetOIDCClientById(id)
+	if err != nil {
+		return "", err
+	}
+	if client.OwnerUserId != ownerUserId {
+		return "", errors.New("只能查看自己申请的密钥")
+	}
+	if client.IsPublic() {
+		return "", errors.New("公开客户端没有密钥（使用 PKCE）")
+	}
+	if client.SecretCipher == "" {
+		return "", errors.New("该应用还没有密钥，请先重置")
+	}
+	return common.AESGCMDecrypt(client.SecretCipher)
+}
+
+// OIDCRotateClientSecret 申请人重置自己应用的密钥（旧密钥立即失效；已签发的令牌不受影响）。
+func OIDCRotateClientSecret(id, ownerUserId int) (string, error) {
+	client, err := model.GetOIDCClientById(id)
+	if err != nil {
+		return "", err
+	}
+	if client.OwnerUserId != ownerUserId {
+		return "", errors.New("只能重置自己申请的密钥")
+	}
+	if client.IsPublic() {
+		return "", errors.New("公开客户端没有密钥（使用 PKCE）")
+	}
+	hash, cipher, err := oidcGenerateClientSecret()
+	if err != nil {
+		return "", err
+	}
+	if err := model.UpdateOIDCClientFields(id, map[string]any{"secret_hash": hash, "secret_cipher": cipher, "updated_at": common.GetTimestamp()}); err != nil {
+		return "", err
+	}
+	return common.AESGCMDecrypt(cipher)
 }
 
 func OIDCRejectApplication(id, reviewerId int, note string) error {

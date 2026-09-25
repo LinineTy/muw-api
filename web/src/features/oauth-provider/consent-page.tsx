@@ -70,6 +70,17 @@ export function OAuthConsentPage({ request }: { request: string }) {
     }
   }
 
+  // 三种状态各给一句话，避免在 JSX 里套三元（可读性 + lint）。
+  let description = t('Start the sign-in from the application that sent you here.')
+  if (request) {
+    description = t('Checking the authorization request…')
+  }
+  if (preview) {
+    description = t('You will return to {{host}} after confirming.', {
+      host: preview.redirect_host,
+    })
+  }
+
   return (
     <div className='flex min-h-[60vh] items-center justify-center p-4'>
       <Card className='w-full max-w-lg'>
@@ -79,13 +90,7 @@ export function OAuthConsentPage({ request }: { request: string }) {
               ? t('{{name}} wants to sign you in', { name: preview.client_name })
               : t('Authorize application')}
           </CardTitle>
-          <CardDescription>
-            {preview
-              ? t('You will return to {{host}} after confirming.', {
-                  host: preview.redirect_host,
-                })
-              : t('Checking the authorization request…')}
-          </CardDescription>
+          <CardDescription>{description}</CardDescription>
         </CardHeader>
         <CardContent className='flex flex-col gap-4'>
           {error ? (
@@ -136,6 +141,7 @@ export function OAuthConsentPage({ request }: { request: string }) {
             </>
           ) : null}
         </CardContent>
+        {preview ? (
         <CardFooter className='flex justify-end gap-2'>
           <Button
             variant='outline'
@@ -148,6 +154,7 @@ export function OAuthConsentPage({ request }: { request: string }) {
             {t('Allow')}
           </Button>
         </CardFooter>
+        ) : null}
       </Card>
     </div>
   )

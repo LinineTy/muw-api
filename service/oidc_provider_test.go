@@ -322,3 +322,36 @@ func TestOIDCRefreshRotationAndReplayDetection(t *testing.T) {
 
 	_ = identity
 }
+
+func TestOIDCClientSecretOnlyVisibleToOwner(t *testing.T) {
+	setupOIDCTest(t)
+	owner := createOIDCTestUser(t, "secretowner", "default")
+	other := createOIDCTestUser(t, "secretother", "default")
+	hash, cipher, err := oidcGenerateClientSecret()
+	require.NoError(t, err)
+	client := &model.OIDCClient{ClientId: "muw_secret_client", Name: "密钥应用", SecretHash: hash, SecretCipher: cipher,
+		ClientType: model.OIDCClientTypeConfidential, Status: model.OIDCClientStatusApproved,
+		OwnerUserId: owner.Id, RedirectUris: "https://app.example.com/cb", Scopes: "openid",
+		CreatedAt: common.GetTimestamp(), UpdatedAt: common.GetTimestamp()}
+	require.NoError(t, model.DB.Create(client).Error)
+
+	// 申请人本人：可以查看，且看到的与重置结果一致
+	secret, err := OIDCRevealClientSecret(client.Id, owner.Id)
+	require.NoError(t, err)
+	assert.NotEmpty(t, secret)
+	assert.True(t, common.ValidatePasswordAndHash(secret, client.SecretHash))
+
+	// 别人（包括管理员）拿不到密钥
+	_, err = OIDCRevealClientSecret(client.Id, other.Id)
+	assert.Error(t, err, "非申请人不得查看密钥")
+	_, err = OIDCRotateClientSecret(client.Id, other.Id)
+	assert.Error(t, err, "非申请人不得重置密钥")
+
+	// 重置后旧密钥失效、新密钥可查看
+	rotated, err := OIDCRotateClientSecret(client.Id, owner.Id)
+	require.NoError(t, err)
+	assert.NotEqual(t, secret, rotated)
+	again, err := OIDCRevealClientSecret(client.Id, owner.Id)
+	require.NoError(t, err)
+	assert.Equal(t, rotated, again)
+}

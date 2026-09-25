@@ -38,7 +38,7 @@ export function OAuthAdminApplicationsPage() {
   const [status, setStatus] = useState<string>('pending')
   const [items, setItems] = useState<OAuthApplication[]>([])
   const [notes, setNotes] = useState<Record<number, string>>({})
-  const [approved, setApproved] = useState<{ clientId: string; secret: string } | null>(null)
+  const [approved, setApproved] = useState<{ clientId: string } | null>(null)
   const [busy, setBusy] = useState(false)
 
   const reload = useCallback(async (next: string) => {
@@ -75,7 +75,7 @@ export function OAuthAdminApplicationsPage() {
         allowed_groups: item.allowed_groups ?? [],
         note: notes[item.id] ?? '',
       })
-      setApproved({ clientId: result.client_id, secret: result.client_secret ?? '' })
+      setApproved({ clientId: result.client_id })
     }, t('Approved'))
 
   const reject = (item: OAuthApplication) =>
@@ -140,16 +140,10 @@ export function OAuthAdminApplicationsPage() {
               <code className='font-mono text-xs break-all'>
                 {approved.clientId}
               </code>
-              {approved.secret ? (
-                <>
-                  <span className='text-sm font-medium'>
-                    {t('Client secret, shown only once')}
-                  </span>
-                  <code className='font-mono text-xs break-all'>
-                    {approved.secret}
-                  </code>
-                </>
-              ) : null}
+              {/* 密钥不经过管理员：申请人可在「第三方应用」页自行查看/重置 */}
+              <span className='text-muted-foreground text-xs'>
+                {t('The applicant can view or reset the secret themselves.')}
+              </span>
             </div>
           ) : null}
 

@@ -360,12 +360,13 @@ func OIDCAdminReviewApplication(c *gin.Context) {
 	reviewerId := c.GetInt("id")
 	switch req.Action {
 	case "approve":
-		client, secret, err := service.OIDCApproveApplication(id, reviewerId, req.Scopes, req.RedirectUris, req.AllowedGroups)
+		// 密钥不进这里：管理员只看元数据，密钥由申请人在自己页面查看/重置。
+		client, err := service.OIDCApproveApplication(id, reviewerId, req.Scopes, req.RedirectUris, req.AllowedGroups)
 		if err != nil {
 			common.ApiError(c, err)
 			return
 		}
-		common.ApiSuccess(c, gin.H{"client_id": client.ClientId, "client_secret": secret, "status": client.Status})
+		common.ApiSuccess(c, gin.H{"client_id": client.ClientId, "status": client.Status})
 	case "reject":
 		if err := service.OIDCRejectApplication(id, reviewerId, req.Note); err != nil {
 			common.ApiError(c, err)
@@ -421,4 +422,50 @@ func OIDCAdminDeleteApplication(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusOK)
+}
+
+// OIDCRevealApplicationSecret 申请人查看自己 confidential 应用的密钥（每次查看记审计）。
+func OIDCRevealApplicationSecret(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiErrorMsg(c, "应用 id 不合法")
+		return
+	}
+	userId := c.GetInt("id")
+	secret, err := service.OIDCRevealClientSecret(id, userId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	oidcRecordSecretAudit(c, userId, id, "oidc_client_secret_viewed")
+	common.ApiSuccess(c, gin.H{"client_secret": secret})
+}
+
+// OIDCRotateApplicationSecret 申请人重置自己应用的密钥（旧密钥立即失效）。
+func OIDCRotateApplicationSecret(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiErrorMsg(c, "应用 id 不合法")
+		return
+	}
+	userId := c.GetInt("id")
+	secret, err := service.OIDCRotateClientSecret(id, userId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	oidcRecordSecretAudit(c, userId, id, "oidc_client_secret_rotated")
+	common.ApiSuccess(c, gin.H{"client_secret": secret})
+}
+
+func oidcRecordSecretAudit(c *gin.Context, userId, clientDbId int, action string) {
+	model.RecordAuditLog(c, model.AuditLog{
+		UserId:    userId,
+		Username:  c.GetString("username"),
+		ActorRole: c.GetInt("role"),
+		Category:  model.AuditCategorySecurity,
+		Action:    action,
+		Success:   true,
+		Content:   "application_id=" + strconv.Itoa(clientDbId),
+	})
 }
