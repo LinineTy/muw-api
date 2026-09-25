@@ -42,6 +42,8 @@ func setupOIDCEndToEnd(t *testing.T) (*model.User, *model.UserSession, *model.OI
 	}
 	// 复用仓库既有的三方言建库助手：每个用例一个独立库（MySQL/PostgreSQL 必须 loopback）。
 	db, _ := newAuditTestDatabase(t, kind, os.Getenv("TEST_"+strings.ToUpper(kind)+"_DSN"))
+	// 每个用例都是新库：清掉进程内的签名密钥缓存，否则第二轮会拿上一个库的 kid 去签。
+	service.ResetOIDCSigningKeyCacheForTest()
 	// 方言类型必须与真实连接一致：一批 ensure*/迁移分支靠它判断（漏设会把 SQLite DDL 发给 MySQL）。
 	previousMain, previousLog := common.MainDatabaseType(), common.LogDatabaseType()
 	common.SetDatabaseTypes(oidcDialectType(kind), oidcDialectType(kind))

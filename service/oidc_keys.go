@@ -219,3 +219,11 @@ func oidcSignIDToken(claims oidcIDTokenClaims) (string, error) {
 	token.Header["kid"] = material.kid
 	return token.SignedString(material.private)
 }
+
+// ResetOIDCSigningKeyCacheForTest 清掉进程内的签名密钥缓存。
+// 测试里每个用例会换到自己的库，缓存中的 kid 属于上一个库，会让 JWKS 与 id_token 对不上。
+func ResetOIDCSigningKeyCacheForTest() {
+	oidcSigningMu.Lock()
+	oidcKeyCache = nil
+	oidcSigningMu.Unlock()
+}
