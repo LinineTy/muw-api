@@ -9,6 +9,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"math/big"
+	"net"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -32,7 +34,7 @@ const (
 )
 
 var (
-	ErrOIDCIssuerInvalid = errors.New("OIDC 需要把站点地址（ServerAddress）配置为 https 地址")
+	ErrOIDCIssuerInvalid = errors.New("OIDC 需要把站点地址（ServerAddress）配置为 https 地址（本机部署可填 http://localhost 或 http://<私网IP>）")
 
 	oidcSigningMu sync.RWMutex
 	oidcKeyCache  *oidcSigningMaterial
@@ -49,19 +51,29 @@ func OIDCIssuer() (string, error) {
 	if issuer == "" {
 		return "", ErrOIDCIssuerInvalid
 	}
-	if !strings.HasPrefix(issuer, "https://") && !isLoopbackOrigin(issuer) {
+	if !strings.HasPrefix(issuer, "https://") && !isLocalOrigin(issuer) {
 		return "", ErrOIDCIssuerInvalid
 	}
 	return issuer, nil
 }
 
-func isLoopbackOrigin(origin string) bool {
-	for _, prefix := range []string{"http://localhost", "http://127.0.0.1", "http://[::1]"} {
-		if strings.HasPrefix(origin, prefix) {
-			return true
-		}
+// isLocalOrigin 判断来源是否"本地或内网"：回环、私网 IPv4、或 localhost 主机名。
+// 公网地址一律要求 https（OIDC 规范如此）；这里只给本机部署留口子——
+// 否则在内网用 http://<私网IP> 起来时，issuer 与回调地址校验会把整条流程拦死。
+func isLocalOrigin(origin string) bool {
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Host == "" {
+		return false
 	}
-	return false
+	host := parsed.Hostname()
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback() || ip.IsPrivate()
 }
 
 func oidcRandomToken(byteLen int) (string, error) {

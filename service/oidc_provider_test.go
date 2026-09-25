@@ -103,6 +103,8 @@ func TestOIDCValidateRedirectUriRules(t *testing.T) {
 		{"https://app.example.com:8443/cb", false},
 		{"http://localhost:5173/cb", false},
 		{"http://127.0.0.1:3000/cb", false},
+		{"http://192.168.1.50:3100/cb", false}, // 本地部署
+		{"http://10.0.0.7/cb", false},
 		{"http://app.example.com/cb", true},
 		{"https://app.example.com/cb*", true},
 		{"https://app.example.com/cb#frag", true},

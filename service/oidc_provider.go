@@ -120,8 +120,8 @@ func oidcValidateRedirectUri(uri string) error {
 	if parsed.Fragment != "" {
 		return errors.New("回调地址不能带 # 片段：" + uri)
 	}
-	if parsed.Scheme != "https" && !isLoopbackOrigin(parsed.Scheme+"://"+parsed.Host) {
-		return errors.New("回调地址必须使用 https（本机调试可用 http://localhost）：" + uri)
+	if parsed.Scheme != "https" && !isLocalOrigin(parsed.Scheme+"://"+parsed.Host) {
+		return errors.New("回调地址必须使用 https（本机部署可用 http://localhost 或 http://<私网IP>）：" + uri)
 	}
 	return nil
 }
