@@ -22,7 +22,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 
 import { updateUserSettings } from '../api'
-import { NotificationTab } from '../components/tabs/notification-tab'
+import { ProfileSettingsCard } from '../components/profile-settings-card'
 import type { UserProfile } from '../types'
 
 const profile: UserProfile = {
@@ -171,9 +171,10 @@ describe('user settings saves across profile and security', () => {
       .spyOn(api, 'put')
       .mockResolvedValue({ data: { success: true } })
     render(
-      <NotificationTab
+      <ProfileSettingsCard
         profile={{ ...profile, setting: JSON.stringify(settings) }}
-        onUpdate={onUpdate}
+        loading={false}
+        onProfileUpdate={onUpdate}
       />
     )
     expect(

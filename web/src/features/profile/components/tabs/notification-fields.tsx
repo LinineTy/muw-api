@@ -1,3 +1,4 @@
+// @muw-owned
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -16,37 +17,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import {
-  Bell,
-  Loader2,
-  Mail,
-  MessageSquareText,
-  Server,
-  Webhook,
-} from 'lucide-react'
-import { useState, useEffect, useCallback } from 'react'
+import { Bell, Mail, MessageSquareText, Server, Webhook } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 
 import { PasswordInput } from '@/components/password-input'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { handleServerError } from '@/lib/handle-server-error'
-import { ROLE } from '@/lib/roles'
 
-import { updateUserSettings } from '../../api'
 import { NOTIFICATION_METHODS } from '../../constants'
-import { normalizeUserSettings } from '../../lib/user-settings'
-import type { UserProfile, NotifyType } from '../../types'
-import {
-  PolicyBadge,
-  PREFERENCE_KEY_ACCEPT_UNPRICED,
-  PREFERENCE_KEY_UPSTREAM_NOTIFY,
-  usePreferencePolicy,
-} from '../preference-policy'
+import type { UserSettingsForm } from '../../lib/user-settings'
+import type { NotifyType } from '../../types'
 
 const NOTIFICATION_ICONS: Record<NotifyType, typeof Mail> = {
   email: Mail,
@@ -58,60 +39,18 @@ const NOTIFICATION_ICONS: Record<NotifyType, typeof Mail> = {
   web: MessageSquareText,
 }
 
-// ============================================================================
-// Settings Tab Component
-// ============================================================================
-
-interface NotificationTabProps {
-  profile: UserProfile | null
-  onUpdate: () => void
+type NotificationFieldsProps = {
+  settings: UserSettingsForm
+  onFieldChange: <K extends keyof UserSettingsForm>(
+    field: K,
+    value: UserSettingsForm[K]
+  ) => void
 }
 
-export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
+/** 通知方式与各渠道参数（「设置」卡的通知页签）。 */
+export function NotificationFields(props: NotificationFieldsProps) {
   const { t } = useTranslation()
-  const isAdmin = (profile?.role ?? 0) >= ROLE.ADMIN
-  const { forceOnSet, lockedSet } = usePreferencePolicy(
-    profile?.preference_policy
-  )
-  const [loading, setLoading] = useState(false)
-  const [settings, setSettings] = useState(() => normalizeUserSettings())
-
-  // Update form field helper
-  const updateField = useCallback(
-    <K extends keyof typeof settings>(
-      field: K,
-      value: (typeof settings)[K]
-    ) => {
-      setSettings((prev) => ({ ...prev, [field]: value }))
-    },
-    []
-  )
-
-  useEffect(() => {
-    if (profile?.setting) {
-      setSettings(normalizeUserSettings(profile.setting))
-    }
-  }, [profile])
-
-  const handleSave = async () => {
-    try {
-      setLoading(true)
-      const { record_ip_log: _recordIpLog, ...notificationSettings } = settings
-      const response = await updateUserSettings(notificationSettings)
-
-      if (response.success) {
-        toast.success(t('Settings updated successfully'))
-        onUpdate()
-      } else {
-        handleServerError(response, t('Failed to update settings'))
-      }
-    } catch (error) {
-      handleServerError(error, t('Failed to update settings'))
-    } finally {
-      setLoading(false)
-    }
-  }
-
+  const { settings, onFieldChange } = props
   const notifyType = settings.notify_type
 
   return (
@@ -123,7 +62,9 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
           value={[notifyType]}
           onValueChange={(value) => {
             const nextValue = value.find((item) => item !== notifyType)
-            if (nextValue) updateField('notify_type', nextValue as NotifyType)
+            if (nextValue) {
+              onFieldChange('notify_type', nextValue as NotifyType)
+            }
           }}
           aria-label={t('Notification Method')}
           variant='outline'
@@ -158,7 +99,7 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
           className='h-9'
           value={settings.quota_warning_threshold}
           onChange={(e) =>
-            updateField('quota_warning_threshold', Number(e.target.value))
+            onFieldChange('quota_warning_threshold', Number(e.target.value))
           }
           placeholder={t('Enter threshold')}
         />
@@ -176,7 +117,9 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
             type='email'
             className='h-9'
             value={settings.notification_email}
-            onChange={(e) => updateField('notification_email', e.target.value)}
+            onChange={(e) =>
+              onFieldChange('notification_email', e.target.value)
+            }
             placeholder={t('Leave empty to use account email')}
           />
         </div>
@@ -192,7 +135,7 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
               type='url'
               className='h-9'
               value={settings.webhook_url}
-              onChange={(e) => updateField('webhook_url', e.target.value)}
+              onChange={(e) => onFieldChange('webhook_url', e.target.value)}
               placeholder={t('https://example.com/webhook')}
             />
           </div>
@@ -201,7 +144,7 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
             <PasswordInput
               id='webhookSecret'
               value={settings.webhook_secret}
-              onChange={(e) => updateField('webhook_secret', e.target.value)}
+              onChange={(e) => onFieldChange('webhook_secret', e.target.value)}
               placeholder={t('Enter secret key')}
             />
           </div>
@@ -217,7 +160,7 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
             type='url'
             className='h-9'
             value={settings.bark_url}
-            onChange={(e) => updateField('bark_url', e.target.value)}
+            onChange={(e) => onFieldChange('bark_url', e.target.value)}
             placeholder={t('https://api.day.app/yourkey/{{title}}/{{content}}')}
           />
           <p className='text-muted-foreground text-xs'>
@@ -236,7 +179,7 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
               type='url'
               className='h-9'
               value={settings.gotify_url}
-              onChange={(e) => updateField('gotify_url', e.target.value)}
+              onChange={(e) => onFieldChange('gotify_url', e.target.value)}
               placeholder={t('https://gotify.example.com')}
             />
             <p className='text-muted-foreground text-xs'>
@@ -248,7 +191,7 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
             <PasswordInput
               id='gotifyToken'
               value={settings.gotify_token}
-              onChange={(e) => updateField('gotify_token', e.target.value)}
+              onChange={(e) => onFieldChange('gotify_token', e.target.value)}
               placeholder={t('Enter application token')}
             />
             <p className='text-muted-foreground text-xs'>
@@ -265,14 +208,12 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
               max='10'
               value={settings.gotify_priority}
               onChange={(e) =>
-                updateField('gotify_priority', Number(e.target.value))
+                onFieldChange('gotify_priority', Number(e.target.value))
               }
               placeholder='5'
             />
             <p className='text-muted-foreground text-xs'>
-              {t(
-                'Priority level from 0 (lowest) to 10 (highest), default is 5'
-              )}
+              {t('Priority level from 0 (lowest) to 10 (highest), default is 5')}
             </p>
           </div>
           <div className='bg-muted/50 rounded-lg border p-3 sm:p-4'>
@@ -298,97 +239,6 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
           </div>
         </>
       )}
-
-      {/* Divider */}
-      <div className='border-t' />
-
-      {/* Preferences Section */}
-      <div className='space-y-3'>
-        <div>
-          <h4 className='text-sm font-medium'>{t('Preferences')}</h4>
-          <p className='text-muted-foreground mt-1 text-xs'>
-            {t('Configure your account behavior preferences')}
-          </p>
-        </div>
-
-        {/* Receive Upstream Model Update Notifications (admin only) */}
-        {isAdmin && (
-          <div className='flex items-start justify-between gap-3 rounded-lg border p-3 sm:items-center sm:p-4'>
-            <div className='space-y-0.5'>
-              <div className='flex flex-wrap items-center gap-2'>
-                <Label htmlFor='upstreamModelUpdateNotify'>
-                  {t('Receive Upstream Model Update Notifications')}
-                </Label>
-                <PolicyBadge
-                  forced={forceOnSet.has(PREFERENCE_KEY_UPSTREAM_NOTIFY)}
-                  locked={lockedSet.has(PREFERENCE_KEY_UPSTREAM_NOTIFY)}
-                />
-              </div>
-              <p className='text-muted-foreground line-clamp-3 text-xs sm:line-clamp-none sm:text-sm'>
-                {t(
-                  'Only available for admins. When enabled, you will receive a summary notification via your selected method when the scheduled model check detects upstream model changes or check failures.'
-                )}
-              </p>
-            </div>
-            <Switch
-              id='upstreamModelUpdateNotify'
-              className='shrink-0'
-              checked={
-                forceOnSet.has(PREFERENCE_KEY_UPSTREAM_NOTIFY) ||
-                settings.upstream_model_update_notify_enabled
-              }
-              disabled={
-                forceOnSet.has(PREFERENCE_KEY_UPSTREAM_NOTIFY) ||
-                lockedSet.has(PREFERENCE_KEY_UPSTREAM_NOTIFY)
-              }
-              onCheckedChange={(checked) =>
-                updateField('upstream_model_update_notify_enabled', checked)
-              }
-            />
-          </div>
-        )}
-
-        {/* Accept Unset Model Price */}
-        <div className='flex items-start justify-between gap-3 rounded-lg border p-3 sm:items-center sm:p-4'>
-          <div className='space-y-0.5'>
-            <div className='flex flex-wrap items-center gap-2'>
-              <Label htmlFor='acceptUnsetPrice'>
-                {t('Accept Unpriced Models')}
-              </Label>
-              <PolicyBadge
-                forced={forceOnSet.has(PREFERENCE_KEY_ACCEPT_UNPRICED)}
-                locked={lockedSet.has(PREFERENCE_KEY_ACCEPT_UNPRICED)}
-              />
-            </div>
-            <p className='text-muted-foreground text-xs sm:text-sm'>
-              {t('Allow using models without price configuration')}
-            </p>
-          </div>
-          <Switch
-            id='acceptUnsetPrice'
-            className='shrink-0'
-            checked={
-              forceOnSet.has(PREFERENCE_KEY_ACCEPT_UNPRICED) ||
-              settings.accept_unset_model_ratio_model
-            }
-            disabled={
-              forceOnSet.has(PREFERENCE_KEY_ACCEPT_UNPRICED) ||
-              lockedSet.has(PREFERENCE_KEY_ACCEPT_UNPRICED)
-            }
-            onCheckedChange={(checked) =>
-              updateField('accept_unset_model_ratio_model', checked)
-            }
-          />
-        </div>
-      </div>
-
-      {/* Save Button */}
-      <div className='flex justify-end'>
-        <Button onClick={handleSave} disabled={loading}>
-          {loading && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
-          {loading ? t('Saving...') : t('Save Settings')}
-        </Button>
-      </div>
     </div>
   )
 }

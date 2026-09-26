@@ -23,9 +23,12 @@ import {
 import type { NotifyType, UpdateUserSettingsRequest } from '../types'
 import { parseUserSettings } from './format'
 
-export function normalizeUserSettings(
-  setting?: string
-): Required<UpdateUserSettingsRequest> & { notify_type: NotifyType } {
+/** 设置表单的完整取值（各字段都已补齐默认值）。 */
+export type UserSettingsForm = Required<UpdateUserSettingsRequest> & {
+  notify_type: NotifyType
+}
+
+export function normalizeUserSettings(setting?: string): UserSettingsForm {
   const parsed = parseUserSettings(setting)
   const notifyType =
     NOTIFICATION_METHODS.find((method) => method.value === parsed.notify_type)

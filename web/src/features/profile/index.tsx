@@ -28,7 +28,6 @@ import { useAuthStore } from '@/stores/auth-store'
 
 import { CreditScoreCard } from './components/credit-score-card'
 import { GroupPinCard } from './components/group-pin-card'
-import { LanguagePreferencesCard } from './components/language-preferences-card'
 import { ProfileHeader } from './components/profile-header'
 import { ProfileSettingsCard } from './components/profile-settings-card'
 import { SidebarModulesCard } from './components/sidebar-modules-card'
@@ -54,21 +53,18 @@ export function Profile() {
           </CardStaggerItem>
 
           <CardStaggerItem>
-            {/* 双列主侧：左=设置/偏好/边栏模块/云空间，右=分组与固定/风控分/容量。
-                分组信息单一来源在右栏分组卡，header 不再重复展示组/钉。 */}
+            {/* 双列主侧：左=云空间/设置/边栏模块，右=分组与固定/风控分/容量。
+                分组信息单一来源在右栏分组卡，header 不再重复展示组/钉。
+                云空间在最上：账号设置类卡片是低频入口。 */}
             <div className='grid gap-4 sm:gap-5 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-start'>
               <div className='space-y-4 sm:space-y-6'>
+                <CloudSpaceCard space={space} onChanged={refreshSpace} />
                 <ProfileSettingsCard
                   profile={profile}
                   loading={loading}
                   onProfileUpdate={refreshProfile}
                 />
-                <LanguagePreferencesCard
-                  profile={profile}
-                  onProfileUpdate={refreshProfile}
-                />
                 {canConfigureSidebar && <SidebarModulesCard />}
-                <CloudSpaceCard space={space} onChanged={refreshSpace} />
               </div>
 
               <div className='space-y-4 sm:space-y-6 xl:sticky xl:top-6'>
