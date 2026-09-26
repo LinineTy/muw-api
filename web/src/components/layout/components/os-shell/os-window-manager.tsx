@@ -9,7 +9,7 @@ import {
 } from '@/stores/os-windows-store'
 
 import { OsDesktopPlaceholder } from './os-desktop-placeholder'
-import { isSettingsUrl } from './os-open'
+import { isSettingsUrl, isStandaloneProtocolUrl } from './os-open'
 import { OsWindowFrame } from './os-window'
 import { useOsNavItems, matchOsNavItem } from './use-os-nav'
 
@@ -80,7 +80,8 @@ export function OsWindowManager() {
     const isDesktopPath = path === SHELL_HOME || path === '/console'
     if (!isDesktopPath) {
       // 设置页已退出多窗口:回桌面壳空态,不开窗
-      if (isSettingsUrl(path)) {
+      // 协议端点(同意页/回调)同样独立成页,不经壳
+      if (isSettingsUrl(path) || isStandaloneProtocolUrl(path)) {
         navigate({ to: SHELL_HOME, replace: true })
         return
       }

@@ -84,9 +84,14 @@ export function OAuthConsentPage({ request }: { request: string }) {
     })
   }
 
+  // 独立窗体：自带全屏背景与遮罩，不依赖桌面壳（壳里渲染会丢掉协议参数）
   return (
-    <div className='flex min-h-[60vh] items-center justify-center p-4'>
-      <Card className='w-full max-w-lg'>
+    <div className='relative flex min-h-svh items-center justify-center p-4'>
+      <div
+        className='bg-background/60 absolute inset-0 backdrop-blur-sm'
+        aria-hidden='true'
+      />
+      <Card className='relative w-full max-w-md shadow-2xl'>
         <CardHeader>
           <CardTitle>
             {preview

@@ -1,6 +1,6 @@
+import { useNavigate } from '@tanstack/react-router'
 // @muw-owned
 import { useCallback } from 'react'
-import { useNavigate } from '@tanstack/react-router'
 
 /**
  * OS 桌面壳开窗能力(宿主注入):
@@ -17,6 +17,15 @@ export function isSettingsUrl(url: string) {
   return url.startsWith('/settings') || url.startsWith('/system-settings')
 }
 
+/** 协议端点(授权同意页 / 第三方登录回调)不该被壳接管:
+ *  它们的参数就是协议状态(state/request),渲染进窗口会打断授权流程,
+ *  所以始终独立成页(与设置页一样走主层布局)。注意排除控制台页面 /oauth/applications。 */
+export function isStandaloneProtocolUrl(url: string) {
+  const path = url.split('?')[0]
+  if (path === '/oauth/consent') return true
+  return /^\/oauth\/[^/]+$/.test(path) && path !== '/oauth/applications'
+}
+
 export function getOsShellOpenWindow(): OsShellOpenWindow | undefined {
   return (window as unknown as { __osShellOpenWindow?: OsShellOpenWindow })
     .__osShellOpenWindow
@@ -30,14 +39,17 @@ export function getOsShellOpenWindow(): OsShellOpenWindow | undefined {
 export function useOsShellNavigate() {
   const navigate = useNavigate()
 
-  return useCallback((url: string, fallback?: () => void): boolean => {
-    const open = getOsShellOpenWindow()
-    if (open?.(url)) return true
-    if (fallback) {
-      fallback()
+  return useCallback(
+    (url: string, fallback?: () => void): boolean => {
+      const open = getOsShellOpenWindow()
+      if (open?.(url)) return true
+      if (fallback) {
+        fallback()
+        return true
+      }
+      navigate({ to: url } as never)
       return true
-    }
-    navigate({ to: url } as never)
-    return true
-  }, [navigate])
+    },
+    [navigate]
+  )
 }

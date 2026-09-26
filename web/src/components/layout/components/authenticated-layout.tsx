@@ -34,7 +34,11 @@ import { AppHeader } from './app-header'
 import { AppSidebar } from './app-sidebar'
 import { MobileNavFab } from './mobile-nav-fab'
 import { OsDock } from './os-shell/os-dock'
-import { isSettingsUrl, type OsShellOpenWindow } from './os-shell/os-open'
+import {
+  isSettingsUrl,
+  isStandaloneProtocolUrl,
+  type OsShellOpenWindow,
+} from './os-shell/os-open'
 import { OsSideStrip } from './os-shell/os-side-strip'
 import { OsWhale } from './os-shell/os-whale'
 import { OsWindowManager } from './os-shell/os-window-manager'
@@ -65,9 +69,10 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
   const isMobile = useIsMobile()
   // 设置页退出多窗口:始终主层完整布局(侧栏分区导航复杂度高,窗口化收益低,
   // 且仅管理员可见)——多窗口只对非设置页生效
-  const isSettingsRoute = isSettingsUrl(
-    useLocation({ select: (s) => s.pathname })
-  )
+  const pathname = useLocation({ select: (s) => s.pathname })
+  const isSettingsRoute = isSettingsUrl(pathname)
+  // 协议端点(授权同意页/回调)独立成页:不挂壳、不留侧栏与顶栏
+  const isProtocolRoute = isStandaloneProtocolUrl(pathname)
   useIframeTransparentBackground(IN_OS_WINDOW)
 
   // 主层(OS 壳 PC 分支)安装认证桥:窗口 iframe 的 session 刷新委托主层,
@@ -79,6 +84,18 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
   // iframe 内容模式:OS 窗口内的页面 = 原布局去顶栏。
   // AppSidebar 只给系统设置类页面(/settings)——侧栏分区导航仅设置页需要,
   // 其他页面全宽铺窗口,避免每页都顶一条侧栏
+  if (isProtocolRoute) {
+    return (
+      <LayoutProvider>
+        <SearchProvider>
+          <SidebarProvider defaultOpen={defaultOpen} className='flex-col'>
+            {props.children ?? <AnimatedOutlet />}
+          </SidebarProvider>
+        </SearchProvider>
+      </LayoutProvider>
+    )
+  }
+
   if (IN_OS_WINDOW) {
     return (
       <LayoutProvider>
@@ -142,7 +159,7 @@ function OsShellDesktopHost() {
         __osShellOpenWindow?: OsShellOpenWindow
       }
     ).__osShellOpenWindow = (url: string) => {
-      if (isSettingsUrl(url)) return false
+      if (isSettingsUrl(url) || isStandaloneProtocolUrl(url)) return false
       const nav = matchOsNavItem(items, url)
       openWindow({ url, title: nav?.title ?? url })
       return true
