@@ -37,6 +37,11 @@ const (
 	OIDCGrantAuthorization = "authorization_code"
 	OIDCGrantRefresh       = "refresh_token"
 
+	// prompt 只支持 none / consent（login 需要站内"强制重登"机制，暂不支持 ⇒ 按
+	// OAuth 对未知参数的约定忽略，discovery 里也就不声明 prompt 能力）。
+	OIDCPromptNone    = "none"
+	OIDCPromptConsent = "consent"
+
 	OIDCAuthCodeTTL         = 60 * time.Second
 	OIDCAccessTokenTTL      = 15 * time.Minute
 	OIDCRefreshTokenTTL     = 30 * 24 * time.Hour
@@ -44,6 +49,10 @@ const (
 
 	oidcClientIdPrefix = "muw_"
 	oidcAccessTokenUse = "oidc_access"
+
+	// 自助申请的配额：总量封顶，且同时在审的不能堆太多（审核队列是人工的）。
+	oidcMaxApplicationsPerUser = 10
+	oidcMaxPendingPerUser      = 3
 )
 
 var (
@@ -157,6 +166,17 @@ func OIDCSubmitApplication(userId int, req OIDCApplicationRequest) (*model.OIDCC
 	}
 	if err := OIDCValidateApplicationRequest(&req); err != nil {
 		return nil, err
+	}
+	// 配额：自助申请必须封顶，否则一个账号就能把审核队列刷满。
+	total, pending, err := model.CountOIDCClientsByOwner(userId)
+	if err != nil {
+		return nil, err
+	}
+	if total >= oidcMaxApplicationsPerUser {
+		return nil, errors.New("每个账号最多创建 " + strconv.Itoa(oidcMaxApplicationsPerUser) + " 个应用，请先删除不再使用的")
+	}
+	if pending >= oidcMaxPendingPerUser {
+		return nil, errors.New("还有 " + strconv.Itoa(oidcMaxPendingPerUser) + " 个应用在等审核，等这批处理完再提交")
 	}
 	suffix, err := oidcRandomToken(12)
 	if err != nil {
@@ -311,7 +331,8 @@ func OIDCUpdateClientStatus(id, reviewerId int, status, note string) error {
 		if err != nil {
 			return err
 		}
-		return model.RevokeOIDCRefreshTokensByUserClient(0, client.ClientId, common.GetTimestamp())
+		// 按应用撤销、不限用户：禁用是"立刻切断这个应用"的动作，不能只撤某一个用户那条。
+		return model.RevokeOIDCRefreshTokensByClient(client.ClientId, common.GetTimestamp())
 	}
 	return nil
 }
@@ -336,7 +357,7 @@ func OIDCDeleteApplication(id int) error {
 		return err
 	}
 	now := common.GetTimestamp()
-	if err := model.RevokeOIDCRefreshTokensByUserClient(0, client.ClientId, now); err != nil {
+	if err := model.RevokeOIDCRefreshTokensByClient(client.ClientId, now); err != nil {
 		return err
 	}
 	if err := model.DeleteOIDCConsentsByClient(client.ClientId); err != nil {
@@ -747,14 +768,16 @@ func OIDCParseAccessToken(raw string) (*oidcAccessClaims, error) {
 
 // OIDCUserInfo 组装 userinfo 响应：先确认应用仍可用、会话仍有效、用户仍在允许的分组里，
 // 再按 token 里的 scope 裁剪字段。权限收回（禁用应用/登出/改密/调分组）都会立刻生效。
-func OIDCUserInfo(accessToken string) (map[string]any, error) {
+// 第二个返回值是 token 所属的 client_id：userinfo 响应体里不含 aud，调用方（明细记录）
+// 需要它来把这次调用归到某个应用上。
+func OIDCUserInfo(accessToken string) (map[string]any, string, error) {
 	claims, err := OIDCParseAccessToken(accessToken)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	client, err := OIDCGetApprovedClient(claims.ClientId)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	identity := AuthIdentity{
 		UserID:          atoiOrZero(claims.Subject),
@@ -763,26 +786,26 @@ func OIDCUserInfo(accessToken string) (map[string]any, error) {
 		SessionVersion:  claims.SessionVersion,
 	}
 	if identity.UserID <= 0 {
-		return nil, ErrAuthTokenInvalid
+		return nil, "", ErrAuthTokenInvalid
 	}
 	_, userBase, err := ValidateLoginSession(identity)
 	if err != nil {
-		return nil, errors.New("登录会话已失效")
+		return nil, "", errors.New("登录会话已失效")
 	}
 	if !OIDCClientAllowsUser(client, userBase) {
-		return nil, errors.New("当前账号不在该应用允许的范围内")
+		return nil, "", errors.New("当前账号不在该应用允许的范围内")
 	}
 	// 授权记录被撤销（用户在"我的授权"里解除）后，已签发的 access_token 也必须立刻失效。
 	consent, err := model.GetOIDCConsent(identity.UserID, client.ClientId)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if consent == nil {
-		return nil, errors.New("该应用的授权已被撤销")
+		return nil, "", errors.New("该应用的授权已被撤销")
 	}
 	user, err := model.GetUserById(identity.UserID, false)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	out := map[string]any{"sub": strconv.Itoa(identity.UserID)}
 	idClaims := oidcIDTokenClaims{}
@@ -803,7 +826,7 @@ func OIDCUserInfo(accessToken string) (map[string]any, error) {
 	if idClaims.Group != "" {
 		out["group"] = idClaims.Group
 	}
-	return out, nil
+	return out, client.ClientId, nil
 }
 
 func atoiOrZero(raw string) int {
@@ -825,8 +848,16 @@ const (
 // 前端同意页，同意页再带着它回来：参数由服务端签名，用户改不动 state/nonce/scope，
 // 也就不需要为一次性的授权请求建表。
 type oidcAuthorizeRequestClaims struct {
-	TokenUse            string   `json:"token_use"`
-	ClientId            string   `json:"client_id"`
+	TokenUse string `json:"token_use"`
+	ClientId string `json:"client_id"`
+	// UserId 是发起这次授权请求的登录账号（授权端点只知道 Cookie 层面的东西，
+	// 通常拿不到 ⇒ 0）。非 0 时，同意与决策环节要求"完成者就是发起者"。
+	UserId int `json:"user_id,omitempty"`
+	// FlowIdHash 是浏览器绑定标识的 HMAC（见 OIDCIssueFlowCookie）：同意页必须
+	// 拿得出对应的 Cookie 才能继续，否则这次凭据是被别的浏览器捡走的。
+	FlowIdHash string `json:"flow_id_hash"`
+	// Prompt 原样带过去：决策环节据此决定"客户端要求 none"时要回什么错误码。
+	Prompt              string   `json:"prompt,omitempty"`
 	RedirectUri         string   `json:"redirect_uri"`
 	Scopes              []string `json:"scopes"`
 	State               string   `json:"state,omitempty"`
@@ -836,7 +867,9 @@ type oidcAuthorizeRequestClaims struct {
 	jwt.RegisteredClaims
 }
 
-func OIDCIssueAuthorizeRequestToken(client *model.OIDCClient, req OIDCAuthorizeRequest, scopes []string) (string, error) {
+// OIDCIssueAuthorizeRequestToken 把"已通过校验的授权请求"签给前端同意页。
+// userId 与 flowIdHash 是"发起者"与"发起浏览器"的绑定（拿不到时传 0 / ""）。
+func OIDCIssueAuthorizeRequestToken(client *model.OIDCClient, req OIDCAuthorizeRequest, scopes []string, userId int, flowIdHash string) (string, error) {
 	issuer, err := OIDCIssuer()
 	if err != nil {
 		return "", err
@@ -845,6 +878,9 @@ func OIDCIssueAuthorizeRequestToken(client *model.OIDCClient, req OIDCAuthorizeR
 	claims := oidcAuthorizeRequestClaims{
 		TokenUse:            oidcAuthorizeRequestUse,
 		ClientId:            client.ClientId,
+		UserId:              userId,
+		FlowIdHash:          flowIdHash,
+		Prompt:              req.Prompt,
 		RedirectUri:         req.RedirectUri,
 		Scopes:              scopes,
 		State:               req.State,
@@ -882,7 +918,8 @@ func OIDCParseAuthorizeRequestToken(raw string) (*oidcAuthorizeRequestClaims, er
 	if err != nil {
 		return nil, ErrOIDCInvalidRequest
 	}
-	if !parsed.Valid || claims.TokenUse != oidcAuthorizeRequestUse || claims.ClientId == "" || claims.CodeChallenge == "" {
+	if !parsed.Valid || claims.TokenUse != oidcAuthorizeRequestUse || claims.ClientId == "" ||
+		claims.CodeChallenge == "" || claims.FlowIdHash == "" {
 		return nil, ErrOIDCInvalidRequest
 	}
 	return claims, nil

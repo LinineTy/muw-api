@@ -44,6 +44,10 @@ func OIDCConsentPreview(c *gin.Context) {
 		common.ApiErrorMsg(c, "登录状态已失效")
 		return
 	}
+	if !service.OIDCFlowMatches(c, claims.FlowIdHash) {
+		common.ApiErrorMsg(c, "授权请求与当前浏览器不匹配，请回到应用重新发起登录")
+		return
+	}
 	userStatus, err := model.GetUserCache(identity.UserID)
 	if err != nil {
 		common.ApiError(c, err)
@@ -51,6 +55,11 @@ func OIDCConsentPreview(c *gin.Context) {
 	}
 	if !service.OIDCClientAllowsUser(client, userStatus) {
 		common.ApiErrorMsg(c, "当前账号不在该应用允许的范围内")
+		return
+	}
+	needsConsent, err := service.OIDCNeedsConsent(identity.UserID, client.ClientId, claims.Scopes)
+	if err != nil {
+		common.ApiError(c, err)
 		return
 	}
 	owner := ""
@@ -74,6 +83,11 @@ func OIDCConsentPreview(c *gin.Context) {
 		"scopes":          claims.Scopes,
 		"scope_catalog":   oidcScopeSummaries,
 		"remember_silent": silent,
+		// needs_consent=false ⇒ 此前已同意、开了「以后不再询问」且这次没有新增 scope：
+		// 同意页据此直接放行，不再要求用户点一次（静默同意）。
+		"needs_consent": needsConsent,
+		// prompt=none 且需要交互时，同意页不渲染界面，直接把错误回给应用。
+		"prompt": claims.Prompt,
 	})
 }
 
@@ -107,6 +121,14 @@ func OIDCConsentDecision(c *gin.Context) {
 		common.ApiErrorMsg(c, "登录状态已失效")
 		return
 	}
+	if !service.OIDCFlowMatches(c, claims.FlowIdHash) {
+		common.ApiErrorMsg(c, "授权请求与当前浏览器不匹配，请回到应用重新发起登录")
+		return
+	}
+	if claims.UserId > 0 && claims.UserId != identity.UserID {
+		common.ApiErrorMsg(c, "该授权请求由其他账号发起，请回到应用重新发起登录")
+		return
+	}
 	client, err := service.OIDCGetApprovedClient(claims.ClientId)
 	if err != nil {
 		common.ApiError(c, err)
@@ -123,7 +145,13 @@ func OIDCConsentDecision(c *gin.Context) {
 	}
 	if !req.Approve {
 		oidcRecordConsentAudit(c, identity.UserID, client.ClientId, false, "")
-		common.ApiSuccess(c, gin.H{"redirect_url": oidcAuthorizationRedirect(claims.RedirectUri, claims.State, "access_denied", "用户拒绝了授权", "")})
+		// prompt=none 的请求本来就不允许弹界面：这一条不是"用户拒绝"，而是"需要交互
+		// 但客户端要求 none"，按规范回 interaction_required。
+		errCode, errDescription := "access_denied", "用户拒绝了授权"
+		if claims.Prompt == service.OIDCPromptNone {
+			errCode, errDescription = "interaction_required", "需要用户确认，但请求要求不进行交互"
+		}
+		common.ApiSuccess(c, gin.H{"redirect_url": oidcAuthorizationRedirect(claims.RedirectUri, claims.State, errCode, errDescription, "")})
 		return
 	}
 	if err := model.UpsertOIDCConsent(identity.UserID, client.ClientId, strings.Join(claims.Scopes, " "), req.Silent); err != nil {
@@ -536,7 +564,9 @@ func OIDCDeleteApplicationSelf(c *gin.Context) {
 	common.ApiSuccess(c, nil)
 }
 
-// OIDCApplicationUsage 应用详情页的"谁在用"列表（申请人本人或管理员）。
+// OIDCApplicationUsage 应用详情的用量（申请人本人或管理员）。
+// 申请人只看聚合（调用数/失败数/去重用户数/最近调用）：终端用户的身份与来源是
+// 运营侧数据，站内用户对应用只有使用权。逐用户明细只给管理员。
 func OIDCApplicationUsage(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -548,21 +578,28 @@ func OIDCApplicationUsage(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	role := c.GetInt("role")
-	if role < common.RoleAdminUser && client.OwnerUserId != c.GetInt("id") {
+	isAdmin := c.GetInt("role") >= common.RoleAdminUser
+	if !isAdmin && client.OwnerUserId != c.GetInt("id") {
 		common.ApiErrorMsg(c, "只能查看自己应用的使用记录")
 		return
 	}
-	rows, err := model.OIDCApplicationUsage(client.ClientId)
+	totals, err := model.OIDCUsageTotalsFor(model.OIDCUsageScopeForClients([]string{client.ClientId}), 0)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	items := make([]gin.H, 0, len(rows))
-	for _, row := range rows {
-		items = append(items, gin.H{"user_id": row.UserId, "token_count": row.TokenCount, "last_issued_at": row.LastIssuedAt})
+	items := make([]gin.H, 0)
+	if isAdmin {
+		rows, err := model.OIDCApplicationUsage(client.ClientId)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		for _, row := range rows {
+			items = append(items, gin.H{"user_id": row.UserId, "token_count": row.TokenCount, "last_issued_at": row.LastIssuedAt})
+		}
 	}
-	common.ApiSuccess(c, gin.H{"items": items})
+	common.ApiSuccess(c, gin.H{"totals": totals, "items": items})
 }
 
 // OIDCUsageStats 统计：scope=self 只看自己；scope=all 仅管理员可用（照数据统计的做法）。
@@ -580,39 +617,17 @@ func OIDCUsageStats(c *gin.Context) {
 	common.ApiSuccess(c, summary)
 }
 
-// OIDCAccessLogs 协议调用明细：管理员可用 scope=all 看全站，普通用户只能看
-// 自己申请的应用（scope=self，默认）。返回列表 + 总数 + 汇总卡片数据。
+// OIDCAccessLogs 协议调用明细，**仅管理员**：带终端用户的 user_id / IP / UA，
+// 是运营侧数据。站内用户对应用只有使用权（对齐 L 站：只看得到自己创建的应用与
+// 自己授权过的站点），他们要看用量就走 /api/oauth/usage 的聚合口径。
 func OIDCAccessLogs(c *gin.Context) {
-	userId := c.GetInt("id")
-	role := c.GetInt("role")
+	if c.GetInt("role") < common.RoleAdminUser {
+		common.ApiErrorMsg(c, "只有管理员能查看调用明细")
+		return
+	}
 	filter := model.OIDCAccessLogFilter{
 		ClientId: strings.TrimSpace(c.Query("client_id")),
 		Action:   strings.TrimSpace(c.Query("action")),
-	}
-	if c.Query("scope") == "all" {
-		if role < common.RoleAdminUser {
-			common.ApiErrorMsg(c, "只有管理员能查看全站调用记录")
-			return
-		}
-	} else {
-		// 用户维度：只认自己申请的应用；一个都没有就直接返回空，别退化成"不限"。
-		clients, err := model.ListOIDCClientsByOwner(userId)
-		if err != nil {
-			common.ApiError(c, err)
-			return
-		}
-		ids := make([]string, 0, len(clients))
-		for _, client := range clients {
-			ids = append(ids, client.ClientId)
-		}
-		if len(ids) == 0 {
-			common.ApiSuccess(c, gin.H{
-				"items": []any{}, "total": 0, "page": 1, "page_size": 20,
-				"summary": model.OIDCAccessLogSummary{},
-			})
-			return
-		}
-		filter.ClientIds = ids
 	}
 	if raw := strings.TrimSpace(c.Query("success")); raw != "" {
 		value := raw == "true" || raw == "1"
@@ -648,10 +663,130 @@ func OIDCAccessLogs(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	if logs == nil {
-		logs = []*model.OIDCAccessLog{}
+	items := make([]gin.H, 0, len(logs))
+	names := make(map[string]string)
+	ids := make([]string, 0, len(logs))
+	for _, entry := range logs {
+		if entry.ClientId != "" {
+			ids = append(ids, entry.ClientId)
+		}
+	}
+	if clients, err := model.ListOIDCClientsByClientIds(ids); err == nil {
+		for _, client := range clients {
+			names[client.ClientId] = client.Name
+		}
+	}
+	for _, entry := range logs {
+		items = append(items, gin.H{
+			"id": entry.Id, "client_id": entry.ClientId, "client_name": names[entry.ClientId],
+			"user_id": entry.UserId, "action": entry.Action, "grant_type": entry.GrantType,
+			"scopes": entry.Scopes, "ip": entry.Ip, "user_agent": entry.UserAgent,
+			"success": entry.Success, "error_code": entry.ErrorCode, "error_message": entry.ErrorMsg,
+			"request_id": entry.RequestId, "created_at": entry.CreatedAt,
+		})
 	}
 	common.ApiSuccess(c, gin.H{
-		"items": logs, "total": total, "page": page, "page_size": pageSize, "summary": summary,
+		"items": items, "total": total, "page": page, "page_size": pageSize, "summary": summary,
 	})
+}
+
+// oidcUsageScope 解析统计口径：scope=all 仅管理员；其余一律"只认自己创建的应用"
+// （一个都没有时由 ClientIdsEmpty 兜住，绝不退化成全站）。
+func oidcUsageScope(c *gin.Context) (model.OIDCUsageScope, bool) {
+	if c.Query("scope") == "all" {
+		if c.GetInt("role") < common.RoleAdminUser {
+			common.ApiErrorMsg(c, "只有管理员可以查看全站统计")
+			return model.OIDCUsageScope{}, false
+		}
+		return model.OIDCUsageScopeAll(), true
+	}
+	clients, err := model.ListOIDCClientsByOwner(c.GetInt("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return model.OIDCUsageScope{}, false
+	}
+	ids := make([]string, 0, len(clients))
+	for _, client := range clients {
+		ids = append(ids, client.ClientId)
+	}
+	return model.OIDCUsageScopeForClients(ids), true
+}
+
+// OIDCUsageOverview 用量总览：按应用聚合 + 按天趋势 + 失败原因 Top。
+// 管理员可切全站（scope=all），其余人只看自己创建的应用；tz_offset 是前端时区
+// 偏移（分钟，东八区传 480），按它切"天"。
+func OIDCUsageOverview(c *gin.Context) {
+	scope, ok := oidcUsageScope(c)
+	if !ok {
+		return
+	}
+	days, err := strconv.Atoi(c.DefaultQuery("days", "14"))
+	if err != nil || days < 1 || days > 90 {
+		days = 14
+	}
+	tzMinutes, err := strconv.Atoi(c.DefaultQuery("tz_offset", "0"))
+	if err != nil || tzMinutes < -840 || tzMinutes > 840 {
+		tzMinutes = 0
+	}
+	tzOffset := int64(tzMinutes) * 60
+	now := common.GetTimestamp()
+	// 从"今天零点"往前推，让趋势图的最后一根是当天而不是"24 小时前"。
+	todayStart := (now+tzOffset)/86400*86400 - tzOffset
+	since := todayStart - int64(days-1)*86400
+
+	applications, err := model.OIDCApplicationUsageRows(scope, 100)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	clients, err := model.ListOIDCClientsByClientIds(oidcClientIdsOf(applications))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	meta := make(map[string]*model.OIDCClient, len(clients))
+	for _, client := range clients {
+		meta[client.ClientId] = client
+	}
+	appItems := make([]gin.H, 0, len(applications))
+	for _, row := range applications {
+		name, status := row.ClientId, ""
+		if client := meta[row.ClientId]; client != nil {
+			name, status = client.Name, client.Status
+		}
+		appItems = append(appItems, gin.H{
+			"client_id": row.ClientId, "name": name, "status": status,
+			"calls": row.Calls, "failed_calls": row.FailedCalls,
+			"active_users": row.ActiveUsers, "last_call_at": row.LastCallAt,
+		})
+	}
+	daily, err := model.OIDCDailyUsageRows(scope, since, tzOffset)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	failures, err := model.OIDCErrorUsageRows(scope, since, 10)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	totals, err := model.OIDCUsageTotalsFor(scope, since)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"applications": appItems, "daily": daily, "failures": failures,
+		"totals": totals, "days": days, "tz_offset": tzMinutes,
+	})
+}
+
+func oidcClientIdsOf(rows []*model.OIDCApplicationUsageRow) []string {
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if row.ClientId != "" {
+			ids = append(ids, row.ClientId)
+		}
+	}
+	return ids
 }

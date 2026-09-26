@@ -62,6 +62,14 @@ func oidcAccessEntry(c *gin.Context, clientId string, userId int, action string,
 	return entry
 }
 
+// oidcGrantEntry 与 oidcAccessEntry 相同，额外带上 grant_type：换令牌这类动作
+// 光看 action 分不出是首次换码还是刷新（明细表里也是空列，统计没法按授权类型拆）。
+func oidcGrantEntry(c *gin.Context, clientId string, userId int, action, grantType string, scopes []string, errCode string, cause error) model.OIDCAccessLog {
+	entry := oidcAccessEntry(c, clientId, userId, action, scopes, errCode, cause)
+	entry.GrantType = grantType
+	return entry
+}
+
 // oidcScopeSummary 审计正文里的 scope 摘要（截断，避免超长内容进审计表）。
 func oidcScopeSummary(scopes []string) string {
 	joined := strings.Join(scopes, " ")

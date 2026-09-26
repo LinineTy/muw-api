@@ -162,6 +162,17 @@ func rateLimitFactory(enable *bool, num *int, duration *int64, mark string) func
 	}
 }
 
+// OIDCProtocolRateLimit guards the OIDC provider protocol endpoints with their own
+// per-IP bucket. They are reachable without a session, and /oauth/token verifies the
+// client secret with bcrypt on every call, so leaving them unbounded turns a leaked
+// client_id into a CPU sink. The limits are far looser than CriticalRateLimit on
+// purpose: a third-party backend exchanges tokens and reads userinfo server-to-server,
+// so one address can legitimately stand for a whole site's traffic. Kept in a separate
+// bucket (own mark) so protocol traffic never drains the sign-in bucket.
+func OIDCProtocolRateLimit() func(c *gin.Context) {
+	return rateLimitFactory(&common.CriticalRateLimitEnable, &common.OIDCProtocolRateLimitNum, &common.OIDCProtocolRateLimitDuration, "OIDC")
+}
+
 func GlobalWebRateLimit() func(c *gin.Context) {
 	return rateLimitFactory(&common.GlobalWebRateLimitEnable, &common.GlobalWebRateLimitNum, &common.GlobalWebRateLimitDuration, "GW")
 }

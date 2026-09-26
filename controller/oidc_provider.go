@@ -86,10 +86,21 @@ func OIDCAuthorize(c *gin.Context) {
 		oidcProtocolError(c, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
+	// 浏览器绑定：同意页必须拿得出这个 Cookie 才算"同一次流程"，防止别人捡走这次
+	// 授权请求（凭据在 URL 里）后用另一个浏览器替他点「允许」。授权端点拿不到登录态
+	// （会话凭据是 JS 里的 Bearer + Path=/api/user/auth 的 Strict 刷新 Cookie），
+	// 所以这里只能绑"浏览器"，绑不了"人"；人的绑定在决策环节用会话做。
+	flowIdHash, err := service.OIDCIssueFlowCookie(c)
+	if err != nil {
+		oidcProtocolError(c, http.StatusInternalServerError, "server_error", err.Error())
+		return
+	}
+	// 明细里的 user_id 在这一步恒为 0：授权端点是浏览器裸跳转，没有身份。真正的
+	// "谁同意了什么"记在决策环节（oidc_consent_granted）与换令牌那一行。
 	oidcRecordAccess(c, oidcAccessEntry(c, client.ClientId, 0, oidcActionAuthorize, scopes, "", nil))
 	oidcRecordAudit(c, 0, "oidc_authorize_requested", true,
 		oidcAuditClient(client.ClientId)+" scopes="+oidcScopeSummary(scopes))
-	requestToken, err := service.OIDCIssueAuthorizeRequestToken(client, req, scopes)
+	requestToken, err := service.OIDCIssueAuthorizeRequestToken(client, req, scopes, 0, flowIdHash)
 	if err != nil {
 		oidcProtocolError(c, http.StatusInternalServerError, "server_error", err.Error())
 		return
@@ -131,13 +142,13 @@ func OIDCToken(c *gin.Context) {
 	case service.OIDCGrantRefresh:
 		result, err := service.OIDCRefreshTokens(client, c.PostForm("refresh_token"))
 		if err != nil {
-			oidcRecordAccess(c, oidcAccessEntry(c, client.ClientId, 0, oidcActionRefresh, nil, "invalid_grant", err))
+			oidcRecordAccess(c, oidcGrantEntry(c, client.ClientId, 0, oidcActionRefresh, service.OIDCGrantRefresh, nil, "invalid_grant", err))
 			oidcRecordAudit(c, 0, "oidc_token_failed", false,
 				oidcAuditClient(client.ClientId)+" grant=refresh_token reason="+err.Error())
 			oidcTokenError(c, http.StatusBadRequest, "invalid_grant", err.Error())
 			return
 		}
-		oidcRecordAccess(c, oidcAccessEntry(c, client.ClientId, result.UserId, oidcActionRefresh, result.Scopes, "", nil))
+		oidcRecordAccess(c, oidcGrantEntry(c, client.ClientId, result.UserId, oidcActionRefresh, service.OIDCGrantRefresh, result.Scopes, "", nil))
 		oidcRecordAudit(c, result.UserId, "oidc_token_refreshed", true,
 			oidcAuditClient(client.ClientId)+" "+oidcUserRef(result.UserId))
 		c.JSON(http.StatusOK, result)
@@ -150,7 +161,7 @@ func oidcExchangeAuthorizationCode(c *gin.Context, client *model.OIDCClient) {
 	code, err := service.OIDCRedeemAuthCode(c.PostForm("code"), client.ClientId, c.PostForm("redirect_uri"), c.PostForm("code_verifier"))
 	if err != nil {
 		// code 是一次性凭据，重放/伪造都走这里：明细只记结果，不记 code 原文。
-		oidcRecordAccess(c, oidcAccessEntry(c, client.ClientId, 0, oidcActionToken, nil, "invalid_grant", err))
+		oidcRecordAccess(c, oidcGrantEntry(c, client.ClientId, 0, oidcActionToken, service.OIDCGrantAuthorization, nil, "invalid_grant", err))
 		oidcRecordAudit(c, 0, "oidc_token_failed", false,
 			oidcAuditClient(client.ClientId)+" grant=authorization_code reason="+err.Error())
 		oidcTokenError(c, http.StatusBadRequest, "invalid_grant", err.Error())
@@ -158,7 +169,7 @@ func oidcExchangeAuthorizationCode(c *gin.Context, client *model.OIDCClient) {
 	}
 	identity, err := service.ValidateSessionReference(code.UserId, code.SessionId)
 	if err != nil {
-		oidcRecordAccess(c, oidcAccessEntry(c, client.ClientId, code.UserId, oidcActionToken, strings.Fields(code.Scopes), "invalid_grant", err))
+		oidcRecordAccess(c, oidcGrantEntry(c, client.ClientId, code.UserId, oidcActionToken, service.OIDCGrantAuthorization, strings.Fields(code.Scopes), "invalid_grant", err))
 		oidcRecordAudit(c, code.UserId, "oidc_token_failed", false,
 			oidcAuditClient(client.ClientId)+" grant=authorization_code reason=登录会话已失效")
 		oidcTokenError(c, http.StatusBadRequest, "invalid_grant", "登录会话已失效，请重新授权")
@@ -166,13 +177,13 @@ func oidcExchangeAuthorizationCode(c *gin.Context, client *model.OIDCClient) {
 	}
 	result, err := service.OIDCIssueTokens(client, code, identity)
 	if err != nil {
-		oidcRecordAccess(c, oidcAccessEntry(c, client.ClientId, code.UserId, oidcActionToken, strings.Fields(code.Scopes), "invalid_grant", err))
+		oidcRecordAccess(c, oidcGrantEntry(c, client.ClientId, code.UserId, oidcActionToken, service.OIDCGrantAuthorization, strings.Fields(code.Scopes), "invalid_grant", err))
 		oidcRecordAudit(c, code.UserId, "oidc_token_failed", false,
 			oidcAuditClient(client.ClientId)+" grant=authorization_code reason="+err.Error())
 		oidcTokenError(c, http.StatusBadRequest, "invalid_grant", err.Error())
 		return
 	}
-	oidcRecordAccess(c, oidcAccessEntry(c, client.ClientId, code.UserId, oidcActionToken, result.Scopes, "", nil))
+	oidcRecordAccess(c, oidcGrantEntry(c, client.ClientId, code.UserId, oidcActionToken, service.OIDCGrantAuthorization, result.Scopes, "", nil))
 	oidcRecordAudit(c, code.UserId, "oidc_token_issued", true,
 		oidcAuditClient(client.ClientId)+" "+oidcUserRef(code.UserId)+" scopes="+oidcScopeSummary(result.Scopes))
 	c.JSON(http.StatusOK, result)
@@ -202,7 +213,7 @@ func oidcTokenError(c *gin.Context, status int, code, description string) {
 func OIDCUserInfo(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	token := oidcBearerToken(c)
-	info, err := service.OIDCUserInfo(token)
+	info, clientId, err := service.OIDCUserInfo(token)
 	if err != nil {
 		// 只进明细、不进审计：这是高频只读端点，失败多为令牌过期/会话失效。
 		oidcRecordAccess(c, oidcAccessEntry(c, "", 0, oidcActionUserInfo, nil, "invalid_token", err))
@@ -210,7 +221,7 @@ func OIDCUserInfo(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_token", "error_description": err.Error()})
 		return
 	}
-	oidcRecordAccess(c, oidcAccessEntry(c, oidcInfoAudience(info), oidcInfoSubject(info), oidcActionUserInfo, nil, "", nil))
+	oidcRecordAccess(c, oidcAccessEntry(c, clientId, oidcInfoSubject(info), oidcActionUserInfo, nil, "", nil))
 	c.JSON(http.StatusOK, info)
 }
 
@@ -244,25 +255,6 @@ func OIDCRevoke(c *gin.Context) {
 	oidcRecordAccess(c, oidcAccessEntry(c, client.ClientId, 0, oidcActionRevoke, nil, "", nil))
 	oidcRecordAudit(c, 0, "oidc_token_revoked", true, oidcAuditClient(client.ClientId))
 	c.Status(http.StatusOK)
-}
-
-// oidcInfoAudience 取 userinfo 响应里的 aud（就是 client_id）；aud 可能是字符串或数组。
-func oidcInfoAudience(info map[string]any) string {
-	switch aud := info["aud"].(type) {
-	case string:
-		return aud
-	case []string:
-		if len(aud) > 0 {
-			return aud[0]
-		}
-	case []any:
-		if len(aud) > 0 {
-			if first, ok := aud[0].(string); ok {
-				return first
-			}
-		}
-	}
-	return ""
 }
 
 // oidcInfoSubject 取 userinfo 响应里的 sub（站内 user id）。

@@ -342,6 +342,12 @@ var (
 	CriticalRateLimitNum            = 20
 	CriticalRateLimitDuration int64 = 20 * 60
 
+	// OIDC 协议端点（/oauth/*）的独立限流桶。数值比 CriticalRateLimit 宽松得多：
+	// 这些端点由第三方后端服务端直连（一个出口 IP 可能代表整站用户），
+	// 而 /oauth/token 每次调用都要做一次 bcrypt 校验，不设限就是白送的 CPU 消耗口。
+	OIDCProtocolRateLimitNum            = 600
+	OIDCProtocolRateLimitDuration int64 = 60
+
 	UploadRateLimitNum            = 10
 	UploadRateLimitDuration int64 = 60
 

@@ -48,67 +48,6 @@ func RecordOIDCTokenIssued(clientId string, userId int, now int64) error {
 	return err
 }
 
-// OIDCUsageSummary 是统计接口的返回体。
-type OIDCUsageSummary struct {
-	Applications   int64 `json:"applications"`
-	Authorizations int64 `json:"authorizations"`
-	TokenIssued    int64 `json:"token_issued"`
-	LastIssuedAt   int64 `json:"last_issued_at"`
-	ActiveUsers    int64 `json:"active_users"`
-}
-
-// OIDCUsageForUser 只统计某个用户自己的数据（普通用户的视图）。
-func OIDCUsageForUser(userId int) (*OIDCUsageSummary, error) {
-	summary := &OIDCUsageSummary{}
-	if err := DB.Model(&OIDCClient{}).Where("owner_user_id = ?", userId).Count(&summary.Applications).Error; err != nil {
-		return nil, err
-	}
-	if err := DB.Model(&OIDCConsent{}).Where("user_id = ?", userId).Count(&summary.Authorizations).Error; err != nil {
-		return nil, err
-	}
-	var row struct {
-		Total int64
-		Last  int64
-	}
-	if err := DB.Model(&OIDCUsageStat{}).
-		Select("COALESCE(SUM(token_count), 0) AS total, COALESCE(MAX(last_issued_at), 0) AS last").
-		Where("user_id = ?", userId).Scan(&row).Error; err != nil {
-		return nil, err
-	}
-	summary.TokenIssued = row.Total
-	summary.LastIssuedAt = row.Last
-	if err := DB.Model(&OIDCUsageStat{}).Where("user_id = ?", userId).Count(&summary.ActiveUsers).Error; err != nil {
-		return nil, err
-	}
-	return summary, nil
-}
-
-// OIDCUsageAll 是管理员的"全部"视图。
-func OIDCUsageAll() (*OIDCUsageSummary, error) {
-	summary := &OIDCUsageSummary{}
-	if err := DB.Model(&OIDCClient{}).Count(&summary.Applications).Error; err != nil {
-		return nil, err
-	}
-	if err := DB.Model(&OIDCConsent{}).Count(&summary.Authorizations).Error; err != nil {
-		return nil, err
-	}
-	var row struct {
-		Total int64
-		Last  int64
-	}
-	if err := DB.Model(&OIDCUsageStat{}).
-		Select("COALESCE(SUM(token_count), 0) AS total, COALESCE(MAX(last_issued_at), 0) AS last").
-		Scan(&row).Error; err != nil {
-		return nil, err
-	}
-	summary.TokenIssued = row.Total
-	summary.LastIssuedAt = row.Last
-	if err := DB.Model(&OIDCUsageStat{}).Distinct("user_id").Count(&summary.ActiveUsers).Error; err != nil {
-		return nil, err
-	}
-	return summary, nil
-}
-
 // OIDCApplicationUsage 返回某个应用的逐用户使用行（应用详情页展示"谁在用、用了多少次"）。
 func OIDCApplicationUsage(clientId string) ([]*OIDCUsageStat, error) {
 	var rows []*OIDCUsageStat

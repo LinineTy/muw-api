@@ -4,6 +4,9 @@ package service
 import (
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strconv"
 	"strings"
@@ -13,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/system_setting"
+	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -188,7 +192,7 @@ func TestOIDCAuthorizeRequestTokenRoundTripAndTamper(t *testing.T) {
 		CodeChallenge:       "challenge-abc",
 		CodeChallengeMethod: OIDCPKCEMethodS256,
 	}
-	token, err := OIDCIssueAuthorizeRequestToken(client, req, req.Scopes)
+	token, err := OIDCIssueAuthorizeRequestToken(client, req, req.Scopes, 0, "flow-hash")
 	require.NoError(t, err)
 
 	claims, err := OIDCParseAuthorizeRequestToken(token)
@@ -401,28 +405,81 @@ func TestOIDCApplicationProfileEditRependsOnRedirectChange(t *testing.T) {
 func TestOIDCUsageCounters(t *testing.T) {
 	setupOIDCTest(t)
 	user := createOIDCTestUser(t, "usageuser", "default")
-	client := &model.OIDCClient{ClientId: "muw_usage_client", Name: "计数", ClientType: model.OIDCClientTypePublic,
-		Status: model.OIDCClientStatusApproved, OwnerUserId: user.Id, RedirectUris: "https://app.example.com/cb",
-		Scopes: "openid", CreatedAt: common.GetTimestamp(), UpdatedAt: common.GetTimestamp()}
-	require.NoError(t, model.DB.Create(client).Error)
+	other := createOIDCTestUser(t, "otheruser", "default")
+	now := common.GetTimestamp()
+
+	newClient := func(clientId, name string, owner int) *model.OIDCClient {
+		client := &model.OIDCClient{ClientId: clientId, Name: name, ClientType: model.OIDCClientTypePublic,
+			Status: model.OIDCClientStatusApproved, OwnerUserId: owner, RedirectUris: "https://app.example.com/cb",
+			Scopes: "openid", CreatedAt: now, UpdatedAt: now}
+		require.NoError(t, model.DB.Create(client).Error)
+		return client
+	}
+	client := newClient("muw_usage_client", "计数", user.Id)
+	otherClient := newClient("muw_usage_other", "别人的应用", other.Id)
 	require.NoError(t, model.UpsertOIDCConsent(user.Id, client.ClientId, "openid", false))
 
-	now := common.GetTimestamp()
+	// 令牌计数：我的应用 3+1 次、别人的应用 5 次
 	for i := range 3 {
 		require.NoError(t, model.RecordOIDCTokenIssued(client.ClientId, user.Id, now+int64(i)))
 	}
 	require.NoError(t, model.RecordOIDCTokenIssued(client.ClientId, 4242, now))
+	for i := range 5 {
+		require.NoError(t, model.RecordOIDCTokenIssued(otherClient.ClientId, other.Id, now+int64(10+i)))
+	}
+	// 调用明细：我的应用 4 次（1 次失败、2 个终端用户）、别人的应用 2 次
+	log := func(clientId string, userId int, success bool) {
+		require.NoError(t, model.DB.Create(&model.OIDCAccessLog{
+			ClientId: clientId, UserId: userId, Action: "token", Success: success,
+			ErrorCode: map[bool]string{true: "", false: "invalid_grant"}[success], CreatedAt: now,
+		}).Error)
+	}
+	log(client.ClientId, user.Id, true)
+	log(client.ClientId, 4242, true)
+	log(client.ClientId, 4242, false)
+	log(client.ClientId, 4242, true)
+	log(otherClient.ClientId, other.Id, true)
+	log(otherClient.ClientId, 0, true)
 
 	self, err := OIDCUsageSummaryFor("self", user.Id)
 	require.NoError(t, err)
-	assert.EqualValues(t, 3, self.TokenIssued, "只统计自己的签发次数")
 	assert.EqualValues(t, 1, self.Applications)
 	assert.EqualValues(t, 1, self.Authorizations)
+	// self 的口径是"我的应用被怎么用"，不是"我自己用了什么"：
+	assert.EqualValues(t, 4, self.TokenIssued, "我的应用签发的令牌数（含别人在用）")
+	assert.EqualValues(t, 4, self.Calls)
+	assert.EqualValues(t, 1, self.FailedCalls)
+	assert.EqualValues(t, 2, self.ActiveUsers, "使用过我应用的去重终端用户")
 
 	all, err := OIDCUsageSummaryFor("all", user.Id)
 	require.NoError(t, err)
-	assert.EqualValues(t, 4, all.TokenIssued, "全站口径应含其他用户")
-	assert.EqualValues(t, 2, all.ActiveUsers)
+	assert.EqualValues(t, 2, all.Applications)
+	assert.EqualValues(t, 9, all.TokenIssued)
+	assert.EqualValues(t, 6, all.Calls)
+	assert.EqualValues(t, 1, all.FailedCalls)
+	assert.EqualValues(t, 3, all.ActiveUsers, "全站去重终端用户（user / 4242 / other）")
+
+	// 一个应用都没有的用户：必须是 0，绝不能退化成"全站"
+	noApps := createOIDCTestUser(t, "noapps", "default")
+	empty, err := OIDCUsageSummaryFor("self", noApps.Id)
+	require.NoError(t, err)
+	assert.EqualValues(t, 0, empty.Calls, "没有应用时不得退化成全站口径")
+	assert.EqualValues(t, 0, empty.TokenIssued)
+	assert.EqualValues(t, 0, empty.ActiveUsers)
+
+	// 失败原因分布与按应用聚合
+	scope := model.OIDCUsageScopeForClients([]string{client.ClientId})
+	totals, err := model.OIDCUsageTotalsFor(scope, 0)
+	require.NoError(t, err)
+	assert.EqualValues(t, 4, totals.Calls)
+	failures, err := model.OIDCErrorUsageRows(scope, 0, 10)
+	require.NoError(t, err)
+	require.Len(t, failures, 1)
+	assert.Equal(t, "invalid_grant", failures[0].ErrorCode)
+	appRows, err := model.OIDCApplicationUsageRows(model.OIDCUsageScopeAll(), 10)
+	require.NoError(t, err)
+	require.Len(t, appRows, 2)
+	assert.EqualValues(t, 4, appRows[0].Calls, "按调用量倒序")
 
 	rows, err := model.OIDCApplicationUsage(client.ClientId)
 	require.NoError(t, err)
@@ -475,4 +532,156 @@ func TestOIDCUnapprovedClientHasNoCredentials(t *testing.T) {
 	secret, err := OIDCRotateClientSecret(approved.Id, owner.Id)
 	require.NoError(t, err)
 	assert.NotEmpty(t, secret)
+}
+
+// 回归：禁用应用必须真的撤销"该应用的全部刷新令牌"。
+// 此前两处调用传的是 userId=0，落到 `user_id = 0` 上 —— 真实令牌的 user_id 恒大于 0，
+// 所以等于什么都没撤：禁用这把"急停开关"不生效，重新启用后 30 天内的旧刷新令牌全复活。
+func TestOIDCDisableRevokesAllRefreshTokens(t *testing.T) {
+	db := setupOIDCTest(t)
+	owner := createOIDCTestUser(t, "revoke-owner", "default")
+	now := common.GetTimestamp()
+	client := &model.OIDCClient{ClientId: "muw_revoke_client", Name: "撤销", ClientType: model.OIDCClientTypePublic,
+		Status: model.OIDCClientStatusApproved, OwnerUserId: owner.Id, RedirectUris: "https://app.example.com/cb",
+		Scopes: "openid offline_access", CreatedAt: now, UpdatedAt: now}
+	require.NoError(t, db.Create(client).Error)
+	for i, userId := range []int{7, 1439} {
+		require.NoError(t, db.Create(&model.OIDCRefreshToken{
+			TokenHash: fmt.Sprintf("revoke-hash-%d", i), ClientId: client.ClientId,
+			UserId: userId, ExpiresAt: now + 86400, CreatedAt: now,
+		}).Error)
+	}
+
+	require.NoError(t, OIDCUpdateClientStatus(client.Id, owner.Id, model.OIDCClientStatusDisabled, "风险"))
+	var live int64
+	require.NoError(t, db.Model(&model.OIDCRefreshToken{}).
+		Where("client_id = ? AND revoked_at = 0", client.ClientId).Count(&live).Error)
+	assert.Zero(t, live, "禁用应用后不该还有未撤销的刷新令牌")
+
+	// 重新启用不会"复活"已撤销的令牌
+	require.NoError(t, OIDCUpdateClientStatus(client.Id, owner.Id, model.OIDCClientStatusApproved, ""))
+	require.NoError(t, db.Model(&model.OIDCRefreshToken{}).
+		Where("client_id = ? AND revoked_at = 0", client.ClientId).Count(&live).Error)
+	assert.Zero(t, live, "重新启用不该让旧刷新令牌复活")
+}
+
+// 申请配额：总量与待审数都要封顶，否则一个账号能把审核队列刷满。
+func TestOIDCApplicationQuota(t *testing.T) {
+	setupOIDCTest(t)
+	user := createOIDCTestUser(t, "quota-user", "default")
+	apply := func(index int) error {
+		_, err := OIDCSubmitApplication(user.Id, OIDCApplicationRequest{
+			Name: fmt.Sprintf("quota %d", index), RedirectUris: []string{"https://app.example.com/cb"},
+			Scopes: []string{OIDCScopeOpenID}, ClientType: model.OIDCClientTypePublic,
+		})
+		return err
+	}
+	// 同时在审的封顶 3 个
+	for i := 1; i <= oidcMaxPendingPerUser; i++ {
+		require.NoError(t, apply(i))
+	}
+	assert.Error(t, apply(oidcMaxPendingPerUser+1), "待审数量必须封顶")
+
+	// 全部批准后继续申请，直到总量封顶
+	clients, err := model.ListOIDCClientsByOwner(user.Id)
+	require.NoError(t, err)
+	for _, client := range clients {
+		_, err := OIDCApproveApplication(client.Id, user.Id, []string{OIDCScopeOpenID},
+			[]string{"https://app.example.com/cb"}, nil)
+		require.NoError(t, err)
+	}
+	// 之后每申请一个就批准，避开"待审数"那道闸，单独验证总量封顶
+	for i := oidcMaxPendingPerUser + 1; i <= oidcMaxApplicationsPerUser; i++ {
+		require.NoError(t, apply(i))
+		latest, err := model.ListOIDCClientsByOwner(user.Id)
+		require.NoError(t, err)
+		require.NotEmpty(t, latest)
+		_, err = OIDCApproveApplication(latest[0].Id, user.Id, []string{OIDCScopeOpenID},
+			[]string{"https://app.example.com/cb"}, nil)
+		require.NoError(t, err)
+	}
+	assert.Error(t, apply(oidcMaxApplicationsPerUser+1), "应用总量必须封顶")
+}
+
+// 浏览器绑定：授权端点下发的 Cookie 与签名凭据里的哈希必须对得上。
+func TestOIDCFlowCookieBinding(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// 模拟浏览器：把响应里的 Set-Cookie 带回下一次请求
+	issue := func(previous []*http.Cookie) (string, []*http.Cookie) {
+		recorder := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(recorder)
+		c.Request = httptest.NewRequest(http.MethodGet, "/oauth/authorize", nil)
+		for _, cookie := range previous {
+			c.Request.AddCookie(cookie)
+		}
+		hash, err := OIDCIssueFlowCookie(c)
+		require.NoError(t, err)
+		require.NotEmpty(t, hash)
+		return hash, recorder.Result().Cookies()
+	}
+	matches := func(hash string, cookies []*http.Cookie) bool {
+		recorder := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(recorder)
+		c.Request = httptest.NewRequest(http.MethodGet, "/oauth/authorize", nil)
+		for _, cookie := range cookies {
+			c.Request.AddCookie(cookie)
+		}
+		return OIDCFlowMatches(c, hash)
+	}
+
+	hash, cookies := issue(nil)
+	require.NotEmpty(t, cookies)
+	assert.True(t, matches(hash, cookies), "同一个浏览器应当匹配")
+	assert.False(t, matches(hash, nil), "别的浏览器不得通过绑定校验")
+	assert.False(t, matches("", cookies), "空哈希不得放行")
+
+	// 同一浏览器并发多个流程：新流程不能把上一个挤掉
+	secondHash, cookies := issue(cookies)
+	assert.NotEqual(t, hash, secondHash)
+	assert.True(t, matches(hash, cookies), "并发流程仍然可完成")
+	assert.True(t, matches(secondHash, cookies))
+
+	// 篡改过的标识不认
+	tampered := []*http.Cookie{{Name: OIDCFlowCookieName, Value: "not-the-flow-id"}}
+	assert.False(t, matches(hash, tampered))
+}
+
+// 按天趋势要按"用户看到的日历天"分桶，且三种库的整数除法语义不同
+// （MySQL 的 / 出小数、SQLite/PostgreSQL 出整数）—— 这条用例跨 UTC 日界，
+// 只有分桶正确才会呈现出"东八区两天、UTC 一天"的差别。
+func TestOIDCDailyUsageRowsBucketsByLocalDay(t *testing.T) {
+	setupOIDCTest(t)
+	client := &model.OIDCClient{ClientId: "muw_daily_client", Name: "趋势", ClientType: model.OIDCClientTypePublic,
+		Status: model.OIDCClientStatusApproved, OwnerUserId: 1, RedirectUris: "https://app.example.com/cb",
+		Scopes: "openid", CreatedAt: common.GetTimestamp(), UpdatedAt: common.GetTimestamp()}
+	require.NoError(t, model.DB.Create(client).Error)
+
+	// 2026-09-26 15:30 UTC = 09-26 23:30（东八区）；2026-09-26 16:30 UTC = 09-27 00:30（东八区）
+	first := int64(1790436600)
+	second := first + 3600
+	for _, ts := range []int64{first, second} {
+		require.NoError(t, model.DB.Create(&model.OIDCAccessLog{
+			ClientId: client.ClientId, UserId: 1, Action: "token", Success: true, CreatedAt: ts,
+		}).Error)
+	}
+	require.NoError(t, model.DB.Create(&model.OIDCAccessLog{
+		ClientId: client.ClientId, UserId: 1, Action: "token", Success: false,
+		ErrorCode: "invalid_grant", CreatedAt: second,
+	}).Error)
+
+	beijing, err := model.OIDCDailyUsageRows(model.OIDCUsageScopeAll(), 0, 8*3600)
+	require.NoError(t, err)
+	require.Len(t, beijing, 2, "东八区跨天应分两桶：%+v", beijing)
+	assert.Equal(t, "2026-09-26", beijing[0].Day)
+	assert.EqualValues(t, 1, beijing[0].Calls)
+	assert.Equal(t, "2026-09-27", beijing[1].Day)
+	assert.EqualValues(t, 2, beijing[1].Calls)
+	assert.EqualValues(t, 1, beijing[1].Failed)
+
+	utc, err := model.OIDCDailyUsageRows(model.OIDCUsageScopeAll(), 0, 0)
+	require.NoError(t, err)
+	require.Len(t, utc, 1, "同一 UTC 日应合成一桶：%+v", utc)
+	assert.Equal(t, "2026-09-26", utc[0].Day)
+	assert.EqualValues(t, 3, utc[0].Calls)
 }

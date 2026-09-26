@@ -52,7 +52,6 @@ func setupOIDCEndToEnd(t *testing.T) (*model.User, *model.UserSession, *model.OI
 	previousLogDB := model.LOG_DB
 	model.DB = db
 	model.LOG_DB = db
-	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
 	common.SessionSecret = "oidc-e2e-test-secret"
 	common.RedisEnabled = false
 	common.MemoryCacheEnabled = false
@@ -105,7 +104,7 @@ func setupOIDCEndToEnd(t *testing.T) (*model.User, *model.UserSession, *model.OI
 	return user, session, client, "e2e-client-secret", engine
 }
 
-func oidcE2ERequest(t *testing.T, engine *gin.Engine, method, target, body, bearer string) *httptest.ResponseRecorder {
+func oidcE2ERequest(t *testing.T, engine *gin.Engine, method, target, body, bearer string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
 	t.Helper()
 	var reader *strings.Reader
 	if body == "" {
@@ -121,6 +120,10 @@ func oidcE2ERequest(t *testing.T, engine *gin.Engine, method, target, body, bear
 	}
 	if bearer != "" {
 		request.Header.Set("Authorization", "Bearer "+bearer)
+	}
+	// 授权流程的浏览器绑定 Cookie：同意页的两个接口都要求它与签名凭据对得上。
+	for _, cookie := range cookies {
+		request.AddCookie(cookie)
 	}
 	recorder := httptest.NewRecorder()
 	engine.ServeHTTP(recorder, request)
@@ -160,6 +163,9 @@ func TestOIDCEndToEndAuthorizationCodeWithPKCE(t *testing.T) {
 	require.NoError(t, err)
 	requestToken := parsedLocation.Query().Get("request")
 	require.NotEmpty(t, requestToken)
+	// 授权端点会下发浏览器绑定 Cookie，同意页的预览与决策要带上它
+	flowCookies := authorize.Result().Cookies()
+	require.NotEmpty(t, flowCookies, "授权端点必须下发流程绑定 Cookie")
 
 	// ③ 未登录用户不能被授权（同意页预览必须要求登录态）
 	anonymous := oidcE2ERequest(t, engine, http.MethodGet, "/api/oauth/consent/preview?request="+url.QueryEscape(requestToken), "", "")
@@ -168,13 +174,13 @@ func TestOIDCEndToEndAuthorizationCodeWithPKCE(t *testing.T) {
 	// ④ 已登录用户看预览，再点同意
 	dashboardToken, _, err := service.IssueAccessToken(service.AuthIdentity{UserID: user.Id, SessionID: session.SID, UserAuthVersion: 1, SessionVersion: 1})
 	require.NoError(t, err)
-	preview := oidcE2ERequest(t, engine, http.MethodGet, "/api/oauth/consent/preview?request="+url.QueryEscape(requestToken), "", dashboardToken)
+	preview := oidcE2ERequest(t, engine, http.MethodGet, "/api/oauth/consent/preview?request="+url.QueryEscape(requestToken), "", dashboardToken, flowCookies...)
 	require.Equal(t, http.StatusOK, preview.Code, preview.Body.String())
 	assert.Contains(t, preview.Body.String(), "端到端测试应用")
 
 	decisionBody, err := common.Marshal(map[string]any{"request": requestToken, "approve": true, "silent": false})
 	require.NoError(t, err)
-	decision := oidcE2ERequest(t, engine, http.MethodPost, "/api/oauth/consent/decision", string(decisionBody), dashboardToken)
+	decision := oidcE2ERequest(t, engine, http.MethodPost, "/api/oauth/consent/decision", string(decisionBody), dashboardToken, flowCookies...)
 	require.Equal(t, http.StatusOK, decision.Code, decision.Body.String())
 	var decisionResult struct {
 		Success bool `json:"success"`
@@ -259,6 +265,23 @@ func TestOIDCEndToEndAuthorizationCodeWithPKCE(t *testing.T) {
 	require.Equal(t, http.StatusOK, userinfo.Code, userinfo.Body.String())
 	assert.Contains(t, userinfo.Body.String(), `"sub":"`+fmt.Sprint(user.Id)+`"`)
 	assert.Contains(t, userinfo.Body.String(), "e2euser")
+
+	// ⑦b 调用明细：每一行都要能归到应用与人上（统计靠它），换码那行还要带 grant_type
+	var logs []model.OIDCAccessLog
+	require.NoError(t, model.DB.Order("id").Find(&logs).Error)
+	byAction := map[string]model.OIDCAccessLog{}
+	for _, entry := range logs {
+		byAction[entry.Action] = entry
+	}
+	require.Contains(t, byAction, "authorize")
+	require.Contains(t, byAction, "token")
+	require.Contains(t, byAction, "userinfo")
+	assert.Equal(t, client.ClientId, byAction["userinfo"].ClientId, "userinfo 明细必须带 client_id")
+	assert.Equal(t, user.Id, byAction["userinfo"].UserId)
+	assert.Equal(t, client.ClientId, byAction["token"].ClientId)
+	assert.Equal(t, service.OIDCGrantAuthorization, byAction["token"].GrantType)
+	assert.Equal(t, user.Id, byAction["token"].UserId)
+	assert.Equal(t, "oidc-e2e-test/1.0", byAction["authorize"].UserAgent)
 
 	// ⑧ 站点自己的仪表盘令牌不能冒充 userinfo 凭据（用途隔离）
 	crossUse := oidcE2ERequest(t, engine, http.MethodGet, "/oauth/userinfo", "", dashboardToken)

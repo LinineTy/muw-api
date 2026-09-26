@@ -58,6 +58,27 @@ func ListOIDCClientsByOwner(userId int) ([]*OIDCClient, error) {
 	return clients, err
 }
 
+// ListOIDCClientsByClientIds 批量取应用（明细/聚合展示应用名用）。
+func ListOIDCClientsByClientIds(clientIds []string) ([]*OIDCClient, error) {
+	if len(clientIds) == 0 {
+		return nil, nil
+	}
+	var clients []*OIDCClient
+	err := DB.Where("client_id IN ?", clientIds).Find(&clients).Error
+	return clients, err
+}
+
+// CountOIDCClientsByOwner 返回该用户的应用总数与待审核数（申请配额用）。
+func CountOIDCClientsByOwner(userId int) (total int64, pending int64, err error) {
+	if err = DB.Model(&OIDCClient{}).Where("owner_user_id = ?", userId).Count(&total).Error; err != nil {
+		return 0, 0, err
+	}
+	if err = DB.Model(&OIDCClient{}).Where("owner_user_id = ? AND status = ?", userId, OIDCClientStatusPending).Count(&pending).Error; err != nil {
+		return 0, 0, err
+	}
+	return total, pending, nil
+}
+
 func UpdateOIDCClientFields(id int, fields map[string]any) error {
 	if len(fields) == 0 {
 		return nil
@@ -148,6 +169,15 @@ func RevokeOIDCRefreshTokenById(id int, now int64) error {
 func RevokeOIDCRefreshTokensByUserClient(userId int, clientId string, now int64) error {
 	return DB.Model(&OIDCRefreshToken{}).
 		Where("user_id = ? AND client_id = ? AND revoked_at = 0", userId, clientId).
+		Update("revoked_at", now).Error
+}
+
+// RevokeOIDCRefreshTokensByClient 撤销某个应用的全部刷新令牌（不限用户）：
+// 管理员禁用/删除应用时用。不要用 RevokeOIDCRefreshTokensByUserClient(0, …) 代替 ——
+// userId=0 会落到 `user_id = 0`，而真实令牌的 user_id 恒大于 0，等于什么都没撤。
+func RevokeOIDCRefreshTokensByClient(clientId string, now int64) error {
+	return DB.Model(&OIDCRefreshToken{}).
+		Where("client_id = ? AND revoked_at = 0", clientId).
 		Update("revoked_at", now).Error
 }
 
