@@ -111,7 +111,14 @@ export function ApplicationDetailDialog(props: {
   })
 
   const issuer = typeof window === 'undefined' ? '' : window.location.origin
-  const usageRows = usageQuery.data ?? []
+  // 用量：totals 对申请人本人可见（聚合），逐用户明细只有管理员拿得到
+  const usageTotals = usageQuery.data?.totals
+  const usageRows = usageQuery.data?.items ?? []
+  const usageStats = [
+    { label: 'Calls', value: usageTotals?.calls ?? 0 },
+    { label: 'Failed calls', value: usageTotals?.failed_calls ?? 0 },
+    { label: 'Active users', value: usageTotals?.active_users ?? 0 },
+  ]
   const isConfidential = application?.client_type === 'confidential'
 
   return (
@@ -258,40 +265,58 @@ export function ApplicationDetailDialog(props: {
           </div>
 
           <div className='flex flex-col gap-1.5'>
-            <Label>{t('Usage by user')}</Label>
-            <StaticDataTable
-              data={usageRows}
-              getRowKey={(row) => row.user_id}
-              empty={usageRows.length === 0}
-              emptyContent={
-                <span className='text-muted-foreground text-xs'>
-                  {t('Never used')}
-                </span>
-              }
-              columns={[
-                {
-                  id: 'user',
-                  header: t('User'),
-                  cell: (row) => `#${row.user_id}`,
-                },
-                {
-                  id: 'tokens',
-                  header: t('Tokens'),
-                  cell: (row) => formatNumber(row.token_count, locale),
-                },
-                {
-                  id: 'last_used_at',
-                  header: t('Last Used'),
-                  cell: (row) => (
-                    <TimestampCell
-                      timestamp={row.last_issued_at}
-                      locale={locale}
-                      justNowLabel={t('Just now')}
-                    />
-                  ),
-                },
-              ]}
-            />
+            <Label>{t('Usage')}</Label>
+            <div className='grid grid-cols-3 gap-2'>
+              {usageStats.map((item) => (
+                <div
+                  key={item.label}
+                  className='border-border/70 rounded-lg border px-3 py-2'
+                >
+                  <p className='text-muted-foreground text-xs'>
+                    {t(item.label)}
+                  </p>
+                  <p className='text-lg font-semibold tabular-nums'>
+                    {formatNumber(item.value, locale)}
+                  </p>
+                </div>
+              ))}
+            </div>
+            {/* 逐用户明细（含站内用户 id）只给管理员：站内用户对应用只有使用权 */}
+            {usageRows.length > 0 ? (
+              <StaticDataTable
+                data={usageRows}
+                getRowKey={(row) => row.user_id}
+                empty={usageRows.length === 0}
+                emptyContent={
+                  <span className='text-muted-foreground text-xs'>
+                    {t('Never used')}
+                  </span>
+                }
+                columns={[
+                  {
+                    id: 'user',
+                    header: t('User'),
+                    cell: (row) => `#${row.user_id}`,
+                  },
+                  {
+                    id: 'tokens',
+                    header: t('Tokens'),
+                    cell: (row) => formatNumber(row.token_count, locale),
+                  },
+                  {
+                    id: 'last_used_at',
+                    header: t('Last Used'),
+                    cell: (row) => (
+                      <TimestampCell
+                        timestamp={row.last_issued_at}
+                        locale={locale}
+                        justNowLabel={t('Just now')}
+                      />
+                    ),
+                  },
+                ]}
+              />
+            ) : null}
           </div>
         </div>
       </Dialog>

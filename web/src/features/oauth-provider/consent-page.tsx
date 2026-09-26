@@ -1,6 +1,6 @@
 // @muw-owned
 import { Check, ChevronDown, Globe, PlugZap } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -34,6 +34,8 @@ export function OAuthConsentPage({ request }: { request: string }) {
   const [silent, setSilent] = useState(false)
   const [busy, setBusy] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  // 已经替用户自动决策过的授权请求（静默同意 / prompt=none），避免重复提交
+  const autoDecided = useRef('')
 
   useEffect(() => {
     let active = true
@@ -44,6 +46,29 @@ export function OAuthConsentPage({ request }: { request: string }) {
     getConsentPreview(request)
       .then((data) => {
         if (!active) {
+          return
+        }
+        // 两种不需要用户动手的情况：
+        // ① 之前同意过、开了「以后不再询问」且这次没有新增权限 ⇒ 直接放行（静默同意）；
+        // ② 客户端要求 prompt=none ⇒ 不能弹界面，需要确认就按规范把 interaction_required 回给应用。
+        if (
+          autoDecided.current !== request &&
+          (!data.needs_consent || data.prompt === 'none')
+        ) {
+          autoDecided.current = request
+          setBusy(true)
+          submitConsentDecision({
+            request,
+            approve: !data.needs_consent,
+            silent: data.remember_silent && !data.needs_consent,
+          })
+            .then((redirectUrl) => window.location.assign(redirectUrl))
+            .catch((cause: unknown) => {
+              if (active) {
+                setError(cause instanceof Error ? cause.message : String(cause))
+                setBusy(false)
+              }
+            })
           return
         }
         setPreview(data)

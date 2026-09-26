@@ -35,3 +35,6 @@ export const ACCESS_LOG_ACTION_LABELS: Record<string, string> = {
   userinfo: 'User info read',
   revoke: 'Token revoked',
 }
+
+// 动作筛选下拉的取值顺序（与标签表同一套 key）。
+export const ACCESS_LOG_ACTIONS = Object.keys(ACCESS_LOG_ACTION_LABELS)

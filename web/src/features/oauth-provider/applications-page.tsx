@@ -16,6 +16,7 @@ import { AuthorizationsTable } from './components/authorizations-table'
 import { MyApplicationsTable } from './components/my-applications-table'
 import { ReviewQueueTable } from './components/review-queue-table'
 import { OAuthStatsCards } from './components/stats-cards'
+import { UsagePanel } from './components/usage-panel'
 import { OAUTH_QUERY_KEY } from './constants'
 
 const EMPTY_STATS: OAuthStats = {
@@ -24,10 +25,13 @@ const EMPTY_STATS: OAuthStats = {
   token_issued: 0,
   last_issued_at: 0,
   active_users: 0,
+  calls: 0,
+  failed_calls: 0,
+  last_call_at: 0,
 }
 
 // 第三方应用控制台：左侧统计（管理员可切全站/仅自己），右侧页签 =
-// 我的应用 / 授权记录 / 审核队列（仅管理员）。
+// 我的应用 / 授权记录 / 用量（所有人，聚合口径）/ 调用明细 · 审核队列（仅管理员）。
 export function OAuthApplicationsPage() {
   const { t } = useTranslation()
   const role = useAuthStore((state) => state.auth.user?.role ?? 0)
@@ -83,7 +87,10 @@ export function OAuthApplicationsPage() {
                 <TabsTrigger value='authorizations'>
                   {t('Authorization records')}
                 </TabsTrigger>
-                <TabsTrigger value='calls'>{t('Call records')}</TabsTrigger>
+                <TabsTrigger value='usage'>{t('Usage')}</TabsTrigger>
+                {isAdmin ? (
+                  <TabsTrigger value='calls'>{t('Call records')}</TabsTrigger>
+                ) : null}
                 {isAdmin ? (
                   <TabsTrigger value='review'>
                     {t('Application review')}
@@ -96,9 +103,14 @@ export function OAuthApplicationsPage() {
               <TabsContent value='authorizations' className='min-h-0 flex-1'>
                 <AuthorizationsTable />
               </TabsContent>
-              <TabsContent value='calls' className='min-h-0 flex-1'>
-                <AccessLogsTable />
+              <TabsContent value='usage' className='min-h-0 flex-1'>
+                <UsagePanel scope={scope} />
               </TabsContent>
+              {isAdmin ? (
+                <TabsContent value='calls' className='min-h-0 flex-1'>
+                  <AccessLogsTable />
+                </TabsContent>
+              ) : null}
               {isAdmin ? (
                 <TabsContent value='review' className='min-h-0 flex-1'>
                   <ReviewQueueTable />

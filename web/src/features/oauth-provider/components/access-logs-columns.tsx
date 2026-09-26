@@ -39,6 +39,12 @@ export function useAccessLogsColumns() {
               ACCESS_LOG_ACTION_LABELS[row.original.action] ??
                 row.original.action
             )}
+            {row.original.grant_type ? (
+              <span className='text-muted-foreground font-normal'>
+                {' · '}
+                {row.original.grant_type}
+              </span>
+            ) : null}
           </span>
         ),
       },
@@ -47,7 +53,17 @@ export function useAccessLogsColumns() {
         header: t('Application'),
         meta: { label: t('Application'), mobileBadge: true },
         cell: ({ row }) => (
-          <span className='font-mono text-xs'>{row.original.client_id}</span>
+          <div className='flex flex-col gap-0.5'>
+            <span className='truncate text-xs'>
+              {row.original.client_name || row.original.client_id || '—'}
+            </span>
+            <span
+              className='text-muted-foreground truncate font-mono text-xs'
+              title={row.original.client_id}
+            >
+              {row.original.client_id || '—'}
+            </span>
+          </div>
         ),
       },
       {

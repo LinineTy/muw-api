@@ -69,6 +69,9 @@ function mockApi() {
             token_issued: 3,
             last_issued_at: 1700000000,
             active_users: 1,
+            calls: 9,
+            failed_calls: 2,
+            last_call_at: 1700000000,
           },
         },
       })
@@ -81,6 +84,39 @@ function mockApi() {
     if (url === '/api/oauth/consents') {
       return Promise.resolve({
         data: { success: true, data: { items: [] } },
+      })
+    }
+    if (url === '/api/oauth/usage') {
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: {
+            applications: [
+              {
+                client_id: 'muw_example',
+                name: 'Example app',
+                status: 'approved',
+                calls: 9,
+                failed_calls: 2,
+                active_users: 3,
+                last_call_at: 1700000000,
+              },
+            ],
+            daily: [
+              { day: '2026-09-25', calls: 4, failed: 1 },
+              { day: '2026-09-26', calls: 5, failed: 1 },
+            ],
+            failures: [{ error_code: 'invalid_grant', count: 2 }],
+            totals: {
+              calls: 9,
+              failed_calls: 2,
+              active_users: 3,
+              last_call_at: 1700000000,
+            },
+            days: 14,
+            tz_offset: 480,
+          },
+        },
       })
     }
     if (url === '/api/oauth/admin/applications') {
@@ -194,4 +230,34 @@ test('the apply dialog needs a name and a callback address before submitting', a
     'https://app.example.com/callback'
   )
   expect(submit).toBeEnabled()
+})
+
+test('the usage tab shows the aggregate, the daily trend and failure reasons', async () => {
+  signIn(ROLE.ADMIN)
+  mockApi()
+  mount()
+  const user = userEvent.setup()
+
+  await user.click(await screen.findByRole('tab', { name: 'Usage' }))
+
+  // 按应用聚合：站内用户能看到自己应用的用量（不含终端用户身份）
+  const table = await screen.findByRole('table')
+  expect(within(table).getByText('Example app')).toBeInTheDocument()
+  expect(within(table).getByText('muw_example')).toBeInTheDocument()
+  expect(within(table).getByText('9')).toBeInTheDocument()
+  // 趋势与失败原因
+  expect(screen.getByText('Calls per day')).toBeInTheDocument()
+  expect(screen.getByText('Failure reasons')).toBeInTheDocument()
+  expect(screen.getByText('invalid_grant')).toBeInTheDocument()
+})
+
+test('a regular user gets no call-detail tab (only the aggregate usage tab)', async () => {
+  signIn(ROLE.USER)
+  mockApi()
+  mount()
+
+  expect(screen.getByRole('tab', { name: 'Usage' })).toBeInTheDocument()
+  expect(
+    screen.queryByRole('tab', { name: 'Call records' })
+  ).not.toBeInTheDocument()
 })

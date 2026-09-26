@@ -8378,6 +8378,16 @@
     "Leave empty to allow every group": "空欄ですべてのグループを許可",
     "Comma separated. Users outside these groups cannot sign in with this application.": "カンマ区切り。ここに無いグループのユーザーはこのアプリでサインインできません。",
     "Client ID, secret and sign-in endpoints appear here once an administrator approves this application.": "管理者の承認後、ここに Client ID・シークレット・サインインエンドポイントが表示されます。",
-    "{{count}} permissions requested": "{{count}} 件の権限を要求します"
+    "{{count}} permissions requested": "{{count}} 件の権限を要求します",
+    "Calls": "呼び出し回数",
+    "Failed calls": "失敗した呼び出し",
+    "Calls per day": "日別の呼び出し",
+    "Failure reasons": "失敗理由",
+    "No failed calls in this period": "この期間に失敗した呼び出しはありません",
+    "{{count}} days": "{{count}} 日",
+    "{{calls}} calls · {{failed}} failed": "{{calls}} 回 · 失敗 {{failed}} 回",
+    "{{calls}} calls · {{failed}} failed · {{users}} users": "{{calls}} 回 · 失敗 {{failed}} 回 · {{users}} ユーザー",
+    "All actions": "すべてのアクション",
+    "Usage appears here once an application starts signing users in.": "アプリがこのログインを使い始めると、ここに利用状況が表示されます。"
   }
 }

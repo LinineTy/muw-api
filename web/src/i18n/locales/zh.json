@@ -8378,6 +8378,16 @@
     "Leave empty to allow every group": "留空表示不限分组",
     "Comma separated. Users outside these groups cannot sign in with this application.": "逗号分隔；不在这些分组里的用户不能用该应用登录。",
     "Client ID, secret and sign-in endpoints appear here once an administrator approves this application.": "审核通过后，这里才会显示 Client ID、密钥与登录端点。",
-    "{{count}} permissions requested": "将获取 {{count}} 项权限"
+    "{{count}} permissions requested": "将获取 {{count}} 项权限",
+    "Calls": "调用次数",
+    "Failed calls": "失败调用",
+    "Calls per day": "每日调用",
+    "Failure reasons": "失败原因",
+    "No failed calls in this period": "这段时间没有失败调用",
+    "{{count}} days": "{{count}} 天",
+    "{{calls}} calls · {{failed}} failed": "{{calls}} 次调用 · {{failed}} 次失败",
+    "{{calls}} calls · {{failed}} failed · {{users}} users": "{{calls}} 次调用 · {{failed}} 次失败 · {{users}} 个用户",
+    "All actions": "全部动作",
+    "Usage appears here once an application starts signing users in.": "有应用开始用它登录后，这里会出现用量。"
   }
 }

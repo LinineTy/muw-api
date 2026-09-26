@@ -12,6 +12,10 @@ export type OAuthConsentPreview = {
   redirect_host: string
   scopes: string[]
   remember_silent: boolean
+  /** false = 此前已同意、开了「以后不再询问」且这次没有新增 scope，可以免交互放行。 */
+  needs_consent: boolean
+  /** 客户端要求的 prompt（只认 none：不弹界面，需要交互就回 interaction_required）。 */
+  prompt?: string
 }
 
 export type OAuthApplication = {
@@ -46,13 +50,56 @@ export type OAuthStats = {
   authorizations: number
   token_issued: number
   last_issued_at: number
+  calls: number
+  failed_calls: number
   active_users: number
+  last_call_at: number
+}
+
+/** 统计口径：all 仅管理员（全站）；self = 我创建的应用被怎么用。 */
+export type OAuthUsageScope = 'self' | 'all'
+
+export type OAuthUsageTotals = {
+  calls: number
+  failed_calls: number
+  active_users: number
+  last_call_at: number
+}
+
+export type OAuthUsageApplication = {
+  client_id: string
+  name: string
+  status: string
+  calls: number
+  failed_calls: number
+  active_users: number
+  last_call_at: number
+}
+
+export type OAuthUsageDaily = { day: string; calls: number; failed: number }
+export type OAuthUsageFailure = { error_code: string; count: number }
+
+export type OAuthUsageOverview = {
+  applications: OAuthUsageApplication[]
+  daily: OAuthUsageDaily[]
+  failures: OAuthUsageFailure[]
+  totals: OAuthUsageTotals
+  days: number
+  tz_offset: number
 }
 
 export type OAuthApplicationUsageRow = {
   user_id: number
   token_count: number
   last_issued_at: number
+}
+
+/**
+ * 应用用量：totals 对所有人可见（聚合），items 是逐用户明细，仅管理员会拿到。
+ */
+export type OAuthApplicationUsage = {
+  totals: OAuthUsageTotals
+  items: OAuthApplicationUsageRow[]
 }
 
 export type OAuthApplicationPayload = {
@@ -117,11 +164,27 @@ export async function deleteMyApplication(id: number): Promise<void> {
 
 export async function getApplicationUsage(
   id: number
-): Promise<OAuthApplicationUsageRow[]> {
+): Promise<OAuthApplicationUsage> {
   const res = await api.get(`/api/oauth/applications/${id}/usage`)
-  return (
-    requireServerSuccess(res.data).data as { items: OAuthApplicationUsageRow[] }
-  ).items
+  return requireServerSuccess(res.data).data as OAuthApplicationUsage
+}
+
+/**
+ * 用量总览：按应用聚合 + 按天趋势 + 失败原因 Top。
+ * tz_offset 传浏览器时区偏移（分钟），让"天"按用户看到的日历切。
+ */
+export async function getOAuthUsage(params: {
+  scope: OAuthUsageScope
+  days: number
+}): Promise<OAuthUsageOverview> {
+  const res = await api.get('/api/oauth/usage', {
+    params: {
+      scope: params.scope,
+      days: params.days,
+      tz_offset: -new Date().getTimezoneOffset(),
+    },
+  })
+  return requireServerSuccess(res.data).data as OAuthUsageOverview
 }
 
 export async function getOAuthStats(
@@ -223,6 +286,7 @@ export async function deleteApplication(id: number): Promise<void> {
 export type OAuthAccessLog = {
   id: number
   client_id: string
+  client_name: string
   user_id: number
   action: string
   grant_type: string
@@ -251,16 +315,15 @@ export type OAuthAccessLogPage = {
   summary: OAuthAccessLogSummary
 }
 
-// 协议调用明细：管理员可看全站（scope=all），其余人只看自己申请的应用。
+// 协议调用明细（含终端用户 IP / UA）：仅管理员。
 export async function getOAuthAccessLogs(params: {
-  scope: 'self' | 'all'
   clientId?: string
   action?: string
   success?: string
   page?: number
   pageSize?: number
 }): Promise<OAuthAccessLogPage> {
-  const query = new URLSearchParams({ scope: params.scope })
+  const query = new URLSearchParams()
   if (params.clientId) query.set('client_id', params.clientId)
   if (params.action) query.set('action', params.action)
   if (params.success) query.set('success', params.success)
