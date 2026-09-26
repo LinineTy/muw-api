@@ -80,6 +80,7 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     space: true,
     orders: true,
     security: true,
+    developer: true,
   },
   admin: {
     enabled: true,

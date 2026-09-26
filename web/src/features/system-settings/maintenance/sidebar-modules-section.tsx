@@ -154,6 +154,12 @@ export function SidebarModulesSection({
         title: t('Security & Access'),
         description: t('Manage your security settings and account access'),
       },
+      developer: {
+        title: t('Developer applications'),
+        description: t(
+          'Apply for third-party applications and manage the authorizations you granted.'
+        ),
+      },
     },
     admin: {
       channel: {
