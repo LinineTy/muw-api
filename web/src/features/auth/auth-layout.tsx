@@ -22,12 +22,18 @@ import { useTranslation } from 'react-i18next'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
+import { cn } from '@/lib/utils'
 
 type AuthLayoutProps = {
   children: React.ReactNode
+  /** 内容列宽（px 断点用 sm:）：默认按设计稿 464，双栏等更宽的页面可以放宽 */
+  contentWidthClassName?: string
 }
 
-export function AuthLayout({ children }: AuthLayoutProps) {
+export function AuthLayout({
+  children,
+  contentWidthClassName = 'sm:w-[464px]',
+}: AuthLayoutProps) {
   const { t } = useTranslation()
   const { systemName, logo, loading } = useSystemConfig()
   const { status } = useStatus()
@@ -80,7 +86,12 @@ export function AuthLayout({ children }: AuthLayoutProps) {
       </div>
       <div className='container flex items-center pt-16 sm:pt-0'>
         {/* 设计稿里卡宽 400px（容器 464 = 400 + 两侧 32 padding） */}
-        <div className='mx-auto flex w-full flex-col justify-center space-y-2 px-4 py-8 sm:w-[464px] sm:p-8'>
+        <div
+          className={cn(
+            'mx-auto flex w-full flex-col justify-center space-y-2 px-4 py-8 sm:p-8',
+            contentWidthClassName
+          )}
+        >
           {children}
         </div>
       </div>
