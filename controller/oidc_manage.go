@@ -66,6 +66,8 @@ func OIDCConsentPreview(c *gin.Context) {
 	common.ApiSuccess(c, gin.H{
 		"client_id":       client.ClientId,
 		"client_name":     client.Name,
+		"client_icon_url": client.IconUrl,
+		"homepage_url":    client.HomepageUrl,
 		"description":     client.Description,
 		"owner_username":  owner,
 		"redirect_host":   oidcRedirectHost(claims.RedirectUri),

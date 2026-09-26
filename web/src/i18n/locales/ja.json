@@ -585,6 +585,8 @@
     "Applicable channels": "対応チャネル",
     "Applicable conditions": "適用条件",
     "Application": "アプリケーション",
+    "Authorizing as @{{username}}": "@{{username}} として認可します",
+    "Application info": "アプリ情報",
     "Application approved": "Application approved",
     "Application name": "Application name",
     "Application review": "Application review",

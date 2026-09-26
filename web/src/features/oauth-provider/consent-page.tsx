@@ -1,18 +1,14 @@
 // @muw-owned
+import { Check, Globe } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { AuthLayout } from '@/features/auth/auth-layout'
+import { AuthCard } from '@/features/auth/components/auth-card'
+import { useAuthStore } from '@/stores/auth-store'
 
 import {
   getConsentPreview,
@@ -22,9 +18,11 @@ import {
 import { SCOPE_LABELS } from './scopes'
 
 // 授权确认页：第三方应用拿本站账号登录时，用户在这里决定给不给。
-// 默认每次都会问；用户勾了「以后不再询问」才会静默放行，且应用新增 scope 时仍会回来问。
+// 独立成页（不进桌面壳），顶/底与登录页同一套；默认每次都会问，
+// 用户勾了「以后不再询问」才会静默放行，且应用新增 scope 时仍会回来问。
 export function OAuthConsentPage({ request }: { request: string }) {
   const { t } = useTranslation()
+  const { auth } = useAuthStore()
   const [preview, setPreview] = useState<OAuthConsentPreview | null>(null)
   const [error, setError] = useState('')
   const [silent, setSilent] = useState(false)
@@ -72,45 +70,68 @@ export function OAuthConsentPage({ request }: { request: string }) {
   }
 
   // 三种状态各给一句话，避免在 JSX 里套三元（可读性 + lint）。
-  let description = t(
+  let title: React.ReactNode = t('Checking the authorization request…')
+  let subtitle: React.ReactNode = t(
     'Start the sign-in from the application that sent you here.'
   )
-  if (request) {
-    description = t('Checking the authorization request…')
+  if (error) {
+    title = t('Authorize application')
+    subtitle = null
   }
   if (preview) {
-    description = t('You will return to {{host}} after confirming.', {
+    title = (
+      <span className='flex items-center gap-3'>
+        {preview.client_icon_url ? (
+          <img
+            src={preview.client_icon_url}
+            alt=''
+            className='size-7 rounded-lg object-cover'
+          />
+        ) : null}
+        <span>
+          {t('{{name}} wants to sign you in', { name: preview.client_name })}
+        </span>
+      </span>
+    )
+    subtitle = t('You will return to {{host}} after confirming.', {
       host: preview.redirect_host,
     })
   }
+  const username = auth.user?.username ?? ''
 
-  // 独立窗体：自带全屏背景与遮罩，不依赖桌面壳（壳里渲染会丢掉协议参数）
   return (
-    <div className='relative flex min-h-svh items-center justify-center p-4'>
-      <div
-        className='bg-background/60 absolute inset-0 backdrop-blur-sm'
-        aria-hidden='true'
-      />
-      <Card className='relative w-full max-w-md shadow-2xl'>
-        <CardHeader>
-          <CardTitle>
-            {preview
-              ? t('{{name}} wants to sign you in', {
-                  name: preview.client_name,
-                })
-              : t('Authorize application')}
-          </CardTitle>
-          <CardDescription>{description}</CardDescription>
-        </CardHeader>
-        <CardContent className='flex flex-col gap-4'>
-          {error ? (
-            <p className='text-destructive text-sm' role='alert'>
-              {error}
-            </p>
-          ) : null}
+    <AuthLayout>
+      <AuthCard title={title} subtitle={subtitle ?? undefined}>
+        {error ? (
+          <p className='text-destructive text-sm' role='alert'>
+            {error}
+          </p>
+        ) : null}
 
-          {preview ? (
-            <>
+        {preview ? (
+          <>
+            {username ? (
+              <div className='border-border/70 flex items-center gap-3 rounded-xl border px-4 py-3'>
+                <span className='bg-muted flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-medium uppercase'>
+                  {username.slice(0, 1)}
+                </span>
+                <div className='min-w-0'>
+                  <p className='truncate text-sm font-medium'>{username}</p>
+                  <p className='text-muted-foreground text-xs'>
+                    {t('Authorizing as @{{username}}', { username })}
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
+            <div className='border-border/70 space-y-2 rounded-xl border p-4'>
+              <p className='text-muted-foreground text-xs'>
+                {t('Application info')}
+              </p>
+              <p className='flex items-center gap-2 text-sm'>
+                <Globe className='size-4 shrink-0' />
+                <span className='truncate'>{preview.redirect_host}</span>
+              </p>
               {preview.description ? (
                 <p className='text-muted-foreground text-sm'>
                   {preview.description}
@@ -123,55 +144,64 @@ export function OAuthConsentPage({ request }: { request: string }) {
                   })}
                 </p>
               ) : null}
-              <div className='flex flex-col gap-2'>
-                <p className='text-sm font-medium'>
-                  {t('This application will be able to:')}
-                </p>
-                <ul className='flex flex-col gap-1.5'>
-                  {preview.scopes.map((scope) => (
-                    <li key={scope} className='text-sm'>
-                      {t(SCOPE_LABELS[scope] ?? scope)}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className='flex items-center gap-2'>
-                <Switch
-                  id='oauth-consent-silent'
-                  checked={silent}
-                  onCheckedChange={setSilent}
-                  disabled={busy}
-                />
+            </div>
+
+            <div className='space-y-2'>
+              <p className='text-sm font-medium'>
+                {t('This application will be able to:')}
+              </p>
+              <ul className='bg-muted/40 space-y-2 rounded-xl p-3'>
+                {preview.scopes.map((scope) => (
+                  <li key={scope} className='flex items-center gap-2 text-sm'>
+                    <Check className='text-success size-4 shrink-0' />
+                    {t(SCOPE_LABELS[scope] ?? scope)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className='flex items-start gap-3'>
+              <Switch
+                id='oauth-consent-silent'
+                checked={silent}
+                onCheckedChange={setSilent}
+                disabled={busy}
+              />
+              <div className='space-y-1'>
                 <Label
                   htmlFor='oauth-consent-silent'
                   className='cursor-pointer text-sm'
                 >
                   {t('Do not ask me again for this application')}
                 </Label>
+                <p className='text-muted-foreground text-xs'>
+                  {t(
+                    'New permissions always ask again, even when this is enabled.'
+                  )}
+                </p>
               </div>
-              <p className='text-muted-foreground text-xs'>
-                {t(
-                  'New permissions always ask again, even when this is enabled.'
-                )}
-              </p>
-            </>
-          ) : null}
-        </CardContent>
-        {preview ? (
-          <CardFooter className='flex justify-end gap-2'>
-            <Button
-              variant='outline'
-              disabled={busy || !preview}
-              onClick={() => decide(false)}
-            >
-              {t('Deny')}
-            </Button>
-            <Button disabled={busy || !preview} onClick={() => decide(true)}>
-              {t('Allow')}
-            </Button>
-          </CardFooter>
+            </div>
+
+            <div className='flex flex-col gap-2 pt-1'>
+              <Button
+                className='w-full'
+                disabled={busy}
+                onClick={() => decide(true)}
+              >
+                {t('Allow')}
+              </Button>
+              <Button
+                variant='outline'
+                className='w-full'
+                disabled={busy}
+                onClick={() => decide(false)}
+              >
+                {t('Deny')}
+              </Button>
+            </div>
+          </>
         ) : null}
-      </Card>
-    </div>
+      </AuthCard>
+    </AuthLayout>
   )
 }

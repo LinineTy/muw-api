@@ -5,6 +5,8 @@ import { requireServerSuccess } from '@/lib/server-error-message'
 export type OAuthConsentPreview = {
   client_id: string
   client_name: string
+  client_icon_url?: string
+  homepage_url?: string
   description: string
   owner_username: string
   redirect_host: string
