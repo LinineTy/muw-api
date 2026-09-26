@@ -96,6 +96,25 @@ afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
   useAuthStore.getState().auth.reset()
+  localStorage.removeItem('oauth-applications:view-mode')
+})
+
+test('the application list switches between the table and the card view', async () => {
+  signIn(ROLE.USER)
+  mockApi()
+  mount()
+  const user = userEvent.setup()
+
+  await screen.findByText('Example app')
+  const cardToggle = screen.getByRole('button', { name: 'Card view' })
+  const tableToggle = screen.getByRole('button', { name: 'Table view' })
+  // 开了卡片视图的列表默认走卡片（同订阅/账户/插件页），用户切走的选择会记住。
+  expect(cardToggle).toHaveAttribute('aria-pressed', 'true')
+
+  await user.click(tableToggle)
+  expect(tableToggle).toHaveAttribute('aria-pressed', 'true')
+  expect(cardToggle).toHaveAttribute('aria-pressed', 'false')
+  expect(localStorage.getItem('oauth-applications:view-mode')).toBe('table')
 })
 
 test('a regular user sees their applications and authorizations, and no review queue', async () => {

@@ -6,7 +6,11 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import { DataTablePage, useDataTable } from '@/components/data-table'
+import {
+  DataTablePage,
+  DATA_TABLE_VIEW_MODES,
+  useDataTable,
+} from '@/components/data-table'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 
@@ -191,6 +195,10 @@ export function ReviewQueueTable() {
           'Applications only work after approval. Callback addresses are matched exactly.'
         )}
         skeletonKeyPrefix='oauth-review-skeleton'
+        enableCardView
+        // 审核是逐列扫的工作列表，默认表格视图（同订单中心的管理列表）。
+        defaultViewMode={DATA_TABLE_VIEW_MODES.TABLE}
+        viewModeStorageKey='oauth-review:view-mode'
         toolbarProps={{
           // 审核接口没有关键字搜索，这里只留状态筛选，避免放一个不生效的搜索框。
           customSearch: null,

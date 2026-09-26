@@ -60,6 +60,8 @@ export function MyApplicationsTable() {
         emptyTitle={t('No applications yet')}
         emptyDescription={t('Apps you asked this site to sign users in with.')}
         skeletonKeyPrefix='oauth-applications-skeleton'
+        enableCardView
+        viewModeStorageKey='oauth-applications:view-mode'
         toolbarProps={{ searchPlaceholder: t('Filter by name...') }}
         className='min-h-0 flex-1'
       />

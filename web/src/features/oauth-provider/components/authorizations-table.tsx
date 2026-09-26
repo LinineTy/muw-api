@@ -5,7 +5,11 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import { DataTablePage, useDataTable } from '@/components/data-table'
+import {
+  DataTablePage,
+  DATA_TABLE_VIEW_MODES,
+  useDataTable,
+} from '@/components/data-table'
 
 import {
   getMyConsents,
@@ -89,6 +93,10 @@ export function AuthorizationsTable() {
         emptyTitle={t('No authorizations yet')}
         emptyDescription={t('Where your account was used to sign in.')}
         skeletonKeyPrefix='oauth-authorizations-skeleton'
+        enableCardView
+        // 权限清单是一长串文字，默认表格视图；想用卡片也能切。
+        defaultViewMode={DATA_TABLE_VIEW_MODES.TABLE}
+        viewModeStorageKey='oauth-authorizations:view-mode'
         toolbarProps={{ searchPlaceholder: t('Filter by name...') }}
         className='min-h-0 flex-1'
       />

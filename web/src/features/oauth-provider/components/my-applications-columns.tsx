@@ -85,7 +85,7 @@ export function useMyApplicationsColumns(options: {
         id: 'actions',
         header: () => null,
         enableHiding: false,
-        meta: { label: t('Actions') },
+        meta: { label: t('Actions'), pinned: 'right' as const },
         cell: ({ row }) => (
           <div className='-ml-1.5 flex items-center gap-1'>
             <Tooltip>
