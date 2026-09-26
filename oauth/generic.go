@@ -97,6 +97,9 @@ func (p *GenericOAuthProvider) ExchangeToken(ctx context.Context, code string, c
 	values.Set("grant_type", "authorization_code")
 	values.Set("code", code)
 	values.Set("redirect_uri", redirectUri)
+	if verifier := PKCEVerifier(c); verifier != "" {
+		values.Set("code_verifier", verifier)
+	}
 
 	// Determine auth style
 	authStyle := p.config.AuthStyle

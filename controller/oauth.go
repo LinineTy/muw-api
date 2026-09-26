@@ -35,6 +35,7 @@ type oauthFlowPayload struct {
 	AffiliateCode   string                         `json:"affiliate_code,omitempty"`
 	Verification    *service.OAuthVerificationFlow `json:"verification,omitempty"`
 	Telegram        *oauth.TelegramOAuthFlow       `json:"telegram,omitempty"`
+	PKCE            *oauth.PKCEFlow                `json:"pkce,omitempty"`
 	SessionIdentity *service.AuthIdentity          `json:"session_identity,omitempty"`
 	Authorization   *model.AuthFlowAuthorization   `json:"authorization,omitempty"`
 }
@@ -73,6 +74,11 @@ func GenerateOAuthCode(c *gin.Context) {
 	sessionID := ""
 	flowPayload := oauthFlowPayload{AffiliateCode: request.Aff}
 	bindingStarted := false
+	if provider := oauth.GetProvider(request.Provider); provider != nil && oauth.SupportsPKCE(provider) {
+		// 客户端侧 PKCE：verifier 留在服务端，浏览器只拿到 S256 challenge。
+		// 提供方（含本站 OIDC）会校验它，缺失即拒绝授权。
+		flowPayload.PKCE = oauth.NewPKCEFlow()
+	}
 	if request.Provider == "telegram" {
 		telegramFlow, err := oauth.NewTelegramOAuthFlow()
 		if err != nil {
@@ -145,6 +151,10 @@ func GenerateOAuthCode(c *gin.Context) {
 	data := gin.H{"flow_token": state, "expires_at": expiresAt.Unix()}
 	if flowPayload.Telegram != nil {
 		data["authorization_url"] = flowPayload.Telegram.AuthorizationURL(state)
+	}
+	if challenge := flowPayload.PKCE.Challenge(); challenge != "" {
+		data["code_challenge"] = challenge
+		data["code_challenge_method"] = "S256"
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -278,6 +288,13 @@ func HandleOAuth(c *gin.Context) {
 	}
 
 	// 5. Exchange code for token
+	// 客户端侧 PKCE：把本次流程的 verifier 交给 provider，换 token 时带上。
+	if pendingFlow.Purpose == model.AuthFlowPurposeOAuth {
+		var pkcePayload oauthFlowPayload
+		if err := common.UnmarshalJsonStr(pendingFlow.Payload, &pkcePayload); err == nil {
+			oauth.WithPKCEVerifier(c, pkcePayload.PKCE)
+		}
+	}
 	code := c.Query("code")
 	token, err := provider.ExchangeToken(c.Request.Context(), code, c)
 	if err != nil {

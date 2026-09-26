@@ -61,6 +61,9 @@ func (p *OIDCProvider) ExchangeToken(ctx context.Context, code string, c *gin.Co
 	values.Set("code", code)
 	values.Set("grant_type", "authorization_code")
 	values.Set("redirect_uri", redirectUri)
+	if verifier := PKCEVerifier(c); verifier != "" {
+		values.Set("code_verifier", verifier)
+	}
 
 	logger.LogDebug(ctx, "[OAuth-OIDC] ExchangeToken: token_endpoint=%s, redirect_uri=%s", settings.TokenEndpoint, redirectUri)
 
