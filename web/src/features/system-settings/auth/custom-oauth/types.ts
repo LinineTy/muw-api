@@ -215,6 +215,20 @@ export const OAUTH_PRESETS: OAuthPreset[] = [
     email_field: 'email',
     needsBaseUrl: true,
   },
+  {
+    key: 'muw-api',
+    name: 'muw-api',
+    icon: 'openid',
+    authorization_endpoint: '/oauth/authorize',
+    token_endpoint: '/oauth/token',
+    user_info_endpoint: '/oauth/userinfo',
+    scopes: 'openid profile email',
+    user_id_field: 'sub',
+    username_field: 'preferred_username',
+    display_name_field: 'name',
+    email_field: 'email',
+    needsBaseUrl: true,
+  },
 ]
 
 export const AUTH_STYLE_OPTIONS = [
