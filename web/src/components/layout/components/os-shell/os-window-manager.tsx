@@ -73,7 +73,7 @@ export function OsWindowManager() {
     // 不做"开窗+回桌面"。桌面窄窗口同理走手机布局。
     if (window.innerWidth < MOBILE_BREAKPOINT) return
 
-    const path = window.location.pathname
+    const { pathname: path, search } = window.location
     // 桌面自身路径:/os-desktop(= 壳的桌面)与 /console(旧别名)。
     // 这里必须放行,否则刷新落在 /dashboard 时代码会把"当前路径"当成深链
     // 开成窗口 —— 表现就是空桌面一刷新自动弹出概览窗。
@@ -98,8 +98,13 @@ export function OsWindowManager() {
         )
       }
       const nav = matchOsNavItem(items, path)
+      // 带查询串的深链要连查询串一起开窗:查询串是页面状态(如
+      // /oauth/consent?request=… 的签名授权请求),只取 pathname 会让窗口
+      // 拿不到参数。有查询串时也不再回退到导航项里那个不带参数的规范 URL。
       openWindow(
-        nav ? { url: nav.url, title: nav.title } : { url: path, title: path }
+        nav && !search
+          ? { url: nav.url, title: nav.title }
+          : { url: `${path}${search}`, title: nav?.title ?? path }
       )
       navigate({ to: SHELL_HOME, replace: true })
     } else {
