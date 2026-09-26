@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next'
 
 import { TimestampCell } from '@/components/activity-time-cell'
 import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
 import {
   Tooltip,
   TooltipContent,
@@ -18,13 +17,11 @@ import type { OAuthConsent } from '../api'
 import { scopeTextList } from '../scopes'
 
 export function useAuthorizationsColumns(options: {
-  onToggleSilent: (consent: OAuthConsent, silent: boolean) => void
   onRevoke: (consent: OAuthConsent) => void
-  silentPending: boolean
 }) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
-  const { onToggleSilent, onRevoke, silentPending } = options
+  const { onRevoke } = options
 
   return useMemo<ColumnDef<OAuthConsent, unknown>[]>(
     () => [
@@ -44,19 +41,6 @@ export function useAuthorizationsColumns(options: {
           <span className='text-muted-foreground text-xs'>
             {scopeTextList(row.original.scopes, t).join(' · ')}
           </span>
-        ),
-      },
-      {
-        accessorKey: 'silent',
-        header: t('Do not ask me again'),
-        meta: { label: t('Do not ask me again'), mobileBadge: true },
-        cell: ({ row }) => (
-          <Switch
-            checked={row.original.silent}
-            disabled={silentPending}
-            aria-label={t('Do not ask me again')}
-            onCheckedChange={(checked) => onToggleSilent(row.original, checked)}
-          />
         ),
       },
       {
@@ -98,6 +82,6 @@ export function useAuthorizationsColumns(options: {
         ),
       },
     ],
-    [t, locale, onToggleSilent, onRevoke, silentPending]
+    [t, locale, onRevoke]
   )
 }

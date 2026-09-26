@@ -218,7 +218,6 @@ func SetApiRouter(router *gin.Engine) {
 			oidcRoute.POST("/applications/:id/rotate-secret", middleware.SessionCookieOriginGuard(), controller.OIDCRotateApplicationSecret)
 			oidcRoute.POST("/applications", middleware.CriticalRateLimit(), middleware.SessionCookieOriginGuard(), controller.OIDCSubmitApplication)
 			oidcRoute.GET("/consents", controller.OIDCListConsents)
-			oidcRoute.POST("/consents/silent", middleware.SessionCookieOriginGuard(), controller.OIDCUpdateConsentSilent)
 			oidcRoute.DELETE("/consents/:clientId", middleware.SessionCookieOriginGuard(), controller.OIDCRevokeConsent)
 		}
 		oidcAdminRoute := apiRouter.Group("/oauth/admin")

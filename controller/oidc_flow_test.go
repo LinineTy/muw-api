@@ -86,25 +86,6 @@ func TestOIDCConsentBindsToInitiatingBrowser(t *testing.T) {
 	assert.Contains(t, ok.Body.String(), "redirect_url")
 }
 
-// 「以后不再询问」必须真的免掉交互，而新增 scope 必须回来问。
-func TestOIDCSilentConsentOnlyWhenNothingNew(t *testing.T) {
-	user, session, client, _, engine := setupOIDCEndToEnd(t)
-	dashboardToken := oidcDashboardToken(t, user, session)
-	// 用户此前静默同意过 openid profile
-	require.NoError(t, model.UpsertOIDCConsent(user.Id, client.ClientId, "openid profile", true))
-
-	preview := func(scopes string) string {
-		requestToken, cookies := oidcAuthorizeForTest(t, engine, client, scopes, "")
-		recorder := oidcE2ERequest(t, engine, http.MethodGet,
-			"/api/oauth/consent/preview?request="+url.QueryEscape(requestToken), "", dashboardToken, cookies...)
-		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
-		return recorder.Body.String()
-	}
-	assert.Contains(t, preview("openid profile"), `"needs_consent":false`, "已静默同意且没有新增 scope ⇒ 免交互")
-	assert.Contains(t, preview("openid profile email"), `"needs_consent":true`, "新增 scope 必须重新征得同意")
-	assert.Contains(t, preview("openid"), `"needs_consent":false`, "scope 收缩不必再问")
-}
-
 // prompt=none：客户端明确要求不交互，需要同意时不能弹页面，要按规范回 interaction_required。
 func TestOIDCPromptNoneReturnsInteractionRequired(t *testing.T) {
 	user, session, client, _, engine := setupOIDCEndToEnd(t)

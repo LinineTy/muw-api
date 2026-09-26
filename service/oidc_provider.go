@@ -37,10 +37,10 @@ const (
 	OIDCGrantAuthorization = "authorization_code"
 	OIDCGrantRefresh       = "refresh_token"
 
-	// prompt 只支持 none / consent（login 需要站内"强制重登"机制，暂不支持 ⇒ 按
-	// OAuth 对未知参数的约定忽略，discovery 里也就不声明 prompt 能力）。
-	OIDCPromptNone    = "none"
-	OIDCPromptConsent = "consent"
+	// prompt 只认 none（同意页每次都弹，所以"需要交互"是常态）：要求不弹界面又确实
+	// 需要用户确认时，按规范回 interaction_required。login 需要站内"强制重登"机制，
+	// 不支持 ⇒ 按 OAuth 对未知参数的约定忽略，discovery 里也就不声明 prompt 能力。
+	OIDCPromptNone = "none"
 
 	OIDCAuthCodeTTL         = 60 * time.Second
 	OIDCAccessTokenTTL      = 15 * time.Minute
@@ -453,24 +453,6 @@ func OIDCValidateAuthorize(req OIDCAuthorizeRequest) (*model.OIDCClient, []strin
 		return client, nil, err
 	}
 	return client, scopes, nil
-}
-
-// OIDCNeedsConsent 是否需要弹同意页：没有授权记录、用户没开静默、或本次申请的
-// scope 超出了已同意范围（新增 scope 必须重新征得同意，不能靠静默放行）。
-func OIDCNeedsConsent(userId int, clientId string, scopes []string) (bool, error) {
-	consent, err := model.GetOIDCConsent(userId, clientId)
-	if err != nil {
-		return false, err
-	}
-	if consent == nil {
-		return true, nil
-	}
-	for _, scope := range scopes {
-		if !slices.Contains(consent.ScopeList(), scope) {
-			return true, nil
-		}
-	}
-	return !consent.Silent, nil
 }
 
 // OIDCIssueAuthCode 签发授权码：只存哈希，绑定 client/user/session/回调地址/PKCE。

@@ -11,9 +11,6 @@ export type OAuthConsentPreview = {
   owner_username: string
   redirect_host: string
   scopes: string[]
-  remember_silent: boolean
-  /** false = 此前已同意、开了「以后不再询问」且这次没有新增 scope，可以免交互放行。 */
-  needs_consent: boolean
   /** 客户端要求的 prompt（只认 none：不弹界面，需要交互就回 interaction_required）。 */
   prompt?: string
 }
@@ -41,7 +38,6 @@ export type OAuthConsent = {
   client_id: string
   client_name: string
   scopes: string[]
-  silent: boolean
   updated_at: number
 }
 
@@ -123,7 +119,6 @@ export async function getConsentPreview(
 export async function submitConsentDecision(payload: {
   request: string
   approve: boolean
-  silent: boolean
 }): Promise<string> {
   const res = await api.post('/api/oauth/consent/decision', payload)
   return (requireServerSuccess(res.data).data as { redirect_url: string })
@@ -198,17 +193,6 @@ export async function getMyConsents(): Promise<OAuthConsent[]> {
   const res = await api.get('/api/oauth/consents')
   return (requireServerSuccess(res.data).data as { items: OAuthConsent[] })
     .items
-}
-
-export async function setConsentSilent(
-  clientId: string,
-  silent: boolean
-): Promise<void> {
-  const res = await api.post('/api/oauth/consents/silent', {
-    client_id: clientId,
-    silent,
-  })
-  requireServerSuccess(res.data)
 }
 
 export async function revokeConsent(clientId: string): Promise<void> {

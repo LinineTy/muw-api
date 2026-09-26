@@ -119,13 +119,13 @@ type OIDCRefreshToken struct {
 
 func (OIDCRefreshToken) TableName() string { return "oidc_refresh_tokens" }
 
-// OIDCConsent 用户对某个应用的授权记录。Silent=true 表示用户允许"以后不再询问"。
+// OIDCConsent 用户对某个应用的授权记录：同意页**每次都问**，这里只留"同意过哪些
+// scope"用于展示授权记录、撤销与 userinfo 的授权有效性校验。
 type OIDCConsent struct {
 	Id        int    `json:"id"`
 	UserId    int    `json:"user_id" gorm:"uniqueIndex:idx_oidc_consents_user_client,priority:1"`
 	ClientId  string `json:"client_id" gorm:"type:varchar(64);uniqueIndex:idx_oidc_consents_user_client,priority:2"`
 	Scopes    string `json:"scopes" gorm:"type:varchar(255)"`
-	Silent    bool   `json:"silent"`
 	CreatedAt int64  `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt int64  `json:"updated_at" gorm:"autoUpdateTime"`
 }

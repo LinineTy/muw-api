@@ -11,12 +11,7 @@ import {
   useDataTable,
 } from '@/components/data-table'
 
-import {
-  getMyConsents,
-  revokeConsent,
-  setConsentSilent,
-  type OAuthConsent,
-} from '../api'
+import { getMyConsents, revokeConsent, type OAuthConsent } from '../api'
 import { OAUTH_QUERY_KEY } from '../constants'
 import { useAuthorizationsColumns } from './authorizations-columns'
 
@@ -33,33 +28,6 @@ export function AuthorizationsTable() {
   })
   const consents = query.data ?? []
 
-  const silentMutation = useMutation({
-    mutationFn: (input: { clientId: string; silent: boolean }) =>
-      setConsentSilent(input.clientId, input.silent),
-    // 开关状态先本地翻过去，失败回滚，避免"点了又弹回来"。
-    onMutate: async (input) => {
-      await queryClient.cancelQueries({ queryKey: CONSENTS_QUERY_KEY })
-      const previous =
-        queryClient.getQueryData<OAuthConsent[]>(CONSENTS_QUERY_KEY)
-      queryClient.setQueryData<OAuthConsent[]>(CONSENTS_QUERY_KEY, (current) =>
-        current?.map((consent) =>
-          consent.client_id === input.clientId
-            ? { ...consent, silent: input.silent }
-            : consent
-        )
-      )
-      return { previous }
-    },
-    onError: (_error, _input, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(CONSENTS_QUERY_KEY, context.previous)
-      }
-    },
-    onSuccess: () => toast.success(t('Saved')),
-    onSettled: () =>
-      queryClient.invalidateQueries({ queryKey: OAUTH_QUERY_KEY }),
-  })
-
   const revokeMutation = useMutation({
     mutationFn: revokeConsent,
     onSuccess: async () => {
@@ -70,9 +38,6 @@ export function AuthorizationsTable() {
   })
 
   const columns = useAuthorizationsColumns({
-    silentPending: silentMutation.isPending,
-    onToggleSilent: (consent, silent) =>
-      silentMutation.mutate({ clientId: consent.client_id, silent }),
     onRevoke: setRevokeTarget,
   })
 

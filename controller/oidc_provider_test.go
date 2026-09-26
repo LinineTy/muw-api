@@ -99,7 +99,6 @@ func setupOIDCEndToEnd(t *testing.T) (*model.User, *model.UserSession, *model.OI
 	consent.POST("/consent/decision", OIDCConsentDecision)
 	consent.GET("/consent/preview", OIDCConsentPreview)
 	consent.GET("/consents", OIDCListConsents)
-	consent.POST("/consents/silent", OIDCUpdateConsentSilent)
 	consent.DELETE("/consents/:clientId", OIDCRevokeConsent)
 	return user, session, client, "e2e-client-secret", engine
 }

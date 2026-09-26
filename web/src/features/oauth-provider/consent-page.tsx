@@ -6,8 +6,6 @@ import { useTranslation } from 'react-i18next'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
 import { AuthLayout } from '@/features/auth/auth-layout'
 import { AuthCard } from '@/features/auth/components/auth-card'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
@@ -24,17 +22,15 @@ import { SCOPE_LABELS } from './scopes'
 // 授权确认页：第三方应用拿本站账号登录时，用户在这里决定给不给。
 // 独立成页（不进桌面壳），顶/底与登录页同一套。
 // 默认只给"应用 + 授权身份"这一张居中的卡；权限明细收在「查看更多」里，
-// 展开后变成左右双卡（窄屏在下方堆叠）。默认每次都会问，
-// 用户勾了「以后不再询问」才会静默放行，且应用新增 scope 时仍会回来问。
+// 展开后变成左右双卡（窄屏在下方堆叠）。**每次都会问**（没有"以后不再询问"）。
 export function OAuthConsentPage({ request }: { request: string }) {
   const { t } = useTranslation()
   const { auth } = useAuthStore()
   const [preview, setPreview] = useState<OAuthConsentPreview | null>(null)
   const [error, setError] = useState('')
-  const [silent, setSilent] = useState(false)
   const [busy, setBusy] = useState(false)
   const [expanded, setExpanded] = useState(false)
-  // 已经替用户自动决策过的授权请求（静默同意 / prompt=none），避免重复提交
+  // 已经替客户端回绝过的授权请求（prompt=none），避免重复提交
   const autoDecided = useRef('')
 
   useEffect(() => {
@@ -48,20 +44,12 @@ export function OAuthConsentPage({ request }: { request: string }) {
         if (!active) {
           return
         }
-        // 两种不需要用户动手的情况：
-        // ① 之前同意过、开了「以后不再询问」且这次没有新增权限 ⇒ 直接放行（静默同意）；
-        // ② 客户端要求 prompt=none ⇒ 不能弹界面，需要确认就按规范把 interaction_required 回给应用。
-        if (
-          autoDecided.current !== request &&
-          (!data.needs_consent || data.prompt === 'none')
-        ) {
+        // 同意页每次都弹。唯一的例外是客户端要求 prompt=none：不能弹界面，而这里
+        // 必然需要用户确认 ⇒ 不渲染界面，按规范把 interaction_required 回给应用。
+        if (autoDecided.current !== request && data.prompt === 'none') {
           autoDecided.current = request
           setBusy(true)
-          submitConsentDecision({
-            request,
-            approve: !data.needs_consent,
-            silent: data.remember_silent && !data.needs_consent,
-          })
+          submitConsentDecision({ request, approve: false })
             .then((redirectUrl) => window.location.assign(redirectUrl))
             .catch((cause: unknown) => {
               if (active) {
@@ -72,7 +60,6 @@ export function OAuthConsentPage({ request }: { request: string }) {
           return
         }
         setPreview(data)
-        setSilent(data.remember_silent)
       })
       .catch((cause: unknown) => {
         if (active) {
@@ -98,11 +85,7 @@ export function OAuthConsentPage({ request }: { request: string }) {
     setBusy(true)
     setError('')
     try {
-      const redirectUrl = await submitConsentDecision({
-        request,
-        approve,
-        silent: approve && silent,
-      })
+      const redirectUrl = await submitConsentDecision({ request, approve })
       // 回到第三方应用（带上授权码或拒绝原因），当前页面使命结束。
       window.location.assign(redirectUrl)
     } catch (cause) {
@@ -267,27 +250,6 @@ export function OAuthConsentPage({ request }: { request: string }) {
                     {t('This application will be able to:')}
                   </p>
                   {permissionList}
-                </div>
-                <div className='flex items-start gap-3'>
-                  <Switch
-                    id='oauth-consent-silent'
-                    checked={silent}
-                    onCheckedChange={setSilent}
-                    disabled={busy}
-                  />
-                  <div className='space-y-1'>
-                    <Label
-                      htmlFor='oauth-consent-silent'
-                      className='cursor-pointer text-sm'
-                    >
-                      {t('Do not ask me again for this application')}
-                    </Label>
-                    <p className='text-muted-foreground text-xs'>
-                      {t(
-                        'New permissions always ask again, even when this is enabled.'
-                      )}
-                    </p>
-                  </div>
                 </div>
               </CardContent>
             </Card>

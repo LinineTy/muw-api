@@ -266,33 +266,6 @@ func TestOIDCAuthCodeIsSingleUseAndBindsPKCE(t *testing.T) {
 	assert.Error(t, err, "授权码重放必须被拒绝")
 }
 
-func TestOIDCConsentGateRequiresConsentForNewScopes(t *testing.T) {
-	setupOIDCTest(t)
-	user := createOIDCTestUser(t, "consentuser", "default")
-
-	needed, err := OIDCNeedsConsent(user.Id, "muw_consent_client", []string{OIDCScopeOpenID})
-	require.NoError(t, err)
-	assert.True(t, needed, "没有授权记录时必须弹同意页")
-
-	require.NoError(t, model.UpsertOIDCConsent(user.Id, "muw_consent_client", OIDCScopeOpenID, false))
-	needed, err = OIDCNeedsConsent(user.Id, "muw_consent_client", []string{OIDCScopeOpenID})
-	require.NoError(t, err)
-	assert.True(t, needed, "用户没开静默时仍要弹")
-
-	needed, err = OIDCNeedsConsent(user.Id, "muw_consent_client", []string{OIDCScopeOpenID, OIDCScopeEmail})
-	require.NoError(t, err)
-	assert.True(t, needed, "新增 scope 必须重新征得同意")
-
-	require.NoError(t, model.UpsertOIDCConsent(user.Id, "muw_consent_client", OIDCScopeOpenID, true))
-	needed, err = OIDCNeedsConsent(user.Id, "muw_consent_client", []string{OIDCScopeOpenID})
-	require.NoError(t, err)
-	assert.False(t, needed, "用户开了静默且 scope 未变时可跳过同意页")
-
-	needed, err = OIDCNeedsConsent(user.Id, "muw_consent_client", []string{OIDCScopeOpenID, OIDCScopeGroup})
-	require.NoError(t, err)
-	assert.True(t, needed, "静默也不能放行新增的 scope")
-}
-
 func TestOIDCRefreshRotationAndReplayDetection(t *testing.T) {
 	setupOIDCTest(t)
 	user := createOIDCTestUser(t, "refreshuser", "default")
@@ -417,7 +390,7 @@ func TestOIDCUsageCounters(t *testing.T) {
 	}
 	client := newClient("muw_usage_client", "计数", user.Id)
 	otherClient := newClient("muw_usage_other", "别人的应用", other.Id)
-	require.NoError(t, model.UpsertOIDCConsent(user.Id, client.ClientId, "openid", false))
+	require.NoError(t, model.UpsertOIDCConsent(user.Id, client.ClientId, "openid"))
 
 	// 令牌计数：我的应用 3+1 次、别人的应用 5 次
 	for i := range 3 {

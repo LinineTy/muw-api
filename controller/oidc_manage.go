@@ -57,21 +57,10 @@ func OIDCConsentPreview(c *gin.Context) {
 		common.ApiErrorMsg(c, "当前账号不在该应用允许的范围内")
 		return
 	}
-	needsConsent, err := service.OIDCNeedsConsent(identity.UserID, client.ClientId, claims.Scopes)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
 	owner := ""
 	if ownerUser, err := model.GetUserById(client.OwnerUserId, false); err == nil && ownerUser != nil {
 		owner = ownerUser.Username
 	}
-	consent, err := model.GetOIDCConsent(identity.UserID, client.ClientId)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	silent := consent != nil && consent.Silent
 	common.ApiSuccess(c, gin.H{
 		"client_id":       client.ClientId,
 		"client_name":     client.Name,
@@ -82,11 +71,8 @@ func OIDCConsentPreview(c *gin.Context) {
 		"redirect_host":   oidcRedirectHost(claims.RedirectUri),
 		"scopes":          claims.Scopes,
 		"scope_catalog":   oidcScopeSummaries,
-		"remember_silent": silent,
-		// needs_consent=false ⇒ 此前已同意、开了「以后不再询问」且这次没有新增 scope：
-		// 同意页据此直接放行，不再要求用户点一次（静默同意）。
-		"needs_consent": needsConsent,
-		// prompt=none 且需要交互时，同意页不渲染界面，直接把错误回给应用。
+		// 同意页每次都弹；只有它带了 prompt=none 且确实需要交互时，页面不渲染界面、
+		// 直接把 interaction_required 回给应用。
 		"prompt": claims.Prompt,
 	})
 }
@@ -105,7 +91,6 @@ func OIDCConsentDecision(c *gin.Context) {
 	var req struct {
 		Request string `json:"request"`
 		Approve bool   `json:"approve"`
-		Silent  bool   `json:"silent"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		common.ApiError(c, err)
@@ -154,7 +139,7 @@ func OIDCConsentDecision(c *gin.Context) {
 		common.ApiSuccess(c, gin.H{"redirect_url": oidcAuthorizationRedirect(claims.RedirectUri, claims.State, errCode, errDescription, "")})
 		return
 	}
-	if err := model.UpsertOIDCConsent(identity.UserID, client.ClientId, strings.Join(claims.Scopes, " "), req.Silent); err != nil {
+	if err := model.UpsertOIDCConsent(identity.UserID, client.ClientId, strings.Join(claims.Scopes, " ")); err != nil {
 		common.ApiError(c, err)
 		return
 	}
@@ -275,38 +260,10 @@ func OIDCListConsents(c *gin.Context) {
 			"client_id":   consent.ClientId,
 			"client_name": name,
 			"scopes":      consent.ScopeList(),
-			"silent":      consent.Silent,
 			"updated_at":  consent.UpdatedAt,
 		})
 	}
 	common.ApiSuccess(c, gin.H{"items": items})
-}
-
-// OIDCUpdateConsentSilent 切换"以后不再询问"（默认不询问用户时每次弹同意页）。
-func OIDCUpdateConsentSilent(c *gin.Context) {
-	var req struct {
-		ClientId string `json:"client_id"`
-		Silent   bool   `json:"silent"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.ClientId) == "" {
-		common.ApiErrorMsg(c, "client_id 不能为空")
-		return
-	}
-	userId := c.GetInt("id")
-	if consent, err := model.GetOIDCConsent(userId, req.ClientId); err != nil {
-		common.ApiError(c, err)
-		return
-	} else if consent == nil {
-		common.ApiErrorMsg(c, "尚未授权该应用")
-		return
-	}
-	if err := model.UpdateOIDCConsentSilent(userId, req.ClientId, req.Silent); err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	oidcRecordAudit(c, userId, "oidc_consent_silent_changed", true,
-		"client="+req.ClientId+" silent="+strconv.FormatBool(req.Silent))
-	common.ApiSuccess(c, nil)
 }
 
 // OIDCRevokeConsent 撤销授权：删授权记录并让该应用已发的刷新令牌全部失效。

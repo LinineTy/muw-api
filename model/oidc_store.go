@@ -205,22 +205,17 @@ func ListOIDCConsentsByUser(userId int) ([]*OIDCConsent, error) {
 }
 
 // UpsertOIDCConsent 先查后写（同一用户对同一应用只有一行，复合唯一索引兜底并发）。
-func UpsertOIDCConsent(userId int, clientId, scopes string, silent bool) error {
+func UpsertOIDCConsent(userId int, clientId, scopes string) error {
 	now := common.GetTimestamp()
 	consent, err := GetOIDCConsent(userId, clientId)
 	if err != nil {
 		return err
 	}
 	if consent == nil {
-		return DB.Create(&OIDCConsent{UserId: userId, ClientId: clientId, Scopes: scopes, Silent: silent, CreatedAt: now, UpdatedAt: now}).Error
+		return DB.Create(&OIDCConsent{UserId: userId, ClientId: clientId, Scopes: scopes, CreatedAt: now, UpdatedAt: now}).Error
 	}
 	return DB.Model(&OIDCConsent{}).Where("id = ?", consent.Id).
-		Updates(map[string]any{"scopes": scopes, "silent": silent, "updated_at": now}).Error
-}
-
-func UpdateOIDCConsentSilent(userId int, clientId string, silent bool) error {
-	return DB.Model(&OIDCConsent{}).Where("user_id = ? AND client_id = ?", userId, clientId).
-		Update("silent", silent).Error
+		Updates(map[string]any{"scopes": scopes, "updated_at": now}).Error
 }
 
 func DeleteOIDCConsent(userId int, clientId string) error {
