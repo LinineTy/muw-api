@@ -317,6 +317,25 @@ func TestOIDCAuthorizeRejectsMismatchedRedirect(t *testing.T) {
 	assert.Contains(t, response.Body.String(), "回调地址不匹配")
 }
 
+func TestOIDCAuthorizeRedirectsMissingPKCEToClient(t *testing.T) {
+	_, _, client, _, engine := setupOIDCEndToEnd(t)
+	query := url.Values{}
+	query.Set("client_id", client.ClientId)
+	query.Set("redirect_uri", "https://app.example.com/cb")
+	query.Set("response_type", "code")
+	query.Set("scope", "openid")
+	query.Set("state", "st-pkce")
+	response := oidcE2ERequest(t, engine, http.MethodGet, "/oauth/authorize?"+query.Encode(), "", "")
+	// 回调地址已登记 ⇒ 错误按规范重定向回应用（把 state 原样带回），不是裸 JSON
+	require.Equal(t, http.StatusFound, response.Code)
+	location, err := url.Parse(response.Header().Get("Location"))
+	require.NoError(t, err)
+	assert.Equal(t, "app.example.com", location.Host)
+	assert.Equal(t, "invalid_request", location.Query().Get("error"))
+	assert.Contains(t, location.Query().Get("error_description"), "PKCE")
+	assert.Equal(t, "st-pkce", location.Query().Get("state"))
+}
+
 func TestOIDCRejectsNonApprovedClient(t *testing.T) {
 	_, _, client, _, engine := setupOIDCEndToEnd(t)
 	require.NoError(t, model.DB.Model(&model.OIDCClient{}).Where("client_id = ?", client.ClientId).

@@ -399,26 +399,28 @@ type OIDCAuthorizeRequest struct {
 }
 
 // OIDCValidateAuthorize 校验授权请求（除用户同意之外的全部前置条件）。
+// 失败时仍把已解析出的 client 一并返回：调用方据此判断"回调地址是否可信"，
+// 可信就把错误按规范重定向回应用，不可信才直接报错（防开放重定向）。
 func OIDCValidateAuthorize(req OIDCAuthorizeRequest) (*model.OIDCClient, []string, error) {
 	client, err := OIDCGetApprovedClient(req.ClientId)
 	if err != nil {
 		return nil, nil, err
 	}
 	if !client.MatchesRedirectUri(req.RedirectUri) {
-		return nil, nil, errors.New("回调地址不匹配")
+		return client, nil, errors.New("回调地址不匹配")
 	}
 	if req.ResponseType != OIDCResponseTypeCode {
-		return nil, nil, errors.New("只支持 response_type=code")
+		return client, nil, errors.New("只支持 response_type=code")
 	}
 	if req.CodeChallenge == "" {
-		return nil, nil, ErrOIDCPKCERequired
+		return client, nil, ErrOIDCPKCERequired
 	}
 	if req.CodeChallengeMethod != OIDCPKCEMethodS256 {
-		return nil, nil, errors.New("PKCE 只支持 S256")
+		return client, nil, errors.New("PKCE 只支持 S256")
 	}
 	scopes, err := OIDCSelectScopes(client, req.Scopes)
 	if err != nil {
-		return nil, nil, err
+		return client, nil, err
 	}
 	return client, scopes, nil
 }
