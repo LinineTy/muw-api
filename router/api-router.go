@@ -207,6 +207,7 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			oidcRoute.GET("/consent/preview", controller.OIDCConsentPreview)
 			oidcRoute.POST("/consent/decision", middleware.SessionCookieOriginGuard(), controller.OIDCConsentDecision)
+			oidcRoute.GET("/access-logs", controller.OIDCAccessLogs)
 			oidcRoute.GET("/applications/mine", controller.OIDCListMyApplications)
 			oidcRoute.GET("/applications/:id/secret", controller.OIDCRevealApplicationSecret)
 			oidcRoute.POST("/applications/:id/update", middleware.SessionCookieOriginGuard(), controller.OIDCUpdateApplication)

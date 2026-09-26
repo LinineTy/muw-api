@@ -513,6 +513,8 @@ type OIDCTokenResult struct {
 	RefreshToken string   `json:"refresh_token,omitempty"`
 	IdToken      string   `json:"id_token,omitempty"`
 	Scopes       []string `json:"-"`
+	// UserId 仅供调用方记审计/明细用，不进响应体。
+	UserId int `json:"-"`
 }
 
 // OIDCIssueTokens 按授权码流程签发：access_token（我方自验，只对 userinfo 有效）、
@@ -553,6 +555,7 @@ func oidcIssueTokenResult(client *model.OIDCClient, sessionId string, identity A
 		return nil, err
 	}
 	result := &OIDCTokenResult{
+		UserId:      identity.UserID,
 		AccessToken: accessToken,
 		TokenType:   "Bearer",
 		ExpiresIn:   int64(OIDCAccessTokenTTL.Seconds()),

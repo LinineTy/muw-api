@@ -8349,6 +8349,17 @@
     "Stop letting {{name}} sign users in with your account.": "不再允許 \"{{name}}\" 使用你的帳號登入。",
     "Show more": "檢視更多",
     "Show less": "收合",
+    "Call records": "調用記錄",
+    "IP address": "IP 位址",
+    "User agent": "用戶端識別",
+    "No calls yet": "暫無調用記錄",
+    "Every authorization request, token exchange and user-info read shows up here.": "每一次授權請求、權杖交換與使用者資訊讀取都會記錄在這裡。",
+    "Authorization request": "授權請求",
+    "Token issued": "簽發權杖",
+    "Token refreshed": "重新整理權杖",
+    "User info read": "讀取使用者資訊",
+    "Token revoked": "撤銷權杖",
+    "{{total}} calls · {{failed}} failed · {{clients}} apps": "共 {{total}} 次調用 · 失敗 {{failed}} · 涉及 {{clients}} 個應用",
     "{{count}} permissions requested": "將取得 {{count}} 項權限"
   }
 }

@@ -48,7 +48,7 @@ func setupOIDCEndToEnd(t *testing.T) (*model.User, *model.UserSession, *model.OI
 	common.SetDatabaseTypes(oidcDialectType(kind), oidcDialectType(kind))
 	t.Cleanup(func() { common.SetDatabaseTypes(previousMain, previousLog) })
 	require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSession{}, &model.OIDCClient{},
-		&model.OIDCAuthCode{}, &model.OIDCRefreshToken{}, &model.OIDCConsent{}, &model.OIDCSigningKey{}, &model.OIDCUsageStat{}, &model.AuditLog{}))
+		&model.OIDCAuthCode{}, &model.OIDCRefreshToken{}, &model.OIDCConsent{}, &model.OIDCSigningKey{}, &model.OIDCUsageStat{}, &model.OIDCAccessLog{}, &model.AuditLog{}))
 	previousLogDB := model.LOG_DB
 	model.DB = db
 	model.LOG_DB = db
@@ -114,6 +114,8 @@ func oidcE2ERequest(t *testing.T, engine *gin.Engine, method, target, body, bear
 		reader = strings.NewReader(body)
 	}
 	request := httptest.NewRequest(method, target, reader)
+	// 审计/明细要记 UA，给个固定值便于断言
+	request.Header.Set("User-Agent", "oidc-e2e-test/1.0")
 	if body != "" {
 		request.Header.Set("Content-Type", "application/json")
 	}

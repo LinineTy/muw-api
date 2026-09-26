@@ -8349,6 +8349,17 @@
     "Stop letting {{name}} sign users in with your account.": "\"{{name}}\" があなたのアカウントでサインインすることを停止します。",
     "Show more": "もっと見る",
     "Show less": "閉じる",
+    "Call records": "呼び出し記録",
+    "IP address": "IP アドレス",
+    "User agent": "ユーザーエージェント",
+    "No calls yet": "呼び出し記録はまだありません",
+    "Every authorization request, token exchange and user-info read shows up here.": "認可要求・トークン交換・ユーザー情報の読み取りはすべてここに記録されます。",
+    "Authorization request": "認可要求",
+    "Token issued": "トークン発行",
+    "Token refreshed": "トークン更新",
+    "User info read": "ユーザー情報の読み取り",
+    "Token revoked": "トークン失効",
+    "{{total}} calls · {{failed}} failed · {{clients}} apps": "合計 {{total}} 回 · 失敗 {{failed}} · {{clients}} アプリ",
     "{{count}} permissions requested": "{{count}} 件の権限を要求します"
   }
 }

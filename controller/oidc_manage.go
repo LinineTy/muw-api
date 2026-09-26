@@ -219,9 +219,12 @@ func OIDCSubmitApplication(c *gin.Context) {
 	}
 	client, err := service.OIDCSubmitApplication(c.GetInt("id"), req)
 	if err != nil {
+		oidcRecordAudit(c, c.GetInt("id"), "oidc_application_submit_failed", false, "reason="+err.Error())
 		common.ApiError(c, err)
 		return
 	}
+	oidcRecordAudit(c, c.GetInt("id"), "oidc_application_submitted", true,
+		"application_id="+strconv.Itoa(client.Id)+" scopes="+oidcScopeSummary(req.Scopes))
 	common.ApiSuccess(c, gin.H{"id": client.Id, "client_id": client.ClientId, "status": client.Status})
 }
 
@@ -273,6 +276,8 @@ func OIDCUpdateConsentSilent(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	oidcRecordAudit(c, userId, "oidc_consent_silent_changed", true,
+		"client="+req.ClientId+" silent="+strconv.FormatBool(req.Silent))
 	common.ApiSuccess(c, nil)
 }
 
@@ -368,12 +373,18 @@ func OIDCAdminReviewApplication(c *gin.Context) {
 			common.ApiError(c, err)
 			return
 		}
+		oidcRecordAudit(c, reviewerId, "oidc_application_approved", true,
+			"application_id="+strconv.Itoa(id)+" client="+client.ClientId+
+				" scopes="+oidcScopeSummary(req.Scopes)+
+				" allowed_groups="+strings.Join(req.AllowedGroups, ","))
 		common.ApiSuccess(c, gin.H{"client_id": client.ClientId, "status": client.Status})
 	case "reject":
 		if err := service.OIDCRejectApplication(id, reviewerId, req.Note); err != nil {
 			common.ApiError(c, err)
 			return
 		}
+		oidcRecordAudit(c, reviewerId, "oidc_application_rejected", true,
+			"application_id="+strconv.Itoa(id)+" note="+req.Note)
 		common.ApiSuccess(c, nil)
 	default:
 		common.ApiErrorMsg(c, "action 只能是 approve 或 reject")
@@ -409,6 +420,8 @@ func OIDCAdminUpdateApplicationStatus(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	oidcRecordAudit(c, c.GetInt("id"), "oidc_application_status_changed", true,
+		"application_id="+strconv.Itoa(id)+" status="+status+" note="+req.Note)
 	common.ApiSuccess(c, nil)
 }
 
@@ -423,6 +436,7 @@ func OIDCAdminDeleteApplication(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	oidcRecordAudit(c, c.GetInt("id"), "oidc_application_deleted", true, "application_id="+strconv.Itoa(id))
 	c.Status(http.StatusOK)
 }
 
@@ -499,6 +513,10 @@ func OIDCUpdateApplication(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	oidcRecordAudit(c, c.GetInt("id"), "oidc_application_updated", true,
+		"application_id="+strconv.Itoa(id)+" client="+client.ClientId+
+			" redirect_uris="+oidcScopeSummary(req.RedirectUris)+
+			" status="+client.Status)
 	common.ApiSuccess(c, gin.H{"status": client.Status, "client_id": client.ClientId})
 }
 
@@ -560,4 +578,80 @@ func OIDCUsageStats(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, summary)
+}
+
+// OIDCAccessLogs 协议调用明细：管理员可用 scope=all 看全站，普通用户只能看
+// 自己申请的应用（scope=self，默认）。返回列表 + 总数 + 汇总卡片数据。
+func OIDCAccessLogs(c *gin.Context) {
+	userId := c.GetInt("id")
+	role := c.GetInt("role")
+	filter := model.OIDCAccessLogFilter{
+		ClientId: strings.TrimSpace(c.Query("client_id")),
+		Action:   strings.TrimSpace(c.Query("action")),
+	}
+	if c.Query("scope") == "all" {
+		if role < common.RoleAdminUser {
+			common.ApiErrorMsg(c, "只有管理员能查看全站调用记录")
+			return
+		}
+	} else {
+		// 用户维度：只认自己申请的应用；一个都没有就直接返回空，别退化成"不限"。
+		clients, err := model.ListOIDCClientsByOwner(userId)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		ids := make([]string, 0, len(clients))
+		for _, client := range clients {
+			ids = append(ids, client.ClientId)
+		}
+		if len(ids) == 0 {
+			common.ApiSuccess(c, gin.H{
+				"items": []any{}, "total": 0, "page": 1, "page_size": 20,
+				"summary": model.OIDCAccessLogSummary{},
+			})
+			return
+		}
+		filter.ClientIds = ids
+	}
+	if raw := strings.TrimSpace(c.Query("success")); raw != "" {
+		value := raw == "true" || raw == "1"
+		filter.Success = &value
+	}
+	if raw := strings.TrimSpace(c.Query("start_timestamp")); raw != "" {
+		filter.StartTimestamp, _ = strconv.ParseInt(raw, 10, 64)
+	}
+	if raw := strings.TrimSpace(c.Query("end_timestamp")); raw != "" {
+		filter.EndTimestamp, _ = strconv.ParseInt(raw, 10, 64)
+	}
+	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+	pageSize, err := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	if err != nil || pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	filter.Offset = (page - 1) * pageSize
+	filter.Limit = pageSize
+
+	logs, total, err := model.ListOIDCAccessLogs(filter)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	summary, err := model.SummarizeOIDCAccessLogs(filter)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if logs == nil {
+		logs = []*model.OIDCAccessLog{}
+	}
+	common.ApiSuccess(c, gin.H{
+		"items": logs, "total": total, "page": page, "page_size": pageSize, "summary": summary,
+	})
 }

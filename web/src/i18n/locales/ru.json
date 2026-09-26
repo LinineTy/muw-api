@@ -8349,6 +8349,17 @@
     "Stop letting {{name}} sign users in with your account.": "Stop letting {{name}} sign users in with your account.",
     "Show more": "Показать больше",
     "Show less": "Свернуть",
+    "Call records": "Call records",
+    "IP address": "IP address",
+    "User agent": "User agent",
+    "No calls yet": "No calls yet",
+    "Every authorization request, token exchange and user-info read shows up here.": "Every authorization request, token exchange and user-info read shows up here.",
+    "Authorization request": "Authorization request",
+    "Token issued": "Token issued",
+    "Token refreshed": "Token refreshed",
+    "User info read": "User info read",
+    "Token revoked": "Token revoked",
+    "{{total}} calls · {{failed}} failed · {{clients}} apps": "{{total}} calls · {{failed}} failed · {{clients}} apps",
     "{{count}} permissions requested": "Запрошено разрешений: {{count}}"
   }
 }

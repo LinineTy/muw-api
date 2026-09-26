@@ -8349,6 +8349,17 @@
     "Stop letting {{name}} sign users in with your account.": "不再允许 \"{{name}}\" 使用你的账号登录。",
     "Show more": "查看更多",
     "Show less": "收起",
+    "Call records": "调用记录",
+    "IP address": "IP 地址",
+    "User agent": "客户端标识",
+    "No calls yet": "暂无调用记录",
+    "Every authorization request, token exchange and user-info read shows up here.": "每一次授权请求、令牌交换与用户信息读取都会记录在这里。",
+    "Authorization request": "授权请求",
+    "Token issued": "签发令牌",
+    "Token refreshed": "刷新令牌",
+    "User info read": "读取用户信息",
+    "Token revoked": "撤销令牌",
+    "{{total}} calls · {{failed}} failed · {{clients}} apps": "共 {{total}} 次调用 · 失败 {{failed}} · 涉及 {{clients}} 个应用",
     "{{count}} permissions requested": "将获取 {{count}} 项权限"
   }
 }
