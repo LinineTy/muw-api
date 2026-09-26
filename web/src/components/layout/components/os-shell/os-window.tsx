@@ -370,11 +370,13 @@ function IframePane({
   }, [src])
   return (
     // 窗口化依赖同源登录态/localStorage,不能加 sandbox(规则误伤,行级豁免)
+    // 窗口内的 Passkey/WebAuthn 调用按规范需要显式放行这两个特性
     // oxlint-disable-next-line react/iframe-missing-sandbox
     <iframe
       src={src}
       data-os-window-id={id}
       title={title}
+      allow='publickey-credentials-create; publickey-credentials-get'
       onLoad={() => setReady(true)}
       className={cn(
         'min-h-0 flex-1 border-0 bg-transparent transition-opacity duration-300',
