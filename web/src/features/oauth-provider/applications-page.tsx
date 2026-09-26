@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next'
 import { SectionPageLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -26,7 +25,8 @@ const EMPTY_STATS: OAuthStats = {
   active_users: 0,
 }
 
-// 第三方应用控制台：统计 + 我的应用 + 授权记录；管理员多一个审核队列页签。
+// 第三方应用控制台：左侧统计（管理员可切全站/仅自己），右侧页签 =
+// 我的应用 / 授权记录 / 审核队列（仅管理员）。
 export function OAuthApplicationsPage() {
   const { t } = useTranslation()
   const role = useAuthStore((state) => state.auth.user?.role ?? 0)
@@ -48,30 +48,32 @@ export function OAuthApplicationsPage() {
         </SectionPageLayout.Title>
         <SectionPageLayout.Actions>
           {isAdmin ? (
-            <ToggleGroup
-              value={[scope]}
-              onValueChange={(value) => {
-                // 单选：取新点中的那一个。
-                const next = value.find((item) => item !== scope)
-                if (next) setScope(next as 'self' | 'all')
-              }}
-              aria-label={t('Statistics')}
+            <Tabs
+              value={scope}
+              onValueChange={(value) => setScope(value as 'self' | 'all')}
             >
-              <ToggleGroupItem value='self'>{t('Only mine')}</ToggleGroupItem>
-              <ToggleGroupItem value='all'>{t('Site-wide')}</ToggleGroupItem>
-            </ToggleGroup>
+              <TabsList>
+                <TabsTrigger value='all'>{t('All')}</TabsTrigger>
+                <TabsTrigger value='self'>{t('Only Mine')}</TabsTrigger>
+              </TabsList>
+            </Tabs>
           ) : null}
           <Button onClick={() => setApplyOpen(true)}>
             {t('Apply for a new application')}
           </Button>
         </SectionPageLayout.Actions>
         <SectionPageLayout.Content>
-          <div className='flex h-full min-h-0 flex-col gap-3'>
-            <OAuthStatsCards stats={statsQuery.data ?? EMPTY_STATS} />
+          <div className='grid h-full min-h-0 gap-4 sm:gap-5 lg:grid-cols-[minmax(200px,260px)_minmax(0,1fr)]'>
+            <aside aria-label={t('Statistics')} className='min-w-0'>
+              <OAuthStatsCards
+                stats={statsQuery.data ?? EMPTY_STATS}
+                className='grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-1'
+              />
+            </aside>
             <Tabs
               value={tab}
               onValueChange={setTab}
-              className='flex min-h-0 flex-1 flex-col gap-3'
+              className='flex min-h-0 flex-col gap-3'
             >
               <TabsList className='max-w-full flex-wrap justify-start group-data-horizontal/tabs:h-auto'>
                 <TabsTrigger value='applications'>

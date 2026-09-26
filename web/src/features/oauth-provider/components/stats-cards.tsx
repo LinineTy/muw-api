@@ -4,10 +4,14 @@ import { useTranslation } from 'react-i18next'
 import { Card, CardContent } from '@/components/ui/card'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber } from '@/lib/format'
+import { cn } from '@/lib/utils'
 
 import type { OAuthStats } from '../api'
 
-export function OAuthStatsCards(props: { stats: OAuthStats }) {
+export function OAuthStatsCards(props: {
+  stats: OAuthStats
+  className?: string
+}) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const items = [
@@ -18,7 +22,9 @@ export function OAuthStatsCards(props: { stats: OAuthStats }) {
   ]
 
   return (
-    <div className='grid grid-cols-2 gap-3 md:grid-cols-4'>
+    <div
+      className={cn('grid grid-cols-2 gap-3 md:grid-cols-4', props.className)}
+    >
       {items.map((item) => (
         <Card key={item.label}>
           <CardContent className='py-3'>
