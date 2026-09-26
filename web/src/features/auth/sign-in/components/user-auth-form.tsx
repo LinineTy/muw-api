@@ -54,6 +54,7 @@ import {
   AUTH_INPUT,
   AUTH_MINOR_TEXT,
   AUTH_PRIMARY_BUTTON,
+  AUTH_SECONDARY_BUTTON,
 } from '@/features/auth/lib/auth-styles'
 import {
   buildLoginDeniedSearch,
@@ -389,7 +390,7 @@ export function UserAuthForm({
             variant='outline'
             disabled={passkeyButtonDisabled}
             onClick={handlePasskeyLogin}
-            className='h-11 w-full justify-center gap-2 rounded-lg'
+            className={AUTH_SECONDARY_BUTTON}
           >
             {isPasskeyLoading ? (
               <Loader2 className='h-4 w-4 animate-spin' />
