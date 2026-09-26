@@ -189,7 +189,12 @@ export async function createOAuthAuthorization(
   operation?: VerificationOperation,
   signal?: AbortSignal,
   proofToken?: string
-): Promise<{ state: string; authorizationUrl?: string }> {
+): Promise<{
+  state: string
+  authorizationUrl?: string
+  codeChallenge?: string
+  codeChallengeMethod?: string
+}> {
   const aff = intent === 'login' ? getAffiliateCode() : ''
   const res = await api.post(
     // 第三方登录同样要过前置校验：服务端在签发 state 这一步校验，回调侧必须消费服务端签发的
@@ -221,6 +226,8 @@ export async function createOAuthAuthorization(
       return {
         state: res.data.data.flow_token,
         authorizationUrl: res.data.data.authorization_url,
+        codeChallenge: res.data.data.code_challenge,
+        codeChallengeMethod: res.data.data.code_challenge_method,
       }
     }
   }

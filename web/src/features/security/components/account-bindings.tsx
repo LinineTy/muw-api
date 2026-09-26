@@ -299,7 +299,11 @@ export function AccountBindings({ profile, onUpdate }: AccountBindingsProps) {
           buildOAuthAuthorizationUrl(
             provider,
             authorization.state,
-            status ?? {}
+            status ?? {},
+            {
+              challenge: authorization.codeChallenge,
+              method: authorization.codeChallengeMethod,
+            }
           ),
         notification_warning: false,
       }

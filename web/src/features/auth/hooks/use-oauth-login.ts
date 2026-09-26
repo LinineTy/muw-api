@@ -22,6 +22,7 @@ import { toast } from 'sonner'
 
 import { clearAuthentication } from '@/lib/api'
 import { handleServerError } from '@/lib/handle-server-error'
+import { applyPkce } from '@/lib/oauth'
 import { AuthOperationError } from '@/lib/secure-verification'
 import { createServerError } from '@/lib/server-error-message'
 
@@ -132,13 +133,18 @@ export function useOAuthLogin(
     setIsLoading(true)
     try {
       await resetSession()
-      const state = await createOAuthFlow('oidc', 'login')
+      const authorization = await createOAuthAuthorization('oidc', 'login')
+      const state = authorization.state
       rememberOAuthLoginRedirect(state, redirectTo)
 
       const url = buildOIDCOAuthUrl(
         status.oidc_authorization_endpoint,
         status.oidc_client_id,
-        state
+        state,
+        {
+          challenge: authorization.codeChallenge,
+          method: authorization.codeChallengeMethod,
+        }
       )
       window.open(url, '_self')
     } catch (error) {
@@ -201,7 +207,11 @@ export function useOAuthLogin(
     setIsLoading(true)
     try {
       await resetSession()
-      const state = await createOAuthFlow(provider.slug, 'login')
+      const authorization = await createOAuthAuthorization(
+        provider.slug,
+        'login'
+      )
+      const state = authorization.state
       rememberOAuthLoginRedirect(state, redirectTo)
 
       const redirectUri = `${window.location.origin}/oauth/${provider.slug}`
@@ -213,6 +223,10 @@ export function useOAuthLogin(
       if (provider.scopes) {
         url.searchParams.set('scope', provider.scopes)
       }
+      applyPkce(url, {
+        challenge: authorization.codeChallenge,
+        method: authorization.codeChallengeMethod,
+      })
 
       window.open(url.toString(), '_self')
     } catch (error) {

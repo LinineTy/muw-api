@@ -39,6 +39,21 @@ export function indexCustomOAuthBindings(
 /**
  * Build GitHub OAuth URL
  */
+/**
+ * 客户端侧 PKCE：服务端在签发 state 时生成 verifier，这里只用它派生的 S256 challenge。
+ */
+export type OAuthPKCEParams = {
+  challenge?: string
+  method?: string
+}
+
+export function applyPkce(url: URL, pkce?: OAuthPKCEParams): URL {
+  if (!pkce?.challenge) return url
+  url.searchParams.set('code_challenge', pkce.challenge)
+  url.searchParams.set('code_challenge_method', pkce.method || 'S256')
+  return url
+}
+
 export function buildGitHubOAuthUrl(clientId: string, state: string): string {
   return `https://github.com/login/oauth/authorize?client_id=${clientId}&state=${state}&scope=user:email`
 }
@@ -65,7 +80,8 @@ export function buildDiscordOAuthUrl(clientId: string, state: string): string {
 export function buildOIDCOAuthUrl(
   authUrl: string,
   clientId: string,
-  state: string
+  state: string,
+  pkce?: OAuthPKCEParams
 ): string {
   const url = new URL(authUrl)
   url.searchParams.set('client_id', clientId)
@@ -73,6 +89,7 @@ export function buildOIDCOAuthUrl(
   url.searchParams.set('response_type', 'code')
   url.searchParams.set('scope', 'openid profile email')
   url.searchParams.set('state', state)
+  applyPkce(url, pkce)
   return url.toString()
 }
 
@@ -86,7 +103,8 @@ export function buildLinuxDOOAuthUrl(clientId: string, state: string): string {
 export function buildOAuthAuthorizationUrl(
   provider: string,
   state: string,
-  status: SystemStatus
+  status: SystemStatus,
+  pkce?: OAuthPKCEParams
 ): string {
   switch (provider) {
     case 'github':
@@ -104,7 +122,8 @@ export function buildOAuthAuthorizationUrl(
         return buildOIDCOAuthUrl(
           status.oidc_authorization_endpoint,
           status.oidc_client_id,
-          state
+          state,
+          pkce
         )
       }
       break
@@ -127,6 +146,7 @@ export function buildOAuthAuthorizationUrl(
         url.searchParams.set('response_type', 'code')
         url.searchParams.set('state', state)
         if (custom.scopes) url.searchParams.set('scope', custom.scopes)
+        applyPkce(url, pkce)
         return url.toString()
       }
     }
