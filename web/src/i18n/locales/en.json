@@ -4852,6 +4852,7 @@
     "Passkey login was cancelled or timed out": "Passkey login was cancelled or timed out",
     "Passkey not supported on this device": "Passkey not supported on this device",
     "Passkey registered successfully": "Passkey registered successfully",
+    "Extensions can block passkeys inside desktop windows — turn off passkey handling in the extension (e.g. Bitwarden) if it fails.": "Extensions can block passkeys inside desktop windows — turn off passkey handling in the extension (e.g. Bitwarden) if it fails.",
     "Passkey registration was cancelled": "Passkey registration was cancelled",
     "Passkey removed successfully": "Passkey removed successfully",
     "Passkey reset successfully": "Passkey reset successfully",

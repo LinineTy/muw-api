@@ -4852,6 +4852,7 @@
     "Passkey login was cancelled or timed out": "Passkey 登入已取消或逾時",
     "Passkey not supported on this device": "此設備不支援通行金鑰",
     "Passkey registered successfully": "Passkey 註冊成功",
+    "Extensions can block passkeys inside desktop windows — turn off passkey handling in the extension (e.g. Bitwarden) if it fails.": "桌面視窗內的通行密鑰可能被瀏覽器擴充功能攔截 —— 若失敗，請在擴充功能（如 Bitwarden）裡關閉通行密鑰接管後重試。",
     "Passkey registration was cancelled": "通行金鑰註冊已取消",
     "Passkey removed successfully": "通行金鑰已成功移除",
     "Passkey reset successfully": "通行金鑰已成功重置",

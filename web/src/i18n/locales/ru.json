@@ -4852,6 +4852,7 @@
     "Passkey login was cancelled or timed out": "Вход с Passkey был отменён или истёк тайм-аут",
     "Passkey not supported on this device": "Passkey не поддерживается на этом устройстве",
     "Passkey registered successfully": "Passkey успешно зарегистрирован",
+    "Extensions can block passkeys inside desktop windows — turn off passkey handling in the extension (e.g. Bitwarden) if it fails.": "Расширения браузера могут блокировать ключи доступа в окнах рабочего стола — при сбое отключите обработку ключей доступа в расширении (например, Bitwarden).",
     "Passkey registration was cancelled": "Регистрация Passkey была отменена",
     "Passkey removed successfully": "Passkey успешно удалён",
     "Passkey reset successfully": "Passkey успешно сброшен",

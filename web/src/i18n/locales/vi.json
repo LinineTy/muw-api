@@ -4852,6 +4852,7 @@
     "Passkey login was cancelled or timed out": "Đăng nhập Passkey đã bị hủy hoặc hết thời gian",
     "Passkey not supported on this device": "Khóa truy cập không được hỗ trợ trên thiết bị này",
     "Passkey registered successfully": "Passkey đã được đăng ký thành công",
+    "Extensions can block passkeys inside desktop windows — turn off passkey handling in the extension (e.g. Bitwarden) if it fails.": "Tiện ích trình duyệt có thể chặn passkey trong cửa sổ màn hình desktop — nếu lỗi, hãy tắt xử lý passkey trong tiện ích (ví dụ Bitwarden).",
     "Passkey registration was cancelled": "Đăng ký Passkey đã bị hủy",
     "Passkey removed successfully": "Đã xóa Passkey thành công",
     "Passkey reset successfully": "Đặt lại Passkey thành công",

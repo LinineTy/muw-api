@@ -28,6 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 import type { PasskeyDomains } from '../../passkey/assertion'
 import { PasskeyDomainSelector } from '../../passkey/components/passkey-domain-selector'
+import { PasskeyFrameNotice } from '../../passkey/components/passkey-frame-notice'
 import type {
   SecureVerificationState,
   VerificationInput,
@@ -241,6 +242,7 @@ export function SecureVerificationDialog(props: SecureVerificationDialogProps) {
                     'We will prompt your device to confirm using biometrics or your hardware key.'
                   )}
                 </p>
+                <PasskeyFrameNotice />
               </TabsContent>
               <TabsContent value='oauth' className='space-y-2'>
                 <p className='text-muted-foreground text-sm'>

@@ -44,6 +44,7 @@ import {
 import { IconBadge } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { usePasskeyManagement } from '@/features/auth/passkey'
+import { PasskeyFrameNotice } from '@/features/auth/passkey/components/passkey-frame-notice'
 import {
   SecureVerificationDialog,
   useSecureVerification,
@@ -215,6 +216,8 @@ export function PasskeyCard({ loading: pageLoading }: PasskeyCardProps) {
                 </Button>
               )}
             </div>
+
+            <PasskeyFrameNotice />
 
             {enabled && (
               <div className='flex flex-col gap-3 border-t pt-6 sm:flex-row xl:flex-col 2xl:flex-row'>

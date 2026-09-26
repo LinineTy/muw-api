@@ -4852,6 +4852,7 @@
     "Passkey login was cancelled or timed out": "Connexion Passkey annulée ou expirée",
     "Passkey not supported on this device": "Passkey non prise en charge sur cet appareil",
     "Passkey registered successfully": "Passkey enregistré avec succès",
+    "Extensions can block passkeys inside desktop windows — turn off passkey handling in the extension (e.g. Bitwarden) if it fails.": "Les extensions peuvent bloquer les clés d'accès dans les fenêtres du bureau — en cas d'échec, désactivez la gestion des clés d'accès dans l'extension (ex. Bitwarden).",
     "Passkey registration was cancelled": "L'enregistrement de la Passkey a été annulé",
     "Passkey removed successfully": "Passkey supprimée avec succès",
     "Passkey reset successfully": "Passkey réinitialisée avec succès",

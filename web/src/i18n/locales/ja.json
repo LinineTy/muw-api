@@ -4852,6 +4852,7 @@
     "Passkey login was cancelled or timed out": "パスキーログインがキャンセルまたはタイムアウトされました",
     "Passkey not supported on this device": "このデバイスではパスキーはサポートされていません",
     "Passkey registered successfully": "パスキーが正常に登録されました",
+    "Extensions can block passkeys inside desktop windows — turn off passkey handling in the extension (e.g. Bitwarden) if it fails.": "デスクトップウィンドウ内のパスキーはブラウザ拡張機能にブロックされることがあります。失敗する場合は拡張機能（Bitwarden など）のパスキー処理を無効にして再試行してください。",
     "Passkey registration was cancelled": "パスキーの登録がキャンセルされました",
     "Passkey removed successfully": "パスキーが正常に削除されました",
     "Passkey reset successfully": "パスキーが正常にリセットされました",
