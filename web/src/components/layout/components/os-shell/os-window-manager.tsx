@@ -9,7 +9,12 @@ import {
 } from '@/stores/os-windows-store'
 
 import { OsDesktopPlaceholder } from './os-desktop-placeholder'
-import { isSettingsUrl, isStandaloneProtocolUrl } from './os-open'
+import {
+  isSettingsUrl,
+  isShellHomeUrl,
+  isStandaloneProtocolUrl,
+  OS_SHELL_HOME,
+} from './os-open'
 import { OsWindowFrame } from './os-window'
 import { useOsNavItems, matchOsNavItem } from './use-os-nav'
 
@@ -27,7 +32,6 @@ export function OsWindowManager() {
     useOsWindowsStore()
 
   /** 壳的桌面路径:刷新/深链/从设置返回的落点,不再是 /dashboard(概览) */
-  const SHELL_HOME = '/os-desktop'
   const booted = useRef(false)
 
   // 点击 iframe 内部时,事件落在子文档里不会冒泡到父层;焦点转移的可见信号:
@@ -77,12 +81,12 @@ export function OsWindowManager() {
     // 桌面自身路径:/os-desktop(= 壳的桌面)与 /console(旧别名)。
     // 这里必须放行,否则刷新落在 /dashboard 时代码会把"当前路径"当成深链
     // 开成窗口 —— 表现就是空桌面一刷新自动弹出概览窗。
-    const isDesktopPath = path === SHELL_HOME || path === '/console'
+    const isDesktopPath = isShellHomeUrl(path)
     if (!isDesktopPath) {
       // 设置页已退出多窗口:回桌面壳空态,不开窗
       // 协议端点(同意页/回调)同样独立成页,不经壳
       if (isSettingsUrl(path) || isStandaloneProtocolUrl(path)) {
-        navigate({ to: SHELL_HOME, replace: true })
+        navigate({ to: OS_SHELL_HOME, replace: true })
         return
       }
       // 深链:该页面开成窗口,主层回到桌面
@@ -107,7 +111,7 @@ export function OsWindowManager() {
           ? { url: nav.url, title: nav.title }
           : { url: `${path}${search}`, title: nav?.title ?? path }
       )
-      navigate({ to: SHELL_HOME, replace: true })
+      navigate({ to: OS_SHELL_HOME, replace: true })
     } else {
       // 恢复上次窗口(标题/图标用当前 nav 数据回填)
       const persisted = readPersistedWindows().filter(

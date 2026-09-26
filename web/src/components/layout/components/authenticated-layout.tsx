@@ -1,4 +1,9 @@
-import { useLocation } from '@tanstack/react-router'
+import {
+  useLocation,
+  useNavigate,
+  useRouter,
+  useRouterState,
+} from '@tanstack/react-router'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -17,7 +22,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 import { AnimatedOutlet } from '@/components/page-transition'
 import { SkipToMain } from '@/components/skip-to-main'
@@ -36,12 +41,22 @@ import { MobileNavFab } from './mobile-nav-fab'
 import { OsDock } from './os-shell/os-dock'
 import {
   isSettingsUrl,
+  isShellHomeUrl,
   isStandaloneProtocolUrl,
   type OsShellOpenWindow,
 } from './os-shell/os-open'
 import { OsSideStrip } from './os-shell/os-side-strip'
 import { OsWhale } from './os-shell/os-whale'
 import { OsWindowManager } from './os-shell/os-window-manager'
+import {
+  getOsWindowSyncBridge,
+  rememberOsWindowHref,
+  resolveOsWindowAction,
+  SHELL_ROUTE_SUBTREE_ID,
+  splitOsShellUrl,
+  type OsWindowNavigationBridge,
+  type OsWindowSyncBridge,
+} from './os-shell/os-window-policy'
 import { matchOsNavItem, useOsNavItems } from './os-shell/use-os-nav'
 
 type AuthenticatedLayoutProps = {
@@ -64,6 +79,37 @@ function useIframeTransparentBackground(enabled: boolean) {
   }, [enabled])
 }
 
+/**
+ * 窗口 iframe 内:每次跳转后把当前地址回填给主层,让窗口标题栏与 Dock 跟着走
+ * (否则窗口内跳到别的页面后,标题/图标仍停在打开时那一页)。
+ * 窗口 id 取自宿主 iframe 元素上由 os-window.tsx 写入的 data-os-window-id。
+ */
+function useOsWindowUrlReport() {
+  // ⚠️ 必须等导航落定(status === 'idle')再取地址:导航进行中 router 已经切到
+  // 目标 location(我们的守卫正是在 beforeLoad 里取消导航的),那时读到的是
+  // "本来要去的地方" —— 会把它当成"已渲染的地址"记下来,下一次判断就全错
+  const href = useRouterState({
+    select: (s) => (s.status === 'idle' ? s.location.href : null),
+  })
+  const router = useRouter()
+  // 本窗口访问过的最大历史下标:当前下标藏在自己的 history.state 里,
+  // @tanstack/history 只公开 canGoBack,判断"还能不能前进"得靠它
+  const furthest = useRef(0)
+  useEffect(() => {
+    if (!IN_OS_WINDOW || !href) return
+    // 导航守卫要用"上一次渲染出来的地址"判同址重入(popstate 时 location 已变)
+    rememberOsWindowHref(href)
+    const id = (window.frameElement as HTMLElement | null)?.dataset.osWindowId
+    if (!id) return
+    const index = window.history.state?.__TSR_index ?? 0
+    if (index > furthest.current) furthest.current = index
+    getOsWindowSyncBridge()?.(id, href, {
+      canBack: router.history.canGoBack(),
+      canForward: index < furthest.current,
+    })
+  }, [href, router])
+}
+
 export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
   const defaultOpen = getCookie('sidebar_state') !== 'false'
   const isMobile = useIsMobile()
@@ -74,6 +120,7 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
   // 协议端点(授权同意页/回调)独立成页:不挂壳、不留侧栏与顶栏
   const isProtocolRoute = isStandaloneProtocolUrl(pathname)
   useIframeTransparentBackground(IN_OS_WINDOW)
+  useOsWindowUrlReport()
 
   // 主层(OS 壳 PC 分支)安装认证桥:窗口 iframe 的 session 刷新委托主层,
   // N 窗共享一次 /api/user/auth/refresh,避免烧穿 CriticalRateLimit(429)
@@ -145,30 +192,73 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
 }
 
 /**
- * OS 桌面壳宿主:挂载 window.__osShellOpenWindow 注入开窗能力,
- * 供头像菜单/搜索结果等全局组件把"路由跳转"转成"开新窗口"
- * (见 os-shell/os-open.ts 的说明)
+ * OS 桌面壳宿主:把壳的能力挂到 window 上,供壳内各处(以及窗口 iframe)取用 —
+ * `__osShellOpenWindow` 给主层入口(头像菜单/搜索/磁贴)把"路由跳转"转成"开窗",
+ * `__osShellWindowNavigation` 给窗口 iframe 裁决其中的页面跳转,
+ * `__osShellSyncWindowUrl` 接收窗口内的地址变化回填标题。
+ * (见 os-shell/os-open.ts 与 os-shell/os-window-policy.ts)
  */
 function OsShellDesktopHost() {
   const items = useOsNavItems()
+  const router = useRouter()
+  const navigate = useNavigate()
   const openWindow = useOsWindowsStore((s) => s.openWindow)
+  const syncWindowUrl = useOsWindowsStore((s) => s.syncWindowUrl)
+  const setWindowHistory = useOsWindowsStore((s) => s.setWindowHistory)
 
   useEffect(() => {
-    ;(
-      window as unknown as {
-        __osShellOpenWindow?: OsShellOpenWindow
-      }
-    ).__osShellOpenWindow = (url: string) => {
+    const host = window as unknown as {
+      __osShellOpenWindow?: OsShellOpenWindow
+      __osShellWindowNavigation?: OsWindowNavigationBridge
+      __osShellSyncWindowUrl?: OsWindowSyncBridge
+    }
+
+    host.__osShellOpenWindow = (url: string) => {
       if (isSettingsUrl(url) || isStandaloneProtocolUrl(url)) return false
       const nav = matchOsNavItem(items, url)
       openWindow({ url, title: nav?.title ?? url })
       return true
     }
-    return () => {
-      delete (window as unknown as { __osShellOpenWindow?: unknown })
-        .__osShellOpenWindow
+
+    host.__osShellWindowNavigation = (url: string) => {
+      const action = resolveOsWindowAction(url, {
+        isShellHome: isShellHomeUrl,
+        routeScope: (pathname) => {
+          const { matchedRoutes, foundRoute } =
+            router.getMatchedRoutes(pathname)
+          return {
+            exists: Boolean(foundRoute),
+            inShell: matchedRoutes.some(
+              (route) => route.id === SHELL_ROUTE_SUBTREE_ID
+            ),
+          }
+        },
+        hasNavItem: (pathname) => Boolean(matchOsNavItem(items, pathname)),
+      })
+      if (action === 'host') {
+        // 交回主层:设置页走完整布局、协议页独立成页、其余(公开页/404)
+        // 由主层路由自己渲染,壳随之卸载
+        void navigate({ href: url } as never)
+      } else if (action === 'open') {
+        // 走到这里说明导航项里没有它,标题先落到路径上
+        const { pathname } = splitOsShellUrl(url)
+        openWindow({ url, title: pathname })
+      }
+      return action
     }
-  }, [items, openWindow])
+
+    host.__osShellSyncWindowUrl = (id: string, url: string, history) => {
+      const { pathname } = splitOsShellUrl(url)
+      syncWindowUrl(id, url, matchOsNavItem(items, pathname)?.title ?? pathname)
+      setWindowHistory(id, history.canBack, history.canForward)
+    }
+
+    return () => {
+      delete host.__osShellOpenWindow
+      delete host.__osShellWindowNavigation
+      delete host.__osShellSyncWindowUrl
+    }
+  }, [items, navigate, openWindow, router, setWindowHistory, syncWindowUrl])
 
   return (
     <div className='relative h-svh w-full overflow-hidden'>

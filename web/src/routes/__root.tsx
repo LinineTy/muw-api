@@ -28,6 +28,10 @@ import {
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import { useEffect } from 'react'
 
+import {
+  currentOsWindowHref,
+  osWindowEscapesToHost,
+} from '@/components/layout/components/os-shell/os-window-policy'
 import { Toaster } from '@/components/ui/sonner'
 import { ThemeCustomizationProvider } from '@/context/theme-customization-provider'
 import { saveAffiliateCode } from '@/features/auth/lib/storage'
@@ -172,10 +176,21 @@ export const Route = createRootRouteWithContext<{
   queryClient: QueryClient
 }>()({
   // 应用初始化与路由解析前统一校验会话
-  beforeLoad: async ({ location }) => {
-    const legacyTarget = resolveLegacyRoute(location.href)
-    if (legacyTarget) {
-      throw redirect({ href: legacyTarget, replace: true })
+  beforeLoad: async ({ location, cause }) => {
+    // 窗口 iframe 内的跳转先交主层裁决:主层接管时(开新窗 / 跳出壳)取消这次
+    // 窗内导航留在原页,放行才继续走窗口自己的路由 —— 详见 os-window-policy.ts
+    // (预加载不算跳转:悬停链接也会预加载,那时不能去动主层)
+    if (osWindowEscapesToHost(location.href, cause)) {
+      throw redirect({ href: currentOsWindowHref(), replace: true })
+    }
+
+    // 旧路径重定向只在真导航时做:预加载(悬停/聚焦链接,defaultPreload:'intent')
+    // 同样会走 beforeLoad,那时抛 redirect 等于「鼠标划过就把页面带走」
+    if (cause !== 'preload') {
+      const legacyTarget = resolveLegacyRoute(location.href)
+      if (legacyTarget) {
+        throw redirect({ href: legacyTarget, replace: true })
+      }
     }
 
     const pathname = location?.pathname || ''

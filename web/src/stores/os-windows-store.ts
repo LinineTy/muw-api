@@ -22,6 +22,9 @@ export type OsWindowState = {
   minimizing?: boolean
   /** 会话恢复的窗口:不播入场动画(刷新后一屏窗口糊脸闪一遍) */
   restored?: boolean
+  /** 窗口内还能不能后退/前进(由窗口自己上报,标题栏按钮用;不持久化) */
+  canBack?: boolean
+  canForward?: boolean
 }
 
 /** 窗口数量上限(超限时忽略并保持现状) */
@@ -30,7 +33,10 @@ export const OS_WINDOW_MAX = 6
 /** sessionStorage 持久化键(刷新恢复窗口列表) */
 const STORAGE_KEY = 'os-windows'
 
-function loadPersisted(): Pick<OsWindowState, 'id' | 'url' | 'title' | 'icon'>[] {
+function loadPersisted(): Pick<
+  OsWindowState,
+  'id' | 'url' | 'title' | 'icon'
+>[] {
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY)
     if (!raw) return []
@@ -60,7 +66,13 @@ type OsWindowsStore = {
   /** 打开(或激活已开)窗口;同 url 不重复开 */
   openWindow: (nav: { url: string; title: string; icon?: string }) => void
   /** 兼容恢复:只按 url 恢复 */
-  restoreWindows: (navs: { url: string; title: string; icon?: string }[]) => void
+  restoreWindows: (
+    navs: { url: string; title: string; icon?: string }[]
+  ) => void
+  /** 窗口内跳转后同步该窗口的 url 与标题(几何/z 序等其余状态不动) */
+  syncWindowUrl: (id: string, url: string, title: string) => void
+  /** 窗口内上报历史可导航性(决定标题栏的后退/前进按钮是否可用) */
+  setWindowHistory: (id: string, canBack: boolean, canForward: boolean) => void
   closeWindow: (id: string) => void
   /** 关闭第一步:置 closing 播退出动画;动画结束再调 closeWindow 真正移除 */
   requestCloseWindow: (id: string) => void
@@ -114,13 +126,30 @@ function defaultGeometry(index: number) {
   return { x, y, w, h }
 }
 
+/** 只看路径:窗口的 url 会带上页面自己的查询串(tab/分页这类状态),比较时忽略它 */
+function pathOf(url: string) {
+  return url.split(/[?#]/)[0]
+}
+
+/** 是否带查询串:带了就是"某个具体地址",没带就是应用入口 */
+function hasQuery(url: string) {
+  return /[?#]/.test(url)
+}
+
 export const useOsWindowsStore = create<OsWindowsStore>((set, get) => ({
   windows: [],
   activeId: null,
 
   openWindow: (nav) => {
     const { windows } = get()
-    const existed = windows.find((w) => w.url === nav.url)
+    // 同一个应用(同路径)已有窗就激活它,不再开第二个 —— 但调用方给的是**具体地址**
+    // (带查询串,如深链 `/orders?tab=pending`)时,已有的窗得真的停在那儿才算数,
+    // 否则用户点了个深链却看到窗口原地不动
+    const existed = windows.find(
+      (w) =>
+        pathOf(w.url) === pathOf(nav.url) &&
+        (!hasQuery(nav.url) || w.url === nav.url)
+    )
     if (existed) {
       // 已开:恢复最小化并置顶激活(解除懒加载,让 iframe 挂真 src)
       const z = nextZ(windows)
@@ -163,31 +192,60 @@ export const useOsWindowsStore = create<OsWindowsStore>((set, get) => ({
   restoreWindows: (navs) => {
     const current = get().windows
     if (current.length > 0) return
-    const restored: OsWindowState[] = navs.slice(0, OS_WINDOW_MAX).map((nav, i) => {
-      const geo = defaultGeometry(i)
-      return {
-        id: `win-restore-${i}-${nav.url}`,
-        url: nav.url,
-        title: nav.title,
-        icon: nav.icon,
-        x: geo.x,
-        y: geo.y,
-        w: geo.w,
-        h: geo.h,
-        maximized: false,
-        minimized: false,
-        zIndex: nextZ(current),
-        /** 恢复窗标懒加载:唤起时才挂真 src,避免刷新后 N 个 iframe 齐发请求(429) */
-        lazy: true,
-        restored: true,
-      }
-    })
+    const restored: OsWindowState[] = navs
+      .slice(0, OS_WINDOW_MAX)
+      .map((nav, i) => {
+        const geo = defaultGeometry(i)
+        return {
+          id: `win-restore-${i}-${nav.url}`,
+          url: nav.url,
+          title: nav.title,
+          icon: nav.icon,
+          x: geo.x,
+          y: geo.y,
+          w: geo.w,
+          h: geo.h,
+          maximized: false,
+          minimized: false,
+          zIndex: nextZ(current),
+          /** 恢复窗标懒加载:唤起时才挂真 src,避免刷新后 N 个 iframe 齐发请求(429) */
+          lazy: true,
+          restored: true,
+        }
+      })
     if (restored.length === 0) return
     // 恢复时全部最小化,由 Dock 唤起(避免刷新后一屏窗口糊脸)
     set({
       windows: restored.map((w) => ({ ...w, minimized: true })),
       activeId: null,
     })
+  },
+
+  syncWindowUrl: (id, url, title) => {
+    const { windows } = get()
+    let changed = false
+    const next = windows.map((w) => {
+      if (w.id !== id || (w.url === url && w.title === title)) return w
+      changed = true
+      return { ...w, url, title }
+    })
+    if (!changed) return
+    set({ windows: next })
+    persist(next)
+  },
+
+  setWindowHistory: (id, canBack, canForward) => {
+    const { windows } = get()
+    let changed = false
+    const next = windows.map((w) => {
+      if (w.id !== id || (w.canBack === canBack && w.canForward === canForward))
+        return w
+      changed = true
+      return { ...w, canBack, canForward }
+    })
+    if (!changed) return
+    // 不落 sessionStorage:历史是这次会话里的事,刷新后失效
+    set({ windows: next })
   },
 
   requestCloseWindow: (id) => {
@@ -252,9 +310,7 @@ export const useOsWindowsStore = create<OsWindowsStore>((set, get) => ({
     const z = nextZ(windows)
     set({
       activeId: id,
-      windows: windows.map((w) =>
-        w.id === id ? { ...w, zIndex: z } : w
-      ),
+      windows: windows.map((w) => (w.id === id ? { ...w, zIndex: z } : w)),
     })
   },
 
