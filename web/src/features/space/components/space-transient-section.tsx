@@ -6,13 +6,6 @@ import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 
 import { clearTransientImages } from '../api'
 import type { SpaceInfo } from '../types'
@@ -60,14 +53,11 @@ export function SpaceTransientSection({
   }
 
   return (
-    <Card>
-      <CardHeader className='flex-row items-start justify-between gap-4 space-y-0'>
-        <div className='space-y-1'>
-          <CardTitle>{t('Temporary images')}</CardTitle>
-          <CardDescription>
-            {t('Chat attachments auto-expire. Only count and size are shown.')}
-          </CardDescription>
-        </div>
+    <div className='space-y-3'>
+      <div className='flex flex-wrap items-start justify-between gap-3'>
+        <p className='text-muted-foreground text-sm'>
+          {t('Chat attachments auto-expire. Only count and size are shown.')}
+        </p>
         <Button
           disabled={busy || (space?.transient_count ?? 0) === 0}
           onClick={() => setConfirmOpen(true)}
@@ -77,23 +67,22 @@ export function SpaceTransientSection({
           <Trash2 className='mr-1.5 size-3.5' />
           {t('Clear my temporary images')}
         </Button>
-      </CardHeader>
-      <CardContent>
-        <dl className='text-muted-foreground grid grid-cols-2 gap-x-6 gap-y-2 text-sm'>
-          <div>
-            <dt className='text-xs'>{t('Count')}</dt>
-            <dd className='text-foreground font-medium'>
-              {space?.transient_count ?? 0}
-            </dd>
-          </div>
-          <div>
-            <dt className='text-xs'>{t('Size')}</dt>
-            <dd className='text-foreground font-medium'>
-              {formatBytes(space?.transient_bytes ?? 0)}
-            </dd>
-          </div>
-        </dl>
-      </CardContent>
+      </div>
+
+      <dl className='text-muted-foreground grid grid-cols-2 gap-x-6 gap-y-2 text-sm'>
+        <div>
+          <dt className='text-xs'>{t('Count')}</dt>
+          <dd className='text-foreground font-medium'>
+            {space?.transient_count ?? 0}
+          </dd>
+        </div>
+        <div>
+          <dt className='text-xs'>{t('Size')}</dt>
+          <dd className='text-foreground font-medium'>
+            {formatBytes(space?.transient_bytes ?? 0)}
+          </dd>
+        </div>
+      </dl>
 
       <ConfirmDialog
         destructive
@@ -105,6 +94,6 @@ export function SpaceTransientSection({
         onOpenChange={setConfirmOpen}
         title={t('Clear my temporary images?')}
       />
-    </Card>
+    </div>
   )
 }

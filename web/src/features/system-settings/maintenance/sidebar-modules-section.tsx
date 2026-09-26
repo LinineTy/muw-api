@@ -140,10 +140,6 @@ export function SidebarModulesSection({
         title: t('Profile'),
         description: t('Personal settings and profile management.'),
       },
-      space: {
-        title: t('Cloud Space'),
-        description: t('Manage your cloud storage and synced conversations.'),
-      },
       orders: {
         title: t('Order Center'),
         description: t(

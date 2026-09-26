@@ -6,13 +6,6 @@ import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { downloadBlobObject } from '@/lib/download'
 import {
@@ -106,56 +99,49 @@ export function SpacePermanentSection() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t('Permanent images')}</CardTitle>
-        <CardDescription>
-          {t('Saved generated images. They never expire.')}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {loading ? (
-          <div className='grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4'>
-            {Array.from({ length: 4 }, (_, i) => (
-              <Skeleton className='aspect-square w-full rounded-lg' key={i} />
-            ))}
-          </div>
-        ) : (
-          <>
-            <PermanentGrid
-              images={pagedImages}
-              onDelete={setDeleteTarget}
-              onDownload={handleDownload}
-              emptyLabel={t('No images yet. Generate one in the playground.')}
-            />
-            {totalPages > 1 && (
-              <div className='mt-4 flex items-center justify-center gap-2'>
-                <Button
-                  disabled={page <= 0}
-                  onClick={() => setPage((p) => Math.max(0, p - 1))}
-                  size='sm'
-                  variant='outline'
-                >
-                  ‹
-                </Button>
-                <span className='text-muted-foreground text-xs'>
-                  {page + 1} / {totalPages}
-                </span>
-                <Button
-                  disabled={page >= totalPages - 1}
-                  onClick={() =>
-                    setPage((p) => Math.min(totalPages - 1, p + 1))
-                  }
-                  size='sm'
-                  variant='outline'
-                >
-                  ›
-                </Button>
-              </div>
-            )}
-          </>
-        )}
-      </CardContent>
+    <div className='space-y-3'>
+      <p className='text-muted-foreground text-sm'>
+        {t('Saved generated images. They never expire.')}
+      </p>
+      {loading ? (
+        <div className='grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4'>
+          {Array.from({ length: 4 }, (_, i) => (
+            <Skeleton className='aspect-square w-full rounded-lg' key={i} />
+          ))}
+        </div>
+      ) : (
+        <>
+          <PermanentGrid
+            images={pagedImages}
+            onDelete={setDeleteTarget}
+            onDownload={handleDownload}
+            emptyLabel={t('No images yet. Generate one in the playground.')}
+          />
+          {totalPages > 1 && (
+            <div className='mt-4 flex items-center justify-center gap-2'>
+              <Button
+                disabled={page <= 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                size='sm'
+                variant='outline'
+              >
+                ‹
+              </Button>
+              <span className='text-muted-foreground text-xs'>
+                {page + 1} / {totalPages}
+              </span>
+              <Button
+                disabled={page >= totalPages - 1}
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                size='sm'
+                variant='outline'
+              >
+                ›
+              </Button>
+            </div>
+          )}
+        </>
+      )}
 
       <ConfirmDialog
         destructive
@@ -173,7 +159,7 @@ export function SpacePermanentSection() {
         }}
         title={t('Delete image?')}
       />
-    </Card>
+    </div>
   )
 }
 

@@ -23,7 +23,6 @@ import {
   Box,
   ClipboardList,
   CreditCard,
-  Database,
   FileText,
   FlaskConical,
   HeartPulse,
@@ -139,11 +138,6 @@ export function useSidebarData(): SidebarData {
             title: t('Order Center'),
             url: '/orders',
             icon: Receipt,
-          },
-          {
-            title: t('Cloud Space'),
-            url: '/space',
-            icon: Database,
           },
           {
             title: t('Profile'),

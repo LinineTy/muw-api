@@ -135,11 +135,6 @@ export function SidebarModulesCard() {
           ),
         },
         {
-          key: 'space',
-          title: t('Cloud Space'),
-          description: t('Manage your cloud storage and synced conversations.'),
-        },
-        {
           key: 'personal',
           title: t('Personal Settings'),
           description: t('Personal info settings'),

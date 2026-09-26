@@ -7,13 +7,6 @@ import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Button } from '@/components/ui/button'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -201,24 +194,19 @@ export function SpaceConversationsSection({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t('Conversations')}</CardTitle>
-        <CardDescription>
-          {t('Synced conversations. Download to keep a copy.')}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className='space-y-3'>
-        {space != null && space.conversation_count > 0 && (
-          <p className='text-muted-foreground text-xs'>
-            {t('{{count}} conversations · {{size}} used', {
-              count: space.conversation_count,
-              size: formatBytes(space.conversation_used_bytes ?? 0),
-            })}
-          </p>
-        )}
-        {listBody}
-      </CardContent>
+    <div className='space-y-3'>
+      <p className='text-muted-foreground text-sm'>
+        {t('Synced conversations. Download to keep a copy.')}
+      </p>
+      {space != null && space.conversation_count > 0 && (
+        <p className='text-muted-foreground text-xs'>
+          {t('{{count}} conversations · {{size}} used', {
+            count: space.conversation_count,
+            size: formatBytes(space.conversation_used_bytes ?? 0),
+          })}
+        </p>
+      )}
+      {listBody}
 
       <ConfirmDialog
         destructive
@@ -233,6 +221,6 @@ export function SpaceConversationsSection({
         }}
         title={t('Delete conversation?')}
       />
-    </Card>
+    </div>
   )
 }

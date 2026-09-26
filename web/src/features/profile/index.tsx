@@ -21,6 +21,9 @@ import {
   CardStaggerContainer,
   CardStaggerItem,
 } from '@/components/page-transition'
+import { CloudSpaceCard } from '@/features/space/components/cloud-space-card'
+import { SpaceStorageCard } from '@/features/space/components/space-storage-card'
+import { useSpaceInfo } from '@/features/space/hooks/use-space-info'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { CreditScoreCard } from './components/credit-score-card'
@@ -33,6 +36,7 @@ import { useProfile } from './hooks'
 
 export function Profile() {
   const { profile, loading, refreshProfile } = useProfile()
+  const { space, refresh: refreshSpace } = useSpaceInfo()
   const permissions = useAuthStore((s) => s.auth.user?.permissions)
 
   const canConfigureSidebar = permissions?.sidebar_settings !== false
@@ -50,7 +54,7 @@ export function Profile() {
           </CardStaggerItem>
 
           <CardStaggerItem>
-            {/* 双列主侧：左=设置/偏好/边栏模块，右=分组与固定/风控分。
+            {/* 双列主侧：左=设置/偏好/边栏模块/云空间，右=分组与固定/风控分/容量。
                 分组信息单一来源在右栏分组卡，header 不再重复展示组/钉。 */}
             <div className='grid gap-4 sm:gap-5 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-start'>
               <div className='space-y-4 sm:space-y-6'>
@@ -64,11 +68,13 @@ export function Profile() {
                   onProfileUpdate={refreshProfile}
                 />
                 {canConfigureSidebar && <SidebarModulesCard />}
+                <CloudSpaceCard space={space} onChanged={refreshSpace} />
               </div>
 
               <div className='space-y-4 sm:space-y-6 xl:sticky xl:top-6'>
                 <GroupPinCard profile={profile} loading={loading} />
                 <CreditScoreCard />
+                <SpaceStorageCard space={space} onPurchased={refreshSpace} />
               </div>
             </div>
           </CardStaggerItem>

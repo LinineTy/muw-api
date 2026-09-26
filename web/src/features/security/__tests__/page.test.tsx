@@ -103,6 +103,44 @@ beforeEach(() => {
     if (url === '/api/user/sessions') {
       return { data: { success: true, data: [] } }
     }
+    if (url === '/api/playground/space') {
+      return {
+        data: {
+          success: true,
+          data: {
+            capacity_bytes: 0,
+            used_bytes: 0,
+            purchase_ratio: 0,
+            max_purchase_mb: 1024,
+            global_used_bytes: 0,
+            global_max_bytes: 0,
+            transient_count: 0,
+            transient_bytes: 0,
+            permanent_count: 0,
+            permanent_bytes: 0,
+            conversation_count: 0,
+            conversation_used_bytes: 0,
+          },
+        },
+      }
+    }
+    if (url === '/api/playground/images') {
+      return { data: { success: true, data: [] } }
+    }
+    if (url === '/api/user/topup/info') {
+      return {
+        data: {
+          success: true,
+          data: {
+            enable_online_topup: false,
+            pay_methods: [],
+            amount_options: [],
+            discount: {},
+            min_topup: 0,
+          },
+        },
+      }
+    }
     throw new Error(`Unexpected GET ${url}`)
   })
 })

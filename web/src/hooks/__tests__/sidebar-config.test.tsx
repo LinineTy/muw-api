@@ -79,9 +79,9 @@ describe('security sidebar visibility', () => {
       { personal: { enabled: true, personal: true, topup: true } },
       { personal: { enabled: true, personal: true } }
     )
-    // This fork adds its own personal modules (Cloud Space, Order Center), so
-    // assert the upstream contract — Security & Access directly after Profile —
-    // instead of pinning the whole group.
+    // This fork adds its own personal modules (Order Center, Developer
+    // applications), so assert the upstream contract — Security & Access
+    // directly after Profile — instead of pinning the whole group.
     const personalTitles =
       result.current
         .find((group) => group.id === 'personal')

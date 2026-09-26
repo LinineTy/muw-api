@@ -77,7 +77,6 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     enabled: true,
     topup: true,
     personal: true,
-    space: true,
     orders: true,
     security: true,
     developer: true,

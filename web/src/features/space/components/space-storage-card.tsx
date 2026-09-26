@@ -7,6 +7,13 @@ import { toast } from 'sonner'
 import { Dialog } from '@/components/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import {
@@ -52,16 +59,16 @@ function purchasePriceToQuota(mb: number, pricePerMB: number): number {
   return Math.round((amount / rate) * config.quotaPerUnit)
 }
 
-type SpaceHeaderProps = {
+type SpaceStorageCardProps = {
   space: SpaceInfo | null
   onPurchased: () => void
 }
 
 /**
- * 云空间用量：紧凑横条（进度 + 已用/总量 + 购买入口），购买流程在弹窗内完成。
+ * 云空间容量卡：进度条 + 已用/总量 + 全站水位 + 购买入口，购买流程在弹窗内完成。
  * 支付双通道：余额购买（扣 quota）+ 在线支付（易支付，按充值同价换算）。
  */
-export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
+export function SpaceStorageCard({ space, onPurchased }: SpaceStorageCardProps) {
   const { t } = useTranslation()
   const [buyOpen, setBuyOpen] = useState(false)
   const [mbInput, setMbInput] = useState('')
@@ -240,41 +247,50 @@ export function SpaceHeader({ space, onPurchased }: SpaceHeaderProps) {
 
   return (
     <>
-      <div className='border-border/60 bg-card flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-3 py-2.5'>
-        <span className='text-foreground text-sm font-medium'>
-          {t('Storage')}
-        </span>
-        <div className='flex min-w-0 flex-1 basis-40 items-center gap-2'>
-          <Progress
-            aria-label={t('Storage usage')}
-            className='flex-1'
-            value={percent}
-          />
-          <span className='text-muted-foreground shrink-0 text-xs'>
-            {usedLabel}
-            {isRoot ? (
-              <span> / {t('Unlimited')}</span>
-            ) : (
-              space !== null && <span> / {totalLabel}</span>
-            )}
-          </span>
-        </div>
-        <span className='text-muted-foreground text-xs'>
-          {t('Global')}: {space ? formatBytes(space.global_used_bytes) : '—'} /{' '}
-          {space ? formatBytes(space.global_max_bytes) : '—'}
-        </span>
-        {!isRoot && (
-          <Button
-            size='sm'
-            variant='outline'
-            disabled={!space}
-            onClick={() => setBuyOpen(true)}
-          >
-            <Plus className='mr-1 size-3.5' />
-            {t('Buy storage')}
-          </Button>
-        )}
-      </div>
+      <Card data-card-hover='false'>
+        <CardHeader className='flex flex-row items-start justify-between space-y-0'>
+          <div>
+            <CardTitle className='text-sm font-semibold'>
+              {t('Storage')}
+            </CardTitle>
+            <CardDescription className='text-xs'>
+              {t('Storage usage')}
+            </CardDescription>
+          </div>
+          {!isRoot && (
+            <Button
+              size='sm'
+              variant='outline'
+              disabled={!space}
+              onClick={() => setBuyOpen(true)}
+            >
+              <Plus className='mr-1 size-3.5' />
+              {t('Buy storage')}
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent className='space-y-3'>
+          <div className='flex items-center gap-2'>
+            <Progress
+              aria-label={t('Storage usage')}
+              className='flex-1'
+              value={percent}
+            />
+            <span className='text-muted-foreground shrink-0 text-xs'>
+              {usedLabel}
+              {isRoot ? (
+                <span> / {t('Unlimited')}</span>
+              ) : (
+                space !== null && <span> / {totalLabel}</span>
+              )}
+            </span>
+          </div>
+          <p className='text-muted-foreground text-xs'>
+            {t('Global')}: {space ? formatBytes(space.global_used_bytes) : '—'}{' '}
+            / {space ? formatBytes(space.global_max_bytes) : '—'}
+          </p>
+        </CardContent>
+      </Card>
 
       <Dialog
         open={buyOpen}

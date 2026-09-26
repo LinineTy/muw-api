@@ -296,7 +296,7 @@ export function PlaygroundSettingsSection({
               <h4 className='text-sm font-semibold'>{t('Manual cleanup')}</h4>
               <p className='text-muted-foreground mt-1 text-sm'>
                 {t(
-                  'Usage is shown in the cloud space page. Here you can clean up temporary images for all users.'
+                  'Usage is shown on the profile page. Here you can clean up temporary images for all users.'
                 )}
               </p>
               <div className='mt-3 flex flex-wrap gap-2'>
