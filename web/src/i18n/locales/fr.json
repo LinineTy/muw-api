@@ -8345,6 +8345,9 @@
     "Redirect URIs": "Redirect URIs",
     "Are you sure you want to delete application \"{{name}}\"? This action cannot be undone.": "Are you sure you want to delete application \"{{name}}\"? This action cannot be undone.",
     "Are you sure you want to disable application \"{{name}}\"? Users can no longer sign in with it.": "Are you sure you want to disable application \"{{name}}\"? Users can no longer sign in with it.",
-    "Stop letting {{name}} sign users in with your account.": "Stop letting {{name}} sign users in with your account."
+    "Stop letting {{name}} sign users in with your account.": "Stop letting {{name}} sign users in with your account.",
+    "Show more": "Voir plus",
+    "Show less": "Réduire",
+    "{{count}} permissions requested": "{{count}} autorisations demandées"
   }
 }

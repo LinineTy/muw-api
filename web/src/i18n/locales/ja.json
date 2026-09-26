@@ -8345,6 +8345,9 @@
     "Redirect URIs": "リダイレクト URI",
     "Are you sure you want to delete application \"{{name}}\"? This action cannot be undone.": "アプリ \"{{name}}\" を削除してもよろしいですか？この操作は元に戻せません。",
     "Are you sure you want to disable application \"{{name}}\"? Users can no longer sign in with it.": "アプリ \"{{name}}\" を無効にしてもよろしいですか？ユーザーはこれでサインインできなくなります。",
-    "Stop letting {{name}} sign users in with your account.": "\"{{name}}\" があなたのアカウントでサインインすることを停止します。"
+    "Stop letting {{name}} sign users in with your account.": "\"{{name}}\" があなたのアカウントでサインインすることを停止します。",
+    "Show more": "もっと見る",
+    "Show less": "閉じる",
+    "{{count}} permissions requested": "{{count}} 件の権限を要求します"
   }
 }

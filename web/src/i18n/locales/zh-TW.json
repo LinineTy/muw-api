@@ -8345,6 +8345,9 @@
     "Redirect URIs": "回調地址",
     "Are you sure you want to delete application \"{{name}}\"? This action cannot be undone.": "確定要刪除應用 \"{{name}}\" 嗎？此操作無法撤銷。",
     "Are you sure you want to disable application \"{{name}}\"? Users can no longer sign in with it.": "確定要停用應用 \"{{name}}\" 嗎？使用者將無法再用它登入。",
-    "Stop letting {{name}} sign users in with your account.": "不再允許 \"{{name}}\" 使用你的帳號登入。"
+    "Stop letting {{name}} sign users in with your account.": "不再允許 \"{{name}}\" 使用你的帳號登入。",
+    "Show more": "檢視更多",
+    "Show less": "收合",
+    "{{count}} permissions requested": "將取得 {{count}} 項權限"
   }
 }

@@ -88,21 +88,7 @@ func OIDCAuthorize(c *gin.Context) {
 		oidcProtocolError(c, http.StatusInternalServerError, "server_error", err.Error())
 		return
 	}
-	consentUrl := oidcConsentRoute + "?request=" + url.QueryEscape(requestToken)
-	// 排布方案对比用（临时）：允许把 layout 透传到同意页，便于同一流程换样式看效果。
-	if layout := oidcConsentLayout(c.Query("layout")); layout != "" {
-		consentUrl += "&layout=" + layout
-	}
-	c.Redirect(http.StatusFound, consentUrl)
-}
-
-// oidcConsentLayout 只放行已知的排布方案，避免把任意参数带到同意页。
-func oidcConsentLayout(raw string) string {
-	switch raw {
-	case "stacked", "split":
-		return raw
-	}
-	return ""
+	c.Redirect(http.StatusFound, oidcConsentRoute+"?request="+url.QueryEscape(requestToken))
 }
 
 // oidcErrorRedirect 按 OAuth 规范把错误回给应用（state 原样带回）。
