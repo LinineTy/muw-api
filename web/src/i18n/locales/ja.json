@@ -8377,6 +8377,7 @@
     "Allowed groups": "許可するグループ",
     "Leave empty to allow every group": "空欄ですべてのグループを許可",
     "Comma separated. Users outside these groups cannot sign in with this application.": "カンマ区切り。ここに無いグループのユーザーはこのアプリでサインインできません。",
+    "Client ID, secret and sign-in endpoints appear here once an administrator approves this application.": "管理者の承認後、ここに Client ID・シークレット・サインインエンドポイントが表示されます。",
     "{{count}} permissions requested": "{{count}} 件の権限を要求します"
   }
 }

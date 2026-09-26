@@ -8377,6 +8377,7 @@
     "Allowed groups": "Allowed groups",
     "Leave empty to allow every group": "Leave empty to allow every group",
     "Comma separated. Users outside these groups cannot sign in with this application.": "Comma separated. Users outside these groups cannot sign in with this application.",
+    "Client ID, secret and sign-in endpoints appear here once an administrator approves this application.": "Client ID, secret and sign-in endpoints appear here once an administrator approves this application.",
     "{{count}} permissions requested": "{{count}} autorisations demandées"
   }
 }

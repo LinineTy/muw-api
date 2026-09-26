@@ -47,11 +47,12 @@ const (
 )
 
 var (
-	ErrOIDCInvalidRequest = errors.New("OIDC 请求参数不合法")
-	ErrOIDCClientDisabled = errors.New("OIDC 应用不可用")
-	ErrOIDCPKCERequired   = errors.New("该应用必须使用 PKCE（S256）")
-	ErrOIDCReplayDetected = errors.New("刷新令牌被重复使用，已撤销该应用的授权")
-	ErrOIDCRefreshRace    = errors.New("刷新令牌刚刚已被使用，请重试")
+	ErrOIDCInvalidRequest    = errors.New("OIDC 请求参数不合法")
+	ErrOIDCClientDisabled    = errors.New("OIDC 应用不可用")
+	ErrOIDCClientNotApproved = errors.New("应用尚未通过审核，密钥与凭据在审核通过后才会签发")
+	ErrOIDCPKCERequired      = errors.New("该应用必须使用 PKCE（S256）")
+	ErrOIDCReplayDetected    = errors.New("刷新令牌被重复使用，已撤销该应用的授权")
+	ErrOIDCRefreshRace       = errors.New("刷新令牌刚刚已被使用，请重试")
 
 	errOIDCRefreshInvalid = errors.New("刷新令牌无效或已过期")
 )
@@ -254,6 +255,10 @@ func OIDCRevealClientSecret(id, ownerUserId int) (string, error) {
 	if client.OwnerUserId != ownerUserId {
 		return "", errors.New("只能查看自己申请的密钥")
 	}
+	// 未通过审核的应用不该持有可用凭据：密钥在批准那一刻才签发。
+	if client.Status != model.OIDCClientStatusApproved {
+		return "", ErrOIDCClientNotApproved
+	}
 	if client.IsPublic() {
 		return "", errors.New("公开客户端没有密钥（使用 PKCE）")
 	}
@@ -271,6 +276,10 @@ func OIDCRotateClientSecret(id, ownerUserId int) (string, error) {
 	}
 	if client.OwnerUserId != ownerUserId {
 		return "", errors.New("只能重置自己申请的密钥")
+	}
+	// 同上：没批准就不该能签发/重置出凭据（否则待审核应用可以直接给自己造一把密钥）
+	if client.Status != model.OIDCClientStatusApproved {
+		return "", ErrOIDCClientNotApproved
 	}
 	if client.IsPublic() {
 		return "", errors.New("公开客户端没有密钥（使用 PKCE）")

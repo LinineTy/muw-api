@@ -47,6 +47,9 @@ export function ApplicationDetailDialog(props: {
   const [homepage, setHomepage] = useState('')
   const [iconUrl, setIconUrl] = useState('')
   const [redirectUris, setRedirectUris] = useState('')
+  // 只有通过审核的应用才持有可用凭据：待审核/驳回/禁用的应用连 Client ID 与
+  // 登录端点都不展示 —— 否则看起来像"已经能用"，还会诱导申请人去重置密钥。
+  const usable = application?.status === 'approved'
   const [secret, setSecret] = useState('')
   const [secretShown, setSecretShown] = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
@@ -133,66 +136,79 @@ export function ApplicationDetailDialog(props: {
         }
       >
         <div className='flex flex-col gap-4'>
-          <div className='flex flex-col gap-1.5'>
-            <Label htmlFor='oauth-detail-client-id'>Client ID</Label>
-            <div className='flex items-center gap-2'>
-              <Input
-                id='oauth-detail-client-id'
-                readOnly
-                value={application?.client_id ?? ''}
-              />
-              <CopyButton value={application?.client_id ?? ''} />
-            </div>
-          </div>
-
-          {isConfidential ? (
-            <div className='flex flex-col gap-1.5'>
-              <Label htmlFor='oauth-detail-secret'>{t('Client secret')}</Label>
-              <div className='flex items-center gap-2'>
-                <Input
-                  id='oauth-detail-secret'
-                  readOnly
-                  type={secretShown ? 'text' : 'password'}
-                  value={secret || '••••••••••••••••'}
-                />
-                <Button
-                  variant='outline'
-                  size='sm'
-                  disabled={revealMutation.isPending}
-                  onClick={() => {
-                    if (secret) {
-                      setSecretShown(!secretShown)
-                      return
-                    }
-                    revealMutation.mutate()
-                  }}
-                >
-                  {secretShown ? t('Hide') : t('Show')}
-                </Button>
-                {secret ? <CopyButton value={secret} /> : null}
-                <Button
-                  variant='outline'
-                  size='sm'
-                  onClick={() => setResetOpen(true)}
-                >
-                  {t('Reset secret')}
-                </Button>
-              </div>
-            </div>
+          {!usable ? (
+            <p className='text-muted-foreground rounded-lg border border-dashed p-3 text-sm'>
+              {t(
+                'Client ID, secret and sign-in endpoints appear here once an administrator approves this application.'
+              )}
+            </p>
           ) : null}
-
-          <div className='flex flex-col gap-1.5'>
-            <Label>{t('Sign-in endpoints')}</Label>
-            {ENDPOINTS.map((endpoint) => (
-              <div key={endpoint.label} className='flex items-center gap-2'>
-                <span className='text-muted-foreground w-44 shrink-0 text-xs'>
-                  {t(endpoint.label)}
-                </span>
-                <Input readOnly value={issuer + endpoint.path} />
-                <CopyButton value={issuer + endpoint.path} />
+          {usable ? (
+            <>
+              <div className='flex flex-col gap-1.5'>
+                <Label htmlFor='oauth-detail-client-id'>Client ID</Label>
+                <div className='flex items-center gap-2'>
+                  <Input
+                    id='oauth-detail-client-id'
+                    readOnly
+                    value={application?.client_id ?? ''}
+                  />
+                  <CopyButton value={application?.client_id ?? ''} />
+                </div>
               </div>
-            ))}
-          </div>
+
+              {isConfidential ? (
+                <div className='flex flex-col gap-1.5'>
+                  <Label htmlFor='oauth-detail-secret'>
+                    {t('Client secret')}
+                  </Label>
+                  <div className='flex items-center gap-2'>
+                    <Input
+                      id='oauth-detail-secret'
+                      readOnly
+                      type={secretShown ? 'text' : 'password'}
+                      value={secret || '••••••••••••••••'}
+                    />
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      disabled={revealMutation.isPending}
+                      onClick={() => {
+                        if (secret) {
+                          setSecretShown(!secretShown)
+                          return
+                        }
+                        revealMutation.mutate()
+                      }}
+                    >
+                      {secretShown ? t('Hide') : t('Show')}
+                    </Button>
+                    {secret ? <CopyButton value={secret} /> : null}
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      onClick={() => setResetOpen(true)}
+                    >
+                      {t('Reset secret')}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className='flex flex-col gap-1.5'>
+                <Label>{t('Sign-in endpoints')}</Label>
+                {ENDPOINTS.map((endpoint) => (
+                  <div key={endpoint.label} className='flex items-center gap-2'>
+                    <span className='text-muted-foreground w-44 shrink-0 text-xs'>
+                      {t(endpoint.label)}
+                    </span>
+                    <Input readOnly value={issuer + endpoint.path} />
+                    <CopyButton value={issuer + endpoint.path} />
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : null}
 
           <div className='flex flex-col gap-1.5'>
             <Label htmlFor='oauth-detail-name'>{t('Application name')}</Label>

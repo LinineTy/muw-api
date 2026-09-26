@@ -8377,6 +8377,7 @@
     "Allowed groups": "允許的分組",
     "Leave empty to allow every group": "留空表示不限分組",
     "Comma separated. Users outside these groups cannot sign in with this application.": "逗號分隔；不在這些分組裡的使用者不能用該應用登入。",
+    "Client ID, secret and sign-in endpoints appear here once an administrator approves this application.": "審核通過後，這裡才會顯示 Client ID、密鑰與登入端點。",
     "{{count}} permissions requested": "將取得 {{count}} 項權限"
   }
 }

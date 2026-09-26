@@ -428,3 +428,51 @@ func TestOIDCUsageCounters(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, rows, 2)
 }
+
+// 未通过审核的应用不该持有可用凭据：密钥在批准那一刻才签发，而"查看/重置密钥"
+// 此前只看归属不看状态 —— 待审核的应用可以自己重置出一把密钥，界面上也像"已经能用"。
+func TestOIDCUnapprovedClientHasNoCredentials(t *testing.T) {
+	db := setupOIDCTest(t)
+	owner := createOIDCTestUser(t, "cred-owner", "default")
+
+	newClient := func(status string) *model.OIDCClient {
+		client := &model.OIDCClient{
+			ClientId:     "muw_cred_" + status,
+			Name:         "credential probe " + status,
+			RedirectUris: "https://app.example.com/cb",
+			Scopes:       "openid profile",
+			ClientType:   model.OIDCClientTypeConfidential,
+			Status:       status,
+			OwnerUserId:  owner.Id,
+			CreatedAt:    1,
+			UpdatedAt:    1,
+		}
+		require.NoError(t, db.Create(client).Error)
+		return client
+	}
+
+	for _, status := range []string{
+		model.OIDCClientStatusPending,
+		model.OIDCClientStatusRejected,
+		model.OIDCClientStatusDisabled,
+	} {
+		client := newClient(status)
+
+		_, err := OIDCRevealClientSecret(client.Id, owner.Id)
+		require.ErrorIs(t, err, ErrOIDCClientNotApproved, "status=%s 不该能查看密钥", status)
+
+		_, err = OIDCRotateClientSecret(client.Id, owner.Id)
+		require.ErrorIs(t, err, ErrOIDCClientNotApproved, "status=%s 不该能重置密钥", status)
+
+		var stored model.OIDCClient
+		require.NoError(t, db.First(&stored, client.Id).Error)
+		assert.Empty(t, stored.SecretCipher, "status=%s 不该留下密钥密文", status)
+		assert.Empty(t, stored.SecretHash, "status=%s 不该留下密钥哈希", status)
+	}
+
+	// 批准之后才拿得到密钥
+	approved := newClient(model.OIDCClientStatusApproved)
+	secret, err := OIDCRotateClientSecret(approved.Id, owner.Id)
+	require.NoError(t, err)
+	assert.NotEmpty(t, secret)
+}
