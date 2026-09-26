@@ -137,7 +137,9 @@ function OptionCombobox(props: LegacyComboboxProps) {
       }}
       isItemEqualToValue={(item, value) => item.value === value.value}
     >
-      <div ref={anchor} className={cn('min-w-0', props.className)}>
+      {/* Default to the standard control height so a combobox lines up with the
+          inputs next to it; callers can override with their own h-* class. */}
+      <div ref={anchor} className={cn('h-8 min-w-0', props.className)}>
         <ComboboxInput
           ref={props.ref}
           id={props.id}
