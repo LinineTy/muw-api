@@ -219,3 +219,53 @@ export async function deleteApplication(id: number): Promise<void> {
   const res = await api.delete(`/api/oauth/admin/applications/${id}`)
   requireServerSuccess(res.data)
 }
+
+export type OAuthAccessLog = {
+  id: number
+  client_id: string
+  user_id: number
+  action: string
+  grant_type: string
+  scopes: string
+  ip: string
+  user_agent: string
+  success: boolean
+  error_code: string
+  error_message: string
+  request_id: string
+  created_at: number
+}
+
+export type OAuthAccessLogSummary = {
+  total_calls: number
+  failed_calls: number
+  active_clients: number
+  active_users: number
+}
+
+export type OAuthAccessLogPage = {
+  items: OAuthAccessLog[]
+  total: number
+  page: number
+  page_size: number
+  summary: OAuthAccessLogSummary
+}
+
+// 协议调用明细：管理员可看全站（scope=all），其余人只看自己申请的应用。
+export async function getOAuthAccessLogs(params: {
+  scope: 'self' | 'all'
+  clientId?: string
+  action?: string
+  success?: string
+  page?: number
+  pageSize?: number
+}): Promise<OAuthAccessLogPage> {
+  const query = new URLSearchParams({ scope: params.scope })
+  if (params.clientId) query.set('client_id', params.clientId)
+  if (params.action) query.set('action', params.action)
+  if (params.success) query.set('success', params.success)
+  query.set('page', String(params.page ?? 1))
+  query.set('page_size', String(params.pageSize ?? 20))
+  const res = await api.get(`/api/oauth/access-logs?${query.toString()}`)
+  return requireServerSuccess(res.data).data as OAuthAccessLogPage
+}

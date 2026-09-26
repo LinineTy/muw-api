@@ -11,6 +11,7 @@ import {
   DATA_TABLE_VIEW_MODES,
   useDataTable,
 } from '@/components/data-table'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 
@@ -28,6 +29,14 @@ import {
 } from '../constants'
 import { scopeTextList } from '../scopes'
 import { useReviewQueueColumns } from './review-queue-columns'
+
+/** 逗号/顿号/空白分隔的分组名，直接喂给后端。 */
+function splitGroupList(raw: string): string[] {
+  return raw
+    .split(/[,，\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
 
 export function ReviewQueueTable() {
   const { t } = useTranslation()
@@ -50,6 +59,8 @@ export function ReviewQueueTable() {
     null
   )
   const [note, setNote] = useState('')
+  // 「允许的分组」：留空 = 不限制；逗号/空格分隔。审核时可改，不改就沿用申请人填的。
+  const [allowedGroups, setAllowedGroups] = useState('')
 
   const status =
     (
@@ -84,12 +95,13 @@ export function ReviewQueueTable() {
       application: OAuthApplication
       action: 'approve' | 'reject'
       note: string
+      allowedGroups: string
     }) =>
       reviewApplication(input.application.id, {
         action: input.action,
         scopes: input.application.scopes,
         redirect_uris: input.application.redirect_uris,
-        allowed_groups: input.application.allowed_groups ?? [],
+        allowed_groups: splitGroupList(input.allowedGroups),
         note: input.note,
       }),
     onSuccess: async (_data, input) => {
@@ -139,6 +151,7 @@ export function ReviewQueueTable() {
     busy,
     onApprove: (application) => {
       setNote('')
+      setAllowedGroups((application.allowed_groups ?? []).join(', '))
       setReviewTarget({ application, action: 'approve' })
     },
     onReject: (application) => {
@@ -237,7 +250,9 @@ export function ReviewQueueTable() {
         }
         isLoading={reviewMutation.isPending}
         handleConfirm={() => {
-          if (reviewTarget) reviewMutation.mutate({ ...reviewTarget, note })
+          if (reviewTarget) {
+            reviewMutation.mutate({ ...reviewTarget, note, allowedGroups })
+          }
         }}
       >
         {reviewApp ? (
@@ -252,6 +267,24 @@ export function ReviewQueueTable() {
               </span>
               <span>{scopeTextList(reviewApp.scopes, t).join(' · ')}</span>
             </span>
+            {reviewTarget?.action === 'approve' ? (
+              <div className='flex flex-col gap-1.5'>
+                <Label htmlFor='oauth-review-groups'>
+                  {t('Allowed groups')}
+                </Label>
+                <Input
+                  id='oauth-review-groups'
+                  value={allowedGroups}
+                  placeholder={t('Leave empty to allow every group')}
+                  onChange={(event) => setAllowedGroups(event.target.value)}
+                />
+                <span className='text-muted-foreground text-xs'>
+                  {t(
+                    'Comma separated. Users outside these groups cannot sign in with this application.'
+                  )}
+                </span>
+              </div>
+            ) : null}
             <span className='flex flex-col gap-1'>
               <span className='text-muted-foreground'>
                 {t('Redirect URIs')}

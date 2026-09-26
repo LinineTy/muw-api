@@ -164,6 +164,42 @@ export function auditFieldLabel(key: string, t: TFunction): string {
   }
 }
 
+// OIDC（本站作为身份提供方）的审计动作 → 可读文案。动作名由后端写死，
+// 这里只做映射；没有映射的动作会回退显示原始名与内容。
+const OIDC_AUDIT_OPERATIONS: Record<string, string> = {
+  oidc_authorize_requested: 'Authorization requested',
+  oidc_authorize_rejected: 'Authorization rejected',
+  oidc_token_issued: 'Token issued',
+  oidc_token_refreshed: 'Token refreshed',
+  oidc_token_revoked: 'Token revoked',
+  oidc_token_failed: 'Token exchange failed',
+  oidc_consent_granted: 'Consent granted',
+  oidc_consent_denied: 'Consent denied',
+  oidc_consent_silent_changed: 'Silent consent toggled',
+  oidc_client_secret_viewed: 'Application secret viewed',
+  oidc_client_secret_rotated: 'Application secret rotated',
+  oidc_application_submitted: 'Application submitted',
+  oidc_application_submit_failed: 'Application submission failed',
+  oidc_application_approved: 'Application approved',
+  oidc_application_rejected: 'Application rejected',
+  oidc_application_status_changed: 'Application status changed',
+  oidc_application_updated: 'Application updated',
+  oidc_application_deleted: 'Application deleted',
+}
+
+function buildOIDCAuditOperation(action: string, t: TFunction) {
+  const labelKey = OIDC_AUDIT_OPERATIONS[action]
+  if (!labelKey) return null
+  const headline = t(labelKey)
+  return {
+    headline,
+    summary: headline,
+    identifier: '',
+    description: '',
+    fields: [] as AuditDetailField[],
+  }
+}
+
 function buildTokenAuditOperation(
   action: string,
   params: Record<string, unknown>,
@@ -339,7 +375,8 @@ export function buildAuditDetails(entry: AuditLog, t: TFunction) {
     entry.success,
     t
   )
-  const operation = tokenOperation ?? quotaOperation
+  const operation =
+    tokenOperation ?? quotaOperation ?? buildOIDCAuditOperation(action, t)
   const summaryParams: NonNullable<NonNullable<LogOtherData['op']>['params']> =
     {}
   for (const [key, value] of Object.entries(params)) {

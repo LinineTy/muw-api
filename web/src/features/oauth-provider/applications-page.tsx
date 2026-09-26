@@ -10,6 +10,7 @@ import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { getOAuthStats, type OAuthStats } from './api'
+import { AccessLogsTable } from './components/access-logs-table'
 import { ApplyApplicationDialog } from './components/apply-application-dialog'
 import { AuthorizationsTable } from './components/authorizations-table'
 import { MyApplicationsTable } from './components/my-applications-table'
@@ -82,6 +83,7 @@ export function OAuthApplicationsPage() {
                 <TabsTrigger value='authorizations'>
                   {t('Authorization records')}
                 </TabsTrigger>
+                <TabsTrigger value='calls'>{t('Call records')}</TabsTrigger>
                 {isAdmin ? (
                   <TabsTrigger value='review'>
                     {t('Application review')}
@@ -93,6 +95,9 @@ export function OAuthApplicationsPage() {
               </TabsContent>
               <TabsContent value='authorizations' className='min-h-0 flex-1'>
                 <AuthorizationsTable />
+              </TabsContent>
+              <TabsContent value='calls' className='min-h-0 flex-1'>
+                <AccessLogsTable />
               </TabsContent>
               {isAdmin ? (
                 <TabsContent value='review' className='min-h-0 flex-1'>

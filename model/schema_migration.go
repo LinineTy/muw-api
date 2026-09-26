@@ -202,6 +202,9 @@ var migrations = []Migration{
 	// oidc_clients.homepage_url / icon_url 列 + oidc_usage_stats 表（使用计数）：
 	// 纯加列 + 建表，存量库由 ensureOIDCApplicationProfileColumns / ensureOIDCUsageStatTable 补齐。
 	{Name: "260926-oidc-app-profile-and-usage", Up: func(db *gorm.DB) error { return nil }},
+	// oidc_access_logs 表（OIDC 协议调用的明细，含 IP/UA/结果）：纯建表，
+	// 存量库由 EnsureOIDCAccessLogTable 幂等补齐。
+	{Name: "260926-oidc-access-log", Up: func(db *gorm.DB) error { return nil }},
 }
 
 // ensureSchemaMigrationsTable 用纯 SQL 建 schema_migrations（主键 name，自带日期前缀），

@@ -26,3 +26,12 @@ export const APPLICATION_STATUS_FILTER = [
 
 // 站内 OIDC 的查询缓存前缀：任一变更后统一失效，统计与各列表一起刷新。
 export const OAUTH_QUERY_KEY = ['oauth'] as const
+
+// 协议调用明细的动作（值即后端 action 参数）。
+export const ACCESS_LOG_ACTION_LABELS: Record<string, string> = {
+  authorize: 'Authorization request',
+  token: 'Token issued',
+  refresh: 'Token refreshed',
+  userinfo: 'User info read',
+  revoke: 'Token revoked',
+}

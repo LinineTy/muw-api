@@ -412,6 +412,10 @@ func migrateDB() error {
 	if err := EnsureOIDCUsageStatTable(DB); err != nil {
 		return err
 	}
+	// oidc_access_logs 表（协议端点调用明细，带 IP/UA）：同样幂等补。
+	if err := EnsureOIDCAccessLogTable(DB); err != nil {
+		return err
+	}
 	// channel_accounts 表（渠道↔账户 N:N 绑定）+ 存量绑定回填:幂等，每次启动执行。
 	// 顺序固定——先建表、再回填，最后才允许读路径依赖绑定表。
 	if err := ensureChannelAccountsTable(DB); err != nil {
@@ -629,6 +633,7 @@ func autoMigrateAll() error {
 		&OIDCConsent{},
 		&OIDCSigningKey{},
 		&OIDCUsageStat{},
+		&OIDCAccessLog{},
 		&ConversationRecord{},
 		&CreditMarkerSuggestion{},
 		&CreditMarkerAnalysisLog{},
