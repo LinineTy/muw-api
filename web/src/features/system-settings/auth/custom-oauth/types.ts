@@ -113,6 +113,8 @@ export interface OAuthPreset {
   username_field: string
   display_name_field: string
   email_field: string
+  /** OIDC 发现文档路径（提供方实现 discovery 时填，随 Base URL 一起预填） */
+  well_known?: string
   needsBaseUrl: boolean
 }
 
@@ -219,6 +221,7 @@ export const OAUTH_PRESETS: OAuthPreset[] = [
     key: 'muw-api',
     name: 'muw-api',
     icon: 'openid',
+    well_known: '/.well-known/openid-configuration',
     authorization_endpoint: '/oauth/authorize',
     token_endpoint: '/oauth/token',
     user_info_endpoint: '/oauth/userinfo',

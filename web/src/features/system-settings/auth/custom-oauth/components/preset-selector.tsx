@@ -86,6 +86,11 @@ export function PresetSelector(props: PresetSelectorProps) {
     url: string
   ) => {
     const cleanUrl = url.replace(/\/+$/, '')
+    if (preset.well_known) {
+      props.form.setValue('well_known', cleanUrl + preset.well_known, {
+        shouldDirty: true,
+      })
+    }
     props.form.setValue(
       'authorization_endpoint',
       cleanUrl + preset.authorization_endpoint,
