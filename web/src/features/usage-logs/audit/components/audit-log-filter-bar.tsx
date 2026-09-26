@@ -29,9 +29,8 @@ import {
 } from '../../components/logs-filter-toolbar'
 import type { AuditFilters, AuditLog } from '../api'
 
-// 与通用日志页的「分组」筛选同款：可输入下拉，但**高度必须在使用点钉死**——
-// 它内部走 InputGroup/InputGroupInput 那条共享链，默认高度由共享件决定，不钉就会跟着共享件变
-// （2026-09-24：登录页调共享输入件时，只有这处没钉高度的筛选跟着变形）。
+// 与通用日志页的「分组」筛选同款：可输入下拉。它内部走 InputGroup/InputGroupInput 那条
+// 共享链，这里显式钉死 h-8，与相邻的共享触发器同高。
 function AuditFilterSelect(props: {
   label: string
   value: string
