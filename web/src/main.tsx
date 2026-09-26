@@ -51,7 +51,13 @@ const queryClient = createAppQueryClient(() => {
 const router = createRouter({
   routeTree,
   context: { queryClient },
-  defaultPreload: 'intent',
+  // 窗口(iframe)内不预加载:预加载同样会跑 beforeLoad,而窗口内的 beforeLoad 带
+  // 副作用(旧路径重定向、把跳转交回桌面壳)—— 开着就变成"鼠标划过链接就把页面
+  // 带走 / 开出新窗口"。窗口内点击时才加载路由,代价可接受
+  defaultPreload:
+    typeof window !== 'undefined' && window.self !== window.top
+      ? false
+      : 'intent',
   defaultPreloadStaleTime: 0,
 })
 

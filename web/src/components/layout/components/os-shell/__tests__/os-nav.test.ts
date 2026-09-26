@@ -41,3 +41,21 @@ describe('matchOsNavItem', () => {
     expect(matchOsNavItem(ITEMS, '/accounts-old')).toBeUndefined()
   })
 })
+
+describe('matchOsNavItem · 带查询串的地址', () => {
+  test('查询串与 hash 不参与匹配（窗口回填的地址会带上它们）', () => {
+    expect(matchOsNavItem(ITEMS, '/accounts?page=2')?.title).toBe('Accounts')
+    expect(matchOsNavItem(ITEMS, '/accounts/12/edit?tab=x')?.title).toBe(
+      'Accounts'
+    )
+    expect(matchOsNavItem(ITEMS, '/usage-logs/common#logs')?.url).toBe(
+      '/usage-logs/common'
+    )
+  })
+
+  test('父路径兜底同样无视查询串', () => {
+    expect(matchOsNavItem(ITEMS, '/dashboard?tab=overview')?.url).toBe(
+      '/dashboard/overview'
+    )
+  })
+})

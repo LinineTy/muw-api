@@ -1,4 +1,11 @@
-import { Maximize2, Minimize2, Minus, X } from 'lucide-react'
+import {
+  ArrowLeft,
+  ArrowRight,
+  Maximize2,
+  Minimize2,
+  Minus,
+  X,
+} from 'lucide-react'
 // @muw-owned
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -11,6 +18,7 @@ import {
 } from '@/stores/os-windows-store'
 
 import { OS_DOCK_GUTTER, OS_RAIL_GUTTER } from './os-ball-style'
+import { navigateOsWindowHistory } from './os-window-policy'
 
 /** 拖拽/缩放下限(px) */
 const MIN_W = 480
@@ -245,8 +253,29 @@ export function OsWindowFrame({
             !win.maximized && 'cursor-grab active:cursor-grabbing'
           )}
         >
-          {/* Win 风格排布:左=最大化,右=[最小化,关闭];hover 只变亮不做彩色底 */}
+          {/* 左侧:[后退,前进,最大化];右侧=[最小化,关闭]。hover 只变亮不做彩色底。
+              后退/前进作用于本窗口自己的历史(窗口里换了页要能退回去) */}
           <div className='flex items-center gap-0.5'>
+            <button
+              type='button'
+              aria-label={t('Back')}
+              title={t('Back')}
+              disabled={!win.canBack}
+              onClick={() => navigateOsWindowHistory(win.id, -1)}
+              className='text-muted-foreground enabled:hover:text-foreground enabled:hover:bg-accent flex size-6 items-center justify-center rounded-md transition-colors disabled:opacity-35'
+            >
+              <ArrowLeft className='size-3' aria-hidden='true' />
+            </button>
+            <button
+              type='button'
+              aria-label={t('Forward')}
+              title={t('Forward')}
+              disabled={!win.canForward}
+              onClick={() => navigateOsWindowHistory(win.id, 1)}
+              className='text-muted-foreground enabled:hover:text-foreground enabled:hover:bg-accent flex size-6 items-center justify-center rounded-md transition-colors disabled:opacity-35'
+            >
+              <ArrowRight className='size-3' aria-hidden='true' />
+            </button>
             <button
               type='button'
               aria-label={t('Maximize window')}
@@ -294,7 +323,8 @@ export function OsWindowFrame({
           load 完成前保持透明,内容就绪后淡入(消除窗口展开后白屏闪现) */}
         <IframePane
           id={win.id}
-          src={win.lazy ? 'about:blank' : win.url}
+          url={win.url}
+          lazy={win.lazy}
           title={win.title}
         />
       </div>
@@ -350,21 +380,29 @@ export function OsWindowFrame({
 
 /**
  * 窗口内容面板:iframe onLoad 前保持透明,就绪后淡入。
- * 每个窗只挂一次(src 不变,SPA 内部导航不触发 load);
- * lazy 窗挂 about:blank 先立即 load,唤起换真 src 后再走一次淡入。
+ *
+ * ⚠️ 地址只认"打开/唤起时"那一次:窗口内的页面自己跳转后,外层记录的 `win.url`
+ * 会跟着更新(标题栏与 Dock 要用),**但不能写回 iframe** —— 重新赋值 src 会让整个
+ * 窗口重新加载,页面状态全丢,且每次窗内跳转都发一轮请求。
  */
 function IframePane({
   id,
-  src,
+  url,
+  lazy,
   title,
 }: {
   id: string
-  src: string
+  url: string
+  lazy?: boolean
   title: string
 }) {
+  const [src, setSrc] = useState(() => (lazy ? 'about:blank' : url))
   const [ready, setReady] = useState(false)
-  // lazy 窗唤起换真 src 时重置:about:blank 的 load 已把 ready 置真,
-  // 不重置则新内容加载期间透明度 100,白屏闪现回归
+  // 恢复的懒窗被唤起:这一次才把 about:blank 换成真地址(唯一允许的替换)
+  useEffect(() => {
+    if (lazy) return
+    setSrc((prev) => (prev === 'about:blank' ? url : prev))
+  }, [lazy, url])
   useEffect(() => {
     setReady(false)
   }, [src])

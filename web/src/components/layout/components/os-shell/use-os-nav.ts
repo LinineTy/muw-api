@@ -1,9 +1,9 @@
+import { useLocation } from '@tanstack/react-router'
 // @muw-owned
 import { useMemo } from 'react'
-import { useLocation } from '@tanstack/react-router'
 
-import { useSidebarView } from '@/hooks/use-sidebar-view'
 import type { NavItem } from '@/components/layout/types'
+import { useSidebarView } from '@/hooks/use-sidebar-view'
 
 /** Dock / 窗口标题栏共用的扁平导航项 */
 export type OsNavItem = {
@@ -74,8 +74,11 @@ export function useOsNavItems(): OsNavItem[] {
  */
 export function matchOsNavItem(
   items: OsNavItem[],
-  pathname: string
+  url: string
 ): OsNavItem | undefined {
+  // 只认路径:窗口回填的地址会带上查询串(页面把 tab 这类状态放在 URL 上),
+  // 直接拿去比会让标题栏与 Dock 的图标/标题全部匹配丢失
+  const pathname = url.split(/[?#]/)[0]
   const matches = items.filter(
     (item) => pathname === item.url || pathname.startsWith(`${item.url}/`)
   )

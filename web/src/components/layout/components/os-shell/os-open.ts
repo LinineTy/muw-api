@@ -12,6 +12,14 @@ import { useCallback } from 'react'
  */
 export type OsShellOpenWindow = (url: string) => boolean
 
+/** 壳的桌面路径:刷新/深链/从设置返回的落点,不再是 /dashboard(概览) */
+export const OS_SHELL_HOME = '/os-desktop'
+
+/** 壳自身路径(含旧别名 /console)——窗口里再跳它没有意义,一律交回主层 */
+export function isShellHomeUrl(pathname: string) {
+  return pathname === OS_SHELL_HOME || pathname === '/console'
+}
+
 /** 系统设置类页面:退出多窗口,始终走主层完整布局(仅管理员可见) */
 export function isSettingsUrl(url: string) {
   return url.startsWith('/settings') || url.startsWith('/system-settings')
