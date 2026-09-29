@@ -1,3 +1,11 @@
+> **About this fork.** This repository is a personal fork of
+> [QuantumNous/new-api](https://github.com/QuantumNous/new-api). It keeps upstream's gateway,
+> billing and admin capabilities, and adds a set of self-hosting-oriented changes — subscription
+> redesign, credit pool, model health monitoring, rate-limit and risk-control stack,
+> expression-based billing, and more. What it adds, what it strips, and where it intentionally
+> diverges from upstream are documented in **[README.muw.md](./README.muw.md)**.
+> All upstream branding, copyright and attribution belong to new-api / QuantumNous.
+
 <div align="center">
 
 ![new-api](/web/public/logo.png)
