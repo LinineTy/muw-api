@@ -33,26 +33,19 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// 更新检测的源 = **公网 Gitea 的 releases API**（2026-09-22定，取代此前的静态发布清单 update.md）：
+// 更新检测的源 = releases API（Gitea / GitHub 同构），由 UPDATE_CHECK_RELEASES_URL 指定；
+// 未配置时不检测更新。
 //
-//	GET https://git.example.com/api/v1/repos/owner/muw-api/releases
-//
-// 上游 new-api 也只有一份 GitHub release，我们跟着走同一套，不再自造清单 + notes 静态文件。
-//
-// 两个通道（2026-09-13定）：
+// 两个通道：
 //   - stable：最新的**非 prerelease** release —— 对外公告的稳定版。没打开「检测开发版更新」的部署都按它判断。
 //   - dev：最新 release（含 prerelease）—— 最新构建。只有打开开关的实例才按它判断
 //     （operation_setting.UpdateCheckDevChannelEnabled）。
-//     发版时由 repo 根 release.sh 按问到的公告范围决定本次 release 是否标 prerelease，
-//     所以"哪个是稳定版"由发版动作本身决定，检测端不需要额外清单。
+//     发版时按公告范围决定本次 release 是否标 prerelease，所以"哪个是稳定版"由发版动作本身决定。
 //
 // 版本号取 tag_name，说明正文取 body（Markdown，随 release 一起发），
 // ⇒ 说明必须动态取、不能内置进二进制：旧版本部署的二进制里没有新版本的说明。
 //
-// 未登录实例读得到：该仓库本身保持私有，但「公开访问」里把**发布 + 软件包**放开为可读
-// （2026-09-22 实测匿名 GET releases 返回 200；代码不外露）。自建分发时用
-// UPDATE_CHECK_RELEASES_URL 指向自己的 releases API。
-const updateCheckURLDefault = "https://git.example.com/api/v1/repos/owner/muw-api/releases"
+const updateCheckURLDefault = ""
 
 // updateCheckUserAgent 给源站一个可识别的 UA（有的反代/WAF 会拦空 UA 或默认 UA）。
 const updateCheckUserAgent = "muw-api-update-check"
@@ -239,10 +232,20 @@ func pickRelease(items []giteaReleaseItem, includePrerelease bool) (string, stri
 	return bestTag, bestBody, best != nil
 }
 
-// GetUpdateCheck 读更新源（公网 Gitea releases），返回是否有比当前版本更新的版本。
+// GetUpdateCheck 读更新源（releases API），返回是否有比当前版本更新的版本。
 // 只读接口；releases 无 CORS 限制但需要出网，故由后端代查再返回给前端。
 func GetUpdateCheck(c *gin.Context) {
 	releasesURL := common.GetEnvOrDefaultString("UPDATE_CHECK_RELEASES_URL", updateCheckURLDefault)
+	if releasesURL == "" {
+		// 未配置更新源：按"无更新"返回，字段与正常路径一致。
+		common.ApiSuccess(c, gin.H{
+			"has_update":      false,
+			"latest_tag":      "",
+			"current_version": common.Version,
+			"channel":         "stable",
+		})
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
 	defer cancel()
